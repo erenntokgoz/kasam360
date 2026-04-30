@@ -1,0 +1,33 @@
+const mongoose = require('mongoose');
+
+const tenantSchema = new mongoose.Schema(
+  {
+    phone: {
+      type: String,
+      required: [true, 'Phone number is required'],
+      unique: true,
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: [true, 'Password is required'],
+      minlength: 6,
+      select: false, // never returned in queries by default
+    },
+    businessName: {
+      type: String,
+      required: [true, 'Business name is required'],
+      trim: true,
+    },
+    subscriptionStatus: {
+      type: String,
+      enum: ['TRIAL', 'ACTIVE', 'EXPIRED', 'SUSPENDED'],
+      default: 'TRIAL',
+    },
+  },
+  {
+    timestamps: true, // adds createdAt + updatedAt automatically
+  }
+);
+
+module.exports = mongoose.model('Tenant', tenantSchema);
