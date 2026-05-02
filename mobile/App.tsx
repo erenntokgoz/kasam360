@@ -1,10 +1,5 @@
 /**
- * Kasam360 — Executive Financial Ledger
- * ──────────────────────────────────────────────────────────────────────────────
- * Root component. Hydrates auth state on mount, then delegates to
- * RootNavigator for auth-gated routing.
- *
- * @format
+ * Kasam360 — Brutalist Fintech Root
  */
 
 import React, { useEffect } from 'react';
@@ -23,7 +18,7 @@ function App(): React.JSX.Element {
   }, [hydrateFromStorage]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.primary }}>
       <SafeAreaProvider>
         <StatusBar
           barStyle="light-content"

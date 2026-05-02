@@ -49,7 +49,7 @@ const fmtDate = (iso: string | null): string => {
 
 // ─── Animated Row ────────────────────────────────────────────────────────────
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 
 const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void }> = React.memo(
   ({ item, index, onPress }) => {
@@ -65,14 +65,16 @@ const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void 
     const progress = item.totalAmount > 0 ? 1 - item.remainingAmount / item.totalAmount : 0;
 
     return (
-      <AnimatedPressable
-        entering={FadeInDown.delay(index * 50).duration(350).springify().damping(18)}
-        layout={Layout.springify()}
-        style={[styles.rowWrap, animStyle]}
+      <Pressable
         onPressIn={pIn}
         onPressOut={pOut}
         onPress={() => onPress(item)}
       >
+        <Animated.View
+          entering={FadeInDown.delay(index * 50).duration(350).springify().damping(18)}
+          layout={Layout.springify()}
+          style={[styles.rowWrap, animStyle]}
+        >
         <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
           <Icon name={isGiven ? 'arrow-down-left' : 'arrow-up-right'} size={16} color={accent} />
         </View>
@@ -97,7 +99,8 @@ const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void 
             </View>
           )}
         </View>
-      </AnimatedPressable>
+        </Animated.View>
+      </Pressable>
     );
   },
 );

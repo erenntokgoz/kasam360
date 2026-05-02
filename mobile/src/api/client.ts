@@ -11,7 +11,7 @@ import { getItem, StorageKeys } from '../utils/storage';
  */
 const BASE_URL =
   (global as any).__API_BASE_URL__ ??
-  'http://10.0.2.2:5000'; // Android emulator → host machine localhost
+  'http://172.20.10.5:5000'; // Android emulator → host machine localhost
 
 const apiClient = axios.create({
   baseURL: BASE_URL,

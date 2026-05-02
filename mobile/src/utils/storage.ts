@@ -1,12 +1,11 @@
-import { MMKV } from 'react-native-mmkv';
-
+import { createMMKV } from 'react-native-mmkv';
 /**
  * Singleton MMKV instance for the app.
  * Used for fast synchronous key-value persistence (JWT token, user data, etc.)
  * A unique ID scopes the storage so it can co-exist with other MMKV instances
  * in the future (e.g. per-tenant encrypted storage).
  */
-export const storage = new MMKV({ id: 'kasam360-storage' });
+export const storage = createMMKV({ id: 'kasam360-storage' });
 
 // ─── Typed helpers ────────────────────────────────────────────────────────────
 
@@ -29,7 +28,7 @@ export const getItem = (key: StorageKey): string | null => {
 
 /** Remove a key from storage. */
 export const removeItem = (key: StorageKey): void => {
-  storage.delete(key);
+  storage.remove(key);
 };
 
 /** Clear all keys scoped to this MMKV instance. */
