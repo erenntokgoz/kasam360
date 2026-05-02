@@ -28,6 +28,7 @@ interface AuthState {
   login: (payload: LoginPayload) => Promise<void>;
   logout: () => void;
   hydrateFromStorage: () => void;
+  updateProfile: (payload: { businessName?: string; password?: string }) => Promise<void>;
   clearError: () => void;
 }
 
@@ -133,6 +134,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     clearAuth();
     set({ user: null, token: null, error: null });
+  },
+
+  /**
+   * Updates current tenant profile details.
+   */
+  updateProfile: async (payload: { businessName?: string; password?: string }) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data } = await apiClient.patch<AuthApiResponse>(
+        '/api/auth/profile',
+        payload,
+      );
+      // Update persistent storage with new user data (token remains same)
+      setItem(StorageKeys.USER, JSON.stringify(data.tenant));
+      set({ user: data.tenant, isLoading: false });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Update failed.';
+      set({ error: message, isLoading: false });
+      throw err;
+    }
   },
 
   /** Clears any lingering error message (e.g. when user navigates away). */

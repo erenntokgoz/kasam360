@@ -28,6 +28,7 @@ const createDebt = async (req, res) => {
   try {
     const { tenantId } = req;
     const { entityName, type, totalAmount, dueDate, syncId } = req.body;
+    console.log(`[POST /api/debts] Received:`, { tenantId, entityName, type, totalAmount });
 
     // ── Validation ─────────────────────────────────────────────────────────
     if (!entityName || !type || totalAmount == null) {
@@ -65,21 +66,58 @@ const createDebt = async (req, res) => {
     }
 
     // ── Create ──────────────────────────────────────────────────────────────
-    const debt = await Debt.create({
-      tenantId,
-      entityName,
-      type,
-      totalAmount: amountInt,
-      remainingAmount: amountInt,
-      status: 'PENDING',
-      dueDate: dueDate ? new Date(dueDate) : null,
-      syncId: syncId || undefined,
+    const session = await mongoose.startSession();
+    let createdDebt;
+
+    await session.withTransaction(async () => {
+      const debt = await Debt.create(
+        [
+          {
+            tenantId,
+            entityName,
+            type,
+            totalAmount: amountInt,
+            remainingAmount: amountInt,
+            status: 'PENDING',
+            dueDate: dueDate ? new Date(dueDate) : null,
+            syncId: syncId || undefined,
+          },
+        ],
+        { session }
+      );
+
+      createdDebt = debt[0];
+
+      // Automatic Transaction creation per "Business Logic"
+      // GIVEN debt (receivable) -> record as INCOME
+      // TAKEN debt (payable)    -> record as EXPENSE
+      const txType = type === 'GIVEN' ? 'INCOME' : 'EXPENSE';
+      const category = type === 'GIVEN' ? 'ALACAK KAYDI' : 'BORÇ KAYDI';
+
+      await Transaction.create(
+        [
+          {
+            tenantId,
+            type: txType,
+            amount: amountInt,
+            method: 'CASH',
+            category,
+            description: `${entityName} için veresiye kaydı.`,
+            transactionDate: new Date(),
+          },
+        ],
+        { session }
+      );
     });
+
+    session.endSession();
+
+    console.log(`[POST /api/debts] SUCCESS: Created ID ${createdDebt._id} with linked transaction.`);
 
     return res.status(201).json({
       success: true,
-      message: 'Debt created successfully.',
-      data: debt,
+      message: 'Debt and linked transaction created successfully.',
+      data: createdDebt,
     });
   } catch (error) {
     // Handle duplicate syncId race condition
@@ -108,6 +146,7 @@ const createDebt = async (req, res) => {
 const getDebts = async (req, res) => {
   try {
     const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
+    console.log(`[GET /api/debts] Tenant: ${req.tenantId}, Page: ${req.query.page}, Type: ${req.query.type}`);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;

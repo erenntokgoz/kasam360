@@ -20,8 +20,11 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { label: 'Gelir ve Giderler', icon: 'wallet-outline', route: 'GelirGider' },
-  { label: 'Borçlar ve Alacaklar', icon: 'swap-horizontal-outline', route: 'BorcAlacak' },
+  { label: 'Ana Sayfa', icon: 'home-outline', route: 'Home' },
+  { label: 'Gelir', icon: 'trending-up-outline', route: 'Gelir' },
+  { label: 'Gider', icon: 'trending-down-outline', route: 'Gider' },
+  { label: 'Borçlar', icon: 'arrow-down-circle-outline', route: 'Borc' },
+  { label: 'Alacaklar', icon: 'arrow-up-circle-outline', route: 'Alacak' },
   { label: 'Sistem Kayıtları', icon: 'document-text-outline', route: 'Logs' },
   { label: 'Ayarlar', icon: 'settings-outline', route: 'Settings' },
 ];
@@ -41,7 +44,7 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
         ]}
       >
         <View style={styles.brandSection}>
-          <Text style={styles.brandName}>KASAM 360</Text>
+          <Text style={styles.brandName}>KASAM360</Text>
         </View>
 
         <View style={styles.menuSection}>
@@ -57,7 +60,7 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
                 <SafeIcon
                   name={item.icon}
                   size={24}
-                  color={isActive ? '#FFFFFF' : '#8E8E93'}
+                  color={isActive ? '#000000' : '#8E8E93'}
                   fallbackText="-"
                 />
                 <Text
@@ -117,7 +120,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   menuItemActive: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#FFFFFF',
   },
   menuLabel: {
     fontWeight: '600',
@@ -126,7 +129,7 @@ const styles = StyleSheet.create({
     marginLeft: 16,
   },
   menuLabelActive: {
-    color: '#FFFFFF',
+    color: '#000000',
     fontWeight: 'bold',
   },
   footer: {

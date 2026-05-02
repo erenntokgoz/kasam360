@@ -2,16 +2,20 @@ import React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import GlassSidebar from '../components/GlassSidebar';
 import HomeScreen from '../screens/HomeScreen';
-import GelirGiderScreen from '../screens/GelirGiderScreen';
-import BorcAlacakScreen from '../screens/BorcAlacakScreen';
+import GelirScreen from '../screens/GelirScreen';
+import GiderScreen from '../screens/GiderScreen';
+import BorcScreen from '../screens/BorcScreen';
+import AlacakScreen from '../screens/AlacakScreen';
 import LogsScreen from '../screens/LogsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { theme } from '../theme';
 
 export type DrawerParamList = {
   Home: undefined;
-  GelirGider: undefined;
-  BorcAlacak: undefined;
+  Gelir: undefined;
+  Gider: undefined;
+  Borc: undefined;
+  Alacak: undefined;
   Logs: undefined;
   Settings: undefined;
 };
@@ -36,8 +40,10 @@ const DrawerNavigator: React.FC = () => (
     }}
   >
     <Drawer.Screen name="Home" component={HomeScreen} />
-    <Drawer.Screen name="GelirGider" component={GelirGiderScreen} />
-    <Drawer.Screen name="BorcAlacak" component={BorcAlacakScreen} />
+    <Drawer.Screen name="Gelir" component={GelirScreen} />
+    <Drawer.Screen name="Gider" component={GiderScreen} />
+    <Drawer.Screen name="Borc" component={BorcScreen} />
+    <Drawer.Screen name="Alacak" component={AlacakScreen} />
     <Drawer.Screen name="Logs" component={LogsScreen} />
     <Drawer.Screen name="Settings" component={SettingsScreen} />
   </Drawer.Navigator>

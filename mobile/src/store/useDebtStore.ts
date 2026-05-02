@@ -11,6 +11,7 @@ import {
   DebtSummary,
   PayDebtResult,
 } from '../api/debtService';
+import { useLogStore } from './useLogStore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -102,6 +103,11 @@ export const useDebtStore = create<DebtState>((set, get) => ({
       // Re-fetch to get updated summary
       get().fetchDebts(1).catch(() => {});
 
+      const actionText = created.type === 'TAKEN'
+        ? `${created.entityName} kişisinden ${(created.totalAmount / 100).toLocaleString('tr-TR')}₺ borç alındı.`
+        : `${created.entityName} kişisine ${(created.totalAmount / 100).toLocaleString('tr-TR')}₺ borç verildi.`;
+      useLogStore.getState().addLog(actionText, 'success');
+
       return created;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create debt.';
@@ -130,6 +136,12 @@ export const useDebtStore = create<DebtState>((set, get) => ({
 
       // Re-fetch to get updated summary totals
       get().fetchDebts(1).catch(() => {});
+
+      const debt = result.debt;
+      const actionText = debt.type === 'TAKEN'
+        ? `${debt.entityName} kişisine olan borcun ${(amount / 100).toLocaleString('tr-TR')}₺ kadarı ödendi.`
+        : `${debt.entityName} kişisindeki alacağın ${(amount / 100).toLocaleString('tr-TR')}₺ kadarı tahsil edildi.`;
+      useLogStore.getState().addLog(actionText, 'info');
 
       return result;
     } catch (err) {

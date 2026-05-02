@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
+const Debt = require('../models/Debt');
 
 /**
  * Transaction CRUD Controller
@@ -16,6 +17,7 @@ const Transaction = require('../models/Transaction');
 const getTransactions = async (req, res) => {
   try {
     const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
+    console.log(`[GET /api/transactions] Tenant: ${req.tenantId}, Page: ${req.query.page}, Type: ${req.query.type}`);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;
@@ -26,24 +28,31 @@ const getTransactions = async (req, res) => {
       filter.type = req.query.type;
     }
 
-    const [transactions, total] = await Promise.all([
+    const [transactions, total, totals, debtSummary] = await Promise.all([
       Transaction.find(filter)
         .sort({ transactionDate: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
       Transaction.countDocuments(filter),
-    ]);
-
-    // Compute running totals for the tenant (all-time, unfiltered)
-    const totals = await Transaction.aggregate([
-      { $match: { tenantId: tenantObjectId } },
-      {
-        $group: {
-          _id: '$type',
-          sum: { $sum: '$amount' },
+      Transaction.aggregate([
+        { $match: { tenantId: tenantObjectId } },
+        {
+          $group: {
+            _id: '$type',
+            sum: { $sum: '$amount' },
+          },
         },
-      },
+      ]),
+      Debt.aggregate([
+        { $match: { tenantId: tenantObjectId } },
+        {
+          $group: {
+            _id: '$type',
+            totalRemaining: { $sum: '$remainingAmount' },
+          },
+        },
+      ]),
     ]);
 
     let totalIncome = 0;
@@ -51,6 +60,13 @@ const getTransactions = async (req, res) => {
     for (const t of totals) {
       if (t._id === 'INCOME') totalIncome = t.sum;
       if (t._id === 'EXPENSE') totalExpense = t.sum;
+    }
+
+    let totalDebt = 0; // TAKEN
+    let totalReceivable = 0; // GIVEN
+    for (const d of debtSummary) {
+      if (d._id === 'TAKEN') totalDebt = d.totalRemaining;
+      if (d._id === 'GIVEN') totalReceivable = d.totalRemaining;
     }
 
     return res.status(200).json({
@@ -64,8 +80,10 @@ const getTransactions = async (req, res) => {
           totalPages: Math.ceil(total / limit),
         },
         summary: {
-          totalIncome,   // integer cents
-          totalExpense,  // integer cents
+          totalIncome,
+          totalExpense,
+          totalDebt,
+          totalReceivable,
           balance: totalIncome - totalExpense,
         },
       },
@@ -88,6 +106,7 @@ const createTransaction = async (req, res) => {
   try {
     const { tenantId } = req;
     const { type, amount, method, category, description, transactionDate, syncId } = req.body;
+    console.log(`[POST /api/transactions] Received:`, { tenantId, type, amount, method, category });
 
     // ── Validation ─────────────────────────────────────────────────────────
     if (!type || amount == null || !method) {
@@ -142,6 +161,8 @@ const createTransaction = async (req, res) => {
       transactionDate: transactionDate ? new Date(transactionDate) : new Date(),
       syncId: syncId || undefined,
     });
+
+    console.log(`[POST /api/transactions] SUCCESS: Created ID ${transaction._id}`);
 
     return res.status(201).json({
       success: true,

@@ -7,6 +7,7 @@ import {
   CreateTransactionPayload,
   TransactionPagination,
 } from '../api/transactionService';
+import { useLogStore } from './useLogStore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,8 @@ interface LedgerState {
   /** All values in integer cents/kuruş */
   totalIncome: number;
   totalExpense: number;
+  totalDebt: number;
+  totalReceivable: number;
   balance: number;
 
   isLoading: boolean;
@@ -38,6 +41,8 @@ const initialState = {
   pagination: null as TransactionPagination | null,
   totalIncome: 0,
   totalExpense: 0,
+  totalDebt: 0,
+  totalReceivable: 0,
   balance: 0,
   isLoading: false,
   isCreating: false,
@@ -66,6 +71,8 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
         pagination: result.pagination,
         totalIncome: result.summary.totalIncome,
         totalExpense: result.summary.totalExpense,
+        totalDebt: result.summary.totalDebt,
+        totalReceivable: result.summary.totalReceivable,
         balance: result.summary.balance,
         isLoading: false,
       }));
@@ -103,6 +110,11 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
           isCreating: false,
         };
       });
+
+      const actionText = created.type === 'INCOME' 
+        ? `[${created.category || 'Gelir'}] ${(created.amount / 100).toLocaleString('tr-TR')}₺ eklendi.` 
+        : `[${created.category || 'Gider'}] ${(created.amount / 100).toLocaleString('tr-TR')}₺ çıkışı yapıldı.`;
+      useLogStore.getState().addLog(actionText, 'success');
 
       return created;
     } catch (err) {

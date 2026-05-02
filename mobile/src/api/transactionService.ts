@@ -37,9 +37,11 @@ export interface TransactionPagination {
 }
 
 export interface TransactionSummary {
-  totalIncome: number;   // integer cents
-  totalExpense: number;  // integer cents
-  balance: number;       // integer cents
+  totalIncome: number;
+  totalExpense: number;
+  totalDebt: number;
+  totalReceivable: number;
+  balance: number;
 }
 
 interface GetTransactionsResponse {

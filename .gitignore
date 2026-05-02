@@ -38,3 +38,6 @@ backend/src/config/google-vision.json
 
 # Coverage
 coverage/
+
+# Context
+Kasam360_Repo_Context.txt

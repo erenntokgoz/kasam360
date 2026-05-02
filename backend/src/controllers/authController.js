@@ -129,4 +129,46 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { register, login };
+const updateProfile = async (req, res) => {
+  try {
+    const { tenantId } = req;
+    const { businessName, password } = req.body;
+
+    const tenant = await Tenant.findById(tenantId);
+    if (!tenant) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant not found.',
+      });
+    }
+
+    if (businessName) {
+      tenant.businessName = businessName;
+    }
+
+    if (password) {
+      tenant.password = await bcrypt.hash(password, SALT_ROUNDS);
+    }
+
+    await tenant.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully.',
+      tenant: {
+        id: tenant._id,
+        phone: tenant.phone,
+        businessName: tenant.businessName,
+        subscriptionStatus: tenant.subscriptionStatus,
+      },
+    });
+  } catch (error) {
+    console.error('[authController.updateProfile]', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error updating profile.',
+    });
+  }
+};
+
+module.exports = { register, login, updateProfile };

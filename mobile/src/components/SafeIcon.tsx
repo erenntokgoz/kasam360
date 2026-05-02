@@ -27,8 +27,8 @@ export class SafeIcon extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <Text style={{ 
-          color: this.props.color, 
+        <Text style={{
+          color: this.props.color,
           fontSize: this.props.size * 0.6,
           fontFamily: theme.fonts.light,
           fontWeight: '300'

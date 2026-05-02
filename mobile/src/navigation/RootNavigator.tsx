@@ -9,7 +9,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAuthStore } from '../store/useAuthStore';
-import DrawerNavigator from './DrawerNavigator';
+import MainStack from './MainStack';
 import AuthStack from './AuthStack';
 import { theme } from '../theme';
 
@@ -40,7 +40,7 @@ const RootNavigator: React.FC = () => {
 
   return (
     <NavigationContainer theme={navTheme}>
-      {token ? <DrawerNavigator /> : <AuthStack />}
+      {token ? <MainStack /> : <AuthStack />}
     </NavigationContainer>
   );
 };

@@ -10,7 +10,7 @@ import { getItem, StorageKeys } from '../utils/storage';
  * otherwise fall back to the Android emulator loopback.
  */
 const BASE_URL =
-  (global as any).__API_BASE_URL__ ??
+  (globalThis as any).__API_BASE_URL__ ??
   'http://172.20.10.5:5000'; // Android emulator → host machine localhost
 
 const apiClient = axios.create({
@@ -30,6 +30,7 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log(`[API REQUEST] ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
     return config;
   },
   (error) => Promise.reject(error),
@@ -39,8 +40,12 @@ apiClient.interceptors.request.use(
 // Centralised error normalisation — unwrap Axios error into a plain Error
 // so callers don't have to import axios just to check AxiosError.
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`[API RESPONSE] ${response.status} ${response.config.url}`, response.data);
+    return response;
+  },
   (error) => {
+    console.warn(`[API ERROR] ${error?.config?.url}`, error?.response?.data || error?.message);
     const message: string =
       error?.response?.data?.message ?? // server error body
       error?.message ??                 // network-level message
