@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { theme } from '../theme';
 import { SafeIcon } from '../components/SafeIcon';
 
 export default function NotificationSettingsScreen() {
@@ -12,47 +13,63 @@ export default function NotificationSettingsScreen() {
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [reportsEnabled, setReportsEnabled] = useState(true);
 
+  const ToggleItem = ({ icon, label, value, onValueChange, isLast }: any) => (
+    <View>
+      <View style={styles.item}>
+        <View style={styles.itemLeft}>
+          <SafeIcon name={icon} size={22} color={theme.colors.textPrimary} fallbackText="•" />
+          <Text style={styles.itemLabel}>{label}</Text>
+        </View>
+        <Switch 
+          value={value} 
+          onValueChange={onValueChange}
+          trackColor={{ false: '#333333', true: theme.colors.accent }}
+          thumbColor={value ? theme.colors.primary : '#FFFFFF'}
+          ios_backgroundColor="#333333"
+        />
+      </View>
+      {!isLast && <View style={styles.divider} />}
+    </View>
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <TouchableOpacity hitSlop={12} onPress={() => navigation.goBack()}>
-          <SafeIcon name="arrow-back-outline" size={28} color="#FFFFFF" fallbackText="GERİ" />
+        <TouchableOpacity hitSlop={12} onPress={() => navigation.goBack()} style={styles.backButton}>
+          <SafeIcon name="arrow-back-outline" size={24} color={theme.colors.textPrimary} fallbackText="<" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>BİLDİRİMLER</Text>
-        <View style={{ width: 28 }} />
+        <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.list}>
-        <View style={styles.row}>
-          <Text style={styles.rowText}>ANLIK BİLDİRİMLER</Text>
-          <Switch 
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.sectionHeader}>TERCİHLER</Text>
+        <View style={styles.section}>
+          <ToggleItem 
+            icon="notifications-outline" 
+            label="Anlık Bildirimler" 
             value={pushEnabled} 
-            onValueChange={setPushEnabled}
-            trackColor={{ false: '#333333', true: '#10B981' }}
-            thumbColor="#FFFFFF"
+            onValueChange={setPushEnabled} 
           />
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.rowText}>E-POSTA BİLDİRİMLERİ</Text>
-          <Switch 
+          <ToggleItem 
+            icon="mail-outline" 
+            label="E-posta Bildirimleri" 
             value={emailEnabled} 
-            onValueChange={setEmailEnabled}
-            trackColor={{ false: '#333333', true: '#10B981' }}
-            thumbColor="#FFFFFF"
+            onValueChange={setEmailEnabled} 
           />
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.rowText}>HAFTALIK ÖZET RAPORLARI</Text>
-          <Switch 
+          <ToggleItem 
+            icon="bar-chart-outline" 
+            label="Özet Raporları" 
             value={reportsEnabled} 
-            onValueChange={setReportsEnabled}
-            trackColor={{ false: '#333333', true: '#10B981' }}
-            thumbColor="#FFFFFF"
+            onValueChange={setReportsEnabled} 
+            isLast 
           />
         </View>
-      </View>
+        
+        <Text style={styles.infoText}>
+          Bildirim ayarları, cihazınızın sistem ayarlarından da yönetilebilir.
+        </Text>
+      </ScrollView>
     </View>
   );
 }
@@ -60,37 +77,75 @@ export default function NotificationSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: theme.colors.primary,
   },
   header: {
+    height: 64,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
+    paddingHorizontal: theme.spacing.lg,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: theme.colors.border,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '900',
+    fontFamily: theme.fonts.black,
+    fontSize: theme.fontSizes.lg,
+    color: theme.colors.textPrimary,
     letterSpacing: 2,
-    color: '#FFFFFF',
   },
-  list: {
-    paddingTop: 20,
+  scrollContent: {
+    paddingBottom: 40,
   },
-  row: {
+  sectionHeader: {
+    fontFamily: theme.fonts.black,
+    fontSize: 11,
+    color: theme.colors.textTertiary,
+    letterSpacing: 1.5,
+    marginTop: 32,
+    marginBottom: 8,
+    paddingHorizontal: theme.spacing.lg,
+    textTransform: 'uppercase',
+  },
+  section: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
+  },
+  item: {
+    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 24,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: theme.spacing.lg,
   },
-  rowText: {
-    color: '#FFFFFF',
+  itemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  itemLabel: {
+    fontFamily: theme.fonts.light,
     fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+    color: theme.colors.textPrimary,
+    marginLeft: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginLeft: 56,
+  },
+  infoText: {
+    fontFamily: theme.fonts.light,
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    paddingHorizontal: theme.spacing.lg,
+    marginTop: 16,
   },
 });
