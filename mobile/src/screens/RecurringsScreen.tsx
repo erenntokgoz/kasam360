@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert, Switch } from 'react-native';
-import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -39,18 +38,11 @@ const RecurringsScreen: React.FC = () => {
     const displayAmount = isIncome ? item.amount : -item.amount;
 
     return (
-      <Animated.View
-        entering={FadeInDown.delay(index * 60).duration(400).springify().damping(18)}
-        layout={Layout.springify()}
-        style={[
-          styles.rowContainer,
-          { backgroundColor: theme.colors.surface, ...theme.shadows.card },
-          !item.active && { opacity: 0.6 },
-        ]}
-      >
+      <View style={[styles.rowContainer, { backgroundColor: theme.colors.surface }, !item.active && { opacity: 0.6 }]}>
         <Pressable
           style={styles.rowContent}
           onLongPress={() => handleLongPress(item.id)}
+          activeOpacity={0.7}
         >
           <View style={[styles.rowIconCircle, { backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.10)' : 'rgba(248, 113, 113, 0.10)' }]}>
             <Icon name={iconName} size={16} color={amountColor} />
@@ -65,12 +57,12 @@ const RecurringsScreen: React.FC = () => {
               value={item.active}
               onValueChange={() => toggleRecurring(item.id)}
               trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
-              thumbColor="#FFFFFF"
+              thumbColor={theme.colors.primary}
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
             />
           </View>
         </Pressable>
-      </Animated.View>
+      </View>
     );
   };
 

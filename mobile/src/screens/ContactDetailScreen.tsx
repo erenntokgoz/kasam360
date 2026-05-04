@@ -2,7 +2,6 @@ import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, StatusBar } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTranslation } from 'react-i18next';
 import { getTheme } from '../theme';
@@ -73,25 +72,21 @@ const ContactDetailScreen: React.FC = () => {
     const paid = item.status === 'PAID';
 
     return (
-      <Animated.View
-        entering={FadeInDown.delay(index * 50).duration(350).springify()}
-        layout={Layout.springify()}
-        style={styles.rowWrap}
-      >
+      <View style={styles.rowWrap}>
         <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
           <Icon name={isGiven ? 'arrow-down-left' : 'arrow-up-right'} size={16} color={accent} />
         </View>
         <View style={styles.rowMid}>
-          <Text style={styles.rowDesc} numberOfLines={1}>
+          <Text style={[styles.rowDesc, { color: theme.colors.textPrimary }]} numberOfLines={1}>
             {isGiven ? t('debts.typeGiven') : t('debts.typeTaken')}
           </Text>
-          <Text style={styles.rowDate}>{fmtDate(item.createdAt || item.dueDate)}</Text>
+          <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>{fmtDate(item.createdAt || item.dueDate)}</Text>
         </View>
         <View style={styles.rowRight}>
           <Text style={[styles.rowRemaining, { color: paid ? theme.colors.textTertiary : accent }]}>
             {fmt(item.remainingAmount)}
           </Text>
-          <Text style={styles.rowTotal}>/ {fmt(item.totalAmount)}</Text>
+          <Text style={[styles.rowTotal, { color: theme.colors.textTertiary }]}>/ {fmt(item.totalAmount)}</Text>
           {paid && <View style={styles.paidBadge}><Text style={styles.paidText}>{t('debts.paid')}</Text></View>}
         </View>
         
@@ -103,7 +98,7 @@ const ContactDetailScreen: React.FC = () => {
             <Text style={styles.payBtnText}>{t('paymentModal.payFull')}</Text>
           </Pressable>
         )}
-      </Animated.View>
+      </View>
     );
   }, [t]);
 
@@ -122,7 +117,7 @@ const ContactDetailScreen: React.FC = () => {
 
       {/* Summary Card */}
       <View style={styles.cardContainer}>
-        <Animated.View entering={FadeInDown.duration(500).springify()} style={[styles.summaryCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card, borderRadius: theme.radii.lg, padding: theme.spacing.xl }]}>
+        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, padding: theme.spacing.xl }]}>
           <View style={styles.cardTop}>
             <Text style={[styles.cardTitle, { color: theme.colors.textTertiary }]}>{t('debts.netStatus')}</Text>
             <Text style={[styles.netAmount, { color: netStatus >= 0 ? theme.colors.successLight : theme.colors.dangerLight }]}>
@@ -141,7 +136,7 @@ const ContactDetailScreen: React.FC = () => {
               <Text style={[styles.summaryVal, { color: theme.colors.dangerLight }]}>{fmt(totalTaken)}</Text>
             </View>
           </View>
-        </Animated.View>
+        </View>
       </View>
 
       {/* Transactions List */}
@@ -192,7 +187,7 @@ const styles = StyleSheet.create({
   rowRemaining: { fontFamily: 'System', fontSize: 15, letterSpacing: -0.3 },
   rowTotal: { fontFamily: 'System', fontSize: 11, marginTop: 1 },
   paidBadge: { marginTop: 4, backgroundColor: 'rgba(16,185,129,0.12)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  paidText: { fontFamily: 'System', fontSize: 9, color: '#10B981', letterSpacing: 0.8 },
+  paidText: { fontFamily: 'System', fontSize: 9, letterSpacing: 0.8 },
   payBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 },
   payBtnText: { fontFamily: 'System', fontSize: 11 },
   emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 8 },

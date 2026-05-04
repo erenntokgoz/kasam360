@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert, ActivityIndicator } from 'react-native';
-import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring, Layout } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -13,37 +12,30 @@ import type { Transaction } from '../api/transactionService';
 import AddTransactionModal from '../components/AddTransactionModal';
 import { formatCurrency, formatDate } from '../utils/format';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 interface TransactionRowProps { item: Transaction; index: number; }
 
-const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item, index }) => {
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const handlePressIn = useCallback(() => { scale.value = withSpring(0.98, { damping: 15, stiffness: 200 }); }, [scale]);
-  const handlePressOut = useCallback(() => { scale.value = withSpring(1, { damping: 15, stiffness: 200 }); }, [scale]);
-
+const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item }) => {
+  const isDark = useThemeStore((s) => s.isDarkMode);
+  const theme = getTheme(isDark);
   const isIncome = item.type === 'INCOME';
   const iconName = isIncome ? 'arrow-down-left' : 'arrow-up-right';
-  const amountColor = isIncome ? '#10B981' : '#EF4444';
+  const amountColor = isIncome ? theme.colors.successLight : theme.colors.dangerLight;
   const displayAmount = isIncome ? item.amount : -item.amount;
 
   return (
-    <AnimatedPressable
-      entering={FadeInDown.delay(index * 60).duration(400).springify().damping(18)}
-      layout={Layout.springify()}
-      style={[styles.rowContainer, animatedStyle]}
-      onPressIn={handlePressIn} onPressOut={handlePressOut}
+    <Pressable
+      style={styles.rowContainer}
+      activeOpacity={0.7}
     >
       <View style={[styles.rowIconCircle, { backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.10)' : 'rgba(248, 113, 113, 0.10)' }]}>
         <Icon name={iconName} size={16} color={amountColor} />
       </View>
       <View style={styles.rowMiddle}>
-        <Text style={styles.rowCategory} numberOfLines={1}>{item.category || item.type}</Text>
-        <Text style={styles.rowDate}>{formatDate(item.transactionDate)}</Text>
+        <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>{item.category || item.type}</Text>
+        <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>{formatDate(item.transactionDate)}</Text>
       </View>
       <Text style={[styles.rowAmount, { color: amountColor }]}>{formatCurrency(displayAmount, true)}</Text>
-    </AnimatedPressable>
+    </Pressable>
   );
 });
 
@@ -53,7 +45,7 @@ const SummaryBar: React.FC<SummaryProps> = ({ balance, totalIn, totalOut }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   return (
-    <Animated.View entering={FadeInDown.duration(500).springify()} style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
+    <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
       <View style={styles.summaryBalanceSection}>
         <Text style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}>Balance</Text>
         <Text style={[styles.summaryBalance, { color: theme.colors.textPrimary }]}>{formatCurrency(balance)}</Text>
@@ -79,17 +71,21 @@ const SummaryBar: React.FC<SummaryProps> = ({ balance, totalIn, totalOut }) => {
           </View>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 };
 
-const EmptyState: React.FC = () => (
+const EmptyState: React.FC = () => {
+  const isDark = useThemeStore((s) => s.isDarkMode);
+  const theme = getTheme(isDark);
+  return (
   <View style={styles.emptyContainer}>
-    <Icon name="inbox" size={48} color="#94A3B8" />
+    <Icon name="inbox" size={48} color={theme.colors.textTertiary} />
     <Text style={styles.emptyTitle}>No transactions yet</Text>
     <Text style={styles.emptySubtitle}>Tap the camera button below to scan your first receipt</Text>
   </View>
-);
+  );
+};
 
 const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -151,7 +147,7 @@ const HomeScreen: React.FC = () => {
         onRefresh={() => fetchTransactions(1)}
       />
       <Pressable style={[styles.fab, { bottom: insets.bottom + theme.spacing.xl, backgroundColor: theme.colors.accent }, isScanning && { opacity: 0.6 }]} onPress={handleScanReceipt} disabled={isScanning}>
-        {isScanning ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Icon name="camera" size={24} color="#FFFFFF" />}
+        {isScanning ? <ActivityIndicator size="small" color={theme.colors.textPrimary} /> : <Icon name="camera" size={24} color={theme.colors.textPrimary} />}
       </Pressable>
       <AddTransactionModal
         visible={showAddModal}
@@ -170,13 +166,13 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: 'System', fontSize: 18, letterSpacing: 0.4 },
   listContent: { paddingHorizontal: 24, paddingTop: 8 },
   separator: { height: 1, marginLeft: 56 },
-  summaryCard: { borderRadius: 10, padding: 24, marginBottom: 32 },
+  summaryCard: { borderRadius: 16, padding: 24, marginBottom: 32 },
   summaryBalanceSection: { alignItems: 'center', marginBottom: 24 },
   summaryLabel: { fontFamily: 'System', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 },
   summaryBalance: { fontFamily: 'System', fontSize: 36, letterSpacing: -0.5 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
   summaryMetric: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  summaryDot: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', alignItems: 'center', justifyContent: 'center' },
+  summaryDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 8, height: 8, borderRadius: 4 },
   summaryMetricLabel: { fontFamily: 'System', fontSize: 11, marginBottom: 1 },
   summaryMetricValue: { fontFamily: 'System', fontSize: 15 },

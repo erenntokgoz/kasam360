@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Modal, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring, Layout } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -12,14 +11,7 @@ import { useContactStore } from '../store/useContactStore';
 import type { Debt, DebtType } from '../api/debtService';
 import { formatCurrency, formatDate } from '../utils/format';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void }> = React.memo(({ item, index, onPress }) => {
-  const scale = useSharedValue(1);
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const pIn = useCallback(() => { scale.value = withSpring(0.98, { damping: 15, stiffness: 200 }); }, [scale]);
-  const pOut = useCallback(() => { scale.value = withSpring(1, { damping: 15, stiffness: 200 }); }, [scale]);
-
+const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void }> = React.memo(({ item, onPress }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const isGiven = item.type === 'GIVEN';
@@ -29,11 +21,9 @@ const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void 
   const progress = item.totalAmount > 0 ? 1 - item.remainingAmount / item.totalAmount : 0;
 
   return (
-    <AnimatedPressable
-      entering={FadeInDown.delay(index * 50).duration(350).springify().damping(18)}
-      layout={Layout.springify()}
-      style={[styles.rowWrap, animStyle]}
-      onPressIn={pIn} onPressOut={pOut}
+    <Pressable
+      style={styles.rowWrap}
+      activeOpacity={0.7}
       onPress={() => onPress(item)}
     >
       <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
@@ -51,7 +41,7 @@ const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void 
         <Text style={[styles.rowTotal, { color: theme.colors.textTertiary }]}>/ {formatCurrency(item.totalAmount)}</Text>
         {paid && <View style={styles.paidBadge}><Text style={styles.paidText}>PAID</Text></View>}
       </View>
-    </AnimatedPressable>
+    </Pressable>
   );
 });
 
@@ -84,7 +74,7 @@ const SummaryHeader: React.FC = () => {
   const theme = getTheme(isDark);
   if (!summary) return null;
   return (
-    <Animated.View entering={FadeInDown.duration(500).springify()} style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
+    <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
       <View style={styles.summaryRow}>
         <View style={styles.summaryCol}>
           <View style={styles.summaryDotWrap}><View style={[styles.sDot, { backgroundColor: theme.colors.successLight }]} /></View>
@@ -102,7 +92,7 @@ const SummaryHeader: React.FC = () => {
           </View>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 };
 
@@ -234,15 +224,15 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerTitle: { fontFamily: 'System', fontSize: 18, letterSpacing: 0.4 },
   segContainer: { paddingHorizontal: 24, marginBottom: 8 },
-  segWrap: { flexDirection: 'row', borderRadius: 10, padding: 3 },
-  segBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
+  segWrap: { flexDirection: 'row', borderRadius: 12, padding: 3 },
+  segBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   segLabel: { fontFamily: 'System', fontSize: 13 },
   listContent: { paddingHorizontal: 24, paddingTop: 8 },
   separator: { height: 1, marginLeft: 56 },
-  summaryCard: { borderRadius: 10, padding: 24, marginBottom: 32 },
+  summaryCard: { borderRadius: 16, padding: 24, marginBottom: 32 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
   summaryCol: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  summaryDotWrap: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.04)', alignItems: 'center', justifyContent: 'center' },
+  summaryDotWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   sDot: { width: 8, height: 8, borderRadius: 4 },
   summaryLabel: { fontFamily: 'System', fontSize: 11, marginBottom: 1 },
   summaryVal: { fontFamily: 'System', fontSize: 15 },
@@ -258,13 +248,12 @@ const styles = StyleSheet.create({
   rowRemaining: { fontFamily: 'System', fontSize: 15, letterSpacing: -0.3 },
   rowTotal: { fontFamily: 'System', fontSize: 11, marginTop: 1 },
   paidBadge: { marginTop: 4, backgroundColor: 'rgba(16,185,129,0.12)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  paidText: { fontFamily: 'System', fontSize: 9, color: '#10B981', letterSpacing: 0.8 },
+  paidText: { fontFamily: 'System', fontSize: 9, letterSpacing: 0.8 },
   emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 8 },
   emptyTitle: { fontFamily: 'System', fontSize: 18, marginTop: 12 },
   emptySub: { fontFamily: 'System', fontSize: 13, textAlign: 'center', maxWidth: 260 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.60)', justifyContent: 'flex-end' },
   modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  modalHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 24 },
   modalTitle: { fontFamily: 'System', fontSize: 22, textAlign: 'center' },
   modalEntity: { fontFamily: 'System', fontSize: 13, textAlign: 'center', marginTop: 4, marginBottom: 32 },
   modalAmountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },

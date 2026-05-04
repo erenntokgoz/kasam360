@@ -21,7 +21,7 @@ export const NotificationsScreen: React.FC = () => {
 
   const getIconData = (type: string) => {
     switch(type) {
-      case 'BUDGET': return { name: 'pie-chart', color: '#F59E0B' };
+      case 'BUDGET': return { name: 'pie-chart', color: theme.colors.accent };
       case 'DEBT': return { name: 'alert-circle', color: theme.colors.dangerLight };
       case 'RECURRING': return { name: 'refresh-cw', color: theme.colors.accent };
       default: return { name: 'info', color: theme.colors.successLight };

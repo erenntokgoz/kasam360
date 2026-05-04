@@ -172,7 +172,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                       style={[{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, borderRadius: theme.radii.full, backgroundColor: theme.colors.card }, category === cat && { backgroundColor: theme.colors.accent }]}
                       onPress={() => setCategory(cat)}
                     >
-                      <Text style={{ fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.sm, color: category === cat ? '#FFFFFF' : theme.colors.textSecondary }}>{cat}</Text>
+                      <Text style={{ fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.sm, color: category === cat ? theme.colors.textPrimary : theme.colors.textSecondary }}>{cat}</Text>
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -230,7 +230,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                     value={isRecurring}
                     onValueChange={setIsRecurring}
                     trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
-                    thumbColor="#FFFFFF"
+                    thumbColor={theme.colors.primary}
                     style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                   />
                 </View>

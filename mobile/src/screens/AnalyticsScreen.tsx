@@ -30,7 +30,7 @@ const AnalyticsScreen: React.FC = () => {
     const amountStr = formatCurrency(isIncome ? item.amount : -item.amount, true);
 
     return (
-      <View style={styles.row}>
+      <View style={[styles.row, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.iconContainer}>
           <Icon
             name={isIncome ? 'arrow-down-left' : 'arrow-up-right'}
@@ -108,9 +108,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 12 },
   headerTitle: { fontFamily: 'System', fontSize: 18, letterSpacing: 0.4 },
   listContent: { paddingHorizontal: 24, paddingTop: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#141C2B', borderRadius: 10, padding: 24 },
+  row: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 24 },
   separator: { height: 1, marginVertical: 8 },
-  iconContainer: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255, 255, 255, 0.05)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  iconContainer: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   rowCenter: { flex: 1, justifyContent: 'center' },
   categoryText: { fontFamily: 'System', fontSize: 15, marginBottom: 4 },
   dateText: { fontFamily: 'System', fontSize: 11 },
