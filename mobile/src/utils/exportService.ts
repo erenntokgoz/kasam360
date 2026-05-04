@@ -4,19 +4,7 @@ import { Alert } from 'react-native';
 const RNHTMLtoPDF = require('react-native-html-to-pdf');
 import { Transaction } from '../api/transactionService';
 
-const formatCurrency = (cents: number): string => {
-  const lira = Math.abs(cents) / 100;
-  return new Intl.NumberFormat('tr-TR', {
-    style: 'currency',
-    currency: 'TRY',
-  }).format(lira);
-};
-
-const formatDate = (iso: string): string => {
-  if (!iso) return '';
-  const date = new Date(iso);
-  return date.toLocaleDateString('tr-TR');
-};
+import { formatCurrency, formatDate } from './format';
 
 export const exportToCSV = async (transactions: Transaction[], fileName: string) => {
   try {
@@ -40,9 +28,9 @@ export const exportToCSV = async (transactions: Transaction[], fileName: string)
       type: 'text/csv',
       title: 'CSV Olarak Dışa Aktar',
     });
-  } catch (error) {
+  } catch (error: any) {
     if (__DEV__) { console.error('CSV Export Error: ', error); }
-    Alert.alert('Hata', 'Dışa aktarma başarısız oldu.');
+    Alert.alert("Dışa aktarma başarısız", error.message);
   }
 };
 
@@ -114,8 +102,8 @@ export const exportToPDF = async (
         title: 'PDF Olarak Dışa Aktar',
       });
     }
-  } catch (error) {
+  } catch (error: any) {
     if (__DEV__) { console.error('PDF Export Error: ', error); }
-    Alert.alert('Hata', 'Dışa aktarma başarısız oldu.');
+    Alert.alert("Dışa aktarma başarısız", error.message);
   }
 };

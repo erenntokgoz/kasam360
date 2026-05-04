@@ -11,6 +11,8 @@ import { scanReceipt } from '../api/ocrService';
 import type { Transaction } from '../api/transactionService';
 import AddTransactionModal from '../components/AddTransactionModal';
 import { formatCurrency, formatDate } from '../utils/format';
+import { useNotificationStore } from '../store/useNotificationStore';
+import { useRecurringStore } from '../store/useRecurringStore';
 
 interface TransactionRowProps { item: Transaction; index: number; }
 
@@ -95,8 +97,21 @@ const HomeScreen: React.FC = () => {
   const { transactions, totalIncome, totalExpense, balance, isLoading, fetchTransactions, addTransaction } = useLedgerStore();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
+  const { addNotification } = useNotificationStore();
 
   useEffect(() => { fetchTransactions(1).catch(() => { }); }, [fetchTransactions]);
+
+  const checkBudgetAndRecurring = useCallback(() => {
+    if (balance < 0) {
+      addNotification({ type: 'BUDGET', title: 'Bütçe Uyarısı', body: 'Bakiyeniz eksiye düştü!' });
+    }
+  }, [balance, addNotification]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      checkBudgetAndRecurring();
+    }
+  }, [balance, isLoading, checkBudgetAndRecurring]);
 
   const handleScanReceipt = useCallback(async () => {
     try {
@@ -163,30 +178,30 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { fontFamily: 'System', fontSize: 18, letterSpacing: 0.4 },
+  headerTitle: { fontSize: 18, letterSpacing: 0.4 },
   listContent: { paddingHorizontal: 24, paddingTop: 8 },
   separator: { height: 1, marginLeft: 56 },
   summaryCard: { borderRadius: 16, padding: 24, marginBottom: 32 },
   summaryBalanceSection: { alignItems: 'center', marginBottom: 24 },
-  summaryLabel: { fontFamily: 'System', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 },
-  summaryBalance: { fontFamily: 'System', fontSize: 36, letterSpacing: -0.5 },
+  summaryLabel: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 },
+  summaryBalance: { fontSize: 36, letterSpacing: -0.5 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
   summaryMetric: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   summaryDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  summaryMetricLabel: { fontFamily: 'System', fontSize: 11, marginBottom: 1 },
-  summaryMetricValue: { fontFamily: 'System', fontSize: 15 },
+  summaryMetricLabel: { fontSize: 11, marginBottom: 1 },
+  summaryMetricValue: { fontSize: 15 },
   summaryDivider: { width: 1, height: 32 },
   rowContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 4 },
   rowIconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   rowMiddle: { flex: 1, marginRight: 8 },
-  rowCategory: { fontFamily: 'System', fontSize: 15, marginBottom: 2 },
-  rowDate: { fontFamily: 'System', fontSize: 11 },
-  rowAmount: { fontFamily: 'System', fontSize: 15, letterSpacing: -0.3 },
+  rowCategory: { fontSize: 15, marginBottom: 2 },
+  rowDate: { fontSize: 11 },
+  rowAmount: { fontSize: 15, letterSpacing: -0.3 },
   fab: { position: 'absolute', right: 32, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 8 },
-  emptyTitle: { fontFamily: 'System', fontSize: 18, marginTop: 12 },
-  emptySubtitle: { fontFamily: 'System', fontSize: 13, textAlign: 'center', maxWidth: 260 },
+  emptyTitle: { fontSize: 18, marginTop: 12 },
+  emptySubtitle: { fontSize: 13, textAlign: 'center', maxWidth: 260 },
 });
 
 export default HomeScreen;

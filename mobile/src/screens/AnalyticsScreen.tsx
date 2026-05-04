@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -7,6 +7,7 @@ import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useLedgerStore } from '../store/useLedgerStore';
 import { Transaction } from '../api/transactionService';
+import { getAuditLogs, AuditLog } from '../api/auditLogService';
 import { formatCurrency, formatDate } from '../utils/format';
 
 const AnalyticsScreen: React.FC = () => {
@@ -16,16 +17,45 @@ const AnalyticsScreen: React.FC = () => {
   const theme = getTheme(isDark);
   const { transactions, isLoading, fetchTransactions, pagination } = useLedgerStore();
   const totalTransactions = pagination?.total || 0;
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
   useEffect(() => {
     fetchTransactions(1, 50);
+    getAuditLogs().then(setAuditLogs).catch(() => {});
   }, []);
 
   const onRefresh = () => {
     fetchTransactions(1, 50);
+    getAuditLogs().then(setAuditLogs).catch(() => {});
   };
 
-  const renderItem = ({ item }: { item: Transaction }) => {
+  const combinedData = [
+    ...transactions.map((t) => ({ ...t, _type: 'transaction' as const })),
+    ...auditLogs.map((a) => ({ ...a, _type: 'audit' as const })),
+  ];
+
+  const renderItem = ({ item }: { item: any }) => {
+    if (item._type === 'audit') {
+      return (
+        <View style={[styles.row, { backgroundColor: theme.colors.accentTransparent }]}>
+          <View style={[styles.iconContainer, { backgroundColor: theme.colors.accentTransparent }]}>
+            <Icon name="activity" size={20} color={theme.colors.accent} />
+          </View>
+          <View style={styles.rowCenter}>
+            <Text style={[styles.categoryText, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+              {item.action} · {item.entityType}
+            </Text>
+            <Text style={[styles.dateText, { color: theme.colors.textTertiary }]}>
+              {formatDate(item.createdAt)}
+            </Text>
+          </View>
+          <View style={styles.rowRight}>
+            <Text style={[styles.amountText, { color: theme.colors.accent }]}>Audit</Text>
+          </View>
+        </View>
+      );
+    }
+
     const isIncome = item.type === 'INCOME';
     const amountStr = formatCurrency(isIncome ? item.amount : -item.amount, true);
 
@@ -83,7 +113,7 @@ const AnalyticsScreen: React.FC = () => {
         </Pressable>
       </View>
       <FlatList
-        data={transactions}
+        data={combinedData}
         keyExtractor={(item) => item._id}
         renderItem={renderItem}
         contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
@@ -106,21 +136,21 @@ const AnalyticsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 12 },
-  headerTitle: { fontFamily: 'System', fontSize: 18, letterSpacing: 0.4 },
+  headerTitle: { fontSize: 18, letterSpacing: 0.4 },
   listContent: { paddingHorizontal: 24, paddingTop: 12 },
   row: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 24 },
   separator: { height: 1, marginVertical: 8 },
   iconContainer: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   rowCenter: { flex: 1, justifyContent: 'center' },
-  categoryText: { fontFamily: 'System', fontSize: 15, marginBottom: 4 },
-  dateText: { fontFamily: 'System', fontSize: 11 },
+  categoryText: { fontSize: 15, marginBottom: 4 },
+  dateText: { fontSize: 11 },
   rowRight: { alignItems: 'flex-end', justifyContent: 'center', marginLeft: 8 },
-  amountText: { fontFamily: 'System', fontSize: 15 },
+  amountText: { fontSize: 15 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  emptyTitle: { fontFamily: 'System', fontSize: 18, marginBottom: 4 },
-  emptySubtitle: { fontFamily: 'System', fontSize: 13, textAlign: 'center' },
+  emptyTitle: { fontSize: 18, marginBottom: 4 },
+  emptySubtitle: { fontSize: 13, textAlign: 'center' },
   footerContainer: { alignItems: 'center', paddingVertical: 24 },
-  footerText: { fontFamily: 'System', fontSize: 13 },
+  footerText: { fontSize: 13 },
 });
 
 export default AnalyticsScreen;

@@ -58,7 +58,10 @@
     "noDebtsTitle": "Henüz borç yok",
     "noDebtsSub": "Yeni bir borç kaydı eklemek için + butonuna dokunun",
     "noDueDate": "Vade yok",
-    "paid": "ÖDENDİ"
+    "paid": "ÖDENDİ",
+    "netStatus": "Net Durum",
+    "typeGiven": "Alacak",
+    "typeTaken": "Borç"
   },
   "paymentModal": {
     "titleGiven": "Tahsil Et",
@@ -102,7 +105,8 @@
     "transaction": "İşlem",
     "noRecordsTitle": "Henüz işlem kaydı yok",
     "noRecordsSub": "İlk işleminizi eklemek için + butonuna basın",
-    "totalRecords": "Toplam {{count}} kayıt"
+    "totalRecords": "Toplam {{count}} kayıt",
+    "recentTransactions": "Son İşlemler"
   },
   "settings": {
     "title": "Ayarlar",

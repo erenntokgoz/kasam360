@@ -147,6 +147,7 @@ const login = async (req, res) => {
     // --- Find tenant (explicitly select password since it has select:false) ---
     const tenant = await Tenant.findOne({ phone }).select('+password');
     if (!tenant) {
+      console.warn(`[BRUTE FORCE KORUMASI] Başarısız giriş denemesi: Bulunamayan telefon numarası: ${phone}`);
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials.',
@@ -156,6 +157,7 @@ const login = async (req, res) => {
     // --- Compare password ---
     const isMatch = await bcrypt.compare(password, tenant.password);
     if (!isMatch) {
+      console.warn(`[BRUTE FORCE KORUMASI] Başarısız giriş denemesi: Yanlış şifre (Telefon: ${phone})`);
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials.',

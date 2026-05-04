@@ -42,7 +42,6 @@ const RecurringsScreen: React.FC = () => {
         <Pressable
           style={styles.rowContent}
           onLongPress={() => handleLongPress(item.id)}
-          activeOpacity={0.7}
         >
           <View style={[styles.rowIconCircle, { backgroundColor: isIncome ? theme.colors.successTransparent : theme.colors.dangerTransparent }]}>
             <Icon name={iconName} size={16} color={amountColor} />
@@ -96,6 +95,7 @@ const RecurringsScreen: React.FC = () => {
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
         defaultRecurring={true}
+        mode="recurring"
       />
     </View>
   );
@@ -104,19 +104,19 @@ const RecurringsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { fontFamily: 'System', fontSize: 18, letterSpacing: 0.4 },
+  headerTitle: { fontSize: 18, letterSpacing: 0.4 },
   listContent: {},
   rowContainer: { borderRadius: 10, marginBottom: 16 },
   rowContent: { flexDirection: 'row', alignItems: 'center', padding: 16 },
   rowIconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   rowMiddle: { flex: 1, marginRight: 8 },
-  rowCategory: { fontFamily: 'System', fontSize: 15, marginBottom: 2 },
-  rowFreq: { fontFamily: 'System', fontSize: 11 },
+  rowCategory: { fontSize: 15, marginBottom: 2 },
+  rowFreq: { fontSize: 11 },
   rowRight: { alignItems: 'flex-end' },
-  rowAmount: { fontFamily: 'System', fontSize: 15, letterSpacing: -0.3, marginBottom: 4 },
+  rowAmount: { fontSize: 15, letterSpacing: -0.3, marginBottom: 4 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { fontFamily: 'System', fontSize: 18, marginTop: 12 },
-  emptySubtitle: { fontFamily: 'System', fontSize: 13, textAlign: 'center', maxWidth: 260 },
+  emptyTitle: { fontSize: 18, marginTop: 12 },
+  emptySubtitle: { fontSize: 13, textAlign: 'center', maxWidth: 260 },
 });
 
 export default RecurringsScreen;

@@ -116,15 +116,15 @@ const styles = StyleSheet.create({
   slide: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   iconContainer: { width: 120, height: 120, borderRadius: 9999, alignItems: 'center', justifyContent: 'center', marginBottom: 48 },
   textContainer: { alignItems: 'center' },
-  title: { fontFamily: 'System', fontSize: 28, textAlign: 'center', marginBottom: 16 },
-  description: { fontFamily: 'System', fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: 28, textAlign: 'center', marginBottom: 16 },
+  description: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
   footer: { paddingHorizontal: 32, paddingTop: 16 },
   pagination: { flexDirection: 'row', justifyContent: 'center', marginBottom: 24 },
   dot: { width: 8, height: 8, borderRadius: 4, marginHorizontal: 4 },
   activeDot: { width: 24 },
   inactiveDot: {},
   startButton: { borderRadius: 10, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
-  startButtonText: { fontFamily: 'System', fontSize: 18, letterSpacing: 0.5 },
+  startButtonText: { fontSize: 18, letterSpacing: 0.5 },
   buttonPlaceholder: { height: 56 },
 });
 

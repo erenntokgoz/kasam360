@@ -18,10 +18,11 @@ interface AddTransactionModalProps {
   onClose: () => void;
   initialData?: Transaction | null;
   defaultRecurring?: boolean;
+  mode?: 'transaction' | 'recurring';
 }
 
 
-const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialData, defaultRecurring = false }) => {
+const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialData, defaultRecurring = false, mode = 'transaction' }) => {
   const { t } = useTranslation();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
@@ -58,11 +59,11 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
         setCategory('');
         setDescription('');
         setNewCategory('');
-        setIsRecurring(defaultRecurring);
+        setIsRecurring(mode === 'recurring' ? true : defaultRecurring);
         setFrequency('MONTHLY');
       }
     }
-  }, [visible, initialData]);
+  }, [visible, initialData, mode, defaultRecurring]);
 
   const handleAddCategory = () => {
     if (newCategory.trim() && !categories.includes(newCategory.trim())) {
@@ -86,23 +87,27 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
 
     try {
       if (initialData) {
-        await updateTransaction(initialData._id, {
-          type,
-          amount: Math.round(numericAmount * 100),
-          method,
-          category,
-          description: description.trim() || undefined,
-        });
+        if (mode === 'transaction') {
+          await updateTransaction(initialData._id, {
+            type,
+            amount: Math.round(numericAmount * 100),
+            method,
+            category,
+            description: description.trim() || undefined,
+          });
+        }
       } else {
-        await addTransaction({
-          type,
-          amount: Math.round(numericAmount * 100),
-          method,
-          category,
-          description: description.trim() || undefined,
-        });
+        if (mode === 'transaction') {
+          await addTransaction({
+            type,
+            amount: Math.round(numericAmount * 100),
+            method,
+            category,
+            description: description.trim() || undefined,
+          });
+        }
 
-        if (isRecurring) {
+        if ((isRecurring && mode === 'transaction') || mode === 'recurring') {
           useRecurringStore.getState().addRecurring({
             type,
             amount: Math.round(numericAmount * 100),
@@ -129,7 +134,9 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           <Pressable style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radii.xl, padding: theme.spacing.xl, ...theme.shadows.card, maxHeight: '90%' }} onPress={(e) => e.stopPropagation()}>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={[styles.header, { marginBottom: theme.spacing.xl }]}>
-                <Text style={{ fontFamily: theme.fonts.bold, fontSize: theme.fontSizes.xl, color: theme.colors.textPrimary }}>{initialData ? 'İşlemi Güncelle' : t('addTransactionModal.title')}</Text>
+                <Text style={{ fontFamily: theme.fonts.bold, fontSize: theme.fontSizes.xl, color: theme.colors.textPrimary }}>
+                  {initialData ? 'İşlemi Güncelle' : mode === 'recurring' ? 'Hatırlatıcı Ekle' : t('addTransactionModal.title')}
+                </Text>
                 <Pressable onPress={onClose} hitSlop={8}>
                   <Icon name="x" size={24} color={theme.colors.textTertiary} />
                 </Pressable>
@@ -223,20 +230,44 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
               </View>
 
               {/* Recurring Toggle */}
-              <View style={{ backgroundColor: theme.colors.card, borderRadius: theme.radii.base, padding: theme.spacing.base, marginBottom: theme.spacing.md }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Icon name="repeat" size={16} color={theme.colors.textTertiary} />
-                  <Text style={{ flex: 1, fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.base, color: theme.colors.textPrimary, marginLeft: theme.spacing.sm }}>Hatırlatıcı Ekle</Text>
-                  <Switch
-                    value={isRecurring}
-                    onValueChange={setIsRecurring}
-                    trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
-                    thumbColor={theme.colors.primary}
-                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                  />
+              {mode !== 'recurring' && (
+                <View style={{ backgroundColor: theme.colors.card, borderRadius: theme.radii.base, padding: theme.spacing.base, marginBottom: theme.spacing.md }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Icon name="repeat" size={16} color={theme.colors.textTertiary} />
+                    <Text style={{ flex: 1, fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.base, color: theme.colors.textPrimary, marginLeft: theme.spacing.sm }}>Hatırlatıcı Ekle</Text>
+                    <Switch
+                      value={isRecurring}
+                      onValueChange={setIsRecurring}
+                      trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
+                      thumbColor={theme.colors.primary}
+                      style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                    />
+                  </View>
+                  {isRecurring && (
+                    <View style={{ flexDirection: 'row', marginTop: theme.spacing.md, gap: theme.spacing.xs }}>
+                      {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const).map((f) => (
+                        <Pressable
+                          key={f}
+                          style={[{ flex: 1, alignItems: 'center', paddingVertical: theme.spacing.xs, borderRadius: theme.radii.sm, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, frequency === f && { backgroundColor: 'rgba(37, 99, 235, 0.1)' }]}
+                          onPress={() => setFrequency(f)}
+                        >
+                          <Text style={{ fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.xs, color: frequency === f ? theme.colors.accent : theme.colors.textTertiary }}>
+                            {f === 'DAILY' ? 'Günlük' : f === 'WEEKLY' ? 'Hft.' : f === 'MONTHLY' ? 'Aylık' : 'Yıllık'}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </View>
-                {isRecurring && (
-                  <View style={{ flexDirection: 'row', marginTop: theme.spacing.md, gap: theme.spacing.xs }}>
+              )}
+
+              {mode === 'recurring' && (
+                <View style={{ backgroundColor: theme.colors.card, borderRadius: theme.radii.base, padding: theme.spacing.base, marginBottom: theme.spacing.md }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.md }}>
+                    <Icon name="clock" size={16} color={theme.colors.textTertiary} />
+                    <Text style={{ flex: 1, fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.base, color: theme.colors.textPrimary, marginLeft: theme.spacing.sm }}>Tekrarlanma Sıklığı</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: theme.spacing.xs }}>
                     {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const).map((f) => (
                       <Pressable
                         key={f}
@@ -249,8 +280,8 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                       </Pressable>
                     ))}
                   </View>
-                )}
-              </View>
+                </View>
+              )}
 
               {/* Submit Button */}
               <Pressable

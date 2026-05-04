@@ -48,6 +48,7 @@ function patchApiClient(ipv4) {
     console.warn('[autoboot] WARNING: No :5000 URL found in client.ts — skipping patch.');
     return;
   }
+  re.lastIndex = 0;
 
   src = src.replace(re, `'${newUrl}'`);
   fs.writeFileSync(clientPath, src, 'utf8');

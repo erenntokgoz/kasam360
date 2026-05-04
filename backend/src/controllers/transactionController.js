@@ -90,6 +90,8 @@ const getTransactions = async (req, res) => {
           totalIncome,   // integer cents
           totalExpense,  // integer cents
           balance: totalIncome - totalExpense,
+          totalDebt: 0,
+          totalReceivable: 0,
         },
       },
     });

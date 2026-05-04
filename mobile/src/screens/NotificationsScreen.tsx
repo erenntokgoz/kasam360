@@ -7,17 +7,14 @@ import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
 import { useNotificationStore, AppNotification } from '../store/useNotificationStore';
 
+import { formatDate } from '../utils/format';
+
 export const NotificationsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { isDarkMode } = useThemeStore();
   const theme = getTheme(isDarkMode);
   const { notifications, markAsRead, markAllAsRead, clearAll } = useNotificationStore();
-
-  const formatDate = (iso: string) => {
-    const date = new Date(iso);
-    return date.toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-  };
 
   const getIconData = (type: string) => {
     switch(type) {

@@ -58,7 +58,10 @@
     "noDebtsTitle": "No debts yet",
     "noDebtsSub": "Tap + to add a new debt record",
     "noDueDate": "No due date",
-    "paid": "PAID"
+    "paid": "PAID",
+    "netStatus": "Net Status",
+    "typeGiven": "Receivable",
+    "typeTaken": "Payable"
   },
   "paymentModal": {
     "titleGiven": "Collect",
@@ -102,7 +105,8 @@
     "transaction": "Transaction",
     "noRecordsTitle": "No transaction records yet",
     "noRecordsSub": "Tap the + button to add your first transaction",
-    "totalRecords": "Total {{count}} records"
+    "totalRecords": "Total {{count}} records",
+    "recentTransactions": "Recent Transactions"
   },
   "settings": {
     "title": "Settings",
