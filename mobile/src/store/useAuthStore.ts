@@ -3,7 +3,6 @@ import apiClient from '../api/client';
 import {
   setItem,
   getItem,
-  removeItem,
   clearStorage,
   StorageKeys,
 } from '../utils/storage';
@@ -20,6 +19,7 @@ export interface Tenant {
 interface AuthState {
   user: Tenant | null;
   token: string | null;
+  refreshToken: string | null;
   isLoading: boolean;
   error: string | null;
 
@@ -69,6 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   // Initial state — always start unauthenticated; hydration happens explicitly.
   user: null,
   token: null,
+  refreshToken: null,
   isLoading: false,
   error: null,
 
@@ -78,12 +79,13 @@ export const useAuthStore = create<AuthState>((set) => ({
    */
   hydrateFromStorage: () => {
     const token = getItem(StorageKeys.TOKEN);
+    const refreshToken = getItem(StorageKeys.REFRESH_TOKEN);
     const userRaw = getItem(StorageKeys.USER);
 
     if (token && userRaw) {
       try {
         const user: Tenant = JSON.parse(userRaw);
-        set({ token, user });
+        set({ token, refreshToken, user });
       } catch {
         // Corrupted storage — wipe and require re-login
         clearAuth();
@@ -102,7 +104,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         payload,
       );
       persistAuth(data.token, data.refreshToken, data.tenant);
-      set({ user: data.tenant, token: data.token, isLoading: false });
+      set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Registration failed.';
@@ -122,7 +124,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         payload,
       );
       persistAuth(data.token, data.refreshToken, data.tenant);
-      set({ user: data.tenant, token: data.token, isLoading: false });
+      set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed.';
       set({ error: message, isLoading: false });
@@ -135,7 +137,7 @@ export const useAuthStore = create<AuthState>((set) => ({
    */
   logout: () => {
     clearAuth();
-    set({ user: null, token: null, error: null });
+    set({ user: null, token: null, refreshToken: null, error: null });
   },
 
   /**

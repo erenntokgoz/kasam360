@@ -3,7 +3,6 @@ import {
   getTransactions,
   createTransaction,
   Transaction,
-  TransactionType,
   CreateTransactionPayload,
   TransactionPagination,
   TransactionFilters,

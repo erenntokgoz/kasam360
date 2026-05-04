@@ -27,7 +27,7 @@ const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item }) => {
       style={styles.rowContainer}
       activeOpacity={0.7}
     >
-      <View style={[styles.rowIconCircle, { backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.10)' : 'rgba(248, 113, 113, 0.10)' }]}>
+      <View style={[styles.rowIconCircle, { backgroundColor: isIncome ? theme.colors.successTransparent : theme.colors.dangerTransparent }]}>
         <Icon name={iconName} size={16} color={amountColor} />
       </View>
       <View style={styles.rowMiddle}>
@@ -142,7 +142,7 @@ const HomeScreen: React.FC = () => {
         ListEmptyComponent={!isLoading ? <EmptyState /> : null}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />}
+        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.accent }]} />}
         refreshing={isLoading}
         onRefresh={() => fetchTransactions(1)}
       />

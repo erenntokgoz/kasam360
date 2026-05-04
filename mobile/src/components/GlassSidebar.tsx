@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Image } from 'react-native';
 import { DrawerContentScrollView, DrawerContentComponentProps } from '@react-navigation/drawer';
 import { BlurView } from '@react-native-community/blur';
 import Icon from 'react-native-vector-icons/Feather';
@@ -48,17 +48,17 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
           reducedTransparencyFallbackColor={theme.colors.primary}
         />
       )}
-      <View style={[styles.overlay, { backgroundColor: isDarkMode ? 'rgba(10, 15, 26, 0.25)' : 'rgba(255, 255, 255, 0.80)' }]} />
+      <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]} />
 
       <DrawerContentScrollView
         {...props}
         contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: insets.top + theme.spacing.lg }}
       >
         <View style={{ alignItems: 'center', marginBottom: theme.spacing.xl }}>
-          <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(37, 99, 235, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.sm }}>
+          <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: theme.colors.accentTransparent, alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.sm }}>
             <Icon name="layers" size={22} color={theme.colors.accent} />
           </View>
-          <Text style={{ fontFamily: theme.fonts.bold, fontSize: theme.fontSizes.lg, color: theme.colors.textPrimary, letterSpacing: 0.5 }}>Kasam360</Text>
+          <Image source={require('../assets/logo-text.png')} style={{ width: 160, height: 40, resizeMode: 'contain' }} />
           {user?.businessName && (
             <Text style={{ fontFamily: theme.fonts.regular, fontSize: theme.fontSizes.xs, color: theme.colors.textTertiary, marginTop: 2 }} numberOfLines={1}>{user.businessName}</Text>
           )}
@@ -75,7 +75,7 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
                 activeOpacity={0.7}
                 style={[
                   { flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing.md, paddingHorizontal: theme.spacing.base, borderRadius: theme.radii.base },
-                  isActive && { backgroundColor: 'rgba(37, 99, 235, 0.1)' },
+                  isActive && { backgroundColor: theme.colors.accentTransparent },
                 ]}
                 onPress={() => props.navigation.navigate(item.route)}
               >

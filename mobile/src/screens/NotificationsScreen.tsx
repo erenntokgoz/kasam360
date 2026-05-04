@@ -68,7 +68,7 @@ export const NotificationsScreen: React.FC = () => {
     return (
       <View style={styles.listHeader}>
          {hasUnread ? (
-           <Pressable onPress={markAllAsRead} style={styles.markAllBtn}>
+           <Pressable onPress={markAllAsRead} style={[styles.markAllBtn, { backgroundColor: theme.colors.accentTransparent }]}>
              <Icon name="check-all" size={16} color={theme.colors.accent} />
              <Text style={[styles.markAllText, { color: theme.colors.accent, fontFamily: theme.fonts.medium }]}>Tümünü Okundu İşaretle</Text>
            </Pressable>
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerTitle: { fontSize: 18, letterSpacing: 0.4 },
   listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  markAllBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(37, 99, 235, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  markAllBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   markAllText: { fontSize: 13, marginLeft: 6 },
   clearBtn: { paddingHorizontal: 8, paddingVertical: 6 },
   clearText: { fontSize: 13 },

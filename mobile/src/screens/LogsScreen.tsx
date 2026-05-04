@@ -1,37 +1,42 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeIcon } from '../components/SafeIcon';
 import { useLogStore } from '../store/useLogStore';
+import { useThemeStore } from '../store/useThemeStore';
+import { getTheme } from '../theme';
+import { formatDate } from '../utils/format';
 
 export default function LogsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const logs = useLogStore((s) => s.logs);
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
+  const theme = getTheme(isDarkMode);
 
   const renderLog = ({ item }: { item: any }) => {
-    let color = '#FFFFFF';
-    if (item.type === 'success') color = '#10B981';
-    if (item.type === 'error') color = '#EF4444';
+    let color = theme.colors.textPrimary;
+    if (item.type === 'success') color = theme.colors.successLight;
+    if (item.type === 'error') color = theme.colors.dangerLight;
 
     return (
-      <View style={styles.logRow}>
-        <Text style={styles.timestamp}>[{item.timestamp}]</Text>
+      <View style={[styles.logRow, { borderColor: theme.colors.border }]}>
+        <Text style={[styles.timestamp, { color: theme.colors.textSecondary }]}>[{formatDate(item.timestamp)}]</Text>
         <Text style={[styles.action, { color }]}>{item.action}</Text>
       </View>
     );
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
+      <View style={[styles.header, { borderColor: theme.colors.border }]}>
         <TouchableOpacity hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
-          <SafeIcon name="menu-outline" size={28} color="#FFFFFF" fallbackText="MENÜ" />
+          <SafeIcon name="menu-outline" size={28} color={theme.colors.textPrimary} fallbackText="MENÜ" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>SİSTEM KAYITLARI</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>SİSTEM KAYITLARI</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={styles.statusDot} />
+          <View style={[styles.statusDot, { backgroundColor: theme.colors.successLight }]} />
         </View>
       </View>
       <FlatList
@@ -48,18 +53,15 @@ export default function LogsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
   },
   header: {
     padding: 20,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: 2,
@@ -67,7 +69,7 @@ const styles = StyleSheet.create({
   statusDot: {
     width: 8,
     height: 8,
-    backgroundColor: '#10B981',
+    borderRadius: 4,
   },
   listContent: {
     padding: 10,
@@ -76,11 +78,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
     flexWrap: 'wrap',
   },
   timestamp: {
-    color: '#8E8E93',
     fontSize: 12,
     marginRight: 10,
     fontWeight: 'bold',

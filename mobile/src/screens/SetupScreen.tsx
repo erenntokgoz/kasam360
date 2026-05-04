@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Pressable,
-  KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
@@ -54,7 +54,7 @@ const SetupScreen: React.FC = () => {
           <View style={styles.logoCircle}>
             <Icon name="settings" size={28} color={theme.colors.accent} />
           </View>
-          <Text style={styles.brandName}>{t('setup.title')}</Text>
+          <Image source={require('../assets/logo-text.png')} style={{ width: 160, height: 40, resizeMode: 'contain' }} />
           <Text style={styles.brandSubtitle}>{t('setup.subtitle')}</Text>
         </Animated.View>
 
@@ -130,7 +130,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 16,
-    backgroundColor: 'rgba(37, 99, 235, 0.12)', // accent uyumlu
+    backgroundColor: theme.colors.accentTransparent,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.md,
@@ -187,7 +187,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   submitLabel: {
     fontFamily: theme.fonts.semiBold,
     fontSize: theme.fontSizes.base,
-    color: '#FFFFFF',
+    color: theme.colors.surface,
     letterSpacing: 0.3,
   },
 });

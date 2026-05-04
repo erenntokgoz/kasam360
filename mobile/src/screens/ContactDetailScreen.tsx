@@ -68,7 +68,7 @@ const ContactDetailScreen: React.FC = () => {
   const renderItem = useCallback(({ item, index }: { item: Debt; index: number }) => {
     const isGiven = item.type === 'GIVEN';
     const accent = isGiven ? theme.colors.successLight : theme.colors.dangerLight;
-    const iconBg = isGiven ? 'rgba(16,185,129,0.10)' : 'rgba(248,113,113,0.10)';
+    const iconBg = isGiven ? theme.colors.successTransparent : theme.colors.dangerTransparent;
     const paid = item.status === 'PAID';
 
     return (
@@ -87,7 +87,7 @@ const ContactDetailScreen: React.FC = () => {
             {fmt(item.remainingAmount)}
           </Text>
           <Text style={[styles.rowTotal, { color: theme.colors.textTertiary }]}>/ {fmt(item.totalAmount)}</Text>
-          {paid && <View style={styles.paidBadge}><Text style={styles.paidText}>{t('debts.paid')}</Text></View>}
+          {paid && <View style={[styles.paidBadge, { backgroundColor: theme.colors.successTransparent }]}><Text style={styles.paidText}>{t('debts.paid')}</Text></View>}
         </View>
         
         {!paid && (
@@ -147,7 +147,7 @@ const ContactDetailScreen: React.FC = () => {
         keyExtractor={(item) => item._id}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + theme.spacing['2xl'] }]}
         showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />}
+        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.accent }]} />}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <Icon name="inbox" size={48} color={theme.colors.textTertiary} />
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   rowRight: { alignItems: 'flex-end', marginRight: 16 },
   rowRemaining: { fontFamily: 'System', fontSize: 15, letterSpacing: -0.3 },
   rowTotal: { fontFamily: 'System', fontSize: 11, marginTop: 1 },
-  paidBadge: { marginTop: 4, backgroundColor: 'rgba(16,185,129,0.12)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  paidBadge: { marginTop: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   paidText: { fontFamily: 'System', fontSize: 9, letterSpacing: 0.8 },
   payBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 },
   payBtnText: { fontFamily: 'System', fontSize: 11 },

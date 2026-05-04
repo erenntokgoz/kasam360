@@ -11,16 +11,17 @@ import { useRecurringStore } from '../store/useRecurringStore';
 import { useTranslation } from 'react-i18next';
 
 import type { Transaction } from '../api/transactionService';
+import { DEFAULT_CATEGORIES } from '../constants/categories';
 
 interface AddTransactionModalProps {
   visible: boolean;
   onClose: () => void;
   initialData?: Transaction | null;
+  defaultRecurring?: boolean;
 }
 
-const DEFAULT_CATEGORIES = ['Maaş', 'Yemek', 'Market', 'Fatura', 'Ulaşım', 'Eğlence', 'Diğer'];
 
-const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialData }) => {
+const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialData, defaultRecurring = false }) => {
   const { t } = useTranslation();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
@@ -48,7 +49,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
         setCategory(initialData.category || '');
         setDescription(initialData.description || '');
         setNewCategory('');
-        setIsRecurring(false);
+        setIsRecurring(defaultRecurring);
         setFrequency('MONTHLY');
       } else {
         setType('EXPENSE');
@@ -57,7 +58,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
         setCategory('');
         setDescription('');
         setNewCategory('');
-        setIsRecurring(false);
+        setIsRecurring(defaultRecurring);
         setFrequency('MONTHLY');
       }
     }
@@ -198,7 +199,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                   {(['CASH', 'POS', 'IBAN'] as const).map((m) => (
                     <Pressable
                       key={m}
-                      style={[{ flex: 1, alignItems: 'center', paddingVertical: theme.spacing.xs, borderRadius: theme.radii.sm }, method === m && { backgroundColor: 'rgba(37, 99, 235, 0.1)' }]}
+                      style={[{ flex: 1, alignItems: 'center', paddingVertical: theme.spacing.xs, borderRadius: theme.radii.sm }, method === m && { backgroundColor: theme.colors.accentTransparent }]}
                       onPress={() => setMethod(m)}
                     >
                       <Text style={{ fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.xs, color: method === m ? theme.colors.accent : theme.colors.textTertiary }}>
@@ -258,9 +259,9 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                 disabled={isCreating || isLoading}
               >
                 {isCreating || isLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={theme.colors.surface} />
                 ) : (
-                  <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.base, color: '#FFFFFF', letterSpacing: 0.3 }}>{initialData ? 'Güncelle' : t('addTransactionModal.save')}</Text>
+                  <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.base, color: theme.colors.surface, letterSpacing: 0.3 }}>{initialData ? 'Güncelle' : t('addTransactionModal.save')}</Text>
                 )}
               </Pressable>
             </ScrollView>

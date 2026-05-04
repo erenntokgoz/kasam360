@@ -1,5 +1,6 @@
 import * as RNFS from 'react-native-fs';
 import Share from 'react-native-share';
+import { Alert } from 'react-native';
 const RNHTMLtoPDF = require('react-native-html-to-pdf');
 import { Transaction } from '../api/transactionService';
 
@@ -40,7 +41,8 @@ export const exportToCSV = async (transactions: Transaction[], fileName: string)
       title: 'CSV Olarak Dışa Aktar',
     });
   } catch (error) {
-    console.error('CSV Export Error: ', error);
+    if (__DEV__) { console.error('CSV Export Error: ', error); }
+    Alert.alert('Hata', 'Dışa aktarma başarısız oldu.');
   }
 };
 
@@ -113,6 +115,7 @@ export const exportToPDF = async (
       });
     }
   } catch (error) {
-    console.error('PDF Export Error: ', error);
+    if (__DEV__) { console.error('PDF Export Error: ', error); }
+    Alert.alert('Hata', 'Dışa aktarma başarısız oldu.');
   }
 };

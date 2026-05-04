@@ -33,7 +33,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     if (stored) {
       try {
         set({ notifications: JSON.parse(stored) });
-      } catch (e) {
+      } catch {
         set({ notifications: [] });
       }
     }

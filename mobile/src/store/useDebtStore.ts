@@ -5,7 +5,6 @@ import {
   payDebt,
   Debt,
   DebtType,
-  DebtStatus,
   CreateDebtPayload,
   DebtPagination,
   DebtSummary,

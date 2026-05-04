@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { theme } from '../theme';
+import { getTheme } from '../theme';
+import { useThemeStore } from '../store/useThemeStore';
 import { SafeIcon } from '../components/SafeIcon';
 
 export default function NotificationSettingsScreen() {
@@ -12,6 +13,8 @@ export default function NotificationSettingsScreen() {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [reportsEnabled, setReportsEnabled] = useState(true);
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
+  const theme = getTheme(isDarkMode);
 
   const ToggleItem = ({ icon, label, value, onValueChange, isLast }: any) => (
     <View>
@@ -23,9 +26,9 @@ export default function NotificationSettingsScreen() {
         <Switch 
           value={value} 
           onValueChange={onValueChange}
-          trackColor={{ false: '#333333', true: theme.colors.accent }}
-          thumbColor={value ? theme.colors.primary : '#FFFFFF'}
-          ios_backgroundColor="#333333"
+          trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
+          thumbColor={value ? theme.colors.primary : theme.colors.surface}
+          ios_backgroundColor={theme.colors.border}
         />
       </View>
       {!isLast && <View style={styles.divider} />}
@@ -33,12 +36,12 @@ export default function NotificationSettingsScreen() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
+      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity hitSlop={12} onPress={() => navigation.goBack()} style={styles.backButton}>
           <SafeIcon name="arrow-back-outline" size={24} color={theme.colors.textPrimary} fallbackText="<" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>BİLDİRİMLER</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>BİLDİRİMLER</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -77,16 +80,14 @@ export default function NotificationSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
   },
   header: {
     height: 64,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
   },
   backButton: {
     width: 40,
@@ -95,9 +96,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontFamily: theme.fonts.black,
-    fontSize: theme.fontSizes.lg,
-    color: theme.colors.textPrimary,
+    fontFamily: 'System',
+    fontSize: 18,
     letterSpacing: 2,
   },
   scrollContent: {

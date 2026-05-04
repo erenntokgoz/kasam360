@@ -7,7 +7,6 @@ import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useDebtStore } from '../store/useDebtStore';
 import { useLedgerStore } from '../store/useLedgerStore';
-import { useContactStore } from '../store/useContactStore';
 import type { Debt, DebtType } from '../api/debtService';
 import { formatCurrency, formatDate } from '../utils/format';
 
@@ -39,7 +38,7 @@ const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void 
       <View style={styles.rowRight}>
         <Text style={[styles.rowRemaining, { color: paid ? theme.colors.textTertiary : accent }]}>{formatCurrency(item.remainingAmount)}</Text>
         <Text style={[styles.rowTotal, { color: theme.colors.textTertiary }]}>/ {formatCurrency(item.totalAmount)}</Text>
-        {paid && <View style={styles.paidBadge}><Text style={styles.paidText}>PAID</Text></View>}
+        {paid && <View style={[styles.paidBadge, { backgroundColor: theme.colors.successTransparent }]}><Text style={styles.paidText}>PAID</Text></View>}
       </View>
     </Pressable>
   );
@@ -143,8 +142,8 @@ const PaymentModal: React.FC<PayModalProps> = ({ visible, debt, onClose }) => {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-        <Pressable style={styles.modalOverlay} onPress={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.modalOverlay, { backgroundColor: theme.colors.overlay }]}>
+        <Pressable style={[styles.modalOverlay, { backgroundColor: theme.colors.overlay }]} onPress={onClose}>
           <Pressable style={[styles.modalSheet, { backgroundColor: theme.colors.surface }]} onPress={(e) => e.stopPropagation()}>
             <View style={[styles.modalHandle, { backgroundColor: theme.colors.border }]} />
             <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>{actionLabel}</Text>
@@ -183,7 +182,9 @@ const DebtsScreen: React.FC = () => {
 
   useEffect(() => { fetchDebts(1).catch(() => { }); }, [fetchDebts]);
 
-  const handleRowPress = useCallback((d: Debt) => { if (d.status === 'PAID') return; setPayTarget(d); }, []);
+  const handleRowPress = useCallback((d: Debt) => { 
+    navigation.navigate('ContactDetail', { contactName: d.entityName });
+  }, [navigation]);
   const renderItem = useCallback(({ item, index }: { item: Debt; index: number }) => <DebtRow item={item} index={index} onPress={handleRowPress} />, [handleRowPress]);
   const keyExtractor = useCallback((item: Debt) => item._id, []);
 
@@ -210,7 +211,7 @@ const DebtsScreen: React.FC = () => {
         ListEmptyComponent={!isLoading ? <EmptyState /> : null}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 48 }]}
         showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />}
+        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.accent }]} />}
         refreshing={isLoading}
         onRefresh={() => fetchDebts(1)}
       />
@@ -247,12 +248,12 @@ const styles = StyleSheet.create({
   rowRight: { alignItems: 'flex-end' },
   rowRemaining: { fontFamily: 'System', fontSize: 15, letterSpacing: -0.3 },
   rowTotal: { fontFamily: 'System', fontSize: 11, marginTop: 1 },
-  paidBadge: { marginTop: 4, backgroundColor: 'rgba(16,185,129,0.12)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  paidBadge: { marginTop: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   paidText: { fontFamily: 'System', fontSize: 9, letterSpacing: 0.8 },
   emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 8 },
   emptyTitle: { fontFamily: 'System', fontSize: 18, marginTop: 12 },
   emptySub: { fontFamily: 'System', fontSize: 13, textAlign: 'center', maxWidth: 260 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.60)', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
   modalTitle: { fontFamily: 'System', fontSize: 22, textAlign: 'center' },
   modalEntity: { fontFamily: 'System', fontSize: 13, textAlign: 'center', marginTop: 4, marginBottom: 32 },

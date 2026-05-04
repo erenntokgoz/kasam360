@@ -36,7 +36,7 @@ const shared = {
   },
   shadows: {
     card: {
-      shadowColor: '#000',
+      shadowColor: 'rgba(0,0,0,0.5)',
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.1,
       shadowRadius: 10,
@@ -69,6 +69,10 @@ export const darkTheme = {
     textSecondary: '#94A3B8',
     textTertiary: '#64748B',
     border: '#334155',
+    accentTransparent: 'rgba(37, 99, 235, 0.12)',
+    successTransparent: 'rgba(16, 185, 129, 0.12)',
+    dangerTransparent: 'rgba(239, 68, 68, 0.12)',
+    overlay: 'rgba(0, 0, 0, 0.60)',
   },
 };
 
@@ -89,6 +93,10 @@ export const lightTheme = {
     textSecondary: '#475569',
     textTertiary: '#94A3B8',
     border: '#E2E8F0',
+    accentTransparent: 'rgba(37, 99, 235, 0.12)',
+    successTransparent: 'rgba(16, 185, 129, 0.12)',
+    dangerTransparent: 'rgba(239, 68, 68, 0.12)',
+    overlay: 'rgba(0, 0, 0, 0.40)',
   },
   shadows: {
     card: {

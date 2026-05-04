@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MainStackParamList } from '../navigation/MainStack';
 import { SafeIcon } from '../components/SafeIcon';
 import { useDebtStore } from '../store/useDebtStore';
+import { getTheme } from '../theme';
+import { useThemeStore } from '../store/useThemeStore';
 
 type RouteProps = RouteProp<MainStackParamList, 'AddDebt'>;
 
@@ -18,8 +20,11 @@ export default function AddDebtScreen() {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
+  const theme = getTheme(isDarkMode);
+
   const isDebt = route.params.type === 'TAKEN';
-  const color = isDebt ? '#EF4444' : '#10B981';
+  const color = isDebt ? theme.colors.dangerLight : theme.colors.successLight;
   const title = isDebt ? 'YENİ BORÇ' : 'YENİ ALACAK';
 
   const handleSave = async () => {
@@ -51,31 +56,31 @@ export default function AddDebtScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
+      <View style={[styles.header, { borderColor: theme.colors.border }]}>
         <TouchableOpacity hitSlop={12} onPress={() => navigation.goBack()}>
-          <SafeIcon name="close-outline" size={32} color="#FFFFFF" fallbackText="KAPAT" />
+          <SafeIcon name="close-outline" size={32} color={theme.colors.textPrimary} fallbackText="KAPAT" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color }]}>{title}</Text>
         <View style={{ width: 32 }} />
       </View>
 
       <View style={styles.form}>
-        <Text style={styles.label}>KİŞİ ADI</Text>
+        <Text style={[styles.label, { color: theme.colors.textTertiary }]}>KİŞİ ADI</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { borderColor: theme.colors.border, backgroundColor: theme.colors.card, color: theme.colors.textPrimary }]}
           placeholder="Örn: Ahmet, Ayşe"
-          placeholderTextColor="#8E8E93"
+          placeholderTextColor={theme.colors.textTertiary}
           value={personName}
           onChangeText={setPersonName}
         />
 
-        <Text style={styles.label}>TUTAR</Text>
+        <Text style={[styles.label, { color: theme.colors.textTertiary }]}>TUTAR</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { borderColor: theme.colors.border, backgroundColor: theme.colors.card, color: theme.colors.textPrimary }]}
           keyboardType="numeric"
           placeholder="0.00"
-          placeholderTextColor="#8E8E93"
+          placeholderTextColor={theme.colors.textTertiary}
           value={amount}
           onChangeText={setAmount}
         />
@@ -88,9 +93,9 @@ export default function AddDebtScreen() {
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color="#000000" />
+          <ActivityIndicator color={theme.colors.surface} />
         ) : (
-          <Text style={styles.saveButtonText}>KAYDET</Text>
+          <Text style={[styles.saveButtonText, { color: theme.colors.surface }]}>KAYDET</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -100,7 +105,6 @@ export default function AddDebtScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
   },
   header: {
     flexDirection: 'row',
@@ -108,7 +112,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   headerTitle: {
     fontSize: 20,
@@ -120,7 +123,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    color: '#8E8E93',
     fontSize: 12,
     fontWeight: 'bold',
     letterSpacing: 1,
@@ -129,12 +131,9 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
     padding: 16,
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '500',
-    backgroundColor: 'rgba(255,255,255,0.02)',
   },
   saveButton: {
     marginHorizontal: 20,
@@ -144,7 +143,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveButtonText: {
-    color: '#000000',
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1,

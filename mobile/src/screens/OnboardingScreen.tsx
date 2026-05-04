@@ -51,7 +51,7 @@ const OnboardingScreen: React.FC = () => {
 
   const renderItem = ({ item }: { item: typeof ONBOARDING_DATA[0] }) => (
     <View style={[styles.slide, { width }]}>
-      <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.iconContainer}>
+      <Animated.View entering={FadeInDown.delay(100).duration(500)} style={[styles.iconContainer, { backgroundColor: theme.colors.accentTransparent }]}>
         <Icon name={item.icon} size={72} color={theme.colors.accent} />
       </Animated.View>
       <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.textContainer}>
@@ -100,7 +100,7 @@ const OnboardingScreen: React.FC = () => {
               ]}
               onPress={handleStart}
             >
-              <Text style={styles.startButtonText}>{t('onboarding.start')}</Text>
+              <Text style={[styles.startButtonText, { color: theme.colors.surface }]}>{t('onboarding.start')}</Text>
             </Pressable>
           </Animated.View>
         ) : (
@@ -114,7 +114,7 @@ const OnboardingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   slide: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  iconContainer: { width: 120, height: 120, borderRadius: 9999, backgroundColor: 'rgba(37, 99, 235, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 48 },
+  iconContainer: { width: 120, height: 120, borderRadius: 9999, alignItems: 'center', justifyContent: 'center', marginBottom: 48 },
   textContainer: { alignItems: 'center' },
   title: { fontFamily: 'System', fontSize: 28, textAlign: 'center', marginBottom: 16 },
   description: { fontFamily: 'System', fontSize: 15, textAlign: 'center', lineHeight: 22 },
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   activeDot: { width: 24 },
   inactiveDot: {},
   startButton: { borderRadius: 10, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
-  startButtonText: { fontFamily: 'System', fontSize: 18, color: '#FFFFFF', letterSpacing: 0.5 },
+  startButtonText: { fontFamily: 'System', fontSize: 18, letterSpacing: 0.5 },
   buttonPlaceholder: { height: 56 },
 });
 

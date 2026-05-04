@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,10 +30,10 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
     <KeyboardAvoidingView style={[styles.flex, { backgroundColor: theme.colors.primary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + theme.spacing['3xl'], paddingBottom: insets.bottom + theme.spacing['2xl'] }]} keyboardShouldPersistTaps="handled">
         <Animated.View entering={FadeInDown.delay(100).duration(500).springify()} style={styles.brandSection}>
-          <View style={styles.logoCircle}>
+          <View style={[styles.logoCircle, { backgroundColor: theme.colors.accentTransparent }]}>
             <Icon name="layers" size={28} color={theme.colors.accent} />
           </View>
-          <Text style={[styles.brandName, { color: theme.colors.textPrimary }]}>{t('login.title')}</Text>
+          <Image source={require('../../assets/logo-text.png')} style={{ width: 160, height: 40, resizeMode: 'contain' }} />
           <Text style={[styles.brandSubtitle, { color: theme.colors.textTertiary }]}>{t('login.subtitle')}</Text>
         </Animated.View>
 
@@ -69,7 +69,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
             </Pressable>
           </View>
 
-          {error && <Text style={styles.errorText}>{error}</Text>}
+          {error && <Text style={[styles.errorText, { color: theme.colors.dangerLight }]}>{error}</Text>}
 
           <Pressable
             style={({ pressed }) => [styles.submitButton, { backgroundColor: theme.colors.accent }, pressed && { opacity: 0.9 }]}
@@ -77,9 +77,9 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={theme.colors.surface} />
             ) : (
-              <Text style={styles.submitLabel}>{t('login.continue')}</Text>
+              <Text style={[styles.submitLabel, { color: theme.colors.surface }]}>{t('login.continue')}</Text>
             )}
           </Pressable>
         </Animated.View>
@@ -99,16 +99,16 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { flexGrow: 1, paddingHorizontal: 32, justifyContent: 'center' },
   brandSection: { alignItems: 'center', marginBottom: 64 },
-  logoCircle: { width: 56, height: 56, borderRadius: 16, backgroundColor: 'rgba(37, 99, 235, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  logoCircle: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   brandName: { fontFamily: 'System', fontSize: 28, letterSpacing: 0.5 },
   brandSubtitle: { fontFamily: 'System', fontSize: 13, marginTop: 4 },
   formCard: { borderRadius: 16, padding: 32 },
   formTitle: { fontFamily: 'System', fontSize: 22, marginBottom: 24 },
   inputWrapper: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 12, paddingVertical: Platform.select({ ios: 14, android: 8 }), marginBottom: 16 },
   input: { flex: 1, fontFamily: 'System', fontSize: 15, marginLeft: 8 },
-  errorText: { fontFamily: 'System', fontSize: 13, color: '#EF4444', marginBottom: 16 },
+  errorText: { fontFamily: 'System', fontSize: 13, marginBottom: 16 },
   submitButton: { borderRadius: 10, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  submitLabel: { fontFamily: 'System', fontSize: 15, color: '#FFFFFF', letterSpacing: 0.3 },
+  submitLabel: { fontFamily: 'System', fontSize: 15, letterSpacing: 0.3 },
   linkRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 32 },
   linkText: { fontFamily: 'System', fontSize: 13 },
   linkAction: { fontFamily: 'System', fontSize: 13 },

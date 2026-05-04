@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,10 +30,10 @@ const RegisterScreen: React.FC<Props> = ({ navigation }) => {
     <KeyboardAvoidingView style={[{ flex: 1 }, { backgroundColor: theme.colors.primary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={[{ flexGrow: 1, paddingHorizontal: theme.spacing.xl, justifyContent: 'center' }, { paddingTop: insets.top + theme.spacing['3xl'], paddingBottom: insets.bottom + theme.spacing['2xl'] }]} keyboardShouldPersistTaps="handled">
         <Animated.View entering={FadeInDown.delay(100).duration(500).springify()} style={{ alignItems: 'center', marginBottom: theme.spacing['3xl'] }}>
-          <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: 'rgba(37, 99, 235, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.md }}>
+          <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: theme.colors.accentTransparent, alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.md }}>
             <Icon name="layers" size={28} color={theme.colors.accent} />
           </View>
-          <Text style={{ fontFamily: theme.fonts.bold, fontSize: theme.fontSizes['2xl'], color: theme.colors.textPrimary, letterSpacing: 0.5 }}>{t('register.title')}</Text>
+          <Image source={require('../../assets/logo-text.png')} style={{ width: 160, height: 40, resizeMode: 'contain' }} />
           <Text style={{ fontFamily: theme.fonts.regular, fontSize: theme.fontSizes.sm, color: theme.colors.textTertiary, marginTop: 4 }}>{t('register.subtitle')}</Text>
         </Animated.View>
 
@@ -61,7 +61,7 @@ const RegisterScreen: React.FC<Props> = ({ navigation }) => {
           {error && <Text style={{ fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.sm, color: theme.colors.dangerLight, marginBottom: theme.spacing.md }}>{error}</Text>}
 
           <Pressable style={({ pressed }) => [{ backgroundColor: theme.colors.accent, borderRadius: theme.radii.base, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', marginTop: theme.spacing.sm }, pressed && { opacity: 0.9 }]} onPress={handleRegister} disabled={isLoading}>
-            {isLoading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.base, color: '#FFFFFF', letterSpacing: 0.3 }}>{t('register.createAccount')}</Text>}
+            {isLoading ? <ActivityIndicator size="small" color={theme.colors.surface} /> : <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.base, color: theme.colors.surface, letterSpacing: 0.3 }}>{t('register.createAccount')}</Text>}
           </Pressable>
         </Animated.View>
 

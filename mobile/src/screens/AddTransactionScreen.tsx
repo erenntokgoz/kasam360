@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MainStackParamList } from '../navigation/MainStack';
 import { SafeIcon } from '../components/SafeIcon';
 import { useLedgerStore } from '../store/useLedgerStore';
+import { getTheme } from '../theme';
+import { useThemeStore } from '../store/useThemeStore';
 
 type RouteProps = RouteProp<MainStackParamList, 'AddTransaction'>;
 
@@ -19,8 +21,11 @@ export default function AddTransactionScreen() {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
+  const theme = getTheme(isDarkMode);
+
   const isIncome = route.params.type === 'INCOME';
-  const color = isIncome ? '#10B981' : '#EF4444';
+  const color = isIncome ? theme.colors.successLight : theme.colors.dangerLight;
   const title = isIncome ? 'YENİ GELİR' : 'YENİ GİDER';
 
   const handleSave = async () => {
@@ -54,40 +59,40 @@ export default function AddTransactionScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
+      <View style={[styles.header, { borderColor: theme.colors.border }]}>
         <TouchableOpacity hitSlop={12} onPress={() => navigation.goBack()}>
-          <SafeIcon name="close-outline" size={32} color="#FFFFFF" fallbackText="KAPAT" />
+          <SafeIcon name="close-outline" size={32} color={theme.colors.textPrimary} fallbackText="KAPAT" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color }]}>{title}</Text>
         <View style={{ width: 32 }} />
       </View>
 
       <View style={styles.form}>
-        <Text style={styles.label}>TUTAR</Text>
+        <Text style={[styles.label, { color: theme.colors.textTertiary }]}>TUTAR</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { borderColor: theme.colors.border, backgroundColor: theme.colors.card, color: theme.colors.textPrimary }]}
           keyboardType="numeric"
           placeholder="0.00"
-          placeholderTextColor="#8E8E93"
+          placeholderTextColor={theme.colors.textTertiary}
           value={amount}
           onChangeText={setAmount}
         />
 
-        <Text style={styles.label}>KATEGORİ</Text>
+        <Text style={[styles.label, { color: theme.colors.textTertiary }]}>KATEGORİ</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { borderColor: theme.colors.border, backgroundColor: theme.colors.card, color: theme.colors.textPrimary }]}
           placeholder={isIncome ? "Örn: Maaş, Prim" : "Örn: Kira, Market"}
-          placeholderTextColor="#8E8E93"
+          placeholderTextColor={theme.colors.textTertiary}
           value={category}
           onChangeText={setCategory}
         />
 
-        <Text style={styles.label}>AÇIKLAMA</Text>
+        <Text style={[styles.label, { color: theme.colors.textTertiary }]}>AÇIKLAMA</Text>
         <TextInput
-          style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
+          style={[styles.input, { height: 100, textAlignVertical: 'top', borderColor: theme.colors.border, backgroundColor: theme.colors.card, color: theme.colors.textPrimary }]}
           placeholder="İsteğe bağlı açıklama..."
-          placeholderTextColor="#8E8E93"
+          placeholderTextColor={theme.colors.textTertiary}
           multiline
           value={description}
           onChangeText={setDescription}
@@ -101,9 +106,9 @@ export default function AddTransactionScreen() {
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color="#000000" />
+          <ActivityIndicator color={theme.colors.surface} />
         ) : (
-          <Text style={styles.saveButtonText}>KAYDET</Text>
+          <Text style={[styles.saveButtonText, { color: theme.colors.surface }]}>KAYDET</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -113,7 +118,6 @@ export default function AddTransactionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
   },
   header: {
     flexDirection: 'row',
@@ -121,7 +125,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   headerTitle: {
     fontSize: 20,
@@ -133,7 +136,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    color: '#8E8E93',
     fontSize: 12,
     fontWeight: 'bold',
     letterSpacing: 1,
@@ -142,12 +144,9 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
     padding: 16,
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '500',
-    backgroundColor: 'rgba(255,255,255,0.02)',
   },
   saveButton: {
     marginHorizontal: 20,
@@ -157,7 +156,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveButtonText: {
-    color: '#000000',
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1,

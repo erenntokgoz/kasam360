@@ -136,7 +136,7 @@ export const DebtList: React.FC<DebtListProps> = ({ type }) => {
                 <Text style={styles.cancelBtnText}>İPTAL</Text>
               </Pressable>
               <Pressable style={styles.payBtn} onPress={handlePay} disabled={isPaying}>
-                {isPaying ? <ActivityIndicator color="#000000" /> : <Text style={styles.payBtnText}>KAYDET</Text>}
+                {isPaying ? <ActivityIndicator color={theme.colors.surface} /> : <Text style={styles.payBtnText}>KAYDET</Text>}
               </Pressable>
             </View>
           </View>
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: theme.colors.overlay,
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   payBtnText: {
-    color: '#000000',
+    color: theme.colors.surface,
     fontWeight: '900',
   },
 });
