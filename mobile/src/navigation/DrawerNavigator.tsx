@@ -12,10 +12,8 @@ import { useThemeStore } from '../store/useThemeStore';
 import GlassSidebar from '../components/GlassSidebar';
 import HomeScreen from '../screens/HomeScreen';
 import DebtsScreen from '../screens/DebtsScreen';
-import {
-  AnalyticsScreen,
-  SettingsScreen,
-} from '../screens/PlaceholderScreen';
+import AnalyticsScreen from '../screens/AnalyticsScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import RecurringsScreen from '../screens/RecurringsScreen';
 import ContactDetailScreen from '../screens/ContactDetailScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';

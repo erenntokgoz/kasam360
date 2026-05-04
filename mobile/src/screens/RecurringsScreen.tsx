@@ -8,13 +8,7 @@ import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useRecurringStore, RecurringItem } from '../store/useRecurringStore';
 import AddTransactionModal from '../components/AddTransactionModal';
-
-const formatCurrency = (cents: number, signed = false): string => {
-  const value = cents / 100;
-  const abs = Math.abs(value);
-  const prefix = signed && cents < 0 ? '−' : '';
-  return `${prefix}₺${abs.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
+import { formatCurrency } from '../utils/format';
 
 const frequencyMap = {
   DAILY: 'Günlük',
@@ -54,7 +48,7 @@ const RecurringsScreen: React.FC = () => {
           !item.active && { opacity: 0.6 },
         ]}
       >
-        <Pressable 
+        <Pressable
           style={styles.rowContent}
           onLongPress={() => handleLongPress(item.id)}
         >
@@ -62,8 +56,8 @@ const RecurringsScreen: React.FC = () => {
             <Icon name={iconName} size={16} color={amountColor} />
           </View>
           <View style={styles.rowMiddle}>
-            <Text style={styles.rowCategory} numberOfLines={1}>{item.category || item.type}</Text>
-            <Text style={styles.rowFreq}>{frequencyMap[item.frequency]}</Text>
+            <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>{item.category || item.type}</Text>
+            <Text style={[styles.rowFreq, { color: theme.colors.textTertiary }]}>{frequencyMap[item.frequency]}</Text>
           </View>
           <View style={styles.rowRight}>
             <Text style={[styles.rowAmount, { color: amountColor }]}>{formatCurrency(displayAmount, true)}</Text>
@@ -118,7 +112,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerTitle: { fontFamily: 'System', fontSize: 18, letterSpacing: 0.4 },
-  listContent: { },
+  listContent: {},
   rowContainer: { borderRadius: 10, marginBottom: 16 },
   rowContent: { flexDirection: 'row', alignItems: 'center', padding: 16 },
   rowIconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
