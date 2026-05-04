@@ -14,7 +14,7 @@ const BASE_URL =
   'http://10.0.2.2:5000'; // Android emulator → host machine localhost
 
 const apiClient = axios.create({
-  baseURL: BASE_URL,
+  const BASE_URL = 'https://aesvora.com.tr';
   timeout: 15_000, // 15 s — reasonable for mobile on slow connections
   headers: {
     'Content-Type': 'application/json',
