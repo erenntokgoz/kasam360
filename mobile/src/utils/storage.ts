@@ -1,4 +1,5 @@
-import { createMMKV } from 'react-native-mmkv';
+import { MMKV, createMMKV } from 'react-native-mmkv';
+
 /**
  * Singleton MMKV instance for the app.
  * Used for fast synchronous key-value persistence (JWT token, user data, etc.)
@@ -11,6 +12,7 @@ export const storage = createMMKV({ id: 'kasam360-storage' });
 
 export const StorageKeys = {
   TOKEN: 'auth.token',
+  REFRESH_TOKEN: 'auth.refreshToken',
   USER: 'auth.user',
 } as const;
 

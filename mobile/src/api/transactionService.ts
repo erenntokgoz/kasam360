@@ -29,6 +29,22 @@ export interface CreateTransactionPayload {
   syncId?: string;
 }
 
+export interface UpdateTransactionPayload {
+  type?: TransactionType;
+  amount?: number;            // integer cents
+  method?: PaymentMethod;
+  category?: string | null;
+  description?: string | null;
+  transactionDate?: string;  // ISO date
+}
+
+export interface TransactionFilters {
+  type?: TransactionType | 'ALL';
+  startDate?: string;
+  endDate?: string;
+  categories?: string[];
+}
+
 export interface TransactionPagination {
   page: number;
   limit: number;
@@ -68,10 +84,16 @@ interface CreateTransactionResponse {
 export const getTransactions = async (
   page = 1,
   limit = 20,
-  type?: TransactionType,
+  filters?: TransactionFilters,
 ): Promise<GetTransactionsResponse['data']> => {
   const params: Record<string, string | number> = { page, limit };
-  if (type) params.type = type;
+  
+  if (filters?.type && filters.type !== 'ALL') params.type = filters.type;
+  if (filters?.startDate) params.startDate = filters.startDate;
+  if (filters?.endDate) params.endDate = filters.endDate;
+  if (filters?.categories && filters.categories.length > 0) {
+    params.categories = filters.categories.join(',');
+  }
 
   const { data } = await apiClient.get<GetTransactionsResponse>(
     '/api/transactions',
@@ -92,4 +114,25 @@ export const createTransaction = async (
     payload,
   );
   return data.data;
+};
+
+/**
+ * Updates an existing transaction.
+ */
+export const updateTransaction = async (
+  id: string,
+  payload: UpdateTransactionPayload,
+): Promise<Transaction> => {
+  const { data } = await apiClient.put<{ success: boolean; data: Transaction }>(
+    `/api/transactions/${id}`,
+    payload,
+  );
+  return data.data;
+};
+
+/**
+ * Soft-deletes a transaction.
+ */
+export const deleteTransaction = async (id: string): Promise<void> => {
+  await apiClient.delete(`/api/transactions/${id}`);
 };

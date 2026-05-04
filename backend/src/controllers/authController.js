@@ -5,15 +5,30 @@ const Tenant = require('../models/Tenant');
 const SALT_ROUNDS = 12;
 const JWT_EXPIRES_IN = '30d';
 
+const isValidPhone = (phone) => {
+  if (!phone || phone.length < 10) return false;
+  return /^[+0-9]+$/.test(phone);
+};
+
 /**
  * Generates a signed JWT for a given tenant.
  * @param {string} tenantId - The MongoDB ObjectId of the tenant.
  * @returns {string} Signed JWT string.
  */
-const generateToken = (tenantId) => {
-  return jwt.sign({ tenantId }, process.env.JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-  });
+const generateTokens = (tenantId) => {
+  const accessToken = jwt.sign(
+    { tenantId },
+    process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+  );
+
+  const refreshToken = jwt.sign(
+    { tenantId },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+  );
+
+  return { accessToken, refreshToken };
 };
 
 // ─────────────────────────────────────────────
@@ -21,6 +36,13 @@ const generateToken = (tenantId) => {
 // @access  Public
 // ─────────────────────────────────────────────
 const register = async (req, res) => {
+  const { phone, password } = req.body || {};
+  if (!phone || !/^\+?[0-9]{10,15}$/.test(phone)) {
+    return res.status(400).json({ success: false, message: 'Geçerli bir telefon numarası girin.' });
+  }
+  if (!password || password.length < 6) {
+    return res.status(400).json({ success: false, message: 'Şifre en az 6 karakter olmalı.' });
+  }
   try {
     const { phone, password, businessName } = req.body;
 
@@ -29,6 +51,20 @@ const register = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Phone, password, and business name are required.',
+      });
+    }
+
+    if (!isValidPhone(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid phone format.',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters.',
       });
     }
 
@@ -51,12 +87,13 @@ const register = async (req, res) => {
       businessName,
     });
 
-    const token = generateToken(tenant._id);
+    const { accessToken, refreshToken } = generateTokens(tenant._id);
 
     return res.status(201).json({
       success: true,
       message: 'Tenant registered successfully.',
-      token,
+      token: accessToken,
+      refreshToken,
       tenant: {
         id: tenant._id,
         phone: tenant.phone,
@@ -78,6 +115,10 @@ const register = async (req, res) => {
 // @access  Public
 // ─────────────────────────────────────────────
 const login = async (req, res) => {
+  const { phone, password } = req.body || {};
+  if (!phone || !password) {
+    return res.status(400).json({ success: false, message: 'Telefon ve şifre gerekli.' });
+  }
   try {
     const { phone, password } = req.body;
 
@@ -86,6 +127,20 @@ const login = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Phone and password are required.',
+      });
+    }
+
+    if (!isValidPhone(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid phone format.',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters.',
       });
     }
 
@@ -107,12 +162,13 @@ const login = async (req, res) => {
       });
     }
 
-    const token = generateToken(tenant._id);
+    const { accessToken, refreshToken } = generateTokens(tenant._id);
 
     return res.status(200).json({
       success: true,
       message: 'Login successful.',
-      token,
+      token: accessToken,
+      refreshToken,
       tenant: {
         id: tenant._id,
         phone: tenant.phone,
@@ -129,46 +185,40 @@ const login = async (req, res) => {
   }
 };
 
-const updateProfile = async (req, res) => {
+// ─────────────────────────────────────────────
+// @route   POST /api/auth/refresh-token
+// @access  Public
+// ─────────────────────────────────────────────
+const refresh = async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({
+      success: false,
+      message: 'Refresh token is required.',
+    });
+  }
+
   try {
-    const { tenantId } = req;
-    const { businessName, password } = req.body;
-
-    const tenant = await Tenant.findById(tenantId);
-    if (!tenant) {
-      return res.status(404).json({
-        success: false,
-        message: 'Tenant not found.',
-      });
-    }
-
-    if (businessName) {
-      tenant.businessName = businessName;
-    }
-
-    if (password) {
-      tenant.password = await bcrypt.hash(password, SALT_ROUNDS);
-    }
-
-    await tenant.save();
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    
+    // Create new access token
+    const accessToken = jwt.sign(
+      { tenantId: decoded.tenantId },
+      process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+    );
 
     return res.status(200).json({
       success: true,
-      message: 'Profile updated successfully.',
-      tenant: {
-        id: tenant._id,
-        phone: tenant.phone,
-        businessName: tenant.businessName,
-        subscriptionStatus: tenant.subscriptionStatus,
-      },
+      token: accessToken,
     });
   } catch (error) {
-    console.error('[authController.updateProfile]', error);
-    return res.status(500).json({
+    return res.status(401).json({
       success: false,
-      message: 'Internal server error updating profile.',
+      message: 'Invalid or expired refresh token.',
     });
   }
 };
 
-module.exports = { register, login, updateProfile };
+module.exports = { register, login, refresh };

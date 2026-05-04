@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Debt = require('../models/Debt');
 const Transaction = require('../models/Transaction');
+const AuditLog = require('../models/AuditLog');
 
 /**
  * Debt (Veresiye) Controller
@@ -25,13 +26,14 @@ const Transaction = require('../models/Transaction');
 // @body    { entityName, type, totalAmount, dueDate?, syncId? }
 // ─────────────────────────────────────────────
 const createDebt = async (req, res) => {
+  const session = await mongoose.startSession();
   try {
     const { tenantId } = req;
     const { entityName, type, totalAmount, dueDate, syncId } = req.body;
-    console.log(`[POST /api/debts] Received:`, { tenantId, entityName, type, totalAmount });
 
     // ── Validation ─────────────────────────────────────────────────────────
     if (!entityName || !type || totalAmount == null) {
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'entityName, type, and totalAmount are required.',
@@ -39,6 +41,7 @@ const createDebt = async (req, res) => {
     }
 
     if (!['GIVEN', 'TAKEN'].includes(type)) {
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'type must be either "GIVEN" or "TAKEN".',
@@ -47,80 +50,92 @@ const createDebt = async (req, res) => {
 
     const amountInt = Math.round(Number(totalAmount));
     if (isNaN(amountInt) || amountInt <= 0) {
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'totalAmount must be a positive integer (cents/kuruş).',
       });
     }
 
-    // ── Deduplication via syncId ────────────────────────────────────────────
-    if (syncId) {
-      const existing = await Debt.findOne({ syncId });
-      if (existing) {
-        return res.status(200).json({
-          success: true,
-          message: 'Debt already exists (deduplicated).',
-          data: existing,
-        });
-      }
-    }
-
-    // ── Create ──────────────────────────────────────────────────────────────
-    const session = await mongoose.startSession();
     let createdDebt;
 
     await session.withTransaction(async () => {
-      const debt = await Debt.create(
-        [
-          {
-            tenantId,
-            entityName,
-            type,
-            totalAmount: amountInt,
-            remainingAmount: amountInt,
-            status: 'PENDING',
-            dueDate: dueDate ? new Date(dueDate) : null,
-            syncId: syncId || undefined,
+      // ── Deduplication via syncId ────────────────────────────────────────────
+      if (syncId) {
+        const existing = await Debt.findOne({ syncId }).session(session);
+        if (existing) {
+          throw Object.assign(new Error('Debt already exists (deduplicated).'), { httpStatus: 200, data: existing });
+        }
+      }
+
+      // ── Calculate Current Balance ───────────────────────────────────────────
+      const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
+      const totals = await Transaction.aggregate([
+        { $match: { tenantId: tenantObjectId } },
+        {
+          $group: {
+            _id: '$type',
+            sum: { $sum: '$amount' },
           },
-        ],
-        { session }
-      );
+        },
+      ]).session(session);
 
-      createdDebt = debt[0];
+      let currentBalance = 0;
+      for (const t of totals) {
+        if (t._id === 'INCOME') currentBalance += t.sum;
+        if (t._id === 'EXPENSE') currentBalance -= t.sum;
+      }
 
-      // Automatic Transaction creation per "Business Logic"
-      // GIVEN debt (receivable) -> record as INCOME
-      // TAKEN debt (payable)    -> record as EXPENSE
-      const txType = type === 'GIVEN' ? 'INCOME' : 'EXPENSE';
-      const category = type === 'GIVEN' ? 'ALACAK KAYDI' : 'BORÇ KAYDI';
+      // GIVEN debt -> money goes out -> EXPENSE
+      // TAKEN debt -> money comes in -> INCOME
+      const txType = type === 'GIVEN' ? 'EXPENSE' : 'INCOME';
+      const balanceAfter = txType === 'INCOME' ? currentBalance + amountInt : currentBalance - amountInt;
 
-      await Transaction.create(
-        [
-          {
-            tenantId,
-            type: txType,
-            amount: amountInt,
-            method: 'CASH',
-            category,
-            description: `${entityName} için veresiye kaydı.`,
-            transactionDate: new Date(),
-          },
-        ],
-        { session }
-      );
+      // ── Create Debt ────────────────────────────────────────────────────────
+      const [debt] = await Debt.create([{
+        tenantId,
+        entityName,
+        type,
+        totalAmount: amountInt,
+        remainingAmount: amountInt,
+        status: 'PENDING',
+        dueDate: dueDate ? new Date(dueDate) : null,
+        syncId: syncId || undefined,
+      }], { session });
+
+      // ── Create Transaction ─────────────────────────────────────────────────
+      await Transaction.create([{
+        tenantId,
+        type: txType,
+        amount: amountInt,
+        method: 'CASH',
+        category: type === 'GIVEN' ? 'Borç Verildi' : 'Borç Alındı',
+        description: `${type === 'GIVEN' ? 'Verilen' : 'Alınan'}: ${entityName}`,
+        transactionDate: new Date(),
+        balanceAfter,
+      }], { session });
+
+      createdDebt = debt;
     });
 
     session.endSession();
 
-    console.log(`[POST /api/debts] SUCCESS: Created ID ${createdDebt._id} with linked transaction.`);
-
     return res.status(201).json({
       success: true,
-      message: 'Debt and linked transaction created successfully.',
+      message: 'Debt created successfully.',
       data: createdDebt,
     });
   } catch (error) {
-    // Handle duplicate syncId race condition
+    session.endSession();
+    
+    if (error.httpStatus === 200) {
+      return res.status(200).json({
+        success: true,
+        message: 'Debt already exists (deduplicated).',
+        data: error.data,
+      });
+    }
+
     if (error.code === 11000 && error.keyPattern?.syncId) {
       const existing = await Debt.findOne({ syncId: req.body.syncId });
       return res.status(200).json({
@@ -146,13 +161,12 @@ const createDebt = async (req, res) => {
 const getDebts = async (req, res) => {
   try {
     const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
-    console.log(`[GET /api/debts] Tenant: ${req.tenantId}, Page: ${req.query.page}, Type: ${req.query.type}`);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;
 
     // Build filter
-    const filter = { tenantId: tenantObjectId };
+    const filter = { tenantId: tenantObjectId, isDeleted: false };
 
     if (req.query.type && ['GIVEN', 'TAKEN'].includes(req.query.type)) {
       filter.type = req.query.type;
@@ -173,7 +187,7 @@ const getDebts = async (req, res) => {
 
     // Aggregate summary per type (all-time, unfiltered)
     const summary = await Debt.aggregate([
-      { $match: { tenantId: tenantObjectId } },
+      { $match: { tenantId: tenantObjectId, isDeleted: false } },
       {
         $group: {
           _id: '$type',
@@ -303,6 +317,25 @@ const payDebt = async (req, res) => {
       // TAKEN debt payment → tenant pays out money   → EXPENSE
       const txType = debt.type === 'GIVEN' ? 'INCOME' : 'EXPENSE';
 
+      const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
+      const totals = await Transaction.aggregate([
+        { $match: { tenantId: tenantObjectId } },
+        {
+          $group: {
+            _id: '$type',
+            sum: { $sum: '$amount' },
+          },
+        },
+      ]).session(session);
+
+      let currentBalance = 0;
+      for (const t of totals) {
+        if (t._id === 'INCOME') currentBalance += t.sum;
+        if (t._id === 'EXPENSE') currentBalance -= t.sum;
+      }
+
+      const balanceAfter = txType === 'INCOME' ? currentBalance + paymentAmount : currentBalance - paymentAmount;
+
       const [transaction] = await Transaction.create(
         [
           {
@@ -313,6 +346,7 @@ const payDebt = async (req, res) => {
             category: debt.type === 'GIVEN' ? 'Debt Collection' : 'Debt Payment',
             description: `${debt.type === 'GIVEN' ? 'Collected from' : 'Paid to'} ${debt.entityName}`,
             transactionDate: new Date(),
+            balanceAfter,
           },
         ],
         { session },
@@ -354,4 +388,74 @@ const payDebt = async (req, res) => {
   }
 };
 
-module.exports = { createDebt, getDebts, payDebt };
+// ─────────────────────────────────────────────
+// @route   PUT /api/debts/:id
+// @access  Private (JWT)
+// ─────────────────────────────────────────────
+const updateDebt = async (req, res) => {
+  try {
+    const { tenantId } = req;
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const debt = await Debt.findOne({ _id: id, tenantId });
+    if (!debt || debt.isDeleted) {
+      return res.status(404).json({ success: false, message: 'Debt not found' });
+    }
+
+    const oldData = debt.toObject();
+
+    if (updateData.totalAmount !== undefined) updateData.totalAmount = Math.round(Number(updateData.totalAmount));
+    if (updateData.remainingAmount !== undefined) updateData.remainingAmount = Math.round(Number(updateData.remainingAmount));
+
+    Object.assign(debt, updateData);
+    await debt.save();
+
+    await AuditLog.create({
+      tenantId,
+      action: 'UPDATE',
+      entityType: 'DEBT',
+      entityId: debt._id,
+      changes: { before: oldData, after: debt.toObject() },
+    });
+
+    return res.status(200).json({ success: true, message: 'Debt updated', data: debt });
+  } catch (error) {
+    console.error('[debtController.updateDebt]', error);
+    return res.status(500).json({ success: false, message: 'Internal server error updating debt.' });
+  }
+};
+
+// ─────────────────────────────────────────────
+// @route   DELETE /api/debts/:id
+// @access  Private (JWT)
+// ─────────────────────────────────────────────
+const deleteDebt = async (req, res) => {
+  try {
+    const { tenantId } = req;
+    const { id } = req.params;
+
+    const debt = await Debt.findOne({ _id: id, tenantId });
+    if (!debt || debt.isDeleted) {
+      return res.status(404).json({ success: false, message: 'Debt not found' });
+    }
+
+    debt.isDeleted = true;
+    await debt.save();
+
+    await AuditLog.create({
+      tenantId,
+      action: 'DELETE',
+      entityType: 'DEBT',
+      entityId: debt._id,
+      changes: { deletedRecord: debt.toObject() },
+    });
+
+    return res.status(200).json({ success: true, message: 'Debt deleted' });
+  } catch (error) {
+    console.error('[debtController.deleteDebt]', error);
+    return res.status(500).json({ success: false, message: 'Internal server error deleting debt.' });
+  }
+};
+
+module.exports = { createDebt, getDebts, payDebt, updateDebt, deleteDebt };

@@ -46,6 +46,14 @@ const transactionSchema = new mongoose.Schema(
       required: [true, 'Transaction date is required'],
       default: Date.now,
     },
+    balanceAfter: {
+      type: Number,
+      default: 0,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

@@ -10,6 +10,9 @@ import {
   DebtPagination,
   DebtSummary,
   PayDebtResult,
+  UpdateDebtPayload,
+  updateDebt as updateDebtApi,
+  deleteDebt as deleteDebtApi,
 } from '../api/debtService';
 import { useLogStore } from './useLogStore';
 
@@ -32,6 +35,8 @@ interface DebtState {
   setFilter: (filter: DebtType | null) => void;
   fetchDebts: (page?: number, limit?: number) => Promise<void>;
   addDebt: (payload: CreateDebtPayload) => Promise<Debt>;
+  updateDebt: (id: string, payload: UpdateDebtPayload) => Promise<Debt>;
+  deleteDebt: (id: string) => Promise<void>;
   makePayment: (debtId: string, amount: number) => Promise<PayDebtResult>;
   refreshDebts: () => Promise<void>;
   clearError: () => void;
@@ -147,6 +152,45 @@ export const useDebtStore = create<DebtState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to process payment.';
       set({ error: message, isPaying: false });
+      throw err;
+    }
+  },
+
+  /**
+   * Updates a debt and re-fetches.
+   */
+  updateDebt: async (id: string, payload: UpdateDebtPayload) => {
+    set({ isLoading: true, error: null });
+    try {
+      const updated = await updateDebtApi(id, payload);
+      set((state) => ({
+        debts: state.debts.map((d) => (d._id === id ? updated : d)),
+        isLoading: false,
+      }));
+      get().fetchDebts(1).catch(() => {});
+      return updated;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update debt.';
+      set({ error: message, isLoading: false });
+      throw err;
+    }
+  },
+
+  /**
+   * Deletes a debt and re-fetches.
+   */
+  deleteDebt: async (id: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await deleteDebtApi(id);
+      set((state) => ({
+        debts: state.debts.filter((d) => d._id !== id),
+        isLoading: false,
+      }));
+      get().fetchDebts(1).catch(() => {});
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete debt.';
+      set({ error: message, isLoading: false });
       throw err;
     }
   },

@@ -47,6 +47,10 @@ const debtSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

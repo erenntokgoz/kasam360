@@ -47,13 +47,15 @@ interface AuthApiResponse {
   success: boolean;
   message: string;
   token: string;
+  refreshToken: string;
   tenant: Tenant;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const persistAuth = (token: string, user: Tenant): void => {
+const persistAuth = (token: string, refreshToken: string, user: Tenant): void => {
   setItem(StorageKeys.TOKEN, token);
+  setItem(StorageKeys.REFRESH_TOKEN, refreshToken);
   setItem(StorageKeys.USER, JSON.stringify(user));
 };
 
@@ -99,7 +101,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         '/api/auth/register',
         payload,
       );
-      persistAuth(data.token, data.tenant);
+      persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, isLoading: false });
     } catch (err) {
       const message =
@@ -119,7 +121,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         '/api/auth/login',
         payload,
       );
-      persistAuth(data.token, data.tenant);
+      persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed.';

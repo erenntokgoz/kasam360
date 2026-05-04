@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getItem, StorageKeys } from '../utils/storage';
+import { getItem, setItem, clearStorage, StorageKeys } from '../utils/storage';
 
 /**
  * Base URL strategy:
@@ -11,7 +11,7 @@ import { getItem, StorageKeys } from '../utils/storage';
  */
 const BASE_URL =
   (globalThis as any).__API_BASE_URL__ ??
-  'http://172.20.10.5:5000'; // Android emulator → host machine localhost
+  'http://10.0.2.2:5000'; // Android emulator → host machine localhost
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
@@ -30,7 +30,6 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log(`[API REQUEST] ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
     return config;
   },
   (error) => Promise.reject(error),
@@ -40,12 +39,47 @@ apiClient.interceptors.request.use(
 // Centralised error normalisation — unwrap Axios error into a plain Error
 // so callers don't have to import axios just to check AxiosError.
 apiClient.interceptors.response.use(
-  (response) => {
-    console.log(`[API RESPONSE] ${response.status} ${response.config.url}`, response.data);
-    return response;
-  },
-  (error) => {
-    console.warn(`[API ERROR] ${error?.config?.url}`, error?.response?.data || error?.message);
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config as any;
+
+    // Attempt token refresh on 401
+    if (
+      error?.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      originalRequest.url !== '/api/auth/login' &&
+      originalRequest.url !== '/api/auth/register'
+    ) {
+      originalRequest._retry = true;
+
+      try {
+        const refreshToken = getItem(StorageKeys.REFRESH_TOKEN);
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
+        }
+
+        const response = await axios.post(`${BASE_URL}/api/auth/refresh-token`, {
+          refreshToken,
+        });
+
+        if (response.data.success) {
+          const newToken = response.data.token;
+          setItem(StorageKeys.TOKEN, newToken);
+          if (originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          } else {
+            originalRequest.headers = { Authorization: `Bearer ${newToken}` };
+          }
+          return apiClient(originalRequest);
+        }
+      } catch (refreshError) {
+        clearStorage();
+        // Since we cannot dispatch store actions here directly due to circular dependencies,
+        // clearing storage will log the user out on next reload or state sync.
+        return Promise.reject(refreshError);
+      }
+    }
     const message: string =
       error?.response?.data?.message ?? // server error body
       error?.message ??                 // network-level message

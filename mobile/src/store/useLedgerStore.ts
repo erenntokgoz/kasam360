@@ -6,6 +6,10 @@ import {
   TransactionType,
   CreateTransactionPayload,
   TransactionPagination,
+  TransactionFilters,
+  UpdateTransactionPayload,
+  updateTransaction as updateTxApi,
+  deleteTransaction as deleteTxApi,
 } from '../api/transactionService';
 import { useLogStore } from './useLogStore';
 
@@ -27,8 +31,10 @@ interface LedgerState {
   error: string | null;
 
   // ── Actions ────────────────────────────────────────────────────────────────
-  fetchTransactions: (page?: number, limit?: number, type?: TransactionType) => Promise<void>;
+  fetchTransactions: (page?: number, limit?: number, filters?: TransactionFilters) => Promise<void>;
   addTransaction: (payload: CreateTransactionPayload) => Promise<Transaction>;
+  updateTransaction: (id: string, payload: UpdateTransactionPayload) => Promise<Transaction>;
+  deleteTransaction: (id: string) => Promise<void>;
   refreshLedger: () => Promise<void>;
   clearError: () => void;
   reset: () => void;
@@ -58,10 +64,10 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
    * Fetches a page of transactions and updates the summary totals.
    * First page replaces the list; subsequent pages append (infinite scroll).
    */
-  fetchTransactions: async (page = 1, limit = 20, type?: TransactionType) => {
+  fetchTransactions: async (page = 1, limit = 20, filters?: TransactionFilters) => {
     set({ isLoading: true, error: null });
     try {
-      const result = await getTransactions(page, limit, type);
+      const result = await getTransactions(page, limit, filters);
 
       set((state) => ({
         transactions:
@@ -120,6 +126,45 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create transaction.';
       set({ error: message, isCreating: false });
+      throw err;
+    }
+  },
+
+  /**
+   * Updates an existing transaction and re-fetches to sync totals.
+   */
+  updateTransaction: async (id: string, payload: UpdateTransactionPayload) => {
+    set({ isLoading: true, error: null });
+    try {
+      const updated = await updateTxApi(id, payload);
+      set((state) => ({
+        transactions: state.transactions.map((t) => (t._id === id ? updated : t)),
+        isLoading: false,
+      }));
+      get().fetchTransactions(1).catch(() => {});
+      return updated;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update transaction.';
+      set({ error: message, isLoading: false });
+      throw err;
+    }
+  },
+
+  /**
+   * Deletes a transaction and re-fetches to sync totals.
+   */
+  deleteTransaction: async (id: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await deleteTxApi(id);
+      set((state) => ({
+        transactions: state.transactions.filter((t) => t._id !== id),
+        isLoading: false,
+      }));
+      get().fetchTransactions(1).catch(() => {});
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete transaction.';
+      set({ error: message, isLoading: false });
       throw err;
     }
   },

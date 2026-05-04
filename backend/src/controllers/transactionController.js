@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
-const Debt = require('../models/Debt');
+const AuditLog = require('../models/AuditLog');
 
 /**
  * Transaction CRUD Controller
@@ -17,42 +17,56 @@ const Debt = require('../models/Debt');
 const getTransactions = async (req, res) => {
   try {
     const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
-    console.log(`[GET /api/transactions] Tenant: ${req.tenantId}, Page: ${req.query.page}, Type: ${req.query.type}`);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;
 
     // Optional type filter
-    const filter = { tenantId: tenantObjectId };
-    if (req.query.type && ['INCOME', 'EXPENSE'].includes(req.query.type)) {
+    const filter = { tenantId: tenantObjectId, isDeleted: false };
+    if (req.query.type && req.query.type !== 'ALL' && ['INCOME', 'EXPENSE'].includes(req.query.type)) {
       filter.type = req.query.type;
     }
+    
+    // Optional date range filter
+    if (req.query.startDate || req.query.endDate) {
+      filter.transactionDate = {};
+      if (req.query.startDate) filter.transactionDate.$gte = new Date(req.query.startDate);
+      if (req.query.endDate) filter.transactionDate.$lte = new Date(req.query.endDate);
+    }
+    
+    // Optional categories filter
+    if (req.query.categories) {
+      const cats = req.query.categories.split(',');
+      filter.category = { $in: cats };
+    }
 
-    const [transactions, total, totals, debtSummary] = await Promise.all([
+    const [transactions, total] = await Promise.all([
       Transaction.find(filter)
         .sort({ transactionDate: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
       Transaction.countDocuments(filter),
-      Transaction.aggregate([
-        { $match: { tenantId: tenantObjectId } },
-        {
-          $group: {
-            _id: '$type',
-            sum: { $sum: '$amount' },
-          },
+    ]);
+
+    // Compute running totals for the tenant (filtered by date/categories but keep all types)
+    // Wait, the UI wants "Seçili tarih aralığına göre gelir, gider, bakiye göster"
+    // So the totals should be based on the SAME filter, but without the type filter?
+    // Actually, if they filter by type='INCOME', they probably still want to see total income in that date range.
+    // The previous implementation computed all-time unfiltered totals. But the prompt explicitly asks:
+    // "Seçili tarih aralığına göre gelir, gider, bakiye göster"
+    
+    const summaryFilter = { ...filter };
+    delete summaryFilter.type; // We want both income and expense for the summary
+    
+    const totals = await Transaction.aggregate([
+      { $match: summaryFilter },
+      {
+        $group: {
+          _id: '$type',
+          sum: { $sum: '$amount' },
         },
-      ]),
-      Debt.aggregate([
-        { $match: { tenantId: tenantObjectId } },
-        {
-          $group: {
-            _id: '$type',
-            totalRemaining: { $sum: '$remainingAmount' },
-          },
-        },
-      ]),
+      },
     ]);
 
     let totalIncome = 0;
@@ -60,13 +74,6 @@ const getTransactions = async (req, res) => {
     for (const t of totals) {
       if (t._id === 'INCOME') totalIncome = t.sum;
       if (t._id === 'EXPENSE') totalExpense = t.sum;
-    }
-
-    let totalDebt = 0; // TAKEN
-    let totalReceivable = 0; // GIVEN
-    for (const d of debtSummary) {
-      if (d._id === 'TAKEN') totalDebt = d.totalRemaining;
-      if (d._id === 'GIVEN') totalReceivable = d.totalRemaining;
     }
 
     return res.status(200).json({
@@ -80,10 +87,8 @@ const getTransactions = async (req, res) => {
           totalPages: Math.ceil(total / limit),
         },
         summary: {
-          totalIncome,
-          totalExpense,
-          totalDebt,
-          totalReceivable,
+          totalIncome,   // integer cents
+          totalExpense,  // integer cents
           balance: totalIncome - totalExpense,
         },
       },
@@ -106,7 +111,6 @@ const createTransaction = async (req, res) => {
   try {
     const { tenantId } = req;
     const { type, amount, method, category, description, transactionDate, syncId } = req.body;
-    console.log(`[POST /api/transactions] Received:`, { tenantId, type, amount, method, category });
 
     // ── Validation ─────────────────────────────────────────────────────────
     if (!type || amount == null || !method) {
@@ -150,6 +154,26 @@ const createTransaction = async (req, res) => {
       }
     }
 
+    // ── Calculate Current Balance ───────────────────────────────────────────
+    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
+    const totals = await Transaction.aggregate([
+      { $match: { tenantId: tenantObjectId } },
+      {
+        $group: {
+          _id: '$type',
+          sum: { $sum: '$amount' },
+        },
+      },
+    ]);
+
+    let currentBalance = 0;
+    for (const t of totals) {
+      if (t._id === 'INCOME') currentBalance += t.sum;
+      if (t._id === 'EXPENSE') currentBalance -= t.sum;
+    }
+
+    const balanceAfter = type === 'INCOME' ? currentBalance + amountInt : currentBalance - amountInt;
+
     // ── Create ──────────────────────────────────────────────────────────────
     const transaction = await Transaction.create({
       tenantId,
@@ -160,9 +184,8 @@ const createTransaction = async (req, res) => {
       description: description || null,
       transactionDate: transactionDate ? new Date(transactionDate) : new Date(),
       syncId: syncId || undefined,
+      balanceAfter,
     });
-
-    console.log(`[POST /api/transactions] SUCCESS: Created ID ${transaction._id}`);
 
     return res.status(201).json({
       success: true,
@@ -188,4 +211,73 @@ const createTransaction = async (req, res) => {
   }
 };
 
-module.exports = { getTransactions, createTransaction };
+// ─────────────────────────────────────────────
+// @route   PUT /api/transactions/:id
+// @access  Private (JWT)
+// ─────────────────────────────────────────────
+const updateTransaction = async (req, res) => {
+  try {
+    const { tenantId } = req;
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const transaction = await Transaction.findOne({ _id: id, tenantId });
+    if (!transaction || transaction.isDeleted) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    const oldData = transaction.toObject();
+
+    if (updateData.amount !== undefined) updateData.amount = Math.round(Number(updateData.amount));
+
+    Object.assign(transaction, updateData);
+    await transaction.save();
+
+    await AuditLog.create({
+      tenantId,
+      action: 'UPDATE',
+      entityType: 'TRANSACTION',
+      entityId: transaction._id,
+      changes: { before: oldData, after: transaction.toObject() },
+    });
+
+    return res.status(200).json({ success: true, message: 'Transaction updated', data: transaction });
+  } catch (error) {
+    console.error('[transactionController.updateTransaction]', error);
+    return res.status(500).json({ success: false, message: 'Internal server error updating transaction.' });
+  }
+};
+
+// ─────────────────────────────────────────────
+// @route   DELETE /api/transactions/:id
+// @access  Private (JWT)
+// ─────────────────────────────────────────────
+const deleteTransaction = async (req, res) => {
+  try {
+    const { tenantId } = req;
+    const { id } = req.params;
+
+    const transaction = await Transaction.findOne({ _id: id, tenantId });
+    if (!transaction || transaction.isDeleted) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    transaction.isDeleted = true;
+    await transaction.save();
+
+    await AuditLog.create({
+      tenantId,
+      action: 'DELETE',
+      entityType: 'TRANSACTION',
+      entityId: transaction._id,
+      changes: { deletedRecord: transaction.toObject() },
+    });
+
+    return res.status(200).json({ success: true, message: 'Transaction deleted' });
+  } catch (error) {
+    console.error('[transactionController.deleteTransaction]', error);
+    return res.status(500).json({ success: false, message: 'Internal server error deleting transaction.' });
+  }
+};
+
+module.exports = { getTransactions, createTransaction, updateTransaction, deleteTransaction };

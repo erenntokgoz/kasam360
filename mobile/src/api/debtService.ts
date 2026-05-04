@@ -28,6 +28,14 @@ export interface CreateDebtPayload {
   syncId?: string;
 }
 
+export interface UpdateDebtPayload {
+  entityName?: string;
+  type?: DebtType;
+  totalAmount?: number;
+  remainingAmount?: number;
+  dueDate?: string | null;
+}
+
 export interface DebtPagination {
   page: number;
   limit: number;
@@ -109,4 +117,25 @@ export const payDebt = async (debtId: string, amount: number): Promise<PayDebtRe
     amount,
   });
   return data.data;
+};
+
+/**
+ * Updates an existing debt.
+ */
+export const updateDebt = async (
+  id: string,
+  payload: UpdateDebtPayload,
+): Promise<Debt> => {
+  const { data } = await apiClient.put<{ success: boolean; data: Debt }>(
+    `/api/debts/${id}`,
+    payload,
+  );
+  return data.data;
+};
+
+/**
+ * Soft-deletes a debt.
+ */
+export const deleteDebt = async (id: string): Promise<void> => {
+  await apiClient.delete(`/api/debts/${id}`);
 };
