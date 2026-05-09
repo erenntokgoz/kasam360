@@ -19,10 +19,6 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 
-/**
- * React Navigation theme — keeps the navigator surfaces consistent
- * with the Executive Slate palette.
- */
 const Stack = createNativeStackNavigator();
 
 const RootNavigator: React.FC = () => {
@@ -34,12 +30,12 @@ const RootNavigator: React.FC = () => {
   const navTheme = {
     dark: isDarkMode,
     colors: {
-      primary: theme.colors.successLight,
+      primary: theme.colors.accent,
       background: theme.colors.primary,
       card: theme.colors.surface,
       text: theme.colors.textPrimary,
       border: theme.colors.border,
-      notification: theme.colors.dangerLight,
+      notification: theme.colors.danger,
     },
     fonts: {
       regular: { fontFamily: theme.fonts.regular, fontWeight: '400' as const },

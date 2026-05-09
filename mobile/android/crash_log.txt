@@ -1,0 +1,11 @@
+--------- beginning of main
+05-09 14:36:00.238   837  1256 E BufferQueueDebug: [Task=187#13615](this:0xb4000071bc607790,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'Task=187#13615'
+05-09 14:36:00.243   837  1256 E BufferQueueDebug: [ActivityRecord{e8b4b24 u0 com.kasam360.app/.MainActivity t187}#13616](this:0xb4000071bc625790,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'ActivityRecord{e8b4b24 u0 com.kasam360.app/.MainActivity t187}#13616'
+05-09 14:36:00.254  5297  5297 E pageboostd: Received HALT command code 2
+05-09 14:36:00.263   837  1256 E BufferQueueDebug: [d9adabc Splash Screen com.kasam360.app#13617](this:0xb4000071bc6bd790,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'd9adabc Splash Screen com.kasam360.app#13617'
+05-09 14:36:00.280   837  5171 E BufferQueueDebug: [Splash Screen com.kasam360.app$_4188#13618](this:0xb4000071c047d790,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'Splash Screen com.kasam360.app$_4188#13618'
+05-09 14:36:00.316   837  1256 E BufferQueueDebug: [Transition Root: Task=187#13619](this:0xb4000071bc6c0790,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'Transition Root: Task=187#13619'
+05-09 14:36:00.324   837  1256 E BufferQueueDebug: [Surface(name=b8bd084 StatusBar)/@0x457418f - animation-leash of insets_animation#13620](this:0xb4000071bc6c3790,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'Surface(name=b8bd084 StatusBar)/@0x457418f - animation-leash of insets_animation#13620'
+05-09 14:36:00.327   837  1256 E BufferQueueDebug: [Surface(name=a040428 TaskbarWindow)/@0x30a4713 - animation-leash of insets_animation#13621](this:0xb4000071bc6ce790,id:-1,api:0,p:-1,c:-1) id info cannot be read from 'Surface(name=a040428 TaskbarWindow)/@0x30a4713 - animation-leash of insets_animation#13621'
+05-09 14:36:00.332   837  1256 E BufferQueueDebug: [6303eb6 ActivityRecordInputSink com.kasam360.app/.MainActivity#13622](this:0xb4000071bc6d1790,id:-1,api:0,p:-1,c:-1) id info cannot be read from '6303eb6 ActivityRecordInputSink com.kasam360.app/.MainActivity#13622'
+05-09 14:36:00.337  2664  2664 E om.kasam360.app: Not starting debugger since process cannot load the jdwp agent.

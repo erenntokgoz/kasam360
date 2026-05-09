@@ -10,211 +10,219 @@ import { useLedgerStore } from '../store/useLedgerStore';
 import type { Debt, DebtType } from '../api/debtService';
 import { formatCurrency, formatDate } from '../utils/format';
 
-const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void }> = React.memo(({ item, onPress }) => {
+// ─── Debt Row Component ──────────────────────────────────────────────────────
+
+const DebtRow: React.FC<{ item: Debt; index: number; onPress: (d: Debt) => void; onPay: (d: Debt) => void }> = React.memo(({ item, onPress, onPay }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const isGiven = item.type === 'GIVEN';
-  const accent = isGiven ? theme.colors.successLight : theme.colors.dangerLight;
-  const iconBg = isGiven ? 'rgba(16,185,129,0.10)' : 'rgba(248,113,113,0.10)';
+  const accent = isGiven ? theme.colors.success : theme.colors.danger;
+  const iconBg = isGiven ? theme.colors.successTransparent : theme.colors.dangerTransparent;
   const paid = item.status === 'PAID';
   const progress = item.totalAmount > 0 ? 1 - item.remainingAmount / item.totalAmount : 0;
 
   return (
-    <Pressable
-      style={styles.rowWrap}
-      activeOpacity={0.7}
-      onPress={() => onPress(item)}
-    >
+    <Pressable style={[styles.rowWrap, { backgroundColor: theme.colors.surface }]} activeOpacity={0.7} onPress={() => onPress(item)}>
       <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
-        <Icon name={isGiven ? 'arrow-down-left' : 'arrow-up-right'} size={16} color={accent} />
+        <Icon name={isGiven ? 'arrow-down-left' : 'arrow-up-right'} size={18} color={accent} />
       </View>
       <View style={styles.rowMid}>
         <Text style={[styles.rowName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{item.entityName}</Text>
-        <Text style={[styles.rowDue, { color: theme.colors.textTertiary }]}>{item.dueDate ? formatDate(item.dueDate) : 'No due date'}</Text>
+        <Text style={[styles.rowDue, { color: theme.colors.textTertiary }]}>{item.dueDate ? `Vade: ${formatDate(item.dueDate)}` : 'Vade tarihi yok'}</Text>
         <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
           <View style={[styles.progressFill, { width: `${Math.min(progress * 100, 100)}%`, backgroundColor: accent }]} />
         </View>
       </View>
       <View style={styles.rowRight}>
         <Text style={[styles.rowRemaining, { color: paid ? theme.colors.textTertiary : accent }]}>{formatCurrency(item.remainingAmount)}</Text>
-        <Text style={[styles.rowTotal, { color: theme.colors.textTertiary }]}>/ {formatCurrency(item.totalAmount)}</Text>
-        {paid && <View style={[styles.paidBadge, { backgroundColor: theme.colors.successTransparent }]}><Text style={styles.paidText}>PAID</Text></View>}
+        <Pressable style={[styles.payBadge, { backgroundColor: accent }]} onPress={() => onPay(item)}>
+          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{isGiven ? 'TAHSİL' : 'ÖDE'}</Text>
+        </Pressable>
       </View>
     </Pressable>
   );
 });
 
-const TABS: { label: string; value: DebtType | null }[] = [
-  { label: 'All', value: null },
-  { label: 'Alacaklar', value: 'GIVEN' },
-  { label: 'Borçlar', value: 'TAKEN' },
-];
+// ─── Add Debt Modal ─────────────────────────────────────────────────────────
 
-const SegmentedControl: React.FC<{ active: DebtType | null; onChange: (v: DebtType | null) => void }> = ({ active, onChange }) => {
+const AddDebtModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ visible, onClose }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
-  return (
-    <View style={[styles.segWrap, { backgroundColor: theme.colors.surface }]}>
-      {TABS.map((t) => {
-        const sel = t.value === active;
-        return (
-          <Pressable key={t.label} style={[styles.segBtn, sel && { backgroundColor: theme.colors.card }]} onPress={() => onChange(t.value)}>
-            <Text style={[styles.segLabel, { color: theme.colors.textTertiary }, sel && { color: theme.colors.textPrimary }]}>{t.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-};
+  const { addDebt, isCreating } = useDebtStore();
+  const { addTransaction } = useLedgerStore();
+  
+  const [type, setType] = useState<DebtType>('TAKEN');
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [dueDate, setDueDate] = useState('');
 
-const SummaryHeader: React.FC = () => {
-  const summary = useDebtStore((s) => s.summary);
-  const isDark = useThemeStore((s) => s.isDarkMode);
-  const theme = getTheme(isDark);
-  if (!summary) return null;
-  return (
-    <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryCol}>
-          <View style={styles.summaryDotWrap}><View style={[styles.sDot, { backgroundColor: theme.colors.successLight }]} /></View>
-          <View>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}>Alacaklar</Text>
-            <Text style={[styles.summaryVal, { color: theme.colors.successLight }]}>{formatCurrency(summary.given.remaining)}</Text>
-          </View>
-        </View>
-        <View style={[styles.summaryDivider, { backgroundColor: theme.colors.border }]} />
-        <View style={styles.summaryCol}>
-          <View style={styles.summaryDotWrap}><View style={[styles.sDot, { backgroundColor: theme.colors.dangerLight }]} /></View>
-          <View>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}>Borçlar</Text>
-            <Text style={[styles.summaryVal, { color: theme.colors.dangerLight }]}>{formatCurrency(summary.taken.remaining)}</Text>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-};
+  const handleSave = async () => {
+    if (!name || !amount) { Alert.alert('Hata', 'Lütfen isim ve tutar giriniz.'); return; }
+    const val = parseFloat(amount.replace(',', '.'));
+    if (isNaN(val) || val <= 0) { Alert.alert('Hata', 'Geçersiz tutar.'); return; }
+    
+    try {
+      const cents = Math.round(val * 100);
+      await addDebt({
+        entityName: name,
+        type: type,
+        totalAmount: cents,
+        dueDate: dueDate || undefined,
+      });
 
-const EmptyState: React.FC = () => {
-  const isDark = useThemeStore((s) => s.isDarkMode);
-  const theme = getTheme(isDark);
-  return (
-    <View style={styles.emptyWrap}>
-      <Icon name="inbox" size={48} color={theme.colors.textTertiary} />
-      <Text style={[styles.emptyTitle, { color: theme.colors.textSecondary }]}>No debts yet</Text>
-      <Text style={[styles.emptySub, { color: theme.colors.textTertiary }]}>Tap + to add a new debt record</Text>
-    </View>
-  );
-};
+      // Also create a transaction as requested: "HER BORÇ BİR GİDER HER ALACAK BİR GELİR"
+      // Wait, if I TAKE a debt (Borç), it should be recorded as Expense? 
+      // User said: "HER BORÇ BİR GİDER HER ALACAK BİR GELİR"
+      await addTransaction({
+        type: type === 'TAKEN' ? 'EXPENSE' : 'INCOME',
+        amount: cents,
+        category: type === 'TAKEN' ? 'Alınan Borç' : 'Verilen Borç (Alacak)',
+        description: `${name}: ${description}`,
+        method: 'CASH'
+      });
 
-interface PayModalProps { visible: boolean; debt: Debt | null; onClose: () => void; }
-
-export const PaymentModal: React.FC<PayModalProps> = ({ visible, debt, onClose }) => {
-  const [input, setInput] = useState('');
-  const { makePayment, isPaying } = useDebtStore();
-  const refreshLedger = useLedgerStore((s) => s.refreshLedger);
-  const inputRef = useRef<TextInput>(null);
-  const isDark = useThemeStore((s) => s.isDarkMode);
-  const theme = getTheme(isDark);
-
-  useEffect(() => { if (visible) { setInput(''); setTimeout(() => inputRef.current?.focus(), 300); } }, [visible]);
-
-  const handlePay = async () => {
-    if (!debt) return;
-    const val = parseFloat(input.replace(',', '.'));
-    if (isNaN(val) || val <= 0) { Alert.alert('Invalid Amount'); return; }
-    const cents = Math.round(val * 100);
-    if (cents > debt.remainingAmount) { Alert.alert('Exceeds Balance', `Max: ${formatCurrency(debt.remainingAmount)}`); return; }
-    try { await makePayment(debt._id, cents); refreshLedger().catch(() => { }); Alert.alert('Success'); onClose(); }
-    catch { Alert.alert('Error', 'Payment failed.'); }
+      Alert.alert('Başarılı', 'Kayıt oluşturuldu.');
+      onClose();
+      // Reset
+      setName(''); setAmount(''); setDescription(''); setDueDate('');
+    } catch (err) {
+      Alert.alert('Hata', 'Kayıt oluşturulamadı.');
+    }
   };
 
-  const handlePayFull = async () => {
-    if (!debt) return;
-    try { await makePayment(debt._id, debt.remainingAmount); refreshLedger().catch(() => { }); Alert.alert('Success', 'Debt fully paid!'); onClose(); }
-    catch { Alert.alert('Error', 'Payment failed.'); }
-  };
-
-  if (!debt) return null;
-  const isGiven = debt.type === 'GIVEN';
-  const accent = isGiven ? theme.colors.successLight : theme.colors.dangerLight;
-  const actionLabel = isGiven ? 'Tahsil Et' : 'Öde';
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.modalOverlay, { backgroundColor: theme.colors.overlay }]}>
-        <Pressable style={[styles.modalOverlay, { backgroundColor: theme.colors.overlay }]} onPress={onClose}>
-          <Pressable style={[styles.modalSheet, { backgroundColor: theme.colors.surface }]} onPress={(e) => e.stopPropagation()}>
-            <View style={[styles.modalHandle, { backgroundColor: theme.colors.border }]} />
-            <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>{actionLabel}</Text>
-            <Text style={[styles.modalEntity, { color: theme.colors.textTertiary }]}>{debt.entityName}</Text>
-            <View style={styles.modalAmountRow}>
-              <Text style={[styles.modalAmountLabel, { color: theme.colors.textTertiary }]}>Remaining</Text>
-              <Text style={[styles.modalAmountVal, { color: accent }]}>{formatCurrency(debt.remainingAmount)}</Text>
-            </View>
-            <View style={[styles.modalInputWrap, { backgroundColor: theme.colors.card }]}>
-              <Text style={[styles.modalCurrency, { color: theme.colors.textTertiary }]}>₺</Text>
-              <TextInput ref={inputRef} style={[styles.modalInput, { color: theme.colors.textPrimary }]} value={input} onChangeText={setInput} placeholder="0.00" placeholderTextColor={theme.colors.textTertiary} keyboardType="decimal-pad" returnKeyType="done" />
-            </View>
-            <View style={styles.modalActions}>
-              <Pressable style={[styles.modalBtn, { borderColor: theme.colors.border, borderWidth: 1 }]} onPress={handlePayFull} disabled={isPaying}>
-                <Text style={[styles.modalBtnText, { color: accent }]}>Pay Full</Text>
-              </Pressable>
-              <Pressable style={[styles.modalBtn, { backgroundColor: accent }]} onPress={handlePay} disabled={isPaying}>
-                {isPaying ? <ActivityIndicator size="small" color={theme.colors.primary} /> : <Text style={[styles.modalBtnText, { color: theme.colors.primary }]}>{actionLabel}</Text>}
-              </Pressable>
-            </View>
-            <Pressable style={styles.modalCancel} onPress={onClose}><Text style={[styles.modalCancelText, { color: theme.colors.textTertiary }]}>Cancel</Text></Pressable>
-          </Pressable>
-        </Pressable>
+    <Modal visible={visible} transparent animationType="slide">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>Yeni Borç/Alacak Ekle</Text>
+          
+          <View style={styles.typeSelector}>
+            <Pressable style={[styles.typeBtn, type === 'TAKEN' && { backgroundColor: theme.colors.danger }]} onPress={() => setType('TAKEN')}>
+              <Text style={[styles.typeBtnText, type === 'TAKEN' ? { color: '#fff' } : { color: theme.colors.textSecondary }]}>BORÇ ALDIM</Text>
+            </Pressable>
+            <Pressable style={[styles.typeBtn, type === 'GIVEN' && { backgroundColor: theme.colors.success }]} onPress={() => setType('GIVEN')}>
+              <Text style={[styles.typeBtnText, type === 'GIVEN' ? { color: '#fff' } : { color: theme.colors.textSecondary }]}>ALACAKLIYIM</Text>
+            </Pressable>
+          </View>
+
+          <TextInput style={[styles.input, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]} placeholder="Kime / Kimden" placeholderTextColor={theme.colors.textTertiary} value={name} onChangeText={setName} />
+          <TextInput style={[styles.input, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]} placeholder="Tutar (₺)" placeholderTextColor={theme.colors.textTertiary} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+          <TextInput style={[styles.input, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]} placeholder="Açıklama" placeholderTextColor={theme.colors.textTertiary} value={description} onChangeText={setDescription} />
+          <TextInput style={[styles.input, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]} placeholder="Vade Tarihi (YYYY-MM-DD)" placeholderTextColor={theme.colors.textTertiary} value={dueDate} onChangeText={setDueDate} />
+
+          <View style={styles.modalActions}>
+            <Pressable style={[styles.modalBtn, { backgroundColor: theme.colors.card }]} onPress={onClose}><Text style={{ color: theme.colors.textPrimary }}>İptal</Text></Pressable>
+            <Pressable style={[styles.modalBtn, { backgroundColor: theme.colors.accent }]} onPress={handleSave} disabled={isCreating}>
+              {isCreating ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>Kaydet</Text>}
+            </Pressable>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
 
+// ─── Payment Modal ──────────────────────────────────────────────────────────
+
+const PaymentModal: React.FC<{ visible: boolean; debt: Debt | null; onClose: () => void }> = ({ visible, debt, onClose }) => {
+  const [input, setInput] = useState('');
+  const { makePayment, isPaying } = useDebtStore();
+  const refreshLedger = useLedgerStore((s) => s.refreshLedger);
+  const isDark = useThemeStore((s) => s.isDarkMode);
+  const theme = getTheme(isDark);
+
+  const handlePay = async (full = false) => {
+    if (!debt) return;
+    const val = full ? debt.remainingAmount / 100 : parseFloat(input.replace(',', '.'));
+    if (isNaN(val) || val <= 0) { Alert.alert('Geçersiz Tutar'); return; }
+    const cents = full ? debt.remainingAmount : Math.round(val * 100);
+    
+    try {
+      await makePayment(debt._id, cents);
+      await refreshLedger();
+      Alert.alert('Başarılı', 'Ödeme kaydedildi.');
+      onClose();
+    } catch { Alert.alert('Hata', 'Ödeme başarısız.'); }
+  };
+
+  if (!debt) return null;
+  const isGiven = debt.type === 'GIVEN';
+  const accent = isGiven ? theme.colors.success : theme.colors.danger;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={[styles.modalOverlay, { backgroundColor: theme.colors.overlay }]}>
+        <View style={[styles.modalSheet, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>{isGiven ? 'Tahsilat Yap' : 'Ödeme Yap'}</Text>
+          <Text style={{ textAlign: 'center', color: theme.colors.textSecondary, marginBottom: 20 }}>{debt.entityName} - Kalan: {formatCurrency(debt.remainingAmount)}</Text>
+          
+          <TextInput style={[styles.input, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]} placeholder="Tutar" keyboardType="decimal-pad" value={input} onChangeText={setInput} autoFocus />
+          
+          <View style={styles.modalActions}>
+            <Pressable style={[styles.modalBtn, { backgroundColor: theme.colors.card }]} onPress={onClose}><Text style={{ color: theme.colors.textPrimary }}>Vazgeç</Text></Pressable>
+            <Pressable style={[styles.modalBtn, { backgroundColor: accent }]} onPress={() => handlePay(false)} disabled={isPaying}>
+              {isPaying ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>Öde</Text>}
+            </Pressable>
+          </View>
+          <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => handlePay(true)}>
+            <Text style={{ color: theme.colors.accent }}>Tamamını Kapat</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
+
 const DebtsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const [payTarget, setPayTarget] = useState<Debt | null>(null);
-  const { debts, activeFilter, isLoading, setFilter, fetchDebts } = useDebtStore();
+  const [showAdd, setShowAdd] = useState(false);
+  const { debts, activeFilter, isLoading, setFilter, fetchDebts, summary } = useDebtStore();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
 
   useEffect(() => { fetchDebts(1).catch(() => { }); }, [fetchDebts]);
 
-  const handleRowPress = useCallback((d: Debt) => { 
-    navigation.navigate('ContactDetail', { contactName: d.entityName });
-  }, [navigation]);
-  const renderItem = useCallback(({ item, index }: { item: Debt; index: number }) => <DebtRow item={item} index={index} onPress={handleRowPress} />, [handleRowPress]);
-  const keyExtractor = useCallback((item: Debt) => item._id, []);
-
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.primary} />
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <View style={[styles.header, { paddingHorizontal: 24, paddingVertical: 16 }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
-          <Icon name="menu" size={22} color={theme.colors.textPrimary} />
+          <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Debts</Text>
-        <Pressable hitSlop={12}>
-          <Icon name="plus-circle" size={22} color={theme.colors.accent} />
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Borçlar & Alacaklar</Text>
+        <Pressable hitSlop={12} onPress={() => setShowAdd(true)}>
+          <Icon name="plus-circle" size={24} color={theme.colors.accent} />
         </Pressable>
       </View>
-      <View style={styles.segContainer}>
-        <SegmentedControl active={activeFilter} onChange={setFilter} />
+
+      <View style={styles.summaryContainer}>
+        <View style={[styles.summaryBox, { backgroundColor: theme.colors.surface }]}>
+          <Text style={styles.summaryLabel}>ALACAKLAR</Text>
+          <Text style={[styles.summaryVal, { color: theme.colors.success }]}>{formatCurrency(summary?.given.remaining || 0)}</Text>
+        </View>
+        <View style={[styles.summaryBox, { backgroundColor: theme.colors.surface }]}>
+          <Text style={styles.summaryLabel}>BORÇLAR</Text>
+          <Text style={[styles.summaryVal, { color: theme.colors.danger }]}>{formatCurrency(summary?.taken.remaining || 0)}</Text>
+        </View>
       </View>
+
       <FlatList
         data={debts}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        ListHeaderComponent={<SummaryHeader />}
-        ListEmptyComponent={!isLoading ? <EmptyState /> : null}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 48 }]}
+        renderItem={({ item, index }) => <DebtRow item={item} index={index} onPress={(d) => navigation.navigate('ContactDetail' as any, { contactName: d.entityName })} onPay={setPayTarget} />}
+        keyExtractor={(item) => item._id}
+        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.accent }]} />}
         refreshing={isLoading}
         onRefresh={() => fetchDebts(1)}
+        ListEmptyComponent={!isLoading ? <Text style={{ textAlign: 'center', marginTop: 40, opacity: 0.5 }}>Kayıt bulunamadı</Text> : null}
       />
+
+      <AddDebtModal visible={showAdd} onClose={() => setShowAdd(false)} />
       <PaymentModal visible={!!payTarget} debt={payTarget} onClose={() => setPayTarget(null)} />
     </View>
   );
@@ -223,51 +231,30 @@ const DebtsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { fontSize: 18, letterSpacing: 0.4 },
-  segContainer: { paddingHorizontal: 24, marginBottom: 8 },
-  segWrap: { flexDirection: 'row', borderRadius: 12, padding: 3 },
-  segBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
-  segLabel: { fontSize: 13 },
-  listContent: { paddingHorizontal: 24, paddingTop: 8 },
-  separator: { height: 1, marginLeft: 56 },
-  summaryCard: { borderRadius: 16, padding: 24, marginBottom: 32 },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
-  summaryCol: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  summaryDotWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  sDot: { width: 8, height: 8, borderRadius: 4 },
-  summaryLabel: { fontSize: 11, marginBottom: 1 },
-  summaryVal: { fontSize: 15 },
-  summaryDivider: { width: 1, height: 32 },
-  rowWrap: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 4 },
-  rowIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-  rowMid: { flex: 1, marginRight: 8 },
-  rowName: { fontSize: 15, marginBottom: 2 },
-  rowDue: { fontSize: 11, marginBottom: 6 },
-  progressTrack: { height: 3, borderRadius: 1.5, overflow: 'hidden' },
-  progressFill: { height: 3, borderRadius: 1.5 },
-  rowRight: { alignItems: 'flex-end' },
-  rowRemaining: { fontSize: 15, letterSpacing: -0.3 },
-  rowTotal: { fontSize: 11, marginTop: 1 },
-  paidBadge: { marginTop: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  paidText: { fontSize: 9, letterSpacing: 0.8 },
-  emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 8 },
-  emptyTitle: { fontSize: 18, marginTop: 12 },
-  emptySub: { fontSize: 13, textAlign: 'center', maxWidth: 260 },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  modalTitle: { fontSize: 22, textAlign: 'center' },
-  modalEntity: { fontSize: 13, textAlign: 'center', marginTop: 4, marginBottom: 32 },
-  modalAmountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalAmountLabel: { fontSize: 13 },
-  modalAmountVal: { fontSize: 22 },
-  modalInputWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 12, marginBottom: 32 },
-  modalCurrency: { fontSize: 22, marginRight: 8 },
-  modalInput: { flex: 1, fontSize: 28, paddingVertical: 12 },
-  modalActions: { flexDirection: 'row', gap: 16 },
-  modalBtn: { flex: 1, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  modalBtnText: { fontSize: 15 },
-  modalCancel: { marginTop: 24, alignItems: 'center' },
-  modalCancelText: { fontSize: 13 },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  summaryContainer: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, marginBottom: 12 },
+  summaryBox: { flex: 1, padding: 16, borderRadius: 16, alignItems: 'center', elevation: 2 },
+  summaryLabel: { fontSize: 10, fontWeight: '700', opacity: 0.5, marginBottom: 4 },
+  summaryVal: { fontSize: 18, fontWeight: '700' },
+  rowWrap: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, marginBottom: 12, elevation: 1 },
+  rowIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  rowMid: { flex: 1 },
+  rowName: { fontSize: 16, fontWeight: '600' },
+  rowDue: { fontSize: 12, marginTop: 2, marginBottom: 8 },
+  progressTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  progressFill: { height: 4, borderRadius: 2 },
+  rowRight: { alignItems: 'flex-end', gap: 8 },
+  rowRemaining: { fontSize: 16, fontWeight: '700' },
+  payBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+  modalSheet: { borderRadius: 24, padding: 24 },
+  modalTitle: { fontSize: 20, fontWeight: '700', textAlign: 'center', marginBottom: 20 },
+  typeSelector: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  typeBtn: { flex: 1, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'transparent' },
+  typeBtnText: { fontSize: 12, fontWeight: '700' },
+  input: { height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, marginBottom: 12, fontSize: 15 },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  modalBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }
 });
 
 export default DebtsScreen;

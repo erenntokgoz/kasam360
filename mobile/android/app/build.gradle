@@ -86,6 +86,12 @@ android {
         versionName "1.0"
         buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", newArchEnabled
         buildConfigField "boolean", "IS_HERMES_ENABLED", hermesEnabled
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared", "-DANDROID_LD=lld"
+            }
+        }
     }
     signingConfigs {
         debug {

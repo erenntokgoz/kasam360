@@ -1,7 +1,5 @@
 import { create } from 'zustand';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const THEME_KEY = 'app.isDarkMode';
+import { getItem, setItem, StorageKeys } from '../utils/storage';
 
 interface ThemeState {
   isDarkMode: boolean;
@@ -14,7 +12,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
 
   hydrateTheme: async () => {
     try {
-      const stored = await AsyncStorage.getItem(THEME_KEY);
+      const stored = await getItem(StorageKeys.THEME);
       if (stored !== null) {
         set({ isDarkMode: stored === 'true' });
       }
@@ -23,10 +21,10 @@ export const useThemeStore = create<ThemeState>((set) => ({
     }
   },
 
-  toggleTheme: () => {
+  toggleTheme: async () => {
     set((state) => {
       const next = !state.isDarkMode;
-      AsyncStorage.setItem(THEME_KEY, String(next)).catch(console.error);
+      setItem(StorageKeys.THEME, String(next)).catch(console.error);
       return { isDarkMode: next };
     });
   },

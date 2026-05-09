@@ -1,11 +1,9 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getItem, setItem, StorageKeys } from '../utils/storage';
 
 import tr from './tr.json';
 import en from './en.json';
-
-const LANGUAGE_KEY = 'app.language';
 
 // i18next initial initialization (defaults to 'tr')
 i18n
@@ -29,7 +27,7 @@ i18n
  */
 export const hydrateLanguage = async () => {
   try {
-    const savedLanguage = await AsyncStorage.getItem(LANGUAGE_KEY);
+    const savedLanguage = await getItem(StorageKeys.LANGUAGE);
     if (savedLanguage) {
       await i18n.changeLanguage(savedLanguage);
     }
@@ -40,7 +38,7 @@ export const hydrateLanguage = async () => {
 
 export const changeLanguage = async (lang: 'tr' | 'en') => {
   await i18n.changeLanguage(lang);
-  await AsyncStorage.setItem(LANGUAGE_KEY, lang);
+  await setItem(StorageKeys.LANGUAGE, lang);
 };
 
 export default i18n;

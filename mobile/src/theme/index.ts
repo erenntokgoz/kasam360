@@ -28,90 +28,92 @@ const shared = {
     bold: 'System',
   },
   radii: {
-    sm: 6,
-    base: 10,
-    lg: 16,
-    xl: 24,
+    sm: 8,
+    base: 12,
+    lg: 20,
+    xl: 28,
     full: 9999,
   },
   shadows: {
     card: {
-      shadowColor: 'rgba(0,0,0,0.5)',
-      shadowOffset: { width: 0, height: 4 },
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
       shadowOpacity: 0.1,
-      shadowRadius: 10,
-      elevation: 2,
+      shadowRadius: 20,
+      elevation: 5,
     },
     button: {
-      shadowColor: '#2563EB',
+      shadowColor: '#3B82F6',
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.35,
-      shadowRadius: 8,
-      elevation: 6,
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 8,
     },
   },
 };
 
-// ─── Dark Theme (mevcut koyu lacivert) ────────────────────────────────────────
+// ─── Dark Theme (Premium Midnight) ────────────────────────────────────────
 
 export const darkTheme = {
   ...shared,
   colors: {
-    primary: '#0A0F1A',       // ultra koyu lacivert
-    surface: '#141C2B',       // kart yüzeyleri
-    card: '#1E293B',          // input, küçük kartlar
-    accent: '#2563EB',        // güven mavisi
-    success: '#059669',
-    successLight: '#10B981',
-    danger: '#DC2626',
-    dangerLight: '#EF4444',
-    textPrimary: '#F8FAFC',
-    textSecondary: '#94A3B8',
-    textTertiary: '#64748B',
-    border: '#334155',
-    accentTransparent: 'rgba(37, 99, 235, 0.12)',
-    successTransparent: 'rgba(16, 185, 129, 0.12)',
-    dangerTransparent: 'rgba(239, 68, 68, 0.12)',
-    overlay: 'rgba(0, 0, 0, 0.60)',
+    primary: '#0F172A',       // Slate 900
+    surface: '#1E293B',       // Slate 800
+    card: '#334155',          // Slate 700
+    accent: '#3B82F6',        // Blue 500
+    accentGradient: ['#3B82F6', '#2563EB'],
+    success: '#10B981',       // Emerald 500
+    successLight: '#34D399',
+    danger: '#EF4444',        // Red 500
+    dangerLight: '#F87171',
+    textPrimary: '#F8FAFC',   // Slate 50
+    textSecondary: '#CBD5E1', // Slate 300
+    textTertiary: '#94A3B8',  // Slate 400
+    border: '#334155',        // Slate 700
+    accentTransparent: 'rgba(59, 130, 246, 0.15)',
+    successTransparent: 'rgba(16, 185, 129, 0.15)',
+    dangerTransparent: 'rgba(239, 68, 68, 0.15)',
+    overlay: 'rgba(0, 0, 0, 0.75)',
   },
 };
 
-// ─── Light Theme (profesyonel açık) ───────────────────────────────────────────
+// ─── Light Theme (Premium Arctic) ───────────────────────────────────────────
 
 export const lightTheme = {
   ...shared,
   colors: {
-    primary: '#F8FAFC',       // açık arkaplan
-    surface: '#FFFFFF',       // kart yüzeyleri
-    card: '#F1F5F9',          // input, küçük kartlar
-    accent: '#2563EB',        // aynı accent mavi
-    success: '#059669',
+    primary: '#F8FAFC',       // Slate 50
+    surface: '#FFFFFF',       // Pure White
+    card: '#F1F5F9',          // Slate 100
+    accent: '#2563EB',        // Blue 600
+    accentGradient: ['#2563EB', '#1D4ED8'],
+    success: '#059669',       // Emerald 600
     successLight: '#10B981',
-    danger: '#DC2626',
+    danger: '#DC2626',        // Red 600
     dangerLight: '#EF4444',
-    textPrimary: '#0F172A',   // koyu metin
-    textSecondary: '#475569',
-    textTertiary: '#94A3B8',
-    border: '#E2E8F0',
-    accentTransparent: 'rgba(37, 99, 235, 0.12)',
-    successTransparent: 'rgba(16, 185, 129, 0.12)',
-    dangerTransparent: 'rgba(239, 68, 68, 0.12)',
-    overlay: 'rgba(0, 0, 0, 0.40)',
+    textPrimary: '#0F172A',   // Slate 900
+    textSecondary: '#475569', // Slate 600
+    textTertiary: '#94A3B8',  // Slate 400
+    border: '#E2E8F0',        // Slate 200
+    accentTransparent: 'rgba(37, 99, 235, 0.10)',
+    successTransparent: 'rgba(16, 185, 129, 0.10)',
+    dangerTransparent: 'rgba(239, 68, 68, 0.10)',
+    overlay: 'rgba(15, 23, 42, 0.40)',
   },
   shadows: {
     card: {
-      shadowColor: '#94A3B8',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 2,
+      shadowColor: '#64748B',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 24,
+      elevation: 4,
     },
     button: {
       shadowColor: '#2563EB',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.25,
-      shadowRadius: 8,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
+      elevation: 6,
     },
   },
 };
@@ -119,8 +121,5 @@ export const lightTheme = {
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 export const getTheme = (isDark: boolean) => (isDark ? darkTheme : lightTheme);
-
-// ─── Backwards-compat default export (dark theme) ─────────────────────────────
-// Eski import'lar hâlâ `import { theme } from '../theme'` kullanıyorsa bozulmasın.
 
 export const theme = darkTheme;

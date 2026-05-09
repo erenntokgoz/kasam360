@@ -25,9 +25,9 @@ interface AuthState {
 
   // Actions
   register: (payload: RegisterPayload) => Promise<void>;
-  login: (payload: LoginPayload) => Promise<void>;
+  login: (payload: LoginPayload, rememberMe?: boolean) => Promise<void>;
   logout: () => void;
-  hydrateFromStorage: () => void;
+  hydrateFromStorage: () => Promise<void>;
   updateProfile: (payload: { businessName?: string; password?: string }) => Promise<void>;
   clearError: () => void;
 }
@@ -77,10 +77,10 @@ export const useAuthStore = create<AuthState>((set) => ({
    * Restores auth state from MMKV on app launch.
    * Call this in the root component (e.g. App.tsx) inside a useEffect.
    */
-  hydrateFromStorage: () => {
-    const token = getItem(StorageKeys.TOKEN);
-    const refreshToken = getItem(StorageKeys.REFRESH_TOKEN);
-    const userRaw = getItem(StorageKeys.USER);
+  hydrateFromStorage: async () => {
+    const token = await getItem(StorageKeys.TOKEN);
+    const refreshToken = await getItem(StorageKeys.REFRESH_TOKEN);
+    const userRaw = await getItem(StorageKeys.USER);
 
     if (token && userRaw) {
       try {
@@ -88,7 +88,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ token, refreshToken, user });
       } catch {
         // Corrupted storage — wipe and require re-login
-        clearAuth();
+        await clearStorage();
       }
     }
   },
@@ -116,14 +116,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   /**
    * Authenticates an existing tenant.
    */
-  login: async (payload: LoginPayload) => {
+  login: async (payload: LoginPayload, rememberMe?: boolean) => {
     set({ isLoading: true, error: null });
     try {
       const { data } = await apiClient.post<AuthApiResponse>(
         '/api/auth/login',
         payload,
       );
-      persistAuth(data.token, data.refreshToken, data.tenant);
+      
+      if (rememberMe) {
+        await setItem(StorageKeys.REMEMBER_ME, 'true');
+        await setItem(StorageKeys.PHONE_NUMBER, payload.phone);
+      } else {
+        await removeItem(StorageKeys.REMEMBER_ME);
+        await removeItem(StorageKeys.PHONE_NUMBER);
+      }
+
+      await persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed.';
