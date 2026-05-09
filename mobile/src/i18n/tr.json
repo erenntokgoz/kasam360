@@ -147,8 +147,12 @@
   },
   "sidebar": {
     "home": "Ana Sayfa",
+    "transactions": "Gelir & Giderler",
+    "contacts": "Rehber",
     "debts": "Borçlar",
     "analytics": "Sistem Kayıtları",
+    "recurrings": "Personel Giderleri",
+    "notifications": "Bildirimler",
     "settings": "Ayarlar",
     "logout": "Çıkış Yap"
   }

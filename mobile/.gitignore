@@ -66,6 +66,12 @@ yarn-error.log
 # testing
 /coverage
 
+# Debug / log files
+logcat*.txt
+bundle_error.txt
+eslint_report.txt
+*.log
+
 # Yarn
 .yarn/*
 !.yarn/patches

@@ -1,23 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, Switch, ScrollView, Platform, Alert, TextInput, Modal, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Switch, ScrollView, Alert, TextInput, Modal, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/useAuthStore';
-import { useBudgetStore } from '../store/useBudgetStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
+import { changeLanguage } from '../i18n';
+import { useTranslation } from 'react-i18next';
 
 const SettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   
   const { user, logout, updateProfile, isLoading: isAuthLoading } = useAuthStore();
-  const { monthlyLimit, setMonthlyLimit, warningThreshold, setWarningThreshold } = useBudgetStore();
-  const { isDarkMode, toggleTheme } = useThemeStore();
-  
+  const { toggleTheme, isDarkMode } = useThemeStore();
+  const { i18n } = useTranslation();
   const theme = getTheme(isDarkMode);
+  const currentLang = i18n.language === 'en' ? 'EN' : 'TR';
 
   const [showEdit, setShowEdit] = useState(false);
   const [editBusName, setEditBusName] = useState(user?.businessName || '');
@@ -43,7 +43,7 @@ const SettingsScreen: React.FC = () => {
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.primary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: theme.colors.surface }]}>
+      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, paddingTop: insets.top + theme.spacing.base, borderBottomColor: theme.colors.border }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
@@ -82,6 +82,23 @@ const SettingsScreen: React.FC = () => {
             </View>
             <Switch value={isDarkMode} onValueChange={toggleTheme} trackColor={{ false: theme.colors.border, true: theme.colors.accent }} />
           </View>
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <Icon name="globe" size={18} color={theme.colors.accent} />
+              <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Dil / Language</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(['TR', 'EN'] as const).map((lang) => (
+                <Pressable
+                  key={lang}
+                  onPress={() => changeLanguage(lang.toLowerCase() as 'tr' | 'en')}
+                  style={[{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, borderWidth: 1.5 }, currentLang === lang ? { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent } : { borderColor: theme.colors.border }]}
+                >
+                  <Text style={{ color: currentLang === lang ? '#fff' : theme.colors.textSecondary, fontWeight: '700', fontSize: 13 }}>{lang}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         </View>
 
         <Pressable style={[styles.logoutBtn, { backgroundColor: theme.colors.surface }]} onPress={handleLogout}>
@@ -115,7 +132,7 @@ const SettingsScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingBottom: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
   headerTitle: { fontSize: 18, fontWeight: '700' },
   content: { flex: 1, padding: 16 },
   section: { borderRadius: 20, padding: 20, marginBottom: 16 },

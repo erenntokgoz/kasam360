@@ -117,9 +117,12 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
         };
       });
 
-      const actionText = created.type === 'INCOME' 
-        ? `[${created.category || 'Gelir'}] ${(created.amount / 100).toLocaleString('tr-TR')}₺ eklendi.` 
-        : `[${created.category || 'Gider'}] ${(created.amount / 100).toLocaleString('tr-TR')}₺ çıkışı yapıldı.`;
+      const amountStr = (created.amount / 100).toLocaleString('tr-TR') + '₺';
+      const categoryText = created.category ? `[${created.category}] ` : '';
+      const actionText = created.description 
+        ? `${categoryText}${created.description} (${amountStr})`
+        : `${categoryText}${amountStr} tutarında ${created.type === 'INCOME' ? 'gelir eklendi' : 'gider kaydedildi'}.`;
+      
       useLogStore.getState().addLog(actionText, 'success');
 
       // Add Notification

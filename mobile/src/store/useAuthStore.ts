@@ -3,7 +3,7 @@ import apiClient from '../api/client';
 import {
   setItem,
   getItem,
-  clearStorage,
+  removeItem,
   StorageKeys,
 } from '../utils/storage';
 
@@ -53,14 +53,18 @@ interface AuthApiResponse {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const persistAuth = (token: string, refreshToken: string, user: Tenant): void => {
-  setItem(StorageKeys.TOKEN, token);
-  setItem(StorageKeys.REFRESH_TOKEN, refreshToken);
-  setItem(StorageKeys.USER, JSON.stringify(user));
+const persistAuth = async (token: string, refreshToken: string, user: Tenant): Promise<void> => {
+  await Promise.all([
+    setItem(StorageKeys.TOKEN, token),
+    setItem(StorageKeys.REFRESH_TOKEN, refreshToken),
+    setItem(StorageKeys.USER, JSON.stringify(user)),
+  ]);
 };
 
-const clearAuth = (): void => {
-  clearStorage();
+const clearAuth = async (): Promise<void> => {
+  await removeItem(StorageKeys.TOKEN);
+  await removeItem(StorageKeys.REFRESH_TOKEN);
+  await removeItem(StorageKeys.USER);
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -87,8 +91,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         const user: Tenant = JSON.parse(userRaw);
         set({ token, refreshToken, user });
       } catch {
-        // Corrupted storage — wipe and require re-login
-        await clearStorage();
+        // Corrupted storage — wipe only auth keys
+        await clearAuth();
       }
     }
   },
@@ -103,7 +107,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         '/api/auth/register',
         payload,
       );
-      persistAuth(data.token, data.refreshToken, data.tenant);
+      await persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
     } catch (err) {
       const message =

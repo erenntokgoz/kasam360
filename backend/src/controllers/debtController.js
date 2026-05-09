@@ -412,10 +412,16 @@ const updateDebt = async (req, res) => {
 
     const oldData = debt.toObject();
 
-    if (updateData.totalAmount !== undefined) updateData.totalAmount = Math.round(Number(updateData.totalAmount));
-    if (updateData.remainingAmount !== undefined) updateData.remainingAmount = Math.round(Number(updateData.remainingAmount));
+    // Whitelist: only allow safe fields to be updated
+    const ALLOWED_FIELDS = ['entityName', 'dueDate', 'notes'];
+    const safeUpdate = {};
+    for (const field of ALLOWED_FIELDS) {
+      if (updateData[field] !== undefined) safeUpdate[field] = updateData[field];
+    }
 
-    Object.assign(debt, updateData);
+    if (safeUpdate.totalAmount !== undefined) safeUpdate.totalAmount = Math.round(Number(safeUpdate.totalAmount));
+
+    Object.assign(debt, safeUpdate);
     await debt.save();
 
     await AuditLog.create({

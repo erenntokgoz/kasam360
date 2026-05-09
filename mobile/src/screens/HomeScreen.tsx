@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert, ActivityIndicator, Image } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,8 +11,10 @@ import { scanReceipt } from '../api/ocrService';
 import type { Transaction } from '../api/transactionService';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
+import FilterBar from '../components/FilterBar';
 import { formatCurrency, formatDate } from '../utils/format';
 
+import AddCard from '../components/AddCard';
 interface TransactionRowProps { item: Transaction; index: number; onPress: (t: Transaction) => void; }
 
 const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item, onPress }) => {
@@ -24,7 +26,7 @@ const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item, onPres
   const displayAmount = isIncome ? item.amount : -item.amount;
 
   return (
-    <Pressable style={styles.rowContainer} activeOpacity={0.7} onPress={() => onPress(item)}>
+    <Pressable style={styles.rowContainer} onPress={() => onPress(item)}>
       <View style={[styles.rowIconCircle, { backgroundColor: isIncome ? theme.colors.successTransparent : theme.colors.dangerTransparent }]}>
         <Icon name={iconName} size={16} color={amountColor} />
       </View>
@@ -66,13 +68,12 @@ const SummaryBar: React.FC<{ balance: number; totalIn: number; totalOut: number;
         </View>
       </View>
       
-      <Pressable 
-        style={[styles.addBtnInline, { backgroundColor: theme.colors.accentTransparent, borderColor: theme.colors.accent }]} 
-        onPress={onAdd}
-      >
-        <Icon name="plus-circle" size={20} color={theme.colors.accent} />
-        <Text style={[styles.addBtnText, { color: theme.colors.accent }]}>YENİ İŞLEM EKLE</Text>
-      </Pressable>
+      <AddCard 
+        title="Yeni İşlem Ekle" 
+        subtitle="Gelir, gider veya borç kaydı oluşturun" 
+        icon="plus-circle" 
+        onPress={onAdd} 
+      />
     </View>
   );
 };
@@ -86,6 +87,9 @@ const HomeScreen: React.FC = () => {
   const { transactions, totalIncome, totalExpense, balance, isLoading, fetchTransactions, addTransaction } = useLedgerStore();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
+
+  const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
+  const [contactFilter, setContactFilter] = useState<string | null>(null);
 
   useEffect(() => { fetchTransactions(1).catch(() => { }); }, [fetchTransactions]);
 
@@ -107,12 +111,25 @@ const HomeScreen: React.FC = () => {
     finally { setIsScanning(false); }
   }, [addTransaction]);
 
-  const displayTransactions = transactions.slice(0, 20);
+  const filteredTransactions = useMemo(() => transactions.filter(t => {
+    if (contactFilter && !t.description?.toLowerCase().includes(contactFilter.toLowerCase()) && !t.category?.toLowerCase().includes(contactFilter.toLowerCase())) return false;
+    if (dateFilter.start) {
+      const d = new Date(t.transactionDate || t.createdAt);
+      if (d < dateFilter.start) return false;
+    }
+    if (dateFilter.end) {
+      const d = new Date(t.transactionDate || t.createdAt);
+      if (d > dateFilter.end) return false;
+    }
+    return true;
+  }), [transactions, contactFilter, dateFilter]);
+
+  const displayTransactions = useMemo(() => filteredTransactions.slice(0, 20), [filteredTransactions]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base }]}>
+      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
@@ -123,7 +140,15 @@ const HomeScreen: React.FC = () => {
         data={displayTransactions}
         renderItem={({ item, index }) => <TransactionRow item={item} index={index} onPress={setSelectedTx} />}
         keyExtractor={(item) => item._id}
-        ListHeaderComponent={<SummaryBar balance={balance} totalIn={totalIncome} totalOut={totalExpense} onAdd={() => setShowAddModal(true)} />}
+        ListHeaderComponent={(
+          <View>
+            <SummaryBar balance={balance} totalIn={totalIncome} totalOut={totalExpense} onAdd={() => setShowAddModal(true)} />
+            <FilterBar 
+              onDateChange={(start, end) => setDateFilter({ start, end })}
+              onContactChange={setContactFilter}
+            />
+          </View>
+        )}
         ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Henüz işlem yok</Text> : null}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
@@ -153,7 +178,7 @@ const HomeScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1 },
   headerLogo: { width: 120, height: 30 },
   listContent: { paddingHorizontal: 20, paddingTop: 16 },
   summaryCard: { borderRadius: 20, padding: 24, marginBottom: 24 },
@@ -174,8 +199,6 @@ const styles = StyleSheet.create({
   rowAmount: { fontSize: 16, fontWeight: '600' },
   viewMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20, gap: 4 },
   viewMoreText: { fontSize: 14, fontWeight: '600' },
-  addBtnInline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 16, borderStyle: 'dashed', borderWidth: 1.5, gap: 10 },
-  addBtnText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
   fab: { position: 'absolute', right: 24, width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
   emptyText: { textAlign: 'center', marginTop: 40, opacity: 0.5 }
 });

@@ -13,12 +13,13 @@ import {
   updateDebt as updateDebtApi,
   deleteDebt as deleteDebtApi,
 } from '../api/debtService';
+export type { Debt } from '../api/debtService';
 import { useLogStore } from './useLogStore';
 import { useNotificationStore } from './useNotificationStore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface DebtState {
+export interface DebtState {
   debts: Debt[];
   pagination: DebtPagination | null;
   summary: DebtSummary | null;

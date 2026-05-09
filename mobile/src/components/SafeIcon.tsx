@@ -30,7 +30,7 @@ export class SafeIcon extends Component<Props, State> {
         <Text style={{
           color: this.props.color,
           fontSize: this.props.size * 0.6,
-          fontFamily: theme.fonts.light,
+          fontFamily: theme.fonts.regular,
           fontWeight: '300'
         }}>
           {this.props.fallbackText || this.props.name}

@@ -41,7 +41,7 @@ const getTransactions = async (req, res) => {
       filter.category = { $in: cats };
     }
 
-    const [transactions, total] = await Promise.all([
+    const [transactions, total, tenant] = await Promise.all([
       Transaction.find(filter)
         .sort({ transactionDate: -1 })
         .skip(skip)

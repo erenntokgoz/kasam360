@@ -148,8 +148,12 @@
   },
   "sidebar": {
     "home": "Home",
+    "transactions": "Income & Expenses",
+    "contacts": "Contacts",
     "debts": "Debts",
     "analytics": "System Logs",
+    "recurrings": "Staff Expenses",
+    "notifications": "Notifications",
     "settings": "Settings",
     "logout": "Sign Out"
   }

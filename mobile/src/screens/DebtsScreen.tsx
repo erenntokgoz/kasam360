@@ -9,9 +9,11 @@ import { useDebtStore, type Debt } from '../store/useDebtStore';
 import { useLedgerStore } from '../store/useLedgerStore';
 import { formatCurrency, formatDate } from '../utils/format';
 import AddTransactionModal from '../components/AddTransactionModal';
+import FilterBar from '../components/FilterBar';
+import AddCard from '../components/AddCard';
 
 // --- Payment Modal (Repayment logic) ---
-const PaymentModal: React.FC<{ visible: boolean; debt: any | null; onClose: () => void }> = ({ visible, debt, onClose }) => {
+export const PaymentModal: React.FC<{ visible: boolean; debt: any | null; onClose: () => void }> = ({ visible, debt, onClose }) => {
   const [input, setInput] = useState('');
   const { makePayment, isPaying } = useDebtStore();
   const fetchTransactions = useLedgerStore((s) => s.fetchTransactions);
@@ -69,7 +71,7 @@ const DebtRow: React.FC<{ item: Debt; onPay: (d: Debt) => void }> = ({ item, onP
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const isGiven = item.type === 'GIVEN';
-  const color = isGiven ? theme.colors.danger : theme.colors.success;
+  const color = isGiven ? theme.colors.success : theme.colors.danger;
   const progress = item.totalAmount > 0 ? 1 - item.remainingAmount / item.totalAmount : 0;
   
   return (
@@ -79,7 +81,14 @@ const DebtRow: React.FC<{ item: Debt; onPay: (d: Debt) => void }> = ({ item, onP
           <Icon name={isGiven ? 'arrow-up-right' : 'arrow-down-left'} size={18} color={color} />
         </View>
         <View style={styles.rowMiddle}>
-          <Text style={[styles.rowName, { color: theme.colors.textPrimary }]}>{item.entityName}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[styles.rowName, { color: theme.colors.textPrimary }]}>{item.entityName}</Text>
+            {item.status === 'OVERDUE' && (
+              <View style={{ backgroundColor: theme.colors.dangerTransparent, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.danger }}>GECİKMİŞ</Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>Vade: {item.dueDate ? formatDate(item.dueDate) : 'Yok'}</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
@@ -111,10 +120,26 @@ const DebtsScreen: React.FC = () => {
   const { debts, isLoading, fetchDebts, summary } = useDebtStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [payTarget, setPayTarget] = useState<Debt | null>(null);
+  
+  const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
+  const [contactFilter, setContactFilter] = useState<string | null>(null);
 
   useEffect(() => { fetchDebts(1).catch(() => {}); }, [fetchDebts]);
 
-  const activeDebts = debts.filter(d => d.status !== 'PAID');
+  const activeDebts = debts.filter(d => {
+    if (d.status === 'PAID') return false;
+    if (contactFilter && d.entityName !== contactFilter) return false;
+    if (dateFilter.start) {
+      const dDate = new Date(d.createdAt);
+      if (dDate < dateFilter.start) return false;
+    }
+    if (dateFilter.end) {
+      const dDate = new Date(d.createdAt);
+      if (dDate > dateFilter.end) return false;
+    }
+    return true;
+  });
+
   const totalGiven = summary?.given.remaining || 0;
   const totalTaken = summary?.taken.remaining || 0;
 
@@ -122,7 +147,7 @@ const DebtsScreen: React.FC = () => {
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
       
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base }]}>
+      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
@@ -140,26 +165,32 @@ const DebtsScreen: React.FC = () => {
               <View style={styles.summaryRow}>
                 <View style={styles.summaryMetric}>
                   <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Toplam Alacak</Text>
-                  <Text style={[styles.summaryMetricValue, { color: theme.colors.danger }]}>{formatCurrency(totalGiven)}</Text>
+                  <Text style={[styles.summaryMetricValue, { color: theme.colors.success }]}>{formatCurrency(totalGiven)}</Text>
                 </View>
                 <View style={[styles.summaryDivider, { backgroundColor: theme.colors.border }]} />
                 <View style={styles.summaryMetric}>
                   <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Toplam Borç</Text>
-                  <Text style={[styles.summaryMetricValue, { color: theme.colors.success }]}>{formatCurrency(totalTaken)}</Text>
+                  <Text style={[styles.summaryMetricValue, { color: theme.colors.danger }]}>{formatCurrency(totalTaken)}</Text>
                 </View>
               </View>
             </View>
             
-            <Pressable 
-              style={[styles.addBtnInline, { backgroundColor: theme.colors.accentTransparent, borderColor: theme.colors.accent }]} 
-              onPress={() => setShowAddModal(true)}
-            >
-              <Icon name="plus-circle" size={20} color={theme.colors.accent} />
-              <Text style={[styles.addBtnText, { color: theme.colors.accent }]}>YENİ KAYIT EKLE</Text>
-            </Pressable>
+            <FilterBar 
+              onDateChange={(start, end) => setDateFilter({ start, end })}
+              onContactChange={setContactFilter}
+            />
+
+            <View style={{ marginTop: 16 }}>
+              <AddCard 
+                title="Yeni Borç/Alacak Ekle" 
+                subtitle="Bir kişiye borç verin veya borç alın" 
+                icon="plus-circle" 
+                onPress={() => setShowAddModal(true)} 
+              />
+            </View>
           </View>
         )}
-        ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Henüz borç veya alacak kaydı yok</Text> : null}
+        ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Sonuç bulunamadı</Text> : null}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
         onRefresh={() => fetchDebts(1)}
@@ -189,8 +220,6 @@ const styles = StyleSheet.create({
   summaryMetricLabel: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
   summaryMetricValue: { fontSize: 18, fontWeight: '700' },
   summaryDivider: { width: 1, height: 30, marginHorizontal: 10 },
-  addBtnInline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 16, borderStyle: 'dashed', borderWidth: 1.5, gap: 10 },
-  addBtnText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
   rowContainer: { padding: 16, borderRadius: 20, marginBottom: 16 },
   rowTop: { flexDirection: 'row', alignItems: 'center' },
   rowIconCircle: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 16 },

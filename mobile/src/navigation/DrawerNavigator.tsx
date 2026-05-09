@@ -9,6 +9,8 @@ import SettingsScreen from '../screens/SettingsScreen';
 import RecurringsScreen from '../screens/RecurringsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import TransactionsScreen from '../screens/TransactionsScreen';
+import ContactsScreen from '../screens/ContactsScreen';
+import ContactDetailScreen from '../screens/ContactDetailScreen';
 import GlassSidebar from '../components/GlassSidebar';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
@@ -50,11 +52,19 @@ const DrawerNavigator = () => {
         }}
       />
       <Drawer.Screen
+        name="Contacts"
+        component={ContactsScreen}
+        options={{
+          drawerLabel: 'Rehber',
+          drawerIcon: ({ color }) => <Icon name="users" size={20} color={color} />,
+        }}
+      />
+      <Drawer.Screen
         name="Debts"
         component={DebtsScreen}
         options={{
           drawerLabel: 'Alacak & Borçlar',
-          drawerIcon: ({ color }) => <Icon name="users" size={20} color={color} />,
+          drawerIcon: ({ color }) => <Icon name="credit-card" size={20} color={color} />,
         }}
       />
       <Drawer.Screen
@@ -87,6 +97,13 @@ const DrawerNavigator = () => {
         options={{
           drawerLabel: 'Ayarlar',
           drawerIcon: ({ color }) => <Icon name="settings" size={20} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="ContactDetail"
+        component={ContactDetailScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
         }}
       />
     </Drawer.Navigator>

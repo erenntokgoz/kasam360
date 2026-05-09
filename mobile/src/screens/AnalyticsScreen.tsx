@@ -103,14 +103,12 @@ const AnalyticsScreen: React.FC = () => {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
-          <Icon name="menu" size={22} color={theme.colors.textPrimary} />
+          <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Sistem Kayıtları</Text>
-        <Pressable hitSlop={12}>
-          <Icon name="filter" size={22} color={theme.colors.textPrimary} />
-        </Pressable>
+        <View style={{ width: 24 }} />
       </View>
       <FlatList
         data={combinedData}
@@ -135,8 +133,8 @@ const AnalyticsScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 12 },
-  headerTitle: { fontSize: 18, letterSpacing: 0.4 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
   listContent: { paddingHorizontal: 24, paddingTop: 12 },
   row: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 24 },
   separator: { height: 1, marginVertical: 8 },

@@ -64,12 +64,12 @@ export const NotificationsScreen: React.FC = () => {
     const hasUnread = notifications.some(n => !n.isRead);
     return (
       <View style={styles.listHeader}>
-         {hasUnread ? (
-           <Pressable onPress={markAllAsRead} style={[styles.markAllBtn, { backgroundColor: theme.colors.accentTransparent }]}>
-             <Icon name="check-all" size={16} color={theme.colors.accent} />
-             <Text style={[styles.markAllText, { color: theme.colors.accent, fontFamily: theme.fonts.medium }]}>Tümünü Okundu İşaretle</Text>
-           </Pressable>
-         ) : <View />}
+          {hasUnread ? (
+            <Pressable onPress={markAllAsRead} style={[styles.markAllBtn, { backgroundColor: theme.colors.accentTransparent }]}>
+              <Icon name="check" size={16} color={theme.colors.accent} />
+              <Text style={[styles.markAllText, { color: theme.colors.accent, fontFamily: theme.fonts.medium }]}>Tümünü Oku</Text>
+            </Pressable>
+          ) : <View />}
          <Pressable onPress={clearAll} style={styles.clearBtn}>
            <Text style={[styles.clearText, { color: theme.colors.dangerLight, fontFamily: theme.fonts.medium }]}>Temizle</Text>
          </Pressable>
@@ -79,12 +79,12 @@ export const NotificationsScreen: React.FC = () => {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base }]}>
+      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
-          <Icon name="menu" size={22} color={theme.colors.textPrimary} />
+          <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary, fontFamily: theme.fonts.semiBold }]}>Bildirimler</Text>
-        <View style={{ width: 22 }} />
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Bildirimler</Text>
+        <View style={{ width: 24 }} />
       </View>
 
       <FlatList
@@ -107,8 +107,8 @@ export const NotificationsScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { fontSize: 18, letterSpacing: 0.4 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
   listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   markAllBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   markAllText: { fontSize: 13, marginLeft: 6 },
@@ -134,3 +134,5 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, marginBottom: 8 },
   emptySubtitle: { fontSize: 14, textAlign: 'center' },
 });
+
+export default NotificationsScreen;

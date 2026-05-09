@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, StatusBar } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -9,6 +9,9 @@ import { useLedgerStore } from '../store/useLedgerStore';
 import type { Transaction } from '../api/transactionService';
 import { formatCurrency, formatDate } from '../utils/format';
 import TransactionDetailModal from '../components/TransactionDetailModal';
+import AddTransactionModal from '../components/AddTransactionModal';
+import FilterBar from '../components/FilterBar';
+import AddCard from '../components/AddCard';
 
 const TransactionRow: React.FC<{ item: Transaction; onPress: (t: Transaction) => void }> = React.memo(({ item, onPress }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
@@ -19,12 +22,12 @@ const TransactionRow: React.FC<{ item: Transaction; onPress: (t: Transaction) =>
   const displayAmount = isIncome ? item.amount : -item.amount;
 
   return (
-    <Pressable style={styles.rowContainer} activeOpacity={0.7} onPress={() => onPress(item)}>
+    <Pressable style={styles.rowContainer} onPress={() => onPress(item)}>
       <View style={[styles.rowIconCircle, { backgroundColor: isIncome ? theme.colors.successTransparent : theme.colors.dangerTransparent }]}>
         <Icon name={iconName} size={16} color={amountColor} />
       </View>
       <View style={styles.rowMiddle}>
-        <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>{item.category || (isIncome ? 'Gelir' : 'Gider')}</Text>
+        <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>{item.description || item.category || (isIncome ? 'Gelir' : 'Gider')}</Text>
         <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>{formatDate(item.transactionDate)}</Text>
       </View>
       <Text style={[styles.rowAmount, { color: amountColor }]}>{formatCurrency(displayAmount, true)}</Text>
@@ -35,12 +38,29 @@ const TransactionRow: React.FC<{ item: Transaction; onPress: (t: Transaction) =>
 const TransactionsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { transactions, isLoading, fetchTransactions } = useLedgerStore();
+  const { transactions, isLoading, fetchTransactions, totalIncome, totalExpense } = useLedgerStore();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  
+  const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
+  const [contactFilter, setContactFilter] = useState<string | null>(null);
 
   useEffect(() => { fetchTransactions(1).catch(() => { }); }, [fetchTransactions]);
+
+  const filteredData = useMemo(() => transactions.filter(t => {
+    if (contactFilter && !t.description?.toLowerCase().includes(contactFilter.toLowerCase()) && !t.category?.toLowerCase().includes(contactFilter.toLowerCase())) return false;
+    if (dateFilter.start) {
+      const d = new Date(t.transactionDate || t.createdAt);
+      if (d < dateFilter.start) return false;
+    }
+    if (dateFilter.end) {
+      const d = new Date(t.transactionDate || t.createdAt);
+      if (d > dateFilter.end) return false;
+    }
+    return true;
+  }), [transactions, contactFilter, dateFilter]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
@@ -54,10 +74,41 @@ const TransactionsScreen: React.FC = () => {
       </View>
 
       <FlatList
-        data={transactions}
+        data={filteredData}
         renderItem={({ item }) => <TransactionRow item={item} onPress={setSelectedTx} />}
         keyExtractor={(item) => item._id}
-        ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Henüz işlem yok</Text> : null}
+        ListHeaderComponent={(
+          <View style={{ marginBottom: 16 }}>
+             <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryMetric}>
+                  <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Toplam Gelir</Text>
+                  <Text style={[styles.summaryMetricValue, { color: theme.colors.success }]}>{formatCurrency(totalIncome)}</Text>
+                </View>
+                <View style={[styles.summaryDivider, { backgroundColor: theme.colors.border }]} />
+                <View style={styles.summaryMetric}>
+                  <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Toplam Gider</Text>
+                  <Text style={[styles.summaryMetricValue, { color: theme.colors.danger }]}>{formatCurrency(totalExpense)}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={{ marginTop: 16 }}>
+              <FilterBar 
+                onDateChange={(start, end) => setDateFilter({ start, end })}
+                onContactChange={setContactFilter}
+              />
+            </View>
+            <View style={{ marginTop: 16 }}>
+              <AddCard 
+                title="Yeni Gelir/Gider Ekle" 
+                subtitle="Kasa giriş veya çıkış işlemi yapın" 
+                icon="plus-circle" 
+                onPress={() => setShowAddModal(true)} 
+              />
+            </View>
+          </View>
+        )}
+        ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Sonuç bulunamadı</Text> : null}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
         onRefresh={() => fetchTransactions(1)}
@@ -71,6 +122,7 @@ const TransactionsScreen: React.FC = () => {
           onClose={() => setSelectedTx(null)}
         />
       )}
+      <AddTransactionModal visible={showAddModal} onClose={() => { setShowAddModal(false); fetchTransactions(1); }} />
     </View>
   );
 };
@@ -80,6 +132,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
   headerTitle: { fontSize: 18, fontWeight: '700' },
   listContent: { paddingHorizontal: 20, paddingTop: 16 },
+  summaryCard: { borderRadius: 20, padding: 20 },
+  summaryRow: { flexDirection: 'row', alignItems: 'center' },
+  summaryMetric: { flex: 1, alignItems: 'center' },
+  summaryMetricLabel: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  summaryMetricValue: { fontSize: 18, fontWeight: '700' },
+  summaryDivider: { width: 1, height: 30, marginHorizontal: 10 },
   rowContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
   rowIconCircle: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   rowMiddle: { flex: 1 },
