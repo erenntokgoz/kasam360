@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
+const Tenant = require('../models/Tenant');
 const AuditLog = require('../models/AuditLog');
 
 /**
@@ -47,7 +48,10 @@ const getTransactions = async (req, res) => {
         .limit(limit)
         .lean(),
       Transaction.countDocuments(filter),
+      Tenant.findById(req.tenantId).select('openingBalance').lean(),
     ]);
+
+    const openingBalance = tenant?.openingBalance || 0;
 
     // Compute running totals for the tenant (filtered by date/categories but keep all types)
     // Wait, the UI wants "Seçili tarih aralığına göre gelir, gider, bakiye göster"
@@ -89,7 +93,7 @@ const getTransactions = async (req, res) => {
         summary: {
           totalIncome,   // integer cents
           totalExpense,  // integer cents
-          balance: totalIncome - totalExpense,
+          balance: totalIncome - totalExpense + openingBalance,
           totalDebt: 0,
           totalReceivable: 0,
         },
@@ -168,7 +172,10 @@ const createTransaction = async (req, res) => {
       },
     ]);
 
-    let currentBalance = 0;
+    const tenant = await Tenant.findById(tenantId).select('openingBalance').lean();
+    const openingBalance = tenant?.openingBalance || 0;
+
+    let currentBalance = openingBalance;
     for (const t of totals) {
       if (t._id === 'INCOME') currentBalance += t.sum;
       if (t._id === 'EXPENSE') currentBalance -= t.sum;

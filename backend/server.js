@@ -12,6 +12,7 @@ const ocrRoutes = require('./src/routes/ocrRoutes');
 const transactionRoutes = require('./src/routes/transactionRoutes');
 const debtRoutes = require('./src/routes/debtRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
+const tenantRoutes = require('./src/routes/tenantRoutes');
 
 dotenv.config();
 
@@ -52,6 +53,7 @@ app.use('/api/ocr', ocrRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/debts', debtRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/tenant', tenantRoutes);
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Debt = require('../models/Debt');
 const Transaction = require('../models/Transaction');
+const Tenant = require('../models/Tenant');
 const AuditLog = require('../models/AuditLog');
 
 /**
@@ -80,7 +81,10 @@ const createDebt = async (req, res) => {
         },
       ]).session(session);
 
-      let currentBalance = 0;
+      const tenant = await Tenant.findById(tenantId).select('openingBalance').lean();
+      const openingBalance = tenant?.openingBalance || 0;
+
+      let currentBalance = openingBalance;
       for (const t of totals) {
         if (t._id === 'INCOME') currentBalance += t.sum;
         if (t._id === 'EXPENSE') currentBalance -= t.sum;
@@ -328,7 +332,10 @@ const payDebt = async (req, res) => {
         },
       ]).session(session);
 
-      let currentBalance = 0;
+      const tenantRecord = await Tenant.findById(tenantId).select('openingBalance').lean();
+      const openingBalance = tenantRecord?.openingBalance || 0;
+
+      let currentBalance = openingBalance;
       for (const t of totals) {
         if (t._id === 'INCOME') currentBalance += t.sum;
         if (t._id === 'EXPENSE') currentBalance -= t.sum;
@@ -343,8 +350,8 @@ const payDebt = async (req, res) => {
             type: txType,
             amount: paymentAmount,
             method: 'CASH', // default — can be extended with req.body.method later
-            category: debt.type === 'GIVEN' ? 'Debt Collection' : 'Debt Payment',
-            description: `${debt.type === 'GIVEN' ? 'Collected from' : 'Paid to'} ${debt.entityName}`,
+            category: debt.type === 'GIVEN' ? 'Alacak Tahsili' : 'Borç Ödemesi',
+            description: `${debt.type === 'GIVEN' ? 'Tahsil edilen:' : 'Ödenen:'} ${debt.entityName}`,
             transactionDate: new Date(),
             balanceAfter,
           },

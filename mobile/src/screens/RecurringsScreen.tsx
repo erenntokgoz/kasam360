@@ -1,64 +1,55 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
-import { useRecurringStore, RecurringItem } from '../store/useRecurringStore';
+import { useLedgerStore } from '../store/useLedgerStore';
+import type { Transaction } from '../api/transactionService';
+import TransactionDetailModal from '../components/TransactionDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
-import { formatCurrency } from '../utils/format';
+import { formatCurrency, formatDate } from '../utils/format';
 
-const frequencyMap = {
-  DAILY: 'Günlük',
-  WEEKLY: 'Haftalık',
-  MONTHLY: 'Aylık',
-  YEARLY: 'Yıllık',
-};
-
-const RecurringsScreen: React.FC = () => {
+const PersonnelExpensesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
-  const { recurrings, toggleRecurring, removeRecurring } = useRecurringStore();
+  const { transactions, removeTransaction } = useLedgerStore();
+  
   const [showAddModal, setShowAddModal] = React.useState(false);
+  const [selectedTx, setSelectedTx] = React.useState<Transaction | null>(null);
+
+  // Filter only personnel expenses
+  const personnelExpenses = transactions.filter(t => t.category === 'Personel Gideri');
 
   const handleLongPress = (id: string) => {
-    Alert.alert('Hatırlatıcıyı Sil', 'Bu hatırlatıcıyı silmek istediğinize emin misiniz?', [
+    Alert.alert('İşlemi Sil', 'Bu personel giderini silmek istediğinize emin misiniz?', [
       { text: 'İptal', style: 'cancel' },
-      { text: 'Sil', style: 'destructive', onPress: () => removeRecurring(id) },
+      { text: 'Sil', style: 'destructive', onPress: () => removeTransaction(id) },
     ]);
   };
 
-  const renderItem = ({ item, index }: { item: RecurringItem; index: number }) => {
-    const isIncome = item.type === 'INCOME';
-    const iconName = isIncome ? 'arrow-down-left' : 'arrow-up-right';
-    const amountColor = isIncome ? theme.colors.successLight : theme.colors.dangerLight;
-    const displayAmount = isIncome ? item.amount : -item.amount;
-
+  const renderItem = ({ item }: { item: Transaction }) => {
     return (
-      <View style={[styles.rowContainer, { backgroundColor: theme.colors.surface }, !item.active && { opacity: 0.6 }]}>
+      <View style={[styles.rowContainer, { backgroundColor: theme.colors.surface }]}>
         <Pressable
           style={styles.rowContent}
+          onPress={() => setSelectedTx(item)}
           onLongPress={() => handleLongPress(item.id)}
         >
-          <View style={[styles.rowIconCircle, { backgroundColor: isIncome ? theme.colors.successTransparent : theme.colors.dangerTransparent }]}>
-            <Icon name={iconName} size={16} color={amountColor} />
+          <View style={[styles.rowIconCircle, { backgroundColor: theme.colors.dangerTransparent }]}>
+            <Icon name="users" size={16} color={theme.colors.dangerLight} />
           </View>
           <View style={styles.rowMiddle}>
-            <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>{item.category || item.type}</Text>
-            <Text style={[styles.rowFreq, { color: theme.colors.textTertiary }]}>{frequencyMap[item.frequency]}</Text>
+            <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+              {item.description || 'Personel Ödemesi'}
+            </Text>
+            <Text style={[styles.rowFreq, { color: theme.colors.textTertiary }]}>{formatDate(item.createdAt)}</Text>
           </View>
           <View style={styles.rowRight}>
-            <Text style={[styles.rowAmount, { color: amountColor }]}>{formatCurrency(displayAmount, true)}</Text>
-            <Switch
-              value={item.active}
-              onValueChange={() => toggleRecurring(item.id)}
-              trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
-              thumbColor={theme.colors.primary}
-              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-            />
+            <Text style={[styles.rowAmount, { color: theme.colors.dangerLight }]}>{formatCurrency(item.amount, true)}</Text>
           </View>
         </Pressable>
       </View>
@@ -72,31 +63,39 @@ const RecurringsScreen: React.FC = () => {
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Icon name="menu" size={22} color={theme.colors.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Hatırlatıcılar</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Personel Giderleri</Text>
         <Pressable hitSlop={12} onPress={() => setShowAddModal(true)}>
           <Icon name="plus-circle" size={22} color={theme.colors.accent} />
         </Pressable>
       </View>
+      
       <FlatList
-        data={recurrings}
+        data={personnelExpenses}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm, paddingBottom: insets.bottom + theme.spacing.xl }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing['4xl'], gap: theme.spacing.sm }}>
-            <Icon name="calendar" size={48} color={theme.colors.textTertiary} />
-            <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.lg, color: theme.colors.textSecondary, marginTop: theme.spacing.base }}>Hatırlatıcı Yok</Text>
-            <Text style={{ fontFamily: theme.fonts.regular, fontSize: theme.fontSizes.sm, color: theme.colors.textTertiary, textAlign: 'center', maxWidth: 260 }}>Düzenli işlemleriniz için hatırlatıcı ekleyin.</Text>
+            <Icon name="users" size={48} color={theme.colors.textTertiary} />
+            <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.lg, color: theme.colors.textSecondary, marginTop: theme.spacing.base }}>Kayıt Yok</Text>
+            <Text style={{ fontFamily: theme.fonts.regular, fontSize: theme.fontSizes.sm, color: theme.colors.textTertiary, textAlign: 'center', maxWidth: 260 }}>Henüz bir personel gideri eklenmemiş.</Text>
           </View>
         }
       />
+
       <AddTransactionModal
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
-        defaultRecurring={true}
-        mode="recurring"
       />
+
+      {selectedTx && (
+        <TransactionDetailModal
+          visible={!!selectedTx}
+          transaction={selectedTx}
+          onClose={() => setSelectedTx(null)}
+        />
+      )}
     </View>
   );
 };
@@ -104,19 +103,15 @@ const RecurringsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { fontSize: 18, letterSpacing: 0.4 },
-  listContent: {},
-  rowContainer: { borderRadius: 10, marginBottom: 16 },
+  headerTitle: { fontSize: 18, letterSpacing: 0.4, fontWeight: '600' },
+  rowContainer: { borderRadius: 10, marginBottom: 12 },
   rowContent: { flexDirection: 'row', alignItems: 'center', padding: 16 },
   rowIconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   rowMiddle: { flex: 1, marginRight: 8 },
-  rowCategory: { fontSize: 15, marginBottom: 2 },
-  rowFreq: { fontSize: 11 },
+  rowCategory: { fontSize: 15, marginBottom: 4, fontWeight: '500' },
+  rowFreq: { fontSize: 12 },
   rowRight: { alignItems: 'flex-end' },
-  rowAmount: { fontSize: 15, letterSpacing: -0.3, marginBottom: 4 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { fontSize: 18, marginTop: 12 },
-  emptySubtitle: { fontSize: 13, textAlign: 'center', maxWidth: 260 },
+  rowAmount: { fontSize: 15, letterSpacing: -0.3, fontWeight: '600' },
 });
 
-export default RecurringsScreen;
+export default PersonnelExpensesScreen;

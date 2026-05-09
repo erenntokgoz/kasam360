@@ -11,6 +11,7 @@ import {
   deleteTransaction as deleteTxApi,
 } from '../api/transactionService';
 import { useLogStore } from './useLogStore';
+import { useNotificationStore } from './useNotificationStore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -120,6 +121,13 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
         ? `[${created.category || 'Gelir'}] ${(created.amount / 100).toLocaleString('tr-TR')}₺ eklendi.` 
         : `[${created.category || 'Gider'}] ${(created.amount / 100).toLocaleString('tr-TR')}₺ çıkışı yapıldı.`;
       useLogStore.getState().addLog(actionText, 'success');
+
+      // Add Notification
+      useNotificationStore.getState().addNotification({
+        title: created.type === 'INCOME' ? 'Yeni Gelir Eklendi' : 'Yeni Gider Eklendi',
+        body: actionText,
+        type: 'INFO',
+      });
 
       return created;
     } catch (err) {

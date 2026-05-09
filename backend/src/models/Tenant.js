@@ -19,6 +19,18 @@ const tenantSchema = new mongoose.Schema(
       required: [true, 'Business name is required'],
       trim: true,
     },
+    openingBalance: {
+      type: Number,
+      default: 0,
+    },
+    openingDebts: {
+      type: Number,
+      default: 0,
+    },
+    openingReceivables: {
+      type: Number,
+      default: 0,
+    },
     subscriptionStatus: {
       type: String,
       enum: ['TRIAL', 'ACTIVE', 'EXPIRED', 'SUSPENDED'],

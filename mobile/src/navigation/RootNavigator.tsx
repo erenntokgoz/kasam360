@@ -15,7 +15,6 @@ import { useSetupStore } from '../store/useSetupStore';
 import DrawerNavigator from './DrawerNavigator';
 import AuthStack from './AuthStack';
 import SetupScreen from '../screens/SetupScreen';
-import OnboardingScreen from '../screens/OnboardingScreen';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 
@@ -51,10 +50,7 @@ const RootNavigator: React.FC = () => {
         {!token ? (
           <Stack.Screen name="Auth" component={AuthStack} />
         ) : !isSetupComplete ? (
-          <Stack.Group>
-            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-            <Stack.Screen name="Setup" component={SetupScreen} />
-          </Stack.Group>
+          <Stack.Screen name="Setup" component={SetupScreen} />
         ) : (
           <Stack.Screen name="Main" component={DrawerNavigator} />
         )}

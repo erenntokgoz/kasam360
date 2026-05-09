@@ -57,23 +57,23 @@ const shared = {
 export const darkTheme = {
   ...shared,
   colors: {
-    primary: '#0F172A',       // Slate 900
-    surface: '#1E293B',       // Slate 800
-    card: '#334155',          // Slate 700
+    primary: '#121826',       // Brighter dark background
+    surface: '#1F2937',       // Brighter surface
+    card: '#374151',          // Brighter card
     accent: '#3B82F6',        // Blue 500
     accentGradient: ['#3B82F6', '#2563EB'],
     success: '#10B981',       // Emerald 500
     successLight: '#34D399',
     danger: '#EF4444',        // Red 500
     dangerLight: '#F87171',
-    textPrimary: '#F8FAFC',   // Slate 50
-    textSecondary: '#CBD5E1', // Slate 300
+    textPrimary: '#FFFFFF',   // Pure white for better readability
+    textSecondary: '#E2E8F0', // Brighter secondary text
     textTertiary: '#94A3B8',  // Slate 400
-    border: '#334155',        // Slate 700
-    accentTransparent: 'rgba(59, 130, 246, 0.15)',
-    successTransparent: 'rgba(16, 185, 129, 0.15)',
-    dangerTransparent: 'rgba(239, 68, 68, 0.15)',
-    overlay: 'rgba(0, 0, 0, 0.75)',
+    border: '#374151',        // Slate 700
+    accentTransparent: 'rgba(59, 130, 246, 0.20)',
+    successTransparent: 'rgba(16, 185, 129, 0.20)',
+    dangerTransparent: 'rgba(239, 68, 68, 0.20)',
+    overlay: 'rgba(0, 0, 0, 0.65)', // Less dark overlay
   },
 };
 

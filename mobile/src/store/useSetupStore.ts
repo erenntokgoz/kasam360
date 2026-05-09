@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { getItem, setItem, StorageKeys } from '../utils/storage';
+import { updateTenantSetup } from '../api/tenantService';
 
 interface SetupState {
   isSetupComplete: boolean;
@@ -12,7 +13,7 @@ interface SetupState {
     openingBalance: number;
     openingDebts: number;
     openingReceivables: number;
-  }) => void;
+  }) => Promise<void>;
 }
 
 export const useSetupStore = create<SetupState>((set) => ({
@@ -33,5 +34,18 @@ export const useSetupStore = create<SetupState>((set) => ({
     set({ isSetupComplete: isComplete });
   },
 
-  setOpeningData: (data) => set({ ...data }),
+  setOpeningData: async (data) => {
+    try {
+      await updateTenantSetup({
+        openingBalance: Math.round(data.openingBalance * 100),
+        openingDebts: Math.round(data.openingDebts * 100),
+        openingReceivables: Math.round(data.openingReceivables * 100),
+      });
+      set({ ...data });
+    } catch (error) {
+      console.error('Failed to update opening data on backend', error);
+      // Still set locally to allow user to proceed
+      set({ ...data });
+    }
+  },
 }));

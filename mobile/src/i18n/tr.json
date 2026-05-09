@@ -22,15 +22,14 @@
   },
   "setup": {
     "title": "Hoş Geldiniz",
-    "subtitle": "İlk Kurulum",
-    "dataTitle": "Açılış Verileri",
-    "balance": "Açılış Bakiyesi (₺)",
-    "debts": "Mevcut Borçlar (₺)",
-    "receivables": "Mevcut Alacaklar (₺)",
+    "subtitle": "Kasanızı yönetmeye başlamadan önce başlangıç değerlerini ayarlayalım.",
+    "balance": "Mevcut Kasa Bakiyesi",
+    "debts": "Toplam Borçlarınız",
+    "receivables": "Toplam Alacaklarınız",
     "complete": "Kurulumu Tamamla"
   },
   "home": {
-    "title": "Ledger",
+    "title": "Defter",
     "balance": "Bakiye",
     "income": "Gelir",
     "expense": "Gider",

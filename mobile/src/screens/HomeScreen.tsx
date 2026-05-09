@@ -9,13 +9,13 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useLedgerStore } from '../store/useLedgerStore';
 import { scanReceipt } from '../api/ocrService';
 import type { Transaction } from '../api/transactionService';
+import TransactionDetailModal from '../components/TransactionDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import { formatCurrency, formatDate } from '../utils/format';
-import { useNotificationStore } from '../store/useNotificationStore';
 
-interface TransactionRowProps { item: Transaction; index: number; }
+interface TransactionRowProps { item: Transaction; index: number; onPress: (t: Transaction) => void; }
 
-const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item }) => {
+const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item, onPress }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const isIncome = item.type === 'INCOME';
@@ -24,7 +24,7 @@ const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item }) => {
   const displayAmount = isIncome ? item.amount : -item.amount;
 
   return (
-    <Pressable style={styles.rowContainer} activeOpacity={0.7}>
+    <Pressable style={styles.rowContainer} activeOpacity={0.7} onPress={() => onPress(item)}>
       <View style={[styles.rowIconCircle, { backgroundColor: isIncome ? theme.colors.successTransparent : theme.colors.dangerTransparent }]}>
         <Icon name={iconName} size={16} color={amountColor} />
       </View>
@@ -37,32 +37,42 @@ const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item }) => {
   );
 });
 
-const SummaryBar: React.FC<{ balance: number; totalIn: number; totalOut: number }> = ({ balance, totalIn, totalOut }) => {
+const SummaryBar: React.FC<{ balance: number; totalIn: number; totalOut: number; onAdd: () => void }> = ({ balance, totalIn, totalOut, onAdd }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   return (
-    <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
-      <View style={styles.summaryBalanceSection}>
-        <Text style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}>TOPLAM BAKİYE</Text>
-        <Text style={[styles.summaryBalance, { color: theme.colors.textPrimary }]}>{formatCurrency(balance)}</Text>
-      </View>
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryMetric}>
-          <View style={[styles.dot, { backgroundColor: theme.colors.success }]} />
-          <View>
-            <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Gelir</Text>
-            <Text style={[styles.summaryMetricValue, { color: theme.colors.success }]}>{formatCurrency(totalIn)}</Text>
+    <View style={{ marginBottom: 24 }}>
+      <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card, marginBottom: 16 }]}>
+        <View style={styles.summaryBalanceSection}>
+          <Text style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}>TOPLAM BAKİYE</Text>
+          <Text style={[styles.summaryBalance, { color: theme.colors.textPrimary }]}>{formatCurrency(balance)}</Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryMetric}>
+            <View style={[styles.dot, { backgroundColor: theme.colors.success }]} />
+            <View>
+              <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Gelir</Text>
+              <Text style={[styles.summaryMetricValue, { color: theme.colors.success }]}>{formatCurrency(totalIn)}</Text>
+            </View>
+          </View>
+          <View style={[styles.summaryDivider, { backgroundColor: theme.colors.border }]} />
+          <View style={styles.summaryMetric}>
+            <View style={[styles.dot, { backgroundColor: theme.colors.danger }]} />
+            <View>
+              <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Gider</Text>
+              <Text style={[styles.summaryMetricValue, { color: theme.colors.danger }]}>{formatCurrency(totalOut)}</Text>
+            </View>
           </View>
         </View>
-        <View style={[styles.summaryDivider, { backgroundColor: theme.colors.border }]} />
-        <View style={styles.summaryMetric}>
-          <View style={[styles.dot, { backgroundColor: theme.colors.danger }]} />
-          <View>
-            <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Gider</Text>
-            <Text style={[styles.summaryMetricValue, { color: theme.colors.danger }]}>{formatCurrency(totalOut)}</Text>
-          </View>
-        </View>
       </View>
+      
+      <Pressable 
+        style={[styles.addBtnInline, { backgroundColor: theme.colors.accentTransparent, borderColor: theme.colors.accent }]} 
+        onPress={onAdd}
+      >
+        <Icon name="plus-circle" size={20} color={theme.colors.accent} />
+        <Text style={[styles.addBtnText, { color: theme.colors.accent }]}>YENİ İŞLEM EKLE</Text>
+      </Pressable>
     </View>
   );
 };
@@ -72,10 +82,10 @@ const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const [isScanning, setIsScanning] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const { transactions, totalIncome, totalExpense, balance, isLoading, fetchTransactions, addTransaction } = useLedgerStore();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
-  const { addNotification } = useNotificationStore();
 
   useEffect(() => { fetchTransactions(1).catch(() => { }); }, [fetchTransactions]);
 
@@ -97,7 +107,6 @@ const HomeScreen: React.FC = () => {
     finally { setIsScanning(false); }
   }, [addTransaction]);
 
-  // Limit to 20 transactions for the home screen
   const displayTransactions = transactions.slice(0, 20);
 
   return (
@@ -108,22 +117,20 @@ const HomeScreen: React.FC = () => {
           <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
         <Image source={require('../assets/logo-text.png')} style={styles.headerLogo} resizeMode="contain" />
-        <Pressable hitSlop={12} onPress={() => setShowAddModal(true)}>
-          <Icon name="plus-circle" size={24} color={theme.colors.accent} />
-        </Pressable>
+        <View style={{ width: 24 }} />
       </View>
       <FlatList
         data={displayTransactions}
-        renderItem={({ item, index }) => <TransactionRow item={item} index={index} />}
+        renderItem={({ item, index }) => <TransactionRow item={item} index={index} onPress={setSelectedTx} />}
         keyExtractor={(item) => item._id}
-        ListHeaderComponent={<SummaryBar balance={balance} totalIn={totalIncome} totalOut={totalExpense} />}
+        ListHeaderComponent={<SummaryBar balance={balance} totalIn={totalIncome} totalOut={totalExpense} onAdd={() => setShowAddModal(true)} />}
         ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Henüz işlem yok</Text> : null}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
         onRefresh={() => fetchTransactions(1)}
         refreshing={isLoading}
         ListFooterComponent={transactions.length > 20 ? (
-          <Pressable style={styles.viewMoreBtn} onPress={() => navigation.navigate('Analytics')}>
+          <Pressable style={styles.viewMoreBtn} onPress={() => navigation.navigate('Transactions')}>
             <Text style={[styles.viewMoreText, { color: theme.colors.accent }]}>Tüm İşlemleri Gör</Text>
             <Icon name="chevron-right" size={16} color={theme.colors.accent} />
           </Pressable>
@@ -133,6 +140,13 @@ const HomeScreen: React.FC = () => {
         {isScanning ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="camera" size={24} color="#fff" />}
       </Pressable>
       <AddTransactionModal visible={showAddModal} onClose={() => { setShowAddModal(false); fetchTransactions(1); }} />
+      {selectedTx && (
+        <TransactionDetailModal
+          visible={!!selectedTx}
+          transaction={selectedTx}
+          onClose={() => setSelectedTx(null)}
+        />
+      )}
     </View>
   );
 };
@@ -160,6 +174,8 @@ const styles = StyleSheet.create({
   rowAmount: { fontSize: 16, fontWeight: '600' },
   viewMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20, gap: 4 },
   viewMoreText: { fontSize: 14, fontWeight: '600' },
+  addBtnInline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 16, borderStyle: 'dashed', borderWidth: 1.5, gap: 10 },
+  addBtnText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
   fab: { position: 'absolute', right: 24, width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
   emptyText: { textAlign: 'center', marginTop: 40, opacity: 0.5 }
 });

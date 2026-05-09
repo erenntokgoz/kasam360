@@ -7,6 +7,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useSetupStore } from '../store/useSetupStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
@@ -39,6 +40,8 @@ const OnboardingScreen: React.FC = () => {
   const { setSetupComplete } = useSetupStore();
   const insets = useSafeAreaInsets();
 
+  const navigation = useNavigation<any>();
+
   const handleScroll = (event: any) => {
     const slideSize = event.nativeEvent.layoutMeasurement.width;
     const index = event.nativeEvent.contentOffset.x / slideSize;
@@ -46,7 +49,7 @@ const OnboardingScreen: React.FC = () => {
   };
 
   const handleStart = () => {
-    setSetupComplete(true);
+    navigation.navigate('Login');
   };
 
   const renderItem = ({ item }: { item: typeof ONBOARDING_DATA[0] }) => (

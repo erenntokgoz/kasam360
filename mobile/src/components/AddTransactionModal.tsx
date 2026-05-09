@@ -1,127 +1,138 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, Pressable, TextInput,
-  Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Switch
+  Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useLedgerStore } from '../store/useLedgerStore';
-import { useRecurringStore } from '../store/useRecurringStore';
+import { useDebtStore } from '../store/useDebtStore';
 import { useTranslation } from 'react-i18next';
-
-import type { Transaction } from '../api/transactionService';
-import { DEFAULT_CATEGORIES } from '../constants/categories';
+import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 
 interface AddTransactionModalProps {
   visible: boolean;
   onClose: () => void;
-  initialData?: Transaction | null;
-  defaultRecurring?: boolean;
-  mode?: 'transaction' | 'recurring';
 }
 
+type Step = 'TYPE' | 'AMOUNT' | 'SUBTYPE' | 'WHO' | 'DATE' | 'DESC';
+type MainType = 'BORÇ' | 'ALACAK' | 'GELİR' | 'GİDER';
 
-const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialData, defaultRecurring = false, mode = 'transaction' }) => {
+const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose }) => {
   const { t } = useTranslation();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
-  const { addTransaction, updateTransaction, isCreating, isLoading } = useLedgerStore();
+  const { addTransaction, isCreating } = useLedgerStore();
+  const { addDebt } = useDebtStore();
 
-  const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
+  const [step, setStep] = useState<Step>('TYPE');
+  const [mainType, setMainType] = useState<MainType | null>(null);
   const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState<'CASH' | 'POS' | 'IBAN'>('CASH');
-  const [category, setCategory] = useState('');
+  const [subType, setSubType] = useState(''); // POS, CASH, IBAN or Business, Personnel, Personal
+  const [who, setWho] = useState('');
+  const [date, setDate] = useState('');
   const [description, setDescription] = useState('');
 
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-  const [newCategory, setNewCategory] = useState('');
-
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [frequency, setFrequency] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'>('MONTHLY');
-
-  // Form temizleme
-  React.useEffect(() => {
+  useEffect(() => {
     if (visible) {
-      if (initialData) {
-        setType(initialData.type);
-        setAmount((initialData.amount / 100).toString());
-        setMethod(initialData.method);
-        setCategory(initialData.category || '');
-        setDescription(initialData.description || '');
-        setNewCategory('');
-        setIsRecurring(defaultRecurring);
-        setFrequency('MONTHLY');
-      } else {
-        setType('EXPENSE');
-        setAmount('');
-        setMethod('CASH');
-        setCategory('');
-        setDescription('');
-        setNewCategory('');
-        setIsRecurring(mode === 'recurring' ? true : defaultRecurring);
-        setFrequency('MONTHLY');
-      }
+      setStep('TYPE');
+      setMainType(null);
+      setAmount('');
+      setSubType('');
+      setWho('');
+      setDate('');
+      setDescription('');
     }
-  }, [visible, initialData, mode, defaultRecurring]);
+  }, [visible]);
 
-  const handleAddCategory = () => {
-    if (newCategory.trim() && !categories.includes(newCategory.trim())) {
-      setCategories([...categories, newCategory.trim()]);
-      setCategory(newCategory.trim());
-      setNewCategory('');
+  const handleNext = () => {
+    if (step === 'TYPE') {
+      if (!mainType) return;
+      setStep('AMOUNT');
+    } else if (step === 'AMOUNT') {
+      if (!amount) return;
+      if (mainType === 'GELİR' || mainType === 'GİDER') setStep('SUBTYPE');
+      else setStep('WHO');
+    } else if (step === 'SUBTYPE') {
+      if (!subType) return;
+      setStep('DESC');
+    } else if (step === 'WHO') {
+      if (!who) return;
+      setStep('DATE');
+    } else if (step === 'DATE') {
+      setStep('DESC');
+    } else if (step === 'DESC') {
+      handleSubmit();
+    }
+  };
+
+  const handleBack = () => {
+    if (step === 'AMOUNT') setStep('TYPE');
+    else if (step === 'SUBTYPE') setStep('AMOUNT');
+    else if (step === 'WHO') setStep('AMOUNT');
+    else if (step === 'DATE') setStep('WHO');
+    else if (step === 'DESC') {
+      if (mainType === 'GELİR' || mainType === 'GİDER') setStep('SUBTYPE');
+      else setStep('DATE');
     }
   };
 
   const handleSubmit = async () => {
-    if (!amount.trim() || !category.trim() || !method) {
-      Alert.alert(t('addTransactionModal.errorMissingTitle'), t('addTransactionModal.errorMissingMsg'));
-      return;
-    }
-
     const numericAmount = parseFloat(amount.replace(',', '.'));
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      Alert.alert(t('addTransactionModal.errorInvalidTitle'), t('addTransactionModal.errorInvalidMsg'));
-      return;
-    }
+    const cents = Math.round(numericAmount * 100);
 
     try {
-      if (initialData) {
-        if (mode === 'transaction') {
-          await updateTransaction(initialData._id, {
-            type,
-            amount: Math.round(numericAmount * 100),
-            method,
-            category,
-            description: description.trim() || undefined,
-          });
-        }
-      } else {
-        if (mode === 'transaction') {
-          await addTransaction({
-            type,
-            amount: Math.round(numericAmount * 100),
-            method,
-            category,
-            description: description.trim() || undefined,
-          });
-        }
-
-        if ((isRecurring && mode === 'transaction') || mode === 'recurring') {
-          useRecurringStore.getState().addRecurring({
-            type,
-            amount: Math.round(numericAmount * 100),
-            method,
-            category,
-            description: description.trim() || undefined,
-            frequency,
-          });
-        }
+      if (mainType === 'GELİR') {
+        await addTransaction({
+          type: 'INCOME',
+          amount: cents,
+          method: subType as any,
+          category: 'Gelir',
+          description: description.trim() || undefined,
+        });
+      } else if (mainType === 'GİDER') {
+        await addTransaction({
+          type: 'EXPENSE',
+          amount: cents,
+          method: 'CASH', // Default for expense, subtype used as category
+          category: subType,
+          description: description.trim() || undefined,
+        });
+      } else if (mainType === 'BORÇ') {
+        // Borrowing money (Borç Aldım) -> Income
+        await addDebt({
+          entityName: who,
+          type: 'TAKEN',
+          totalAmount: cents,
+          dueDate: date || undefined,
+        });
+        await addTransaction({
+          type: 'INCOME',
+          amount: cents,
+          method: 'CASH',
+          category: 'Borç Alındı',
+          description: `Kimden: ${who}${description ? ' - ' + description : ''}`,
+        });
+      } else if (mainType === 'ALACAK') {
+        // Lending money (Borç Verdim) -> Expense
+        await addDebt({
+          entityName: who,
+          type: 'GIVEN',
+          totalAmount: cents,
+          dueDate: date || undefined,
+        });
+        await addTransaction({
+          type: 'EXPENSE',
+          amount: cents,
+          method: 'CASH',
+          category: 'Borç Verildi (Alacak)',
+          description: `Kime: ${who}${description ? ' - ' + description : ''}`,
+        });
       }
-
       onClose();
     } catch (err) {
-      Alert.alert(t('addTransactionModal.errorSaveTitle'), t('addTransactionModal.errorSaveMsg'));
+      Alert.alert('Hata', 'İşlem kaydedilemedi.');
     }
   };
 
@@ -129,188 +140,176 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.modalOverlay, { padding: theme.spacing.lg }]}>
-        <Pressable style={[styles.modalOverlay, { padding: theme.spacing.lg }]} onPress={onClose}>
-          <Pressable style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radii.xl, padding: theme.spacing.xl, ...theme.shadows.card, maxHeight: '90%' }} onPress={(e) => e.stopPropagation()}>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <View style={[styles.header, { marginBottom: theme.spacing.xl }]}>
-                <Text style={{ fontFamily: theme.fonts.bold, fontSize: theme.fontSizes.xl, color: theme.colors.textPrimary }}>
-                  {initialData ? 'İşlemi Güncelle' : mode === 'recurring' ? 'Hatırlatıcı Ekle' : t('addTransactionModal.title')}
-                </Text>
-                <Pressable onPress={onClose} hitSlop={8}>
-                  <Icon name="x" size={24} color={theme.colors.textTertiary} />
-                </Pressable>
-              </View>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+        <View style={[styles.content, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
+          <View style={styles.header}>
+            <Pressable onPress={step === 'TYPE' ? onClose : handleBack} hitSlop={12}>
+              <Icon name={step === 'TYPE' ? 'x' : 'arrow-left'} size={24} color={theme.colors.textPrimary} />
+            </Pressable>
+            <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Yeni İşlem</Text>
+            <View style={{ width: 24 }} />
+          </View>
 
-              {/* Type Selection */}
-              <View style={[styles.typeSelector, { backgroundColor: theme.colors.card, borderRadius: theme.radii.base, marginBottom: theme.spacing.md }]}>
-                <Pressable
-                  style={[styles.typeBtn, { paddingVertical: theme.spacing.sm, borderRadius: theme.radii.sm }, type === 'INCOME' && styles.typeBtnIncome]}
-                  onPress={() => setType('INCOME')}
-                >
-                  <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.sm, color: type === 'INCOME' ? theme.colors.successLight : theme.colors.textTertiary }}>{t('addTransactionModal.typeIncome')}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.typeBtn, { paddingVertical: theme.spacing.sm, borderRadius: theme.radii.sm }, type === 'EXPENSE' && styles.typeBtnExpense]}
-                  onPress={() => setType('EXPENSE')}
-                >
-                  <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.sm, color: type === 'EXPENSE' ? theme.colors.dangerLight : theme.colors.textTertiary }}>{t('addTransactionModal.typeExpense')}</Text>
-                </Pressable>
-              </View>
+          <View style={styles.stepContainer}>
+            {step === 'TYPE' && (
+              <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>İşlem tipi seçiniz:</Text>
+                <View style={styles.grid}>
+                  <TypeBox icon="arrow-up-right" label="BORÇ" subLabel="Para Aldım" color={theme.colors.success} active={mainType === 'BORÇ'} onSelect={() => { setMainType('BORÇ'); setStep('AMOUNT'); }} theme={theme} />
+                  <TypeBox icon="arrow-down-left" label="ALACAK" subLabel="Para Verdim" color={theme.colors.danger} active={mainType === 'ALACAK'} onSelect={() => { setMainType('ALACAK'); setStep('AMOUNT'); }} theme={theme} />
+                  <TypeBox icon="plus-circle" label="GELİR" subLabel="Kasa Girişi" color={theme.colors.success} active={mainType === 'GELİR'} onSelect={() => { setMainType('GELİR'); setStep('AMOUNT'); }} theme={theme} />
+                  <TypeBox icon="minus-circle" label="GİDER" subLabel="Kasa Çıkışı" color={theme.colors.danger} active={mainType === 'GİDER'} onSelect={() => { setMainType('GİDER'); setStep('AMOUNT'); }} theme={theme} />
+                </View>
+              </Animated.View>
+            )}
 
-              {/* Amount */}
-              <View style={[styles.inputWrapper, { backgroundColor: theme.colors.card, borderRadius: theme.radii.base, paddingHorizontal: theme.spacing.base, marginBottom: theme.spacing.md }]}>
-                <Icon name="dollar-sign" size={16} color={theme.colors.textTertiary} />
+            {step === 'AMOUNT' && (
+              <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>Tutar giriniz:</Text>
                 <TextInput
-                  style={{ flex: 1, fontFamily: theme.fonts.regular, fontSize: theme.fontSizes.base, color: theme.colors.textPrimary, marginLeft: theme.spacing.sm }}
-                  placeholder={t('addTransactionModal.amount')}
+                  style={[styles.bigInput, { color: theme.colors.textPrimary }]}
+                  placeholder="0.00 ₺"
                   placeholderTextColor={theme.colors.textTertiary}
                   keyboardType="decimal-pad"
+                  autoFocus
                   value={amount}
                   onChangeText={setAmount}
                 />
-              </View>
+                <NextBtn onPress={handleNext} theme={theme} />
+              </Animated.View>
+            )}
 
-              {/* Category Options */}
-              <View style={{ marginBottom: theme.spacing.md }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm, paddingBottom: theme.spacing.sm }}>
-                  {categories.map((cat) => (
-                    <Pressable
-                      key={cat}
-                      style={[{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, borderRadius: theme.radii.full, backgroundColor: theme.colors.card }, category === cat && { backgroundColor: theme.colors.accent }]}
-                      onPress={() => setCategory(cat)}
-                    >
-                      <Text style={{ fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.sm, color: category === cat ? theme.colors.textPrimary : theme.colors.textSecondary }}>{cat}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-                <View style={[styles.inputWrapper, { backgroundColor: theme.colors.card, borderRadius: theme.radii.base, paddingHorizontal: theme.spacing.base, marginBottom: 0 }]}>
-                  <Icon name="list" size={16} color={theme.colors.textTertiary} />
-                  <TextInput
-                    style={{ flex: 1, fontFamily: theme.fonts.regular, fontSize: theme.fontSizes.base, color: theme.colors.textPrimary, marginLeft: theme.spacing.sm }}
-                    placeholder={t('addTransactionModal.newCategory')}
-                    placeholderTextColor={theme.colors.textTertiary}
-                    value={newCategory}
-                    onChangeText={setNewCategory}
-                  />
-                  <Pressable onPress={handleAddCategory} hitSlop={8}>
-                    <Icon name="plus" size={20} color={theme.colors.accent} />
-                  </Pressable>
+            {step === 'SUBTYPE' && (
+              <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>{mainType === 'GELİR' ? 'Ödeme yöntemi seçiniz:' : 'Gider tipi seçiniz:'}</Text>
+                <View style={styles.subtypeList}>
+                  {mainType === 'GELİR' ? (
+                    <>
+                      <SubtypeItem label="POS" icon="credit-card" active={subType === 'POS'} onSelect={() => { setSubType('POS'); setStep('DESC'); }} theme={theme} />
+                      <SubtypeItem label="Nakit" icon="dollar-sign" active={subType === 'CASH'} onSelect={() => { setSubType('CASH'); setStep('DESC'); }} theme={theme} />
+                      <SubtypeItem label="Havale" icon="send" active={subType === 'IBAN'} onSelect={() => { setSubType('IBAN'); setStep('DESC'); }} theme={theme} />
+                    </>
+                  ) : (
+                    <>
+                      <SubtypeItem label="İşletme Gideri" icon="briefcase" active={subType === 'İşletme Gideri'} onSelect={() => { setSubType('İşletme Gideri'); setStep('DESC'); }} theme={theme} />
+                      <SubtypeItem label="Personel Gideri" icon="users" active={subType === 'Personel Gideri'} onSelect={() => { setSubType('Personel Gideri'); setStep('DESC'); }} theme={theme} />
+                      <SubtypeItem label="Kişisel Gider" icon="user" active={subType === 'Kişisel Gider'} onSelect={() => { setSubType('Kişisel Gider'); setStep('DESC'); }} theme={theme} />
+                    </>
+                  )}
                 </View>
-              </View>
+              </Animated.View>
+            )}
 
-              {/* Method */}
-              <View style={[styles.inputWrapper, { backgroundColor: theme.colors.card, borderRadius: theme.radii.base, paddingHorizontal: theme.spacing.base, marginBottom: theme.spacing.md }]}>
-                <Icon name="credit-card" size={16} color={theme.colors.textTertiary} />
-                <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', marginLeft: theme.spacing.sm, gap: theme.spacing.xs }}>
-                  {(['CASH', 'POS', 'IBAN'] as const).map((m) => (
-                    <Pressable
-                      key={m}
-                      style={[{ flex: 1, alignItems: 'center', paddingVertical: theme.spacing.xs, borderRadius: theme.radii.sm }, method === m && { backgroundColor: theme.colors.accentTransparent }]}
-                      onPress={() => setMethod(m)}
-                    >
-                      <Text style={{ fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.xs, color: method === m ? theme.colors.accent : theme.colors.textTertiary }}>
-                        {m === 'CASH' ? t('addTransactionModal.cash') : m === 'POS' ? t('addTransactionModal.pos') : t('addTransactionModal.transfer')}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              {/* Description */}
-              <View style={[styles.inputWrapper, { backgroundColor: theme.colors.card, borderRadius: theme.radii.base, paddingHorizontal: theme.spacing.base, marginBottom: theme.spacing.md }]}>
-                <Icon name="file-text" size={16} color={theme.colors.textTertiary} />
+            {step === 'WHO' && (
+              <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>{mainType === 'BORÇ' ? 'Kimden aldınız?' : 'Kime verdiniz?'}</Text>
                 <TextInput
-                  style={{ flex: 1, fontFamily: theme.fonts.regular, fontSize: theme.fontSizes.base, color: theme.colors.textPrimary, marginLeft: theme.spacing.sm }}
-                  placeholder={t('addTransactionModal.description')}
+                  style={[styles.input, { color: theme.colors.textPrimary, borderBottomColor: theme.colors.border }]}
+                  placeholder="İsim / Ünvan"
                   placeholderTextColor={theme.colors.textTertiary}
+                  autoFocus
+                  value={who}
+                  onChangeText={setWho}
+                />
+                <NextBtn onPress={handleNext} theme={theme} />
+              </Animated.View>
+            )}
+
+            {step === 'DATE' && (
+              <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>Geri ödeme tarihi (isteğe bağlı):</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.colors.textPrimary, borderBottomColor: theme.colors.border }]}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  keyboardType="numeric"
+                  autoFocus
+                  value={date}
+                  onChangeText={setDate}
+                />
+                <NextBtn onPress={handleNext} theme={theme} />
+              </Animated.View>
+            )}
+
+            {step === 'DESC' && (
+              <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>Açıklama (isteğe bağlı):</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.colors.textPrimary, borderBottomColor: theme.colors.border }]}
+                  placeholder="Bir şeyler yazın..."
+                  placeholderTextColor={theme.colors.textTertiary}
+                  autoFocus
                   value={description}
                   onChangeText={setDescription}
                 />
-              </View>
-
-              {/* Recurring Toggle */}
-              {mode !== 'recurring' && (
-                <View style={{ backgroundColor: theme.colors.card, borderRadius: theme.radii.base, padding: theme.spacing.base, marginBottom: theme.spacing.md }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Icon name="repeat" size={16} color={theme.colors.textTertiary} />
-                    <Text style={{ flex: 1, fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.base, color: theme.colors.textPrimary, marginLeft: theme.spacing.sm }}>Hatırlatıcı Ekle</Text>
-                    <Switch
-                      value={isRecurring}
-                      onValueChange={setIsRecurring}
-                      trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
-                      thumbColor={theme.colors.primary}
-                      style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                    />
-                  </View>
-                  {isRecurring && (
-                    <View style={{ flexDirection: 'row', marginTop: theme.spacing.md, gap: theme.spacing.xs }}>
-                      {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const).map((f) => (
-                        <Pressable
-                          key={f}
-                          style={[{ flex: 1, alignItems: 'center', paddingVertical: theme.spacing.xs, borderRadius: theme.radii.sm, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, frequency === f && { backgroundColor: 'rgba(37, 99, 235, 0.1)' }]}
-                          onPress={() => setFrequency(f)}
-                        >
-                          <Text style={{ fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.xs, color: frequency === f ? theme.colors.accent : theme.colors.textTertiary }}>
-                            {f === 'DAILY' ? 'Günlük' : f === 'WEEKLY' ? 'Hft.' : f === 'MONTHLY' ? 'Aylık' : 'Yıllık'}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {mode === 'recurring' && (
-                <View style={{ backgroundColor: theme.colors.card, borderRadius: theme.radii.base, padding: theme.spacing.base, marginBottom: theme.spacing.md }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.md }}>
-                    <Icon name="clock" size={16} color={theme.colors.textTertiary} />
-                    <Text style={{ flex: 1, fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.base, color: theme.colors.textPrimary, marginLeft: theme.spacing.sm }}>Tekrarlanma Sıklığı</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: theme.spacing.xs }}>
-                    {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const).map((f) => (
-                      <Pressable
-                        key={f}
-                        style={[{ flex: 1, alignItems: 'center', paddingVertical: theme.spacing.xs, borderRadius: theme.radii.sm, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, frequency === f && { backgroundColor: 'rgba(37, 99, 235, 0.1)' }]}
-                        onPress={() => setFrequency(f)}
-                      >
-                        <Text style={{ fontFamily: theme.fonts.medium, fontSize: theme.fontSizes.xs, color: frequency === f ? theme.colors.accent : theme.colors.textTertiary }}>
-                          {f === 'DAILY' ? 'Günlük' : f === 'WEEKLY' ? 'Hft.' : f === 'MONTHLY' ? 'Aylık' : 'Yıllık'}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Submit Button */}
-              <Pressable
-                style={({ pressed }) => [{ backgroundColor: theme.colors.accent, borderRadius: theme.radii.base, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', marginTop: theme.spacing.sm, ...theme.shadows.button }, pressed && { opacity: 0.9 }]}
-                onPress={handleSubmit}
-                disabled={isCreating || isLoading}
-              >
-                {isCreating || isLoading ? (
-                  <ActivityIndicator size="small" color={theme.colors.surface} />
-                ) : (
-                  <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.base, color: theme.colors.surface, letterSpacing: 0.3 }}>{initialData ? 'Güncelle' : t('addTransactionModal.save')}</Text>
-                )}
-              </Pressable>
-            </ScrollView>
-          </Pressable>
-        </Pressable>
+                <Pressable
+                  style={[styles.finishBtn, { backgroundColor: theme.colors.accent }]}
+                  onPress={handleSubmit}
+                  disabled={isCreating}
+                >
+                  {isCreating ? <ActivityIndicator color="#fff" /> : <Text style={styles.finishBtnText}>İŞLEMİ TAMAMLA</Text>}
+                </Pressable>
+              </Animated.View>
+            )}
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
 
+const TypeBox = ({ icon, label, subLabel, color, active, onSelect, theme }: any) => (
+  <Pressable
+    style={[styles.typeBox, { backgroundColor: theme.colors.card, borderColor: active ? color : 'transparent' }]}
+    onPress={onSelect}
+  >
+    <View style={[styles.iconCircle, { backgroundColor: color + '20' }]}>
+      <Icon name={icon} size={24} color={color} />
+    </View>
+    <Text style={[styles.typeLabel, { color: theme.colors.textPrimary }]}>{label}</Text>
+    <Text style={[styles.typeSubLabel, { color: theme.colors.textTertiary }]}>{subLabel}</Text>
+  </Pressable>
+);
+
+const SubtypeItem = ({ label, icon, active, onSelect, theme }: any) => (
+  <Pressable
+    style={[styles.subtypeItem, { backgroundColor: theme.colors.card, borderColor: active ? theme.colors.accent : 'transparent' }]}
+    onPress={onSelect}
+  >
+    <Icon name={icon} size={20} color={active ? theme.colors.accent : theme.colors.textSecondary} />
+    <Text style={[styles.subtypeLabel, { color: active ? theme.colors.accent : theme.colors.textPrimary }]}>{label}</Text>
+  </Pressable>
+);
+
+const NextBtn = ({ onPress, theme }: any) => (
+  <Pressable style={[styles.nextBtn, { backgroundColor: theme.colors.accent }]} onPress={onPress}>
+    <Text style={styles.nextBtnText}>DEVAM ET</Text>
+    <Icon name="chevron-right" size={20} color="#fff" />
+  </Pressable>
+);
+
 const styles = StyleSheet.create({
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.60)', justifyContent: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  typeSelector: { flexDirection: 'row', padding: 4 },
-  typeBtn: { flex: 1, alignItems: 'center' },
-  typeBtnIncome: { backgroundColor: 'rgba(16,185,129,0.15)' },
-  typeBtnExpense: { backgroundColor: 'rgba(248,113,113,0.15)' },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', paddingVertical: Platform.select({ ios: 14, android: 8 }) },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  content: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, minHeight: 450 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
+  title: { fontSize: 18, fontWeight: '700' },
+  stepContainer: { flex: 1 },
+  stepContent: { flex: 1 },
+  stepLabel: { fontSize: 16, fontWeight: '600', marginBottom: 20 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  typeBox: { width: '48%', padding: 20, borderRadius: 20, borderWidth: 2, alignItems: 'center' },
+  iconCircle: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  typeLabel: { fontSize: 16, fontWeight: '700' },
+  typeSubLabel: { fontSize: 11, fontWeight: '500', marginTop: 4 },
+  bigInput: { fontSize: 48, fontWeight: '700', textAlign: 'center', marginVertical: 40 },
+  input: { fontSize: 24, fontWeight: '600', borderBottomWidth: 2, paddingVertical: 12, marginBottom: 40 },
+  subtypeList: { gap: 12 },
+  subtypeItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 16, borderWidth: 2, gap: 16 },
+  subtypeLabel: { fontSize: 16, fontWeight: '600' },
+  nextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 16, gap: 8 },
+  nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  finishBtn: { paddingVertical: 18, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  finishBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 1 }
 });
 
 export default AddTransactionModal;

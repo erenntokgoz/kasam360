@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Pressable,
-  KeyboardAvoidingView, Platform, ScrollView, Image,
+  KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
@@ -22,14 +22,17 @@ const SetupScreen: React.FC = () => {
   const [balance, setBalance] = useState('');
   const [debts, setDebts] = useState('');
   const [receivables, setReceivables] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleComplete = () => {
-    const openingBalance = parseFloat(balance) || 0;
-    const openingDebts = parseFloat(debts) || 0;
-    const openingReceivables = parseFloat(receivables) || 0;
+  const handleComplete = async () => {
+    setIsSubmitting(true);
+    const openingBalance = parseFloat(balance.replace(',', '.')) || 0;
+    const openingDebts = parseFloat(debts.replace(',', '.')) || 0;
+    const openingReceivables = parseFloat(receivables.replace(',', '.')) || 0;
 
-    setOpeningData({ openingBalance, openingDebts, openingReceivables });
+    await setOpeningData({ openingBalance, openingDebts, openingReceivables });
     setSetupComplete(true);
+    setIsSubmitting(false);
   };
 
   return (
@@ -106,8 +109,13 @@ const SetupScreen: React.FC = () => {
               pressed && { opacity: 0.9 },
             ]}
             onPress={handleComplete}
+            disabled={isSubmitting}
           >
-            <Text style={styles.submitLabel}>{t('setup.complete')}</Text>
+            {isSubmitting ? (
+              <ActivityIndicator color={theme.colors.surface} />
+            ) : (
+              <Text style={styles.submitLabel}>{t('setup.complete')}</Text>
+            )}
           </Pressable>
         </Animated.View>
       </ScrollView>

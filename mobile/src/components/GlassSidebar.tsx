@@ -30,10 +30,11 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
   const unreadCount = useNotificationStore((s) => s.getUnreadCount());
 
   const MENU_ITEMS: MenuItem[] = [
-    { label: t('sidebar.home'), icon: 'book-open', route: 'Home' },
+    { label: t('sidebar.home'), icon: 'home', route: 'Home' },
+    { label: 'Gelir & Giderler', icon: 'list', route: 'Transactions' },
+    { label: t('sidebar.debts'), icon: 'users', route: 'Debts' },
     { label: t('sidebar.analytics'), icon: 'bar-chart-2', route: 'Analytics' },
-    { label: t('sidebar.debts'), icon: 'credit-card', route: 'Debts' },
-    { label: 'Hatırlatıcılar', icon: 'calendar', route: 'Recurrings' },
+    { label: 'Personel Giderleri', icon: 'briefcase', route: 'Recurrings' },
     { label: 'Bildirimler', icon: 'bell', route: 'Notifications', badge: unreadCount },
     { label: t('sidebar.settings'), icon: 'settings', route: 'Settings' },
   ];
@@ -44,15 +45,15 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
         <BlurView
           style={StyleSheet.absoluteFill}
           blurType={isDarkMode ? 'dark' : 'light'}
-          blurAmount={15}
+          blurAmount={20}
           reducedTransparencyFallbackColor={theme.colors.primary}
         />
       )}
-      <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]} />
+      <View style={[styles.overlay, { backgroundColor: theme.colors.overlay, opacity: 0.85 }]} />
 
       <DrawerContentScrollView
         {...props}
-        contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: insets.top + theme.spacing.lg }}
+        contentContainerStyle={{ paddingHorizontal: theme.spacing.md, paddingTop: insets.top + theme.spacing.lg }}
       >
         <View style={{ alignItems: 'center', marginBottom: theme.spacing.xl }}>
           <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: theme.colors.accentTransparent, alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.sm }}>
