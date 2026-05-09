@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { storage } from '../utils/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-get-random-values';
 
 const NOTIFICATIONS_KEY = 'app.notifications';
@@ -21,21 +21,21 @@ interface NotificationState {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearAll: () => void;
-  hydrateNotifications: () => void;
+  hydrateNotifications: () => Promise<void>;
   getUnreadCount: () => number;
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
 
-  hydrateNotifications: () => {
-    const stored = storage.getString(NOTIFICATIONS_KEY);
-    if (stored) {
-      try {
+  hydrateNotifications: async () => {
+    try {
+      const stored = await AsyncStorage.getItem(NOTIFICATIONS_KEY);
+      if (stored) {
         set({ notifications: JSON.parse(stored) });
-      } catch {
-        set({ notifications: [] });
       }
+    } catch {
+      set({ notifications: [] });
     }
   },
 
@@ -47,46 +47,42 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         isRead: false,
         createdAt: new Date().toISOString(),
       };
-      
-      // Avoid duplicate notifications with same title and body in last 24 hours
+
       const isDuplicate = state.notifications.some(
-        n => n.title === newNotif.title && 
-             n.body === newNotif.body && 
-             (new Date(newNotif.createdAt).getTime() - new Date(n.createdAt).getTime() < 86400000)
+        n =>
+          n.title === newNotif.title &&
+          n.body === newNotif.body &&
+          new Date(newNotif.createdAt).getTime() - new Date(n.createdAt).getTime() < 86400000,
       );
-      
+
       if (isDuplicate) return state;
 
-      const newNotifications = [newNotif, ...state.notifications];
-      storage.set(NOTIFICATIONS_KEY, JSON.stringify(newNotifications));
-      return { notifications: newNotifications };
+      const updated = [newNotif, ...state.notifications];
+      AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated)).catch(console.error);
+      return { notifications: updated };
     });
   },
 
   markAsRead: (id) => {
     set((state) => {
-      const newNotifications = state.notifications.map((n) =>
-        n.id === id ? { ...n, isRead: true } : n
-      );
-      storage.set(NOTIFICATIONS_KEY, JSON.stringify(newNotifications));
-      return { notifications: newNotifications };
+      const updated = state.notifications.map(n => (n.id === id ? { ...n, isRead: true } : n));
+      AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated)).catch(console.error);
+      return { notifications: updated };
     });
   },
 
   markAllAsRead: () => {
     set((state) => {
-      const newNotifications = state.notifications.map((n) => ({ ...n, isRead: true }));
-      storage.set(NOTIFICATIONS_KEY, JSON.stringify(newNotifications));
-      return { notifications: newNotifications };
+      const updated = state.notifications.map(n => ({ ...n, isRead: true }));
+      AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated)).catch(console.error);
+      return { notifications: updated };
     });
   },
 
-  clearAll: () => {
-    storage.remove(NOTIFICATIONS_KEY);
+  clearAll: async () => {
+    await AsyncStorage.removeItem(NOTIFICATIONS_KEY);
     set({ notifications: [] });
   },
 
-  getUnreadCount: () => {
-    return get().notifications.filter((n) => !n.isRead).length;
-  },
+  getUnreadCount: () => get().notifications.filter(n => !n.isRead).length,
 }));

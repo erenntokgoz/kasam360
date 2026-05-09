@@ -7,6 +7,7 @@ import { useAuthStore } from './src/store/useAuthStore';
 import { useThemeStore } from './src/store/useThemeStore';
 import { useNotificationStore } from './src/store/useNotificationStore';
 import { getTheme } from './src/theme';
+import { hydrateLanguage } from './src/i18n';
 
 function App(): React.JSX.Element {
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
@@ -14,9 +15,13 @@ function App(): React.JSX.Element {
   const hydrateNotifications = useNotificationStore((s) => s.hydrateNotifications);
 
   useEffect(() => {
-    hydrateFromStorage();
-    hydrateTheme();
-    hydrateNotifications();
+    const init = async () => {
+      await hydrateLanguage();
+      await hydrateFromStorage();
+      await hydrateTheme();
+      await hydrateNotifications();
+    };
+    init();
   }, [hydrateFromStorage, hydrateTheme, hydrateNotifications]);
 
   const theme = getTheme(isDarkMode);

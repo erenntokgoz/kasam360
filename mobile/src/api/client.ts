@@ -14,8 +14,8 @@ const apiClient = axios.create({
 
 // Request Interceptor
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = getItem(StorageKeys.TOKEN);
+  async (config) => {
+    const token = await getItem(StorageKeys.TOKEN);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -40,7 +40,7 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = getItem(StorageKeys.REFRESH_TOKEN);
+        const refreshToken = await getItem(StorageKeys.REFRESH_TOKEN);
         if (!refreshToken) {
           throw new Error('No refresh token available');
         }
@@ -51,7 +51,7 @@ apiClient.interceptors.response.use(
 
         if (response.data.success) {
           const newToken = response.data.token;
-          setItem(StorageKeys.TOKEN, newToken);
+          await setItem(StorageKeys.TOKEN, newToken);
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
           } else {
@@ -60,7 +60,7 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         }
       } catch (refreshError) {
-        clearStorage();
+        await clearStorage();
         return Promise.reject(refreshError);
       }
     }

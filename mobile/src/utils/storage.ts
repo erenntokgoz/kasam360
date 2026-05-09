@@ -1,39 +1,52 @@
-import { MMKV } from 'react-native-mmkv';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-/**
- * Singleton MMKV instance for the app.
- * Used for fast synchronous key-value persistence (JWT token, user data, etc.)
- * A unique ID scopes the storage so it can co-exist with other MMKV instances
- * in the future (e.g. per-tenant encrypted storage).
- */
-export const storage = new MMKV({ id: 'kasam360-storage' });
-
-// ─── Typed helpers ────────────────────────────────────────────────────────────
+// ─── Keys ────────────────────────────────────────────────────────────────────
 
 export const StorageKeys = {
   TOKEN: 'auth.token',
   REFRESH_TOKEN: 'auth.refreshToken',
   USER: 'auth.user',
+  THEME: 'theme.mode',
+  NOTIFICATIONS: 'notifications.settings',
 } as const;
 
 export type StorageKey = (typeof StorageKeys)[keyof typeof StorageKeys];
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 /** Persist a string value. */
-export const setItem = (key: StorageKey, value: string): void => {
-  storage.set(key, value);
+export const setItem = async (key: StorageKey, value: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(key, value);
+  } catch (e) {
+    console.error('[Storage] setItem error', e);
+  }
 };
 
 /** Retrieve a string value, or null if not set. */
-export const getItem = (key: StorageKey): string | null => {
-  return storage.getString(key) ?? null;
+export const getItem = async (key: StorageKey): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(key);
+  } catch (e) {
+    console.error('[Storage] getItem error', e);
+    return null;
+  }
 };
 
-/** Remove a key from storage. */
-export const removeItem = (key: StorageKey): void => {
-  storage.remove(key);
+/** Remove a key. */
+export const removeItem = async (key: StorageKey): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch (e) {
+    console.error('[Storage] removeItem error', e);
+  }
 };
 
-/** Clear all keys scoped to this MMKV instance. */
-export const clearStorage = (): void => {
-  storage.clearAll();
+/** Clear all stored data. */
+export const clearStorage = async (): Promise<void> => {
+  try {
+    await AsyncStorage.clear();
+  } catch (e) {
+    console.error('[Storage] clearStorage error', e);
+  }
 };

@@ -1,12 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { storage } from '../utils/storage';
-
-const zustandStorage = {
-  setItem: (name: string, value: string) => storage.set(name, value),
-  getItem: (name: string) => storage.getString(name) ?? null,
-  removeItem: (name: string) => storage.remove(name),
-};
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface BudgetStore {
   monthlyLimit: number;
@@ -25,7 +19,7 @@ export const useBudgetStore = create<BudgetStore>()(
     }),
     {
       name: 'budget-storage',
-      storage: createJSONStorage(() => zustandStorage),
+      storage: createJSONStorage(() => AsyncStorage),
     }
   )
 );

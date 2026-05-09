@@ -73,6 +73,7 @@ def enableProguardInReleaseBuilds = false
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
+    ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
@@ -83,6 +84,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", newArchEnabled
+        buildConfigField "boolean", "IS_HERMES_ENABLED", hermesEnabled
     }
     signingConfigs {
         debug {
@@ -115,5 +118,7 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+    implementation project(':react-native-nitro-modules')
 }
+
 apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"

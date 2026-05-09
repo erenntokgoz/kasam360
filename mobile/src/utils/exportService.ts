@@ -94,7 +94,7 @@ export const exportToPDF = async (
     };
 
     const file = await RNHTMLtoPDF.convert(options);
-    
+
     if (file.filePath) {
       await Share.open({
         url: `file://${file.filePath}`,

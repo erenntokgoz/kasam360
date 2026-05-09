@@ -1,15 +1,13 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { storage } from '../utils/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import tr from './tr.json';
 import en from './en.json';
 
 const LANGUAGE_KEY = 'app.language';
 
-// MMKV'den seçili dili al (varsayılan: 'tr')
-const savedLanguage = storage.getString(LANGUAGE_KEY) || 'tr';
-
+// i18next initial initialization (defaults to 'tr')
 i18n
   .use(initReactI18next)
   .init({
@@ -17,17 +15,32 @@ i18n
       tr: { translation: tr },
       en: { translation: en },
     },
-    lng: savedLanguage,
+    lng: 'tr', // Default
     fallbackLng: 'tr',
     interpolation: {
-      escapeValue: false, // React zaten XSS koruması sağlıyor
+      escapeValue: false,
     },
     compatibilityJSON: 'v4',
   });
 
-export const changeLanguage = (lang: 'tr' | 'en') => {
-  i18n.changeLanguage(lang);
-  storage.set(LANGUAGE_KEY, lang);
+/**
+ * Loads the saved language from AsyncStorage and updates i18n.
+ * Should be called in App.tsx.
+ */
+export const hydrateLanguage = async () => {
+  try {
+    const savedLanguage = await AsyncStorage.getItem(LANGUAGE_KEY);
+    if (savedLanguage) {
+      await i18n.changeLanguage(savedLanguage);
+    }
+  } catch (e) {
+    console.error('Failed to hydrate language', e);
+  }
+};
+
+export const changeLanguage = async (lang: 'tr' | 'en') => {
+  await i18n.changeLanguage(lang);
+  await AsyncStorage.setItem(LANGUAGE_KEY, lang);
 };
 
 export default i18n;

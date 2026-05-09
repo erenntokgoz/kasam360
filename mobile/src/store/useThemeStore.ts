@@ -1,35 +1,33 @@
 import { create } from 'zustand';
-import { storage } from '../utils/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const THEME_KEY = 'app.isDarkMode';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ThemeState {
   isDarkMode: boolean;
   toggleTheme: () => void;
-  hydrateTheme: () => void;
+  hydrateTheme: () => Promise<void>;
 }
 
-// ─── Store ────────────────────────────────────────────────────────────────────
-
 export const useThemeStore = create<ThemeState>((set) => ({
-  /** Default: karanlık mod (mevcut davranış korunuyor) */
   isDarkMode: true,
 
-  /** Uygulama açılışında MMKV'den okur. App.tsx'te çağırılmalı. */
-  hydrateTheme: () => {
-    const stored = storage.getString(THEME_KEY);
-    if (stored !== undefined) {
-      set({ isDarkMode: stored === 'true' });
+  hydrateTheme: async () => {
+    try {
+      const stored = await AsyncStorage.getItem(THEME_KEY);
+      if (stored !== null) {
+        set({ isDarkMode: stored === 'true' });
+      }
+    } catch (e) {
+      console.error('[ThemeStore] hydrateTheme error', e);
     }
   },
 
-  /** Dark ↔ Light arasında geçiş yapar ve MMKV'ye kaydeder. */
-  toggleTheme: () =>
+  toggleTheme: () => {
     set((state) => {
       const next = !state.isDarkMode;
-      storage.set(THEME_KEY, String(next));
+      AsyncStorage.setItem(THEME_KEY, String(next)).catch(console.error);
       return { isDarkMode: next };
-    }),
+    });
+  },
 }));
