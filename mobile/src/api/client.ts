@@ -52,6 +52,9 @@ apiClient.interceptors.response.use(
         if (response.data.success) {
           const newToken = response.data.token;
           await setItem(StorageKeys.TOKEN, newToken);
+          if (response.data.refreshToken) {
+            await setItem(StorageKeys.REFRESH_TOKEN, response.data.refreshToken);
+          }
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
           } else {

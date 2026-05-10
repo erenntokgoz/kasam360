@@ -29,6 +29,7 @@ interface AuthState {
   logout: () => void;
   hydrateFromStorage: () => Promise<void>;
   updateProfile: (payload: { businessName?: string; password?: string }) => Promise<void>;
+  deleteAccount: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -168,6 +169,21 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: data.tenant, isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Update failed.';
+      set({ error: message, isLoading: false });
+      throw err;
+    }
+  },
+
+  /**
+   * Deletes the user account permanently.
+   */
+  deleteAccount: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      await apiClient.delete('/api/auth/account');
+      useAuthStore.getState().logout();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Account deletion failed.';
       set({ error: message, isLoading: false });
       throw err;
     }

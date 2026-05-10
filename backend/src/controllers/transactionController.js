@@ -229,6 +229,11 @@ const updateTransaction = async (req, res) => {
     const { tenantId } = req;
     const { id } = req.params;
     const updateData = req.body;
+    const ALLOWED_FIELDS = ['type', 'amount', 'method', 'category', 'description', 'transactionDate'];
+    const safeUpdate = {};
+    for (const field of ALLOWED_FIELDS) {
+      if (updateData[field] !== undefined) safeUpdate[field] = updateData[field];
+    }
 
     const transaction = await Transaction.findOne({ _id: id, tenantId });
     if (!transaction || transaction.isDeleted) {
@@ -237,9 +242,9 @@ const updateTransaction = async (req, res) => {
 
     const oldData = transaction.toObject();
 
-    if (updateData.amount !== undefined) updateData.amount = Math.round(Number(updateData.amount));
+    if (safeUpdate.amount !== undefined) safeUpdate.amount = Math.round(Number(safeUpdate.amount));
 
-    Object.assign(transaction, updateData);
+    Object.assign(transaction, safeUpdate);
     await transaction.save();
 
     await AuditLog.create({

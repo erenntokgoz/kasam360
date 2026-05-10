@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const tenantController = require('../controllers/tenantController');
-const authMiddleware = require('../middlewares/authMiddleware');
+const { requireAuth } = require('../middlewares/authMiddleware');
 
-// All routes are protected by authMiddleware
-router.use(authMiddleware);
+// All routes are protected by requireAuth
+router.use(requireAuth);
 
 router.put('/setup', tenantController.updateSetup);
 

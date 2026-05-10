@@ -33,6 +33,7 @@ const DrawerNavigator = () => {
         drawerStyle: { width: 280, backgroundColor: 'transparent' },
         drawerType: 'slide',
         overlayColor: 'transparent',
+        sceneStyle: { backgroundColor: 'transparent' },
       }}
     >
       <Drawer.Screen

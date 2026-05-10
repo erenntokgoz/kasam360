@@ -1,30 +1,40 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert, TextInput } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useLedgerStore } from '../store/useLedgerStore';
+import { useStaffStore, Staff } from '../store/useStaffStore';
 import type { Transaction } from '../api/transactionService';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import FilterBar from '../components/FilterBar';
 import AddCard from '../components/AddCard';
 import { formatCurrency, formatDate } from '../utils/format';
+import { useTranslation } from 'react-i18next';
 
 const PersonnelExpensesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
+  const { t } = useTranslation();
   const { transactions, deleteTransaction } = useLedgerStore();
+  const { staffList, removeStaff, updateStaff, addStaff, fetchStaff } = useStaffStore();
   
-  const [showAddModal, setShowAddModal] = React.useState(false);
-  const [selectedTx, setSelectedTx] = React.useState<Transaction | null>(null);
+  React.useEffect(() => {
+    fetchStaff();
+  }, [fetchStaff]);
+  
+  const [activeTab, setActiveTab] = useState<'HISTORY' | 'DIRECTORY'>('HISTORY');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   
   const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
   const [contactFilter, setContactFilter] = useState<string | null>(null);
+  const [newStaffName, setNewStaffName] = useState('');
 
   // Filter only personnel expenses and apply date/contact filters
   const filteredPersonnelExpenses = useMemo(() => transactions.filter(t => {
@@ -43,88 +53,166 @@ const PersonnelExpensesScreen: React.FC = () => {
 
   const totalSpent = useMemo(() => filteredPersonnelExpenses.reduce((sum, t) => sum + t.amount, 0), [filteredPersonnelExpenses]);
 
-  const handleLongPress = (id: string) => {
+  const handleLongPressTx = (id: string) => {
     Alert.alert('İşlemi Sil', 'Bu personel giderini silmek istediğinize emin misiniz?', [
       { text: 'İptal', style: 'cancel' },
       { text: 'Sil', style: 'destructive', onPress: () => deleteTransaction(id) },
     ]);
   };
 
-  const renderItem = ({ item }: { item: Transaction }) => {
-    return (
-      <View style={[styles.rowContainer, { backgroundColor: theme.colors.surface }]}>
-        <Pressable
-          style={styles.rowContent}
-          onPress={() => setSelectedTx(item)}
-          onLongPress={() => handleLongPress(item._id)}
-        >
-          <View style={[styles.rowIconCircle, { backgroundColor: theme.colors.dangerTransparent }]}>
-            <Icon name="user" size={16} color={theme.colors.dangerLight} />
+  const handleAddStaff = () => {
+    if (!newStaffName.trim()) return;
+    addStaff(newStaffName.trim());
+    setNewStaffName('');
+  };
+
+  const handleRemoveStaff = (id: string) => {
+    Alert.alert('Personeli Sil', 'Bu personeli rehberden silmek istediğinize emin misiniz?', [
+      { text: 'İptal', style: 'cancel' },
+      { text: 'Sil', style: 'destructive', onPress: () => removeStaff(id) },
+    ]);
+  };
+
+  const renderTxItem = ({ item }: { item: Transaction }) => (
+    <View style={[styles.rowContainer, { backgroundColor: theme.colors.surface }]}>
+      <Pressable
+        style={styles.rowContent}
+        onPress={() => setSelectedTx(item)}
+        onLongPress={() => handleLongPressTx(item._id)}
+      >
+        <View style={[styles.rowIconCircle, { backgroundColor: theme.colors.dangerTransparent }]}>
+          <Icon name="user" size={16} color={theme.colors.dangerLight} />
+        </View>
+        <View style={styles.rowMiddle}>
+          <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+            {item.description || 'Personel Ödemesi'}
+          </Text>
+          <Text style={[styles.rowFreq, { color: theme.colors.textTertiary }]}>{formatDate(item.transactionDate || item.createdAt)}</Text>
+        </View>
+        <View style={styles.rowRight}>
+          <Text style={[styles.rowAmount, { color: theme.colors.dangerLight }]}>{formatCurrency(item.amount, true)}</Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+
+  const renderStaffItem = ({ item }: { item: Staff }) => (
+    <View style={[styles.staffCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      <View style={styles.staffHeader}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={[styles.staffIcon, { backgroundColor: theme.colors.accentTransparent }]}>
+            <Icon name="user" size={20} color={theme.colors.accent} />
           </View>
-          <View style={styles.rowMiddle}>
-            <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>
-              {item.description || 'Personel Ödemesi'}
-            </Text>
-            <Text style={[styles.rowFreq, { color: theme.colors.textTertiary }]}>{formatDate(item.transactionDate || item.createdAt)}</Text>
+          <View>
+            <Text style={[styles.staffName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
+            {item.role && <Text style={[styles.staffRole, { color: theme.colors.textSecondary }]}>{item.role}</Text>}
           </View>
-          <View style={styles.rowRight}>
-            <Text style={[styles.rowAmount, { color: theme.colors.dangerLight }]}>{formatCurrency(item.amount, true)}</Text>
-          </View>
+        </View>
+        <Pressable hitSlop={12} onPress={() => handleRemoveStaff(item.id)}>
+          <Icon name="trash-2" size={18} color={theme.colors.dangerLight} />
         </Pressable>
       </View>
-    );
-  };
+      <View style={[styles.staffFooter, { borderTopColor: theme.colors.border }]}>
+        <Text style={{ fontSize: 12, color: theme.colors.textTertiary, fontWeight: '500' }}>TOPLAM ÖDENEN</Text>
+        <Text style={{ fontSize: 14, color: theme.colors.success, fontWeight: '700' }}>{formatCurrency(item.totalPaid)}</Text>
+      </View>
+    </View>
+  );
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.primary} />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
       <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
-          <Icon name="menu" size={22} color={theme.colors.textPrimary} />
+          <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Personel Giderleri</Text>
-        <View style={{ width: 22 }} />
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Personel Yönetimi</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <View style={[styles.tabs, { backgroundColor: theme.colors.surface }]}>
+        <Pressable style={[styles.tab, activeTab === 'HISTORY' && { backgroundColor: theme.colors.accent }]} onPress={() => setActiveTab('HISTORY')}>
+          <Text style={[styles.tabText, { color: activeTab === 'HISTORY' ? '#fff' : theme.colors.textSecondary }]}>Gider Geçmişi</Text>
+        </Pressable>
+        <Pressable style={[styles.tab, activeTab === 'DIRECTORY' && { backgroundColor: theme.colors.accent }]} onPress={() => setActiveTab('DIRECTORY')}>
+          <Text style={[styles.tabText, { color: activeTab === 'DIRECTORY' ? '#fff' : theme.colors.textSecondary }]}>Personel Rehberi</Text>
+        </Pressable>
       </View>
       
-      <FlatList
-        data={filteredPersonnelExpenses}
-        renderItem={renderItem}
-        keyExtractor={(item) => item._id}
-        ListHeaderComponent={(
-          <View style={{ marginBottom: 20 }}>
-            <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card, marginBottom: 16 }]}>
-              <Text style={{ fontSize: 12, color: theme.colors.textTertiary, fontWeight: '600', marginBottom: 4 }}>TOPLAM PERSONEL GİDERİ</Text>
-              <Text style={{ fontSize: 24, color: theme.colors.danger, fontWeight: '700' }}>{formatCurrency(totalSpent)}</Text>
-            </View>
+      {activeTab === 'HISTORY' ? (
+        <FlatList
+          data={filteredPersonnelExpenses}
+          renderItem={renderTxItem}
+          keyExtractor={(item) => item._id}
+          ListHeaderComponent={(
+            <View style={{ marginBottom: 20 }}>
+              <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card, marginBottom: 16 }]}>
+                <Text style={{ fontSize: 12, color: theme.colors.textTertiary, fontWeight: '600', marginBottom: 4 }}>TOPLAM PERSONEL GİDERİ</Text>
+                <Text style={{ fontSize: 24, color: theme.colors.danger, fontWeight: '700' }}>{formatCurrency(totalSpent)}</Text>
+              </View>
 
-            <FilterBar 
-              onDateChange={(start, end) => setDateFilter({ start, end })}
-              onContactChange={setContactFilter}
-            />
-
-            <View style={{ marginTop: 16 }}>
-              <AddCard 
-                title="Yeni Personel Gideri Ekle" 
-                subtitle="Personel maaş veya avans ödemesi yapın" 
-                icon="plus-circle" 
-                onPress={() => setShowAddModal(true)} 
+              <FilterBar 
+                onDateChange={(start, end) => setDateFilter({ start, end })}
+                onContactChange={setContactFilter}
               />
+
+              <View style={{ marginTop: 16 }}>
+                <AddCard 
+                  title="Yeni Personel Gideri Ekle" 
+                  subtitle="Personel maaş veya avans ödemesi yapın" 
+                  icon="plus-circle" 
+                  onPress={() => setShowAddModal(true)} 
+                />
+              </View>
             </View>
-          </View>
-        )}
-        contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm, paddingBottom: insets.bottom + theme.spacing.xl }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing['4xl'], gap: theme.spacing.sm }}>
-            <Icon name="users" size={48} color={theme.colors.textTertiary} />
-            <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.lg, color: theme.colors.textSecondary, marginTop: theme.spacing.base }}>Sonuç Bulunamadı</Text>
-          </View>
-        }
-      />
+          )}
+          contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm, paddingBottom: insets.bottom + theme.spacing.xl }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing['4xl'], gap: theme.spacing.sm }}>
+              <Icon name="list" size={48} color={theme.colors.textTertiary} />
+              <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.lg, color: theme.colors.textSecondary, marginTop: theme.spacing.base }}>Kayıt Bulunamadı</Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={staffList}
+          renderItem={renderStaffItem}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={(
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>Yeni Personel Ekle</Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
+                  placeholder="Personel Adı Soyadı"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={newStaffName}
+                  onChangeText={setNewStaffName}
+                />
+                <Pressable style={[styles.addStaffBtn, { backgroundColor: theme.colors.accent }]} onPress={handleAddStaff}>
+                  <Icon name="plus" size={20} color="#fff" />
+                </Pressable>
+              </View>
+            </View>
+          )}
+          contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md, paddingBottom: insets.bottom + theme.spacing.xl }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing['4xl'], gap: theme.spacing.sm }}>
+              <Icon name="users" size={48} color={theme.colors.textTertiary} />
+              <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.lg, color: theme.colors.textSecondary, marginTop: theme.spacing.base }}>Rehber Boş</Text>
+            </View>
+          }
+        />
+      )}
 
       <AddTransactionModal
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
+        initialType="GİDER"
+        initialSubType="Personel Gideri"
       />
 
       {selectedTx && (
@@ -142,6 +230,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
   headerTitle: { fontSize: 18, fontWeight: '700' },
+  tabs: { flexDirection: 'row', padding: 4, marginHorizontal: 20, marginTop: 16, borderRadius: 12, marginBottom: 8 },
+  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
+  tabText: { fontSize: 14, fontWeight: '600' },
   rowContainer: { borderRadius: 10, marginBottom: 12 },
   rowContent: { flexDirection: 'row', alignItems: 'center', padding: 16 },
   rowIconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
@@ -151,6 +242,14 @@ const styles = StyleSheet.create({
   rowRight: { alignItems: 'flex-end' },
   rowAmount: { fontSize: 15, letterSpacing: -0.3, fontWeight: '600' },
   summaryCard: { borderRadius: 20, padding: 24, marginBottom: 24 },
+  staffCard: { borderRadius: 16, borderWidth: 1, marginBottom: 16 },
+  staffHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
+  staffIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  staffName: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  staffRole: { fontSize: 13 },
+  staffFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1 },
+  input: { flex: 1, height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, fontSize: 15 },
+  addStaffBtn: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }
 });
 
 export default PersonnelExpensesScreen;

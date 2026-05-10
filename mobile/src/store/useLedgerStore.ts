@@ -12,6 +12,7 @@ import {
 } from '../api/transactionService';
 import { useLogStore } from './useLogStore';
 import { useNotificationStore } from './useNotificationStore';
+import { useStaffStore } from './useStaffStore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -112,7 +113,7 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
           transactions: [created, ...state.transactions],
           totalIncome: newIncome,
           totalExpense: newExpense,
-          balance: newIncome - newExpense,
+          balance: state.balance + (created.type === 'INCOME' ? created.amount : -created.amount),
           isCreating: false,
         };
       });
@@ -166,6 +167,18 @@ export const useLedgerStore = create<LedgerState>((set, get) => ({
   deleteTransaction: async (id: string) => {
     set({ isLoading: true, error: null });
     try {
+      // Sync staff totalPaid if this was a personnel expense
+      const tx = get().transactions.find((t) => t._id === id);
+      if (tx?.category === 'Personel Gideri' && tx?.description) {
+        const { staffList, updateStaff } = useStaffStore.getState();
+        const staffName = tx.description.split(' kişisine')[0];
+        const staff = staffList.find((s) => s.name === staffName);
+        if (staff) {
+          const newTotal = Math.max(0, staff.totalPaid - tx.amount);
+          updateStaff(staff.id, { totalPaid: newTotal }).catch(() => {});
+        }
+      }
+
       await deleteTxApi(id);
       set((state) => ({
         transactions: state.transactions.filter((t) => t._id !== id),

@@ -57,9 +57,9 @@ const shared = {
 export const darkTheme = {
   ...shared,
   colors: {
-    primary: '#0F1623',        // Deeper dark bg
-    surface: '#1A2333',        // Slightly lighter surface
-    card: '#243044',           // Card bg
+    primary: '#0F172A',        // Slate 900
+    surface: '#1E293B',        // Slate 800
+    card: '#334155',           // Slate 700
     accent: '#3B82F6',         // Blue 500
     accentGradient: ['#3B82F6', '#2563EB'],
     success: '#10B981',        // Emerald 500
@@ -69,7 +69,7 @@ export const darkTheme = {
     textPrimary: '#F9FAFB',    // Gray 50
     textSecondary: '#CBD5E1',  // Slate 300 - daha iyi kontrast
     textTertiary: '#94A3B8',   // Slate 400
-    border: '#2D3F55',         // Koyu mavi-gri border
+    border: '#334155',         // Slate 700
     accentTransparent: 'rgba(59, 130, 246, 0.15)',
     successTransparent: 'rgba(16, 185, 129, 0.15)',
     dangerTransparent: 'rgba(239, 68, 68, 0.15)',

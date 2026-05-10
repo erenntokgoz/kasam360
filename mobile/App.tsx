@@ -17,7 +17,6 @@ function App(): React.JSX.Element {
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
   const { isDarkMode, hydrateTheme } = useThemeStore();
   const hydrateNotifications = useNotificationStore((s) => s.hydrateNotifications);
-  const hydrateContacts = useContactStore((s) => s.hydrateContacts);
   const hydrateSetup = useSetupStore((s) => s.hydrateSetup);
   const checkAndNotify = useRecurringStore((s) => s.checkAndNotify);
   const addNotification = useNotificationStore((s) => s.addNotification);
@@ -29,7 +28,7 @@ function App(): React.JSX.Element {
         await hydrateFromStorage();
         await hydrateTheme();
         await hydrateNotifications();
-        await hydrateContacts();
+        // Skip fetchContacts here, handle in screens to avoid auth issues during init
         await hydrateSetup();
         // Check recurring items and create notifications for due ones
         const dueItems = checkAndNotify();

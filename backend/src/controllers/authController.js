@@ -1,6 +1,10 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const Tenant = require('../models/Tenant');
+const Transaction = require('../models/Transaction');
+const Debt = require('../models/Debt');
+const AuditLog = require('../models/AuditLog');
+const Directory = require('../models/Directory');
 
 const SALT_ROUNDS = 12;
 const JWT_EXPIRES_IN = '30d';
@@ -36,13 +40,6 @@ const generateTokens = (tenantId) => {
 // @access  Public
 // ─────────────────────────────────────────────
 const register = async (req, res) => {
-  const { phone, password } = req.body || {};
-  if (!phone || !/^\+?[0-9]{10,15}$/.test(phone)) {
-    return res.status(400).json({ success: false, message: 'Geçerli bir telefon numarası girin.' });
-  }
-  if (!password || password.length < 6) {
-    return res.status(400).json({ success: false, message: 'Şifre en az 6 karakter olmalı.' });
-  }
   try {
     const { phone, password, businessName } = req.body;
 
@@ -211,9 +208,16 @@ const refresh = async (req, res) => {
       { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
     );
 
+    const newRefreshToken = jwt.sign(
+      { tenantId: decoded.tenantId },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+    );
+
     return res.status(200).json({
       success: true,
       token: accessToken,
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     return res.status(401).json({
@@ -223,4 +227,64 @@ const refresh = async (req, res) => {
   }
 };
 
-module.exports = { register, login, refresh };
+// ─────────────────────────────────────────────
+// @route   DELETE /api/auth/account
+// @access  Private
+// ─────────────────────────────────────────────
+const deleteAccount = async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+
+    // Hard delete all tenant data
+    await Transaction.deleteMany({ tenantId });
+    await Debt.deleteMany({ tenantId });
+    await AuditLog.deleteMany({ tenantId });
+    await Directory.deleteMany({ tenantId });
+    
+    // Finally delete the tenant
+    await Tenant.findByIdAndDelete(tenantId);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Account and all related data deleted successfully.',
+    });
+  } catch (error) {
+    console.error('[authController.deleteAccount]', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error during account deletion.',
+    });
+  }
+};
+
+const updateProfile = async (req, res) => {
+  try {
+    const { tenantId } = req;
+    const { businessName, password } = req.body;
+    const updates = {};
+    if (businessName && typeof businessName === 'string') {
+      updates.businessName = businessName.trim();
+    }
+    if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+      }
+      updates.password = await bcrypt.hash(password, SALT_ROUNDS);
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: 'Nothing to update.' });
+    }
+    const tenant = await Tenant.findByIdAndUpdate(tenantId, updates, { new: true });
+    if (!tenant) return res.status(404).json({ success: false, message: 'Tenant not found.' });
+    return res.status(200).json({
+      success: true,
+      message: 'Profile updated.',
+      tenant: { id: tenant._id, phone: tenant.phone, businessName: tenant.businessName, subscriptionStatus: tenant.subscriptionStatus },
+    });
+  } catch (error) {
+    console.error('[authController.updateProfile]', error);
+    return res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+};
+
+module.exports = { register, login, refresh, deleteAccount, updateProfile };

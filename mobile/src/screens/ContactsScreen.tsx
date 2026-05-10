@@ -41,8 +41,12 @@ const ContactsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
-  const { contacts, addContact } = useContactStore();
+  const { contacts, addContact, fetchContacts } = useContactStore();
   const [search, setSearch] = useState('');
+  
+  React.useEffect(() => {
+    fetchContacts();
+  }, [fetchContacts]);
   const [showAddInput, setShowAddInput] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -86,7 +90,7 @@ const ContactsScreen: React.FC = () => {
 
       <FlatList
         data={filteredContacts}
-        keyExtractor={(item) => item.name}
+        keyExtractor={(item) => item.id}
         renderItem={({ item }) => <ContactRow item={item} onPress={(c) => navigation.navigate('ContactDetail', { contactName: c.name })} />}
         ListHeaderComponent={(
           <View style={{ marginBottom: 20 }}>

@@ -11,22 +11,26 @@ import { useDebtStore } from '../store/useDebtStore';
 import { useTranslation } from 'react-i18next';
 import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { useContactStore } from '../store/useContactStore';
+import { useStaffStore } from '../store/useStaffStore';
 
 interface AddTransactionModalProps {
   visible: boolean;
   onClose: () => void;
+  initialType?: MainType;
+  initialSubType?: string;
 }
 
 type Step = 'TYPE' | 'AMOUNT' | 'SUBTYPE' | 'WHO' | 'DATE' | 'DESC';
-type MainType = 'BORÇ' | 'ALACAK' | 'GELİR' | 'GİDER';
+export type MainType = 'BORÇ' | 'ALACAK' | 'GELİR' | 'GİDER';
 
-const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose }) => {
+const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialType, initialSubType }) => {
   const { t } = useTranslation();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
   const { addTransaction, isCreating } = useLedgerStore();
   const { addDebt } = useDebtStore();
   const { contacts, addContact } = useContactStore();
+  const { staffList, addStaff, addPaymentToStaff } = useStaffStore();
 
   const [step, setStep] = useState<Step>('TYPE');
   const [mainType, setMainType] = useState<MainType | null>(null);
@@ -38,15 +42,15 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
 
   useEffect(() => {
     if (visible) {
-      setStep('TYPE');
-      setMainType(null);
+      setMainType(initialType || null);
+      setSubType(initialSubType || '');
+      setStep(initialType ? 'AMOUNT' : 'TYPE');
       setAmount('');
-      setSubType('');
       setWho('');
       setDate('');
       setDescription('');
     }
-  }, [visible]);
+  }, [visible, initialType, initialSubType]);
 
   const handleNext = () => {
     if (step === 'TYPE') {
@@ -62,8 +66,14 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       else setStep('DESC');
     } else if (step === 'WHO') {
       if (!who) return;
-      if (!contacts.find(c => c.name.toLowerCase() === who.trim().toLowerCase())) {
-        addContact(who.trim());
+      if (subType === 'Personel Gideri') {
+        if (!staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase())) {
+          addStaff(who.trim());
+        }
+      } else {
+        if (!contacts.find(c => c.name.toLowerCase() === who.trim().toLowerCase())) {
+          addContact(who.trim());
+        }
       }
       setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE');
     } else if (step === 'DATE') {
@@ -74,16 +84,22 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
   };
 
   const handleBack = () => {
-    if (step === 'AMOUNT') setStep('TYPE');
+    if (step === 'AMOUNT') {
+      if (initialType) onClose(); else setStep('TYPE');
+    }
     else if (step === 'SUBTYPE') setStep('AMOUNT');
     else if (step === 'WHO') {
-      if (mainType === 'GELİR' || mainType === 'GİDER') setStep('SUBTYPE');
+      if (mainType === 'GELİR' || mainType === 'GİDER') {
+        if (initialSubType) setStep('AMOUNT'); else setStep('SUBTYPE');
+      }
       else setStep('AMOUNT');
     }
     else if (step === 'DATE') setStep('WHO');
     else if (step === 'DESC') {
       if (subType === 'Personel Gideri') setStep('WHO');
-      else if (mainType === 'GELİR' || mainType === 'GİDER') setStep('SUBTYPE');
+      else if (mainType === 'GELİR' || mainType === 'GİDER') {
+        if (initialSubType) setStep('AMOUNT'); else setStep('SUBTYPE');
+      }
       else setStep('DATE');
     }
   };
@@ -113,6 +129,13 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           category: subType,
           description: finalDesc,
         });
+
+        if (subType === 'Personel Gideri' && who) {
+          const staff = useStaffStore.getState().staffList.find(s => s.name.toLowerCase() === who.toLowerCase());
+          if (staff) {
+            useStaffStore.getState().addPaymentToStaff(staff.id, cents);
+          }
+        }
       } else if (mainType === 'BORÇ') {
         await addDebt({
           entityName: who,
@@ -212,27 +235,56 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                   />
                 </View>
                 <ScrollView style={{ maxHeight: 200, marginBottom: 12 }}>
-                  {contacts.filter(c => c.name.toLowerCase().includes(who.toLowerCase())).map(c => (
-                    <Pressable
-                      key={c.name}
-                      style={[styles.contactItem, { backgroundColor: theme.colors.card }]}
-                      onPress={() => { setWho(c.name); setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE'); }}
-                    >
-                      <Icon name="user" size={16} color={theme.colors.textSecondary} />
-                      <Text style={{ color: theme.colors.textPrimary, fontWeight: '500' }}>{c.name}</Text>
-                    </Pressable>
-                  ))}
-                  {who.length > 0 && !contacts.find(c => c.name.toLowerCase() === who.toLowerCase()) && (
-                    <Pressable
-                      style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]}
-                      onPress={() => { 
-                        addContact(who);
-                        setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE');
-                      }}
-                    >
-                      <Icon name="user-plus" size={16} color={theme.colors.accent} />
-                      <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>Yeni Kişi Ekle ("{who}")</Text>
-                    </Pressable>
+                  {subType === 'Personel Gideri' ? (
+                    <>
+                      {staffList.filter(s => s.name.toLowerCase().includes(who.toLowerCase())).map(s => (
+                        <Pressable
+                          key={s.name}
+                          style={[styles.contactItem, { backgroundColor: theme.colors.card }]}
+                          onPress={() => { setWho(s.name); setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE'); }}
+                        >
+                          <Icon name="user" size={16} color={theme.colors.textSecondary} />
+                          <Text style={{ color: theme.colors.textPrimary, fontWeight: '500' }}>{s.name}</Text>
+                        </Pressable>
+                      ))}
+                      {who.length > 0 && !staffList.find(s => s.name.toLowerCase() === who.toLowerCase()) && (
+                        <Pressable
+                          style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]}
+                          onPress={() => { 
+                            addStaff(who);
+                            setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE');
+                          }}
+                        >
+                          <Icon name="user-plus" size={16} color={theme.colors.accent} />
+                          <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>Yeni Personel Ekle ("{who}")</Text>
+                        </Pressable>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {contacts.filter(c => c.name.toLowerCase().includes(who.toLowerCase())).map(c => (
+                        <Pressable
+                          key={c.name}
+                          style={[styles.contactItem, { backgroundColor: theme.colors.card }]}
+                          onPress={() => { setWho(c.name); setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE'); }}
+                        >
+                          <Icon name="user" size={16} color={theme.colors.textSecondary} />
+                          <Text style={{ color: theme.colors.textPrimary, fontWeight: '500' }}>{c.name}</Text>
+                        </Pressable>
+                      ))}
+                      {who.length > 0 && !contacts.find(c => c.name.toLowerCase() === who.toLowerCase()) && (
+                        <Pressable
+                          style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]}
+                          onPress={() => { 
+                            addContact(who);
+                            setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE');
+                          }}
+                        >
+                          <Icon name="user-plus" size={16} color={theme.colors.accent} />
+                          <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>Yeni Kişi Ekle ("{who}")</Text>
+                        </Pressable>
+                      )}
+                    </>
                   )}
                 </ScrollView>
                 <NextBtn onPress={handleNext} theme={theme} />

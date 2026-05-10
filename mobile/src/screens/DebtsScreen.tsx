@@ -52,15 +52,17 @@ export const PaymentModal: React.FC<{ visible: boolean; debt: any | null; onClos
             onChangeText={setInput} 
             autoFocus 
           />
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
-            <Pressable style={{ flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.card }} onPress={onClose}><Text style={{ color: theme.colors.textPrimary }}>Vazgeç</Text></Pressable>
-            <Pressable style={{ flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: accent }} onPress={() => handlePay(false)} disabled={isPaying}>
-              {isPaying ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>Öde</Text>}
+          <View style={{ gap: 12, marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Pressable style={{ flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.card }} onPress={onClose}><Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>Vazgeç</Text></Pressable>
+              <Pressable style={{ flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: accent }} onPress={() => handlePay(false)} disabled={isPaying}>
+                {isPaying ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '600' }}>Kısmi Öde</Text>}
+              </Pressable>
+            </View>
+            <Pressable style={{ height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.accentTransparent, borderWidth: 1, borderColor: theme.colors.accent }} onPress={() => handlePay(true)} disabled={isPaying}>
+              {isPaying ? <ActivityIndicator color={theme.colors.accent} /> : <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>Tamamını Kapat</Text>}
             </Pressable>
           </View>
-          <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => handlePay(true)}>
-            <Text style={{ color: theme.colors.accent }}>Tamamını Kapat</Text>
-          </Pressable>
         </View>
       </View>
     </Modal>
@@ -112,11 +114,14 @@ const DebtRow: React.FC<{ item: Debt; onPay: (d: Debt) => void }> = ({ item, onP
   );
 };
 
+import { useTranslation } from 'react-i18next';
+
 const DebtsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
+  const { t } = useTranslation();
   const { debts, isLoading, fetchDebts, summary } = useDebtStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [payTarget, setPayTarget] = useState<Debt | null>(null);
@@ -197,7 +202,11 @@ const DebtsScreen: React.FC = () => {
         refreshing={isLoading}
       />
 
-      <AddTransactionModal visible={showAddModal} onClose={() => { setShowAddModal(false); fetchDebts(1); }} />
+      <AddTransactionModal 
+        visible={showAddModal} 
+        onClose={() => { setShowAddModal(false); fetchDebts(1); }} 
+        initialType="BORÇ"
+      />
       {payTarget && (
         <PaymentModal 
           visible={!!payTarget} 

@@ -12,7 +12,7 @@ import { formatDate } from '../utils/format';
 export const NotificationsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { isDarkMode } = useThemeStore();
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
   const { notifications, markAsRead, markAllAsRead, clearAll } = useNotificationStore();
 

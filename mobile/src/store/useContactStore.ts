@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { getItem, setItem, StorageKeys } from '../utils/storage';
+import { getDirectory, createEntry, updateEntry, deleteEntry, DirectoryEntry } from '../api/directoryService';
 
 export interface ContactInfo {
+  id: string;
   name: string;
   lastTransactionDate?: string;
   totalBalance?: number;
@@ -10,21 +11,20 @@ export interface ContactInfo {
 interface ContactState {
   contacts: ContactInfo[];
   addContact: (name: string, date?: string, balance?: number) => Promise<void>;
-  removeContact: (name: string) => Promise<void>;
-  updateContact: (name: string, data: Partial<ContactInfo>) => Promise<void>;
-  hydrateContacts: () => Promise<void>;
+  removeContact: (id: string) => Promise<void>;
+  updateContact: (id: string, data: Partial<ContactInfo>) => Promise<void>;
+  fetchContacts: () => Promise<void>;
 }
 
 export const useContactStore = create<ContactState>((set, get) => ({
   contacts: [],
-  hydrateContacts: async () => {
+  
+  fetchContacts: async () => {
     try {
-      const stored = await getItem(StorageKeys.CONTACTS);
-      if (stored) {
-        set({ contacts: JSON.parse(stored) });
-      }
-    } catch {
-      set({ contacts: [] });
+      const data = await getDirectory('CONTACT');
+      set({ contacts: data.map(d => ({ id: d._id, name: d.name, totalBalance: d.totalBalance, lastTransactionDate: d.lastTransactionDate })) });
+    } catch (error) {
+      console.error('[useContactStore.fetchContacts]', error);
     }
   },
   
@@ -33,35 +33,38 @@ export const useContactStore = create<ContactState>((set, get) => ({
     if (!trimmedName) return;
     
     const { contacts } = get();
-    const existingIndex = contacts.findIndex((c) => c.name === trimmedName);
-    
-    let updated: ContactInfo[];
-    if (existingIndex >= 0) {
-      updated = [...contacts];
-      updated[existingIndex] = {
-        ...updated[existingIndex],
-        ...(date ? { lastTransactionDate: date } : {}),
-        ...(balance !== undefined ? { totalBalance: balance } : {})
-      };
-    } else {
-      updated = [...contacts, { name: trimmedName, lastTransactionDate: date, totalBalance: balance }];
+    // Try to find locally first to avoid unnecessary requests if exact match
+    if (contacts.find((c) => c.name.toLowerCase() === trimmedName.toLowerCase())) {
+      return;
     }
     
-    await setItem(StorageKeys.CONTACTS, JSON.stringify(updated));
-    set({ contacts: updated });
+    try {
+      const newEntry = await createEntry({ name: trimmedName, type: 'CONTACT', lastTransactionDate: date, totalBalance: balance });
+      set({ contacts: [...contacts, { id: newEntry._id, name: newEntry.name, totalBalance: newEntry.totalBalance, lastTransactionDate: newEntry.lastTransactionDate }] });
+    } catch (error) {
+      console.error('[useContactStore.addContact]', error);
+    }
   },
 
-  updateContact: async (name: string, data: Partial<ContactInfo>) => {
-    const updated = get().contacts.map((c) => 
-      c.name === name ? { ...c, ...data } : c
-    );
-    await setItem(StorageKeys.CONTACTS, JSON.stringify(updated));
-    set({ contacts: updated });
+  updateContact: async (id: string, data: Partial<ContactInfo>) => {
+    try {
+      await updateEntry(id, data);
+      const updated = get().contacts.map((c) => 
+        c.id === id ? { ...c, ...data } : c
+      );
+      set({ contacts: updated });
+    } catch (error) {
+      console.error('[useContactStore.updateContact]', error);
+    }
   },
 
-  removeContact: async (name: string) => {
-    const updated = get().contacts.filter((contact) => contact.name !== name);
-    await setItem(StorageKeys.CONTACTS, JSON.stringify(updated));
-    set({ contacts: updated });
+  removeContact: async (id: string) => {
+    try {
+      await deleteEntry(id);
+      const updated = get().contacts.filter((contact) => contact.id !== id);
+      set({ contacts: updated });
+    } catch (error) {
+      console.error('[useContactStore.removeContact]', error);
+    }
   },
 }));

@@ -13,6 +13,7 @@ export const StorageKeys = {
   REMEMBER_ME: 'auth.rememberMe',
   PHONE_NUMBER: 'auth.phoneNumber',
   CONTACTS: 'app.contacts',
+  STAFF: 'app.staff',
 } as const;
 
 export type StorageKey = (typeof StorageKeys)[keyof typeof StorageKeys];

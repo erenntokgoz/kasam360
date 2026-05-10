@@ -13,7 +13,7 @@ const SettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   
-  const { user, logout, updateProfile, isLoading: isAuthLoading } = useAuthStore();
+  const { user, logout, updateProfile, deleteAccount, isLoading: isAuthLoading } = useAuthStore();
   const { toggleTheme, isDarkMode } = useThemeStore();
   const { i18n } = useTranslation();
   const theme = getTheme(isDarkMode);
@@ -39,6 +39,17 @@ const SettingsScreen: React.FC = () => {
       { text: 'İptal', style: 'cancel' },
       { text: 'Çıkış', style: 'destructive', onPress: logout },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'DİKKAT: Hesabı Sil',
+      'Hesabınızı ve tüm kayıtlarınızı (borçlar, işlemler, personeller vb.) kalıcı olarak silmek istediğinize emin misiniz? Bu işlem GERİ ALINAMAZ.',
+      [
+        { text: 'İptal', style: 'cancel' },
+        { text: 'Kalıcı Olarak Sil', style: 'destructive', onPress: deleteAccount },
+      ]
+    );
   };
 
   return (
@@ -104,6 +115,11 @@ const SettingsScreen: React.FC = () => {
         <Pressable style={[styles.logoutBtn, { backgroundColor: theme.colors.surface }]} onPress={handleLogout}>
           <Icon name="log-out" size={20} color={theme.colors.danger} />
           <Text style={[styles.logoutText, { color: theme.colors.danger }]}>Çıkış Yap</Text>
+        </Pressable>
+
+        <Pressable style={[styles.logoutBtn, { backgroundColor: theme.colors.dangerTransparent, marginTop: 16, marginBottom: 40 }]} onPress={handleDeleteAccount}>
+          <Icon name="trash-2" size={20} color={theme.colors.danger} />
+          <Text style={[styles.logoutText, { color: theme.colors.danger }]}>Hesabımı Kalıcı Olarak Sil</Text>
         </Pressable>
       </ScrollView>
 

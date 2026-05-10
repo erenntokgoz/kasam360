@@ -9,6 +9,8 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useLedgerStore } from '../store/useLedgerStore';
 import { scanReceipt } from '../api/ocrService';
 import type { Transaction } from '../api/transactionService';
+import { useContactStore } from '../store/useContactStore';
+import { useStaffStore } from '../store/useStaffStore';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import FilterBar from '../components/FilterBar';
@@ -78,20 +80,30 @@ const SummaryBar: React.FC<{ balance: number; totalIn: number; totalOut: number;
   );
 };
 
+import { useTranslation } from 'react-i18next';
+
 const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { t } = useTranslation();
   const [isScanning, setIsScanning] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const { transactions, totalIncome, totalExpense, balance, isLoading, fetchTransactions, addTransaction } = useLedgerStore();
+  const fetchContacts = useContactStore(s => s.fetchContacts);
+  const fetchStaff = useStaffStore(s => s.fetchStaff);
+  
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
 
   const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
   const [contactFilter, setContactFilter] = useState<string | null>(null);
 
-  useEffect(() => { fetchTransactions(1).catch(() => { }); }, [fetchTransactions]);
+  useEffect(() => { 
+    fetchTransactions(1).catch(() => { });
+    fetchContacts();
+    fetchStaff();
+  }, [fetchTransactions, fetchContacts, fetchStaff]);
 
   const handleScanReceipt = useCallback(async () => {
     try {

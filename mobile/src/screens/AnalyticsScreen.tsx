@@ -10,11 +10,14 @@ import { Transaction } from '../api/transactionService';
 import { getAuditLogs, AuditLog } from '../api/auditLogService';
 import { formatCurrency, formatDate } from '../utils/format';
 
+import { useTranslation } from 'react-i18next';
+
 const AnalyticsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
+  const { t } = useTranslation();
   const { transactions, isLoading, fetchTransactions, pagination } = useLedgerStore();
   const totalTransactions = pagination?.total || 0;
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
