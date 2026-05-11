@@ -21,7 +21,8 @@ export const useContactStore = create<ContactState>((set, get) => ({
   
   fetchContacts: async () => {
     try {
-      const data = await getDirectory('CONTACT');
+      // Tüm rehber girişlerini çekiyoruz (CONTACT + STAFF)
+      const data = await getDirectory();
       set({ contacts: data.map(d => ({ id: d._id, name: d.name, totalBalance: d.totalBalance, lastTransactionDate: d.lastTransactionDate })) });
     } catch (error) {
       console.error('[useContactStore.fetchContacts]', error);

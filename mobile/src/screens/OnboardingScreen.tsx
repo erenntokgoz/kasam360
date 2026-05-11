@@ -37,7 +37,7 @@ const OnboardingScreen: React.FC = () => {
   ];
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const { setSetupComplete } = useSetupStore();
+  const { setOnboardingSeen } = useSetupStore();
   const insets = useSafeAreaInsets();
 
   const navigation = useNavigation<any>();
@@ -48,7 +48,8 @@ const OnboardingScreen: React.FC = () => {
     setCurrentIndex(Math.round(index));
   };
 
-  const handleStart = () => {
+  const handleStart = async () => {
+    await setOnboardingSeen();
     navigation.navigate('Login');
   };
 

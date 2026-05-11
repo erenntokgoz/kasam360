@@ -110,7 +110,7 @@ const AnalyticsScreen: React.FC = () => {
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Sistem Kayıtları</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Analiz & Kayıtlar</Text>
         <View style={{ width: 24 }} />
       </View>
       <FlatList
@@ -119,6 +119,21 @@ const AnalyticsScreen: React.FC = () => {
         renderItem={renderItem}
         contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
         ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.accent }]} />}
+        ListHeaderComponent={() => (
+          <View style={{ marginBottom: 24 }}>
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+              <View style={{ flex: 1, backgroundColor: theme.colors.surface, padding: 16, borderRadius: 20 }}>
+                <Text style={{ fontSize: 12, color: theme.colors.textTertiary, marginBottom: 4 }}>İŞLEM SAYISI</Text>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary }}>{totalTransactions}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: theme.colors.surface, padding: 16, borderRadius: 20 }}>
+                <Text style={{ fontSize: 12, color: theme.colors.textTertiary, marginBottom: 4 }}>AUDIT KAYDI</Text>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.accent }}>{auditLogs.length}</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.textSecondary, letterSpacing: 1 }}>GEÇMİŞ AKTİVİTELER</Text>
+          </View>
+        )}
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={renderFooter}
         refreshControl={

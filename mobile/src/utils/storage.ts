@@ -9,6 +9,7 @@ export const StorageKeys = {
   THEME: 'theme.mode',
   NOTIFICATIONS: 'notifications.settings',
   SETUP_COMPLETE: 'setup.complete',
+  ONBOARDING_SEEN: 'onboarding.seen',
   LANGUAGE: 'app.language',
   REMEMBER_ME: 'auth.rememberMe',
   PHONE_NUMBER: 'auth.phoneNumber',

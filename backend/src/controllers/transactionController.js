@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 const Tenant = require('../models/Tenant');
+const Debt = require('../models/Debt');
 const AuditLog = require('../models/AuditLog');
 
 /**
@@ -80,6 +81,24 @@ const getTransactions = async (req, res) => {
       if (t._id === 'EXPENSE') totalExpense = t.sum;
     }
 
+    // Calculate Debts and Receivables for summary
+    const debtTotals = await Debt.aggregate([
+      { $match: { tenantId: tenantObjectId, isDeleted: false, status: { $ne: 'PAID' } } },
+      {
+        $group: {
+          _id: '$type',
+          sum: { $sum: '$remainingAmount' },
+        },
+      },
+    ]);
+
+    let totalDebt = 0;
+    let totalReceivable = 0;
+    for (const d of debtTotals) {
+      if (d._id === 'TAKEN') totalDebt = d.sum;
+      if (d._id === 'GIVEN') totalReceivable = d.sum;
+    }
+
     return res.status(200).json({
       success: true,
       data: {
@@ -94,8 +113,8 @@ const getTransactions = async (req, res) => {
           totalIncome,   // integer cents
           totalExpense,  // integer cents
           balance: totalIncome - totalExpense + openingBalance,
-          totalDebt: 0,
-          totalReceivable: 0,
+          totalDebt,
+          totalReceivable,
         },
       },
     });
@@ -267,28 +286,58 @@ const updateTransaction = async (req, res) => {
 // @access  Private (JWT)
 // ─────────────────────────────────────────────
 const deleteTransaction = async (req, res) => {
+  const session = await mongoose.startSession();
   try {
     const { tenantId } = req;
     const { id } = req.params;
 
-    const transaction = await Transaction.findOne({ _id: id, tenantId });
-    if (!transaction || transaction.isDeleted) {
-      return res.status(404).json({ success: false, message: 'Transaction not found' });
-    }
+    let message = 'Transaction deleted';
 
-    transaction.isDeleted = true;
-    await transaction.save();
+    await session.withTransaction(async () => {
+      const transaction = await Transaction.findOne({ _id: id, tenantId }).session(session);
+      if (!transaction || transaction.isDeleted) {
+        throw Object.assign(new Error('Transaction not found'), { httpStatus: 404 });
+      }
 
-    await AuditLog.create({
-      tenantId,
-      action: 'DELETE',
-      entityType: 'TRANSACTION',
-      entityId: transaction._id,
-      changes: { deletedRecord: transaction.toObject() },
+      // ── Handle Debt Rollback ───────────────────────────────────────────────
+      if (transaction.relatedType === 'DEBT' && transaction.relatedId) {
+        const debt = await Debt.findOne({ _id: transaction.relatedId, tenantId }).session(session);
+        if (debt) {
+          const isInitial = ['Borç Verildi', 'Borç Alındı'].includes(transaction.category);
+          
+          if (isInitial) {
+            // If the initial debt record transaction is deleted, delete the debt too
+            debt.isDeleted = true;
+            message = 'Transaction and associated Debt record deleted';
+          } else {
+            // If it's a payment, roll back the amount
+            debt.remainingAmount += transaction.amount;
+            debt.status = debt.remainingAmount >= debt.totalAmount ? 'PENDING' : 'PARTIAL';
+            message = 'Transaction deleted and Debt balance restored';
+          }
+          await debt.save({ session });
+        }
+      }
+
+      transaction.isDeleted = true;
+      await transaction.save({ session });
+
+      await AuditLog.create([{
+        tenantId,
+        action: 'DELETE',
+        entityType: 'TRANSACTION',
+        entityId: transaction._id,
+        changes: { deletedRecord: transaction.toObject() },
+      }], { session });
     });
 
-    return res.status(200).json({ success: true, message: 'Transaction deleted' });
+    session.endSession();
+    return res.status(200).json({ success: true, message });
   } catch (error) {
+    session.endSession();
+    if (error.httpStatus) {
+      return res.status(error.httpStatus).json({ success: false, message: error.message });
+    }
     console.error('[transactionController.deleteTransaction]', error);
     return res.status(500).json({ success: false, message: 'Internal server error deleting transaction.' });
   }

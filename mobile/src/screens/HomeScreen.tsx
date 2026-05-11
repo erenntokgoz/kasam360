@@ -41,7 +41,14 @@ const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item, onPres
   );
 });
 
-const SummaryBar: React.FC<{ balance: number; totalIn: number; totalOut: number; onAdd: () => void }> = ({ balance, totalIn, totalOut, onAdd }) => {
+const SummaryBar: React.FC<{ 
+  balance: number; 
+  totalIn: number; 
+  totalOut: number; 
+  totalDebt: number; 
+  totalReceivable: number; 
+  onAdd: () => void 
+}> = ({ balance, totalIn, totalOut, totalDebt, totalReceivable, onAdd }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   return (
@@ -68,6 +75,26 @@ const SummaryBar: React.FC<{ balance: number; totalIn: number; totalOut: number;
             </View>
           </View>
         </View>
+
+        <View style={[styles.summaryDividerH, { backgroundColor: theme.colors.border }]} />
+
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryMetric}>
+            <Icon name="arrow-down-left" size={12} color={theme.colors.successLight} style={{ marginRight: 6 }} />
+            <View>
+              <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Alacak</Text>
+              <Text style={[styles.summaryMetricValue, { color: theme.colors.successLight, fontSize: 13 }]}>{formatCurrency(totalReceivable)}</Text>
+            </View>
+          </View>
+          <View style={[styles.summaryDivider, { backgroundColor: theme.colors.border }]} />
+          <View style={styles.summaryMetric}>
+            <Icon name="arrow-up-right" size={12} color={theme.colors.dangerLight} style={{ marginRight: 6 }} />
+            <View>
+              <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Borç</Text>
+              <Text style={[styles.summaryMetricValue, { color: theme.colors.dangerLight, fontSize: 13 }]}>{formatCurrency(totalDebt)}</Text>
+            </View>
+          </View>
+        </View>
       </View>
       
       <AddCard 
@@ -89,7 +116,7 @@ const HomeScreen: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-  const { transactions, totalIncome, totalExpense, balance, isLoading, fetchTransactions, addTransaction } = useLedgerStore();
+  const { transactions, totalIncome, totalExpense, totalDebt, totalReceivable, balance, isLoading, fetchTransactions, addTransaction } = useLedgerStore();
   const fetchContacts = useContactStore(s => s.fetchContacts);
   const fetchStaff = useStaffStore(s => s.fetchStaff);
   
@@ -154,7 +181,14 @@ const HomeScreen: React.FC = () => {
         keyExtractor={(item) => item._id}
         ListHeaderComponent={(
           <View>
-            <SummaryBar balance={balance} totalIn={totalIncome} totalOut={totalExpense} onAdd={() => setShowAddModal(true)} />
+            <SummaryBar 
+              balance={balance} 
+              totalIn={totalIncome} 
+              totalOut={totalExpense} 
+              totalDebt={totalDebt}
+              totalReceivable={totalReceivable}
+              onAdd={() => setShowAddModal(true)} 
+            />
             <FilterBar 
               onDateChange={(start, end) => setDateFilter({ start, end })}
               onContactChange={setContactFilter}
@@ -194,15 +228,13 @@ const styles = StyleSheet.create({
   headerLogo: { width: 120, height: 30 },
   listContent: { paddingHorizontal: 20, paddingTop: 16 },
   summaryCard: { borderRadius: 20, padding: 24, marginBottom: 24 },
-  summaryBalanceSection: { alignItems: 'center', marginBottom: 20 },
+  summaryBalanceSection: { marginBottom: 16, alignItems: 'center' },
   summaryLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  summaryBalance: { fontSize: 32, fontWeight: '700', marginTop: 4 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
-  summaryMetric: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  summaryMetricLabel: { fontSize: 12 },
-  summaryMetricValue: { fontSize: 16, fontWeight: '600' },
-  summaryDivider: { width: 1, height: 30 },
+  summaryBalance: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  summaryRow: { flexDirection: 'row', alignItems: 'center' },
+  summaryMetric: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  summaryDivider: { width: 1, height: 24, marginHorizontal: 16 },
+  summaryDividerH: { height: 1, marginVertical: 12, opacity: 0.5 },
   rowContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
   rowIconCircle: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   rowMiddle: { flex: 1 },

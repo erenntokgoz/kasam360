@@ -3,13 +3,20 @@ import { View, Text, StyleSheet, FlatList, Pressable, StatusBar } from 'react-na
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
+import Share from 'react-native-share';
 import { useTranslation } from 'react-i18next';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useDebtStore } from '../store/useDebtStore';
+import { useLedgerStore } from '../store/useLedgerStore';
 import type { Debt } from '../api/debtService';
+import type { Transaction } from '../api/transactionService';
 import { PaymentModal } from './DebtsScreen';
 import { formatCurrency, formatDate } from '../utils/format';
+import TransactionDetailModal from '../components/TransactionDetailModal';
+import DebtDetailModal from '../components/DebtDetailModal';
+import AddTransactionModal from '../components/AddTransactionModal';
+import AddCard from '../components/AddCard';
 
 type ParamList = {
   ContactDetail: { contactName: string };
@@ -27,12 +34,17 @@ const ContactDetailScreen: React.FC = () => {
   
   const { contactName } = route.params;
   const { debts, fetchDebts } = useDebtStore();
+  const { transactions, fetchTransactions } = useLedgerStore();
   
   const [payTarget, setPayTarget] = useState<Debt | null>(null);
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     fetchDebts(1).catch(() => {});
-  }, [fetchDebts]);
+    fetchTransactions(1).catch(() => {});
+  }, [fetchDebts, fetchTransactions]);
 
   const contactDebts = useMemo(() => {
     return debts
@@ -44,10 +56,16 @@ const ContactDetailScreen: React.FC = () => {
       });
   }, [debts, contactName]);
 
+  const contactTransactions = useMemo(() => {
+    return transactions
+      .filter((t: Transaction) => t.description?.includes(contactName) || t.category?.includes(contactName))
+      .sort((a: Transaction, b: Transaction) => new Date(b.transactionDate || b.createdAt).getTime() - new Date(a.transactionDate || a.createdAt).getTime());
+  }, [transactions, contactName]);
+
   const { totalGiven, totalTaken, netStatus } = useMemo(() => {
     let given = 0;
     let taken = 0;
-    contactDebts.forEach(d => {
+    contactDebts.forEach((d: Debt) => {
       if (d.type === 'GIVEN') given += d.remainingAmount;
       if (d.type === 'TAKEN') taken += d.remainingAmount;
     });
@@ -58,46 +76,94 @@ const ContactDetailScreen: React.FC = () => {
     };
   }, [contactDebts]);
 
-  const renderItem = useCallback(({ item, index }: { item: Debt; index: number }) => {
-    const isGiven = item.type === 'GIVEN';
-    const accent = isGiven ? theme.colors.successLight : theme.colors.dangerLight;
-    const iconBg = isGiven ? theme.colors.successTransparent : theme.colors.dangerTransparent;
-    const paid = item.status === 'PAID';
+  const combinedData = useMemo(() => {
+    const list: any[] = [];
+    contactDebts.forEach((d: Debt) => list.push({ ...d, rowType: 'DEBT' }));
+    contactTransactions.forEach((t: Transaction) => list.push({ ...t, rowType: 'TX' }));
+    return list.sort((a, b) => {
+      const dateA = new Date(a.transactionDate || a.createdAt || a.dueDate || 0).getTime();
+      const dateB = new Date(b.transactionDate || b.createdAt || b.dueDate || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [contactDebts, contactTransactions]);
 
-    return (
-      <View style={styles.rowWrap}>
-        <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
-          <Icon name={isGiven ? 'arrow-down-left' : 'arrow-up-right'} size={16} color={accent} />
-        </View>
-        <View style={styles.rowMid}>
-          <Text style={[styles.rowDesc, { color: theme.colors.textPrimary }]} numberOfLines={1}>
-            {isGiven ? t('debts.typeGiven') : t('debts.typeTaken')}
-          </Text>
-          <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>{formatDate(item.createdAt || item.dueDate)}</Text>
-        </View>
-        <View style={styles.rowRight}>
-          <Text style={[styles.rowRemaining, { color: paid ? theme.colors.textTertiary : accent }]}>
-            {formatCurrency(item.remainingAmount)}
-          </Text>
-          <Text style={[styles.rowTotal, { color: theme.colors.textTertiary }]}>/ {formatCurrency(item.totalAmount)}</Text>
-          {paid && <View style={[styles.paidBadge, { backgroundColor: theme.colors.successTransparent }]}><Text style={styles.paidText}>{t('debts.paid')}</Text></View>}
-        </View>
-        
-        {!paid && (
-          <Pressable 
-            style={[styles.payBtn, { backgroundColor: accent }]}
-            onPress={() => setPayTarget(item)}
-          >
-            <Text style={styles.payBtnText}>{t('paymentModal.payFull')}</Text>
-          </Pressable>
-        )}
-      </View>
-    );
-  }, [t]);
+  const renderItem = useCallback(({ item }: { item: any }) => {
+    if (item.rowType === 'DEBT') {
+      const isGiven = item.type === 'GIVEN';
+      const accent = isGiven ? theme.colors.successLight : theme.colors.dangerLight;
+      const iconBg = isGiven ? theme.colors.successTransparent : theme.colors.dangerTransparent;
+      const paid = item.status === 'PAID';
+
+      return (
+        <Pressable style={styles.rowWrap} onPress={() => setSelectedDebt(item)}>
+          <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
+            <Icon name={isGiven ? 'arrow-down-left' : 'arrow-up-right'} size={16} color={accent} />
+          </View>
+          <View style={styles.rowMid}>
+            <Text style={[styles.rowDesc, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+              {isGiven ? t('debts.typeGiven') : t('debts.typeTaken')}
+            </Text>
+            <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>{formatDate(item.createdAt || item.dueDate)}</Text>
+          </View>
+          <View style={styles.rowRight}>
+            <Text style={[styles.rowRemaining, { color: paid ? theme.colors.textTertiary : accent }]}>
+              {formatCurrency(item.remainingAmount)}
+            </Text>
+            <Text style={[styles.rowTotal, { color: theme.colors.textTertiary }]}>/ {formatCurrency(item.totalAmount)}</Text>
+          </View>
+          
+          {!paid && (
+            <Pressable 
+              style={[styles.payBtn, { backgroundColor: accent }]}
+              onPress={() => setPayTarget(item)}
+            >
+              <Text style={styles.payBtnText}>{t('paymentModal.payFull')}</Text>
+            </Pressable>
+          )}
+        </Pressable>
+      );
+    } else {
+      const isIncome = item.type === 'INCOME';
+      const accent = isIncome ? theme.colors.success : theme.colors.danger;
+      return (
+        <Pressable style={styles.rowWrap} onPress={() => setSelectedTx(item)}>
+          <View style={[styles.rowIcon, { backgroundColor: theme.colors.card }]}>
+            <Icon name={isIncome ? 'plus' : 'minus'} size={14} color={accent} />
+          </View>
+          <View style={styles.rowMid}>
+            <Text style={[styles.rowDesc, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+              {item.category || (isIncome ? 'Gelir' : 'Gider')}
+            </Text>
+            <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>{formatDate(item.transactionDate || item.createdAt)}</Text>
+          </View>
+          <View style={styles.rowRight}>
+            <Text style={[styles.rowRemaining, { color: accent }]}>
+              {isIncome ? '+' : '-'}{formatCurrency(item.amount)}
+            </Text>
+            <Text style={[styles.rowTotal, { color: theme.colors.textTertiary }]}>{item.method}</Text>
+          </View>
+        </Pressable>
+      );
+    }
+  }, [theme, t]);
+
+  const handleShare = async () => {
+    const message = `Kasam360 Özet: ${contactName}\n\n` +
+      `Toplam Alacak: ${formatCurrency(totalGiven)}\n` +
+      `Toplam Borç: ${formatCurrency(totalTaken)}\n` +
+      `-------------------\n` +
+      `Net Durum: ${netStatus >= 0 ? 'Alacaklıyız' : 'Borçluyuz'} (${formatCurrency(Math.abs(netStatus))})`;
+    
+    try {
+      await Share.open({ message });
+    } catch (err) {
+      // User cancelled or error
+    }
+  };
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.primary} />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
       
       {/* Header */}
       <View style={styles.header}>
@@ -105,7 +171,9 @@ const ContactDetailScreen: React.FC = () => {
           <Icon name="arrow-left" size={22} color={theme.colors.textPrimary} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]} numberOfLines={1}>{contactName}</Text>
-        <View style={{ width: 22 }} />
+        <Pressable hitSlop={12} onPress={handleShare}>
+          <Icon name="share-2" size={22} color={theme.colors.accent} />
+        </Pressable>
       </View>
 
       {/* Summary Card */}
@@ -133,23 +201,53 @@ const ContactDetailScreen: React.FC = () => {
       </View>
 
       {/* Transactions List */}
-      <Text style={[styles.listTitle, { color: theme.colors.textPrimary }]}>{t('analytics.recentTransactions')}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginBottom: 16 }}>
+        <Text style={[styles.listTitle, { color: theme.colors.textPrimary, paddingHorizontal: 0, marginBottom: 0 }]}>İşlemler & Borçlar</Text>
+        <Pressable 
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          onPress={() => setShowAddModal(true)}
+        >
+          <Icon name="plus-circle" size={20} color={theme.colors.accent} />
+          <Text style={{ color: theme.colors.accent, fontWeight: '600', fontSize: 13 }}>İşlem Ekle</Text>
+        </Pressable>
+      </View>
       <FlatList
-        data={contactDebts}
+        data={combinedData}
         renderItem={renderItem}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item, index) => item._id || index.toString()}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + theme.spacing['2xl'] }]}
         showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.accent }]} />}
+        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <Icon name="inbox" size={48} color={theme.colors.textTertiary} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.textSecondary }]}>{t('debts.noDebtsTitle')}</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.textSecondary }]}>Henüz bir işlem kaydı bulunmuyor.</Text>
           </View>
         }
       />
 
       <PaymentModal visible={!!payTarget} debt={payTarget} onClose={() => setPayTarget(null)} />
+      {selectedTx && (
+        <TransactionDetailModal 
+          visible={!!selectedTx} 
+          transaction={selectedTx} 
+          onClose={() => setSelectedTx(null)} 
+        />
+      )}
+      {selectedDebt && (
+        <DebtDetailModal 
+          visible={!!selectedDebt} 
+          debt={selectedDebt} 
+          onClose={() => setSelectedDebt(null)} 
+          onPay={setPayTarget}
+        />
+      )}
+      <AddTransactionModal 
+        visible={showAddModal} 
+        onClose={() => { setShowAddModal(false); fetchDebts(1); fetchTransactions(1); }} 
+        initialType="BORÇ"
+        initialWho={contactName}
+      />
     </View>
   );
 };

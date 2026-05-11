@@ -6,6 +6,8 @@ import {
   removeItem,
   StorageKeys,
 } from '../utils/storage';
+import { useLedgerStore } from './useLedgerStore';
+import { useDebtStore } from './useDebtStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -152,6 +154,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     clearAuth();
     set({ user: null, token: null, refreshToken: null, error: null });
+    // Reset data stores so a subsequent login won't briefly show stale data
+    useLedgerStore.getState().reset();
+    useDebtStore.getState().reset();
   },
 
   /**

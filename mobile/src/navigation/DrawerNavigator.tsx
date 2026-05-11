@@ -6,7 +6,7 @@ import HomeScreen from '../screens/HomeScreen';
 import DebtsScreen from '../screens/DebtsScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
-import RecurringsScreen from '../screens/RecurringsScreen';
+import StaffExpensesScreen from '../screens/StaffExpensesScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import TransactionsScreen from '../screens/TransactionsScreen';
 import ContactsScreen from '../screens/ContactsScreen';
@@ -31,9 +31,9 @@ const DrawerNavigator = () => {
         drawerInactiveTintColor: theme.colors.textSecondary,
         drawerLabelStyle: { marginLeft: -16, fontSize: 15, fontWeight: '500' },
         drawerStyle: { width: 280, backgroundColor: 'transparent' },
-        drawerType: 'slide',
-        overlayColor: 'transparent',
-        sceneStyle: { backgroundColor: 'transparent' },
+        drawerType: 'front', // 'slide' yerine 'front' kullanarak ana ekranın kaymasını ve gölgelenmesini önledik
+        overlayColor: 'rgba(0,0,0,0.5)', // Drawer açıkken hafif bir karartma (standart)
+        sceneStyle: { backgroundColor: theme.colors.primary },
       }}
     >
       <Drawer.Screen
@@ -77,8 +77,8 @@ const DrawerNavigator = () => {
         }}
       />
       <Drawer.Screen
-        name="Recurrings"
-        component={RecurringsScreen}
+        name="StaffExpenses"
+        component={StaffExpensesScreen}
         options={{
           drawerLabel: 'Personel Giderleri',
           drawerIcon: ({ color }) => <Icon name="briefcase" size={20} color={color} />,

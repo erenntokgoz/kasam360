@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, Modal, Pressable, TextInput,
   Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator
 } from 'react-native';
+import DatePicker from 'react-native-date-picker';
 import Icon from 'react-native-vector-icons/Feather';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
@@ -18,12 +19,13 @@ interface AddTransactionModalProps {
   onClose: () => void;
   initialType?: MainType;
   initialSubType?: string;
+  initialWho?: string;
 }
 
-type Step = 'TYPE' | 'AMOUNT' | 'SUBTYPE' | 'WHO' | 'DATE' | 'DESC';
+type Step = 'TYPE' | 'AMOUNT' | 'SUBTYPE' | 'METHOD' | 'WHO' | 'DATE' | 'DESC';
 export type MainType = 'BORÇ' | 'ALACAK' | 'GELİR' | 'GİDER';
 
-const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialType, initialSubType }) => {
+const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialType, initialSubType, initialWho }) => {
   const { t } = useTranslation();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
@@ -37,7 +39,8 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
   const [amount, setAmount] = useState('');
   const [subType, setSubType] = useState(''); // POS, CASH, IBAN or Business, Personnel, Personal
   const [who, setWho] = useState('');
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [method, setMethod] = useState<'CASH' | 'POS' | 'IBAN'>('CASH');
   const [description, setDescription] = useState('');
 
   useEffect(() => {
@@ -46,11 +49,12 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       setSubType(initialSubType || '');
       setStep(initialType ? 'AMOUNT' : 'TYPE');
       setAmount('');
-      setWho('');
-      setDate('');
+      setWho(initialWho || '');
+      setDate(new Date());
+      setMethod('CASH');
       setDescription('');
     }
-  }, [visible, initialType, initialSubType]);
+  }, [visible, initialType, initialSubType, initialWho]);
 
   const handleNext = () => {
     if (step === 'TYPE') {
@@ -58,12 +62,13 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       setStep('AMOUNT');
     } else if (step === 'AMOUNT') {
       if (!amount) return;
-      if (mainType === 'GELİR' || mainType === 'GİDER') setStep('SUBTYPE');
+      if (mainType === 'GELİR') setStep('METHOD');
+      else if (mainType === 'GİDER') setStep('SUBTYPE');
       else setStep('WHO');
     } else if (step === 'SUBTYPE') {
       if (!subType) return;
       if (subType === 'Personel Gideri') setStep('WHO');
-      else setStep('DESC');
+      else setStep('METHOD');
     } else if (step === 'WHO') {
       if (!who) return;
       if (subType === 'Personel Gideri') {
@@ -75,7 +80,10 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           addContact(who.trim());
         }
       }
-      setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE');
+      if (mainType === 'GELİR' || mainType === 'GİDER') setStep('METHOD');
+      else setStep('DATE');
+    } else if (step === 'METHOD') {
+      setStep('DATE');
     } else if (step === 'DATE') {
       setStep('DESC');
     } else if (step === 'DESC') {
@@ -89,19 +97,15 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
     }
     else if (step === 'SUBTYPE') setStep('AMOUNT');
     else if (step === 'WHO') {
-      if (mainType === 'GELİR' || mainType === 'GİDER') {
-        if (initialSubType) setStep('AMOUNT'); else setStep('SUBTYPE');
-      }
-      else setStep('AMOUNT');
+      setStep('SUBTYPE');
     }
-    else if (step === 'DATE') setStep('WHO');
-    else if (step === 'DESC') {
-      if (subType === 'Personel Gideri') setStep('WHO');
-      else if (mainType === 'GELİR' || mainType === 'GİDER') {
-        if (initialSubType) setStep('AMOUNT'); else setStep('SUBTYPE');
-      }
-      else setStep('DATE');
+    else if (step === 'METHOD') {
+      if (mainType === 'GELİR') setStep('AMOUNT');
+      else if (subType === 'Personel Gideri') setStep('WHO');
+      else setStep('SUBTYPE');
     }
+    else if (step === 'DATE') setStep('METHOD');
+    else if (step === 'DESC') setStep('DATE');
   };
 
   const handleSubmit = async () => {
@@ -109,13 +113,17 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
     const cents = Math.round(numericAmount * 100);
 
     try {
+      const syncId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
       if (mainType === 'GELİR') {
         await addTransaction({
           type: 'INCOME',
           amount: cents,
-          method: subType as any,
+          method: method,
           category: 'Gelir',
           description: description.trim() || undefined,
+          transactionDate: date.toISOString(),
+          syncId,
         });
       } else if (mainType === 'GİDER') {
         const finalDesc = subType === 'Personel Gideri' && who 
@@ -125,9 +133,11 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
         await addTransaction({
           type: 'EXPENSE',
           amount: cents,
-          method: 'CASH', // Default for expense, subtype used as category
+          method: method,
           category: subType,
           description: finalDesc,
+          transactionDate: date.toISOString(),
+          syncId,
         });
 
         if (subType === 'Personel Gideri' && who) {
@@ -141,14 +151,16 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           entityName: who,
           type: 'TAKEN',
           totalAmount: cents,
-          dueDate: date || undefined,
+          dueDate: date.toISOString().split('T')[0],
+          syncId,
         });
       } else if (mainType === 'ALACAK') {
         await addDebt({
           entityName: who,
           type: 'GIVEN',
           totalAmount: cents,
-          dueDate: date || undefined,
+          dueDate: date.toISOString().split('T')[0],
+          syncId,
         });
       }
       onClose();
@@ -293,16 +305,16 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
 
             {step === 'DATE' && (
               <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
-                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>Geri ödeme tarihi (isteğe bağlı):</Text>
-                <TextInput
-                  style={[styles.input, { color: theme.colors.textPrimary, borderBottomColor: theme.colors.border }]}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  keyboardType="numeric"
-                  autoFocus
-                  value={date}
-                  onChangeText={setDate}
-                />
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>Vade/İşlem Tarihi Seçiniz:</Text>
+                <View style={{ alignItems: 'center', marginVertical: 20 }}>
+                  <DatePicker
+                    date={date}
+                    onDateChange={setDate}
+                    mode="date"
+                    locale="tr"
+                    theme={isDarkMode ? 'dark' : 'light'}
+                  />
+                </View>
                 <NextBtn onPress={handleNext} theme={theme} />
               </Animated.View>
             )}

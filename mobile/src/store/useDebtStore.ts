@@ -38,7 +38,7 @@ export interface DebtState {
   addDebt: (payload: CreateDebtPayload) => Promise<Debt>;
   updateDebt: (id: string, payload: UpdateDebtPayload) => Promise<Debt>;
   deleteDebt: (id: string) => Promise<void>;
-  makePayment: (debtId: string, amount: number) => Promise<PayDebtResult>;
+  makePayment: (debtId: string, amount: number, method?: string) => Promise<PayDebtResult>;
   refreshDebts: () => Promise<void>;
   clearError: () => void;
   reset: () => void;
@@ -133,10 +133,10 @@ export const useDebtStore = create<DebtState>((set, get) => ({
    * Optimistically updates the local debt record.
    * Also triggers a ledger refresh since a Transaction is created server-side.
    */
-  makePayment: async (debtId: string, amount: number) => {
+  makePayment: async (debtId: string, amount: number, method?: string) => {
     set({ isPaying: true, error: null });
     try {
-      const result = await payDebt(debtId, amount);
+      const result = await payDebt(debtId, amount, method);
 
       // Update the debt in the local array
       set((state) => ({

@@ -9,7 +9,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useContactStore, ContactInfo } from '../store/useContactStore';
 import { formatCurrency, formatDate } from '../utils/format';
 
-const ContactRow: React.FC<{ item: ContactInfo; onPress: (c: ContactInfo) => void }> = ({ item, onPress }) => {
+const ContactRow: React.FC<{ item: ContactInfo; onPress: (c: ContactInfo) => void; onDelete: (id: string) => void; onEdit: (c: ContactInfo) => void }> = ({ item, onPress, onDelete, onEdit }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
 
@@ -25,6 +25,14 @@ const ContactRow: React.FC<{ item: ContactInfo; onPress: (c: ContactInfo) => voi
         )}
       </View>
       <View style={styles.rowRight}>
+        <View style={{ flexDirection: 'row', gap: 12, marginRight: 12 }}>
+          <Pressable hitSlop={8} onPress={() => onEdit(item)}>
+            <Icon name="edit-2" size={18} color={theme.colors.textSecondary} />
+          </Pressable>
+          <Pressable hitSlop={8} onPress={() => onDelete(item.id)}>
+            <Icon name="trash-2" size={18} color={theme.colors.dangerLight} />
+          </Pressable>
+        </View>
         {item.totalBalance !== undefined && (
           <Text style={[styles.rowAmount, { color: item.totalBalance >= 0 ? theme.colors.success : theme.colors.danger }]}>
             {formatCurrency(item.totalBalance, true)}
@@ -41,7 +49,7 @@ const ContactsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
-  const { contacts, addContact, fetchContacts } = useContactStore();
+  const { contacts, addContact, fetchContacts, removeContact, updateContact } = useContactStore();
   const [search, setSearch] = useState('');
   
   React.useEffect(() => {
@@ -49,18 +57,38 @@ const ContactsScreen: React.FC = () => {
   }, [fetchContacts]);
   const [showAddInput, setShowAddInput] = useState(false);
   const [newName, setNewName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const filteredContacts = contacts.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
-  const handleAddContact = () => {
+  const handleSaveContact = () => {
     if (!newName.trim()) {
       Alert.alert('Hata', 'Lütfen geçerli bir isim girin.');
       return;
     }
-    addContact(newName.trim());
+    if (editingId) {
+      updateContact(editingId, { name: newName.trim() });
+      Alert.alert('Başarılı', 'Kişi güncellendi.');
+    } else {
+      addContact(newName.trim());
+      Alert.alert('Başarılı', 'Kişi rehbere eklendi.');
+    }
     setNewName('');
     setShowAddInput(false);
-    Alert.alert('Başarılı', 'Kişi rehbere eklendi.');
+    setEditingId(null);
+  };
+
+  const handleEdit = (c: ContactInfo) => {
+    setNewName(c.name);
+    setEditingId(c.id);
+    setShowAddInput(true);
+  };
+
+  const handleDelete = (id: string) => {
+    Alert.alert('Kişiyi Sil', 'Bu kişiyi rehberden silmek istediğinize emin misiniz?', [
+      { text: 'İptal', style: 'cancel' },
+      { text: 'Sil', style: 'destructive', onPress: () => removeContact(id) }
+    ]);
   };
 
   return (
@@ -91,7 +119,14 @@ const ContactsScreen: React.FC = () => {
       <FlatList
         data={filteredContacts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ContactRow item={item} onPress={(c) => navigation.navigate('ContactDetail', { contactName: c.name })} />}
+        renderItem={({ item }) => (
+          <ContactRow 
+            item={item} 
+            onDelete={handleDelete} 
+            onEdit={handleEdit}
+            onPress={(c) => navigation.navigate('ContactDetail', { contactName: c.name })} 
+          />
+        )}
         ListHeaderComponent={(
           <View style={{ marginBottom: 20 }}>
             {!showAddInput ? (
@@ -115,8 +150,8 @@ const ContactsScreen: React.FC = () => {
                   <Pressable style={[styles.actionBtn, { backgroundColor: theme.colors.card }]} onPress={() => setShowAddInput(false)}>
                     <Text style={{ color: theme.colors.textPrimary }}>Vazgeç</Text>
                   </Pressable>
-                  <Pressable style={[styles.actionBtn, { backgroundColor: theme.colors.accent }]} onPress={handleAddContact}>
-                    <Text style={{ color: '#fff', fontWeight: '600' }}>Kaydet</Text>
+                  <Pressable style={[styles.actionBtn, { backgroundColor: theme.colors.accent }]} onPress={handleSaveContact}>
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>{editingId ? 'Güncelle' : 'Kaydet'}</Text>
                   </Pressable>
                 </View>
               </View>

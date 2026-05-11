@@ -57,23 +57,42 @@ const shared = {
 export const darkTheme = {
   ...shared,
   colors: {
-    primary: '#0F172A',        // Slate 900
-    surface: '#1E293B',        // Slate 800
-    card: '#334155',           // Slate 700
-    accent: '#3B82F6',         // Blue 500
+    primary: '#0F172A',        // Slate 900 — Classic Deep Dark
+    surface: '#1E293B',        // Slate 800 — Surface
+    card: '#334155',           // Slate 700 — Card
+    accent: '#3B82F6',         // Blue 500 — Vibrant Accent
     accentGradient: ['#3B82F6', '#2563EB'],
     success: '#10B981',        // Emerald 500
     successLight: '#34D399',
-    danger: '#EF4444',         // Red 500
-    dangerLight: '#F87171',
-    textPrimary: '#F9FAFB',    // Gray 50
-    textSecondary: '#CBD5E1',  // Slate 300 - daha iyi kontrast
+    danger: '#F43F5E',         // Rose 500
+    dangerLight: '#FB7185',
+    warning: '#F59E0B',        // Amber 500
+    warningLight: '#FBBF24',
+    textPrimary: '#F8FAFC',    // Slate 50
+    textSecondary: '#CBD5E1',  // Slate 300
     textTertiary: '#94A3B8',   // Slate 400
     border: '#334155',         // Slate 700
     accentTransparent: 'rgba(59, 130, 246, 0.15)',
     successTransparent: 'rgba(16, 185, 129, 0.15)',
-    dangerTransparent: 'rgba(239, 68, 68, 0.15)',
-    overlay: 'rgba(0, 0, 0, 0.75)',
+    dangerTransparent: 'rgba(244, 63, 94, 0.15)',
+    warningTransparent: 'rgba(245, 158, 11, 0.15)',
+    overlay: 'rgba(0, 0, 0, 0.8)',
+  },
+  shadows: {
+    card: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.25,
+      shadowRadius: 20,
+      elevation: 6,
+    },
+    button: {
+      shadowColor: '#4F9EFF',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
+      elevation: 8,
+    },
   },
 };
 
@@ -91,6 +110,8 @@ export const lightTheme = {
     successLight: '#10B981',
     danger: '#DC2626',        // Red 600
     dangerLight: '#EF4444',
+    warning: '#D97706',       // Amber 600
+    warningLight: '#F59E0B',
     textPrimary: '#0F172A',   // Slate 900
     textSecondary: '#475569', // Slate 600
     textTertiary: '#94A3B8',  // Slate 400
@@ -98,6 +119,7 @@ export const lightTheme = {
     accentTransparent: 'rgba(37, 99, 235, 0.10)',
     successTransparent: 'rgba(16, 185, 129, 0.10)',
     dangerTransparent: 'rgba(239, 68, 68, 0.10)',
+    warningTransparent: 'rgba(217, 119, 6, 0.10)',
     overlay: 'rgba(15, 23, 42, 0.40)',
   },
   shadows: {

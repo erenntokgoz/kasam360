@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 const PersonnelExpensesScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
   const { t } = useTranslation();
@@ -97,7 +97,10 @@ const PersonnelExpensesScreen: React.FC = () => {
   );
 
   const renderStaffItem = ({ item }: { item: Staff }) => (
-    <View style={[styles.staffCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+    <Pressable 
+      style={[styles.staffCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+      onPress={() => navigation.navigate('ContactDetail', { contactName: item.name })}
+    >
       <View style={styles.staffHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={[styles.staffIcon, { backgroundColor: theme.colors.accentTransparent }]}>
@@ -108,15 +111,20 @@ const PersonnelExpensesScreen: React.FC = () => {
             {item.role && <Text style={[styles.staffRole, { color: theme.colors.textSecondary }]}>{item.role}</Text>}
           </View>
         </View>
-        <Pressable hitSlop={12} onPress={() => handleRemoveStaff(item.id)}>
-          <Icon name="trash-2" size={18} color={theme.colors.dangerLight} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <Pressable hitSlop={12} onPress={() => { /* Edit logic if needed */ }}>
+            <Icon name="edit-2" size={18} color={theme.colors.textSecondary} />
+          </Pressable>
+          <Pressable hitSlop={12} onPress={() => handleRemoveStaff(item.id)}>
+            <Icon name="trash-2" size={18} color={theme.colors.dangerLight} />
+          </Pressable>
+        </View>
       </View>
       <View style={[styles.staffFooter, { borderTopColor: theme.colors.border }]}>
         <Text style={{ fontSize: 12, color: theme.colors.textTertiary, fontWeight: '500' }}>TOPLAM ÖDENEN</Text>
         <Text style={{ fontSize: 14, color: theme.colors.success, fontWeight: '700' }}>{formatCurrency(item.totalPaid)}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 
   return (

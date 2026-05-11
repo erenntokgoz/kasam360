@@ -112,9 +112,10 @@ export const createDebt = async (payload: CreateDebtPayload): Promise<Debt> => {
  * @param debtId - MongoDB ObjectId of the debt
  * @param amount - Payment amount in cents/kuruş
  */
-export const payDebt = async (debtId: string, amount: number): Promise<PayDebtResult> => {
+export const payDebt = async (debtId: string, amount: number, method?: string): Promise<PayDebtResult> => {
   const { data } = await apiClient.post<PayDebtResponse>(`/api/debts/${debtId}/pay`, {
     amount,
+    method,
   });
   return data.data;
 };

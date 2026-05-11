@@ -11,6 +11,7 @@ import { useContactStore } from './src/store/useContactStore';
 import { useRecurringStore } from './src/store/useRecurringStore';
 import { getTheme } from './src/theme';
 import { hydrateLanguage } from './src/i18n';
+import { getTransactions } from './src/api/transactionService';
 
 function App(): React.JSX.Element {
   const [isReady, setIsReady] = useState(false);
@@ -28,8 +29,8 @@ function App(): React.JSX.Element {
         await hydrateFromStorage();
         await hydrateTheme();
         await hydrateNotifications();
-        // Skip fetchContacts here, handle in screens to avoid auth issues during init
         await hydrateSetup();
+
         // Check recurring items and create notifications for due ones
         const dueItems = checkAndNotify();
         for (const item of dueItems) {
@@ -47,6 +48,24 @@ function App(): React.JSX.Element {
     };
     init();
   }, []);
+
+  // ── Auto-detect setup: if user has a token but setup flag is missing
+  //    Check backend for existing data whenever token becomes available.
+  const token = useAuthStore((s) => s.token);
+  const isSetupComplete = useSetupStore((s) => s.isSetupComplete);
+  const setSetupComplete = useSetupStore((s) => s.setSetupComplete);
+
+  useEffect(() => {
+    if (token && !isSetupComplete) {
+      getTransactions(1, 1)
+        .then((result) => {
+          if (result.transactions.length > 0) {
+            setSetupComplete(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [token, isSetupComplete, setSetupComplete]);
 
   const theme = getTheme(isDarkMode);
 

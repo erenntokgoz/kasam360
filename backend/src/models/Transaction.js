@@ -50,6 +50,16 @@ const transactionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    relatedId: {
+      type: mongoose.Schema.Types.ObjectId,
+      refPath: 'relatedType',
+      default: null,
+    },
+    relatedType: {
+      type: String,
+      enum: ['DEBT', 'RECURRING', null],
+      default: null,
+    },
     isDeleted: {
       type: Boolean,
       default: false,

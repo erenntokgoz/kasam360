@@ -23,9 +23,10 @@
   "setup": {
     "title": "Hoş Geldiniz",
     "subtitle": "Kasanızı yönetmeye başlamadan önce başlangıç değerlerini ayarlayalım.",
-    "balance": "Mevcut Kasa Bakiyesi",
-    "debts": "Toplam Borçlarınız",
-    "receivables": "Toplam Alacaklarınız",
+    "dataTitle": "Giriş Bakiyesi & Mevcut Borç Alacak",
+    "balance": "Kasa Giriş Bakiyesi",
+    "debts": "Toplam Mevcut Borçlar",
+    "receivables": "Toplam Mevcut Alacaklar",
     "complete": "Kurulumu Tamamla"
   },
   "home": {

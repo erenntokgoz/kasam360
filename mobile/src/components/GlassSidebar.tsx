@@ -35,7 +35,7 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
     { label: t('sidebar.contacts'), icon: 'users', route: 'Contacts' },
     { label: t('sidebar.debts'), icon: 'credit-card', route: 'Debts' },
     { label: t('sidebar.analytics'), icon: 'bar-chart-2', route: 'Analytics' },
-    { label: t('sidebar.recurrings'), icon: 'briefcase', route: 'Recurrings' },
+    { label: t('sidebar.recurrings'), icon: 'briefcase', route: 'StaffExpenses' },
     { label: t('sidebar.notifications'), icon: 'bell', route: 'Notifications', badge: unreadCount },
     { label: t('sidebar.settings'), icon: 'settings', route: 'Settings' },
   ];

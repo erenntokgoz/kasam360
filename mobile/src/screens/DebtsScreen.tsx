@@ -9,12 +9,14 @@ import { useDebtStore, type Debt } from '../store/useDebtStore';
 import { useLedgerStore } from '../store/useLedgerStore';
 import { formatCurrency, formatDate } from '../utils/format';
 import AddTransactionModal from '../components/AddTransactionModal';
+import DebtDetailModal from '../components/DebtDetailModal';
 import FilterBar from '../components/FilterBar';
 import AddCard from '../components/AddCard';
 
 // --- Payment Modal (Repayment logic) ---
 export const PaymentModal: React.FC<{ visible: boolean; debt: any | null; onClose: () => void }> = ({ visible, debt, onClose }) => {
   const [input, setInput] = useState('');
+  const [method, setMethod] = useState<'CASH' | 'POS' | 'IBAN'>('CASH');
   const { makePayment, isPaying } = useDebtStore();
   const fetchTransactions = useLedgerStore((s) => s.fetchTransactions);
   const isDark = useThemeStore((s) => s.isDarkMode);
@@ -27,7 +29,7 @@ export const PaymentModal: React.FC<{ visible: boolean; debt: any | null; onClos
     const cents = full ? debt.remainingAmount : Math.round(val * 100);
     
     try {
-      await makePayment(debt._id, cents);
+      await makePayment(debt._id, cents, method);
       await fetchTransactions(1);
       Alert.alert('Başarılı', 'Ödeme kaydedildi.');
       onClose();
@@ -43,16 +45,47 @@ export const PaymentModal: React.FC<{ visible: boolean; debt: any | null; onClos
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
         <View style={{ backgroundColor: theme.colors.surface, borderRadius: 24, padding: 24 }}>
           <Text style={{ fontSize: 20, fontWeight: '700', textAlign: 'center', marginBottom: 20, color: theme.colors.textPrimary }}>{isGiven ? 'Tahsilat Yap' : 'Ödeme Yap'}</Text>
-          <Text style={{ textAlign: 'center', color: theme.colors.textSecondary, marginBottom: 20 }}>{debt.entityName} - Kalan: {formatCurrency(debt.remainingAmount)}</Text>
+          <Text style={{ textAlign: 'center', color: theme.colors.textSecondary, marginBottom: 12 }}>{debt.entityName} - Kalan: {formatCurrency(debt.remainingAmount)}</Text>
+          
           <TextInput 
-            style={{ height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, marginBottom: 12, fontSize: 15, color: theme.colors.textPrimary, borderColor: theme.colors.border }} 
+            style={{ height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, marginBottom: 16, fontSize: 15, color: theme.colors.textPrimary, borderColor: theme.colors.border }} 
             placeholder="Tutar" 
             keyboardType="decimal-pad" 
             value={input} 
             onChangeText={setInput} 
             autoFocus 
           />
-          <View style={{ gap: 12, marginTop: 16 }}>
+
+          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8 }}>Ödeme Yöntemi</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
+            {[
+              { id: 'CASH', label: 'Nakit', icon: 'dollar-sign' },
+              { id: 'POS', label: 'POS', icon: 'credit-card' },
+              { id: 'IBAN', label: 'Havale', icon: 'send' },
+            ].map((m) => (
+              <Pressable 
+                key={m.id}
+                onPress={() => setMethod(m.id as any)}
+                style={{ 
+                  flex: 1, 
+                  height: 40, 
+                  borderRadius: 10, 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: 6,
+                  borderWidth: 1,
+                  borderColor: method === m.id ? accent : theme.colors.border,
+                  backgroundColor: method === m.id ? accent + '10' : 'transparent'
+                }}
+              >
+                <Icon name={m.icon} size={14} color={method === m.id ? accent : theme.colors.textTertiary} />
+                <Text style={{ fontSize: 12, fontWeight: '600', color: method === m.id ? accent : theme.colors.textSecondary }}>{m.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={{ gap: 12 }}>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Pressable style={{ flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.card }} onPress={onClose}><Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>Vazgeç</Text></Pressable>
               <Pressable style={{ flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: accent }} onPress={() => handlePay(false)} disabled={isPaying}>
@@ -69,7 +102,7 @@ export const PaymentModal: React.FC<{ visible: boolean; debt: any | null; onClos
   );
 };
 
-const DebtRow: React.FC<{ item: Debt; onPay: (d: Debt) => void }> = ({ item, onPay }) => {
+const DebtRow: React.FC<{ item: Debt; onPay: (d: Debt) => void; onPress: (d: Debt) => void }> = ({ item, onPay, onPress }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const isGiven = item.type === 'GIVEN';
@@ -77,7 +110,7 @@ const DebtRow: React.FC<{ item: Debt; onPay: (d: Debt) => void }> = ({ item, onP
   const progress = item.totalAmount > 0 ? 1 - item.remainingAmount / item.totalAmount : 0;
   
   return (
-    <View style={[styles.rowContainer, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
+    <Pressable style={[styles.rowContainer, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]} onPress={() => onPress(item)}>
       <View style={styles.rowTop}>
         <View style={[styles.rowIconCircle, { backgroundColor: color + '15' }]}>
           <Icon name={isGiven ? 'arrow-up-right' : 'arrow-down-left'} size={18} color={color} />
@@ -110,7 +143,7 @@ const DebtRow: React.FC<{ item: Debt; onPay: (d: Debt) => void }> = ({ item, onP
           <Text style={[styles.payActionText, { color }]}>{isGiven ? 'Tahsil Et' : 'Ödeme Yap'}</Text>
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 };
 
@@ -125,6 +158,7 @@ const DebtsScreen: React.FC = () => {
   const { debts, isLoading, fetchDebts, summary } = useDebtStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [payTarget, setPayTarget] = useState<Debt | null>(null);
+  const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   
   const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
   const [contactFilter, setContactFilter] = useState<string | null>(null);
@@ -162,7 +196,7 @@ const DebtsScreen: React.FC = () => {
 
       <FlatList
         data={activeDebts}
-        renderItem={({ item }) => <DebtRow item={item} onPay={setPayTarget} />}
+        renderItem={({ item }) => <DebtRow item={item} onPay={setPayTarget} onPress={setSelectedDebt} />}
         keyExtractor={(item) => item._id}
         ListHeaderComponent={(
           <View style={{ marginBottom: 24 }}>
@@ -207,6 +241,14 @@ const DebtsScreen: React.FC = () => {
         onClose={() => { setShowAddModal(false); fetchDebts(1); }} 
         initialType="BORÇ"
       />
+      {selectedDebt && (
+        <DebtDetailModal
+          visible={!!selectedDebt}
+          debt={selectedDebt}
+          onClose={() => setSelectedDebt(null)}
+          onPay={setPayTarget}
+        />
+      )}
       {payTarget && (
         <PaymentModal 
           visible={!!payTarget} 

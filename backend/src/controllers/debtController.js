@@ -117,6 +117,8 @@ const createDebt = async (req, res) => {
         description: `${type === 'GIVEN' ? 'Verilen' : 'Alınan'}: ${entityName}`,
         transactionDate: new Date(),
         balanceAfter,
+        relatedId: debt._id,
+        relatedType: 'DEBT',
       }], { session });
 
       createdDebt = debt;
@@ -260,7 +262,7 @@ const payDebt = async (req, res) => {
   try {
     const { tenantId } = req;
     const { id } = req.params;
-    const { amount } = req.body;
+    const { amount, method } = req.body;
 
     // ── Validate payment amount ────────────────────────────────────────────
     const paymentAmount = Math.round(Number(amount));
@@ -271,6 +273,8 @@ const payDebt = async (req, res) => {
         message: 'Payment amount must be a positive integer (cents/kuruş).',
       });
     }
+
+    const selectedMethod = method || 'CASH';
 
     // ── Validate debt ID format ────────────────────────────────────────────
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -349,11 +353,13 @@ const payDebt = async (req, res) => {
             tenantId,
             type: txType,
             amount: paymentAmount,
-            method: 'CASH', // default — can be extended with req.body.method later
+            method: selectedMethod,
             category: debt.type === 'GIVEN' ? 'Alacak Tahsili' : 'Borç Ödemesi',
             description: `${debt.type === 'GIVEN' ? 'Tahsil edilen:' : 'Ödenen:'} ${debt.entityName}`,
             transactionDate: new Date(),
             balanceAfter,
+            relatedId: debt._id,
+            relatedType: 'DEBT',
           },
         ],
         { session },
