@@ -50,7 +50,7 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
           reducedTransparencyFallbackColor={theme.colors.primary}
         />
       )}
-      <View style={[styles.overlay, { backgroundColor: theme.colors.overlay, opacity: 0.85 }]} />
+      <View style={[styles.overlay, { backgroundColor: theme.colors.overlay, opacity: isDarkMode ? 0.75 : 0.05 }]} />
 
       <DrawerContentScrollView
         {...props}

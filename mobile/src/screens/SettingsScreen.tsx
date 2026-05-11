@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Switch, ScrollView, Alert, TextInput, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Switch, ScrollView, Alert, TextInput, Modal, ActivityIndicator, Share } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
 import { changeLanguage } from '../i18n';
 import { useTranslation } from 'react-i18next';
+import { useLedgerStore } from '../store/useLedgerStore';
 
 const SettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -15,6 +16,7 @@ const SettingsScreen: React.FC = () => {
   
   const { user, logout, updateProfile, deleteAccount, isLoading: isAuthLoading } = useAuthStore();
   const { toggleTheme, isDarkMode } = useThemeStore();
+  const { transactions } = useLedgerStore();
   const { i18n } = useTranslation();
   const theme = getTheme(isDarkMode);
   const currentLang = i18n.language === 'en' ? 'EN' : 'TR';
@@ -31,6 +33,31 @@ const SettingsScreen: React.FC = () => {
       setEditPass('');
     } catch {
       Alert.alert('Hata', 'Profil güncellenemedi.');
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      if (transactions.length === 0) {
+        Alert.alert('Uyarı', 'Dışa aktarılacak işlem bulunamadı.');
+        return;
+      }
+      const header = "Tarih,Tip,Kategori,Tutar,Yontem,Aciklama\n";
+      const rows = transactions.map(t => {
+        const date = new Date(t.transactionDate || t.createdAt).toLocaleDateString('tr-TR');
+        const type = t.type === 'INCOME' ? 'GELIR' : 'GIDER';
+        const amount = (t.amount / 100).toFixed(2);
+        const desc = (t.description || '').replace(/,/g, ' '); // Remove commas to not break CSV
+        return `${date},${type},${t.category || ''},${amount},${t.method},${desc}`;
+      }).join("\n");
+      
+      const csv = header + rows;
+      await Share.share({
+        message: csv,
+        title: 'Kasam360 İşlem Kayıtları'
+      });
+    } catch (error) {
+      Alert.alert('Hata', 'Dışa aktarma başarısız oldu.');
     }
   };
 
@@ -110,6 +137,17 @@ const SettingsScreen: React.FC = () => {
               ))}
             </View>
           </View>
+        </View>
+
+        <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>VERİ YÖNETİMİ</Text>
+          <Pressable style={styles.row} onPress={handleExportCSV}>
+            <View style={styles.rowLeft}>
+              <Icon name="download" size={18} color={theme.colors.accent} />
+              <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Excel (CSV) Olarak Aktar</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={theme.colors.textTertiary} />
+          </Pressable>
         </View>
 
         <Pressable style={[styles.logoutBtn, { backgroundColor: theme.colors.surface }]} onPress={handleLogout}>

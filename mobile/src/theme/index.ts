@@ -57,41 +57,41 @@ const shared = {
 export const darkTheme = {
   ...shared,
   colors: {
-    primary: '#0F172A',        // Slate 900 — Classic Deep Dark
-    surface: '#1E293B',        // Slate 800 — Surface
-    card: '#334155',           // Slate 700 — Card
-    accent: '#3B82F6',         // Blue 500 — Vibrant Accent
+    primary: '#0A0F1D',        // Deepest Navy (Background)
+    surface: '#161F33',        // Lighter Navy (Surfaces)
+    card: '#1E293B',           // Slate 800 (Cards)
+    accent: '#3B82F6',         // Vibrant Blue
     accentGradient: ['#3B82F6', '#2563EB'],
-    success: '#10B981',        // Emerald 500
+    success: '#10B981',        
     successLight: '#34D399',
-    danger: '#F43F5E',         // Rose 500
+    danger: '#F43F5E',         
     dangerLight: '#FB7185',
-    warning: '#F59E0B',        // Amber 500
+    warning: '#F59E0B',        
     warningLight: '#FBBF24',
-    textPrimary: '#F8FAFC',    // Slate 50
-    textSecondary: '#CBD5E1',  // Slate 300
+    textPrimary: '#FFFFFF',    // Pure White
+    textSecondary: '#CBD5E1',  // Slate 300 (Much brighter)
     textTertiary: '#94A3B8',   // Slate 400
-    border: '#334155',         // Slate 700
+    border: '#2A3547',         // Visible but subtle border
     accentTransparent: 'rgba(59, 130, 246, 0.15)',
     successTransparent: 'rgba(16, 185, 129, 0.15)',
     dangerTransparent: 'rgba(244, 63, 94, 0.15)',
     warningTransparent: 'rgba(245, 158, 11, 0.15)',
-    overlay: 'rgba(0, 0, 0, 0.8)',
+    overlay: 'rgba(5, 8, 15, 0.9)', 
   },
   shadows: {
     card: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.25,
-      shadowRadius: 20,
-      elevation: 6,
-    },
-    button: {
-      shadowColor: '#4F9EFF',
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.4,
       shadowRadius: 12,
-      elevation: 8,
+      elevation: 4,
+    },
+    button: {
+      shadowColor: '#3B82F6',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      elevation: 6,
     },
   },
 };
@@ -113,14 +113,14 @@ export const lightTheme = {
     warning: '#D97706',       // Amber 600
     warningLight: '#F59E0B',
     textPrimary: '#0F172A',   // Slate 900
-    textSecondary: '#475569', // Slate 600
-    textTertiary: '#94A3B8',  // Slate 400
+    textSecondary: '#334155', // Slate 700 (Was Slate 600 - made it darker for contrast)
+    textTertiary: '#64748B',  // Slate 500 (Was Slate 400)
     border: '#E2E8F0',        // Slate 200
-    accentTransparent: 'rgba(37, 99, 235, 0.10)',
-    successTransparent: 'rgba(16, 185, 129, 0.10)',
-    dangerTransparent: 'rgba(239, 68, 68, 0.10)',
-    warningTransparent: 'rgba(217, 119, 6, 0.10)',
-    overlay: 'rgba(15, 23, 42, 0.40)',
+    accentTransparent: 'rgba(37, 99, 235, 0.08)',
+    successTransparent: 'rgba(16, 185, 129, 0.08)',
+    dangerTransparent: 'rgba(239, 68, 68, 0.08)',
+    warningTransparent: 'rgba(217, 119, 6, 0.08)',
+    overlay: 'rgba(15, 23, 42, 0.35)',
   },
   shadows: {
     card: {

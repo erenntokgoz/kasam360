@@ -1,5 +1,15 @@
-const express = require('express');
 const dotenv = require('dotenv');
+dotenv.config();
+
+// Assert required environment variables
+const REQUIRED_ENV = ['JWT_SECRET', 'MONGO_URI', 'JWT_REFRESH_SECRET'];
+const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missing.length > 0) {
+  console.error(`[CRITICAL] Missing required environment variables: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
+const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
@@ -14,8 +24,6 @@ const debtRoutes = require('./src/routes/debtRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const tenantRoutes = require('./src/routes/tenantRoutes');
 const directoryRoutes = require('./src/routes/directoryRoutes');
-
-dotenv.config();
 
 const app = express();
 
@@ -46,6 +54,15 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth', authLimiter);
 
+const ocrLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { success: false, message: 'Too many OCR scans. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/ocr', ocrLimiter);
+
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -62,6 +79,14 @@ app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 require('./src/cron/dailyAlertCheck');
+
+// ── Error Handling ────────────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error(`[ERROR] ${req.method} ${req.url}`, err);
+  const status = err.httpStatus || 500;
+  const message = err.message || 'Sunucu tarafında bir hata oluştu.';
+  res.status(status).json({ success: false, message });
+});
 
 const PORT = process.env.PORT || 5000;
 

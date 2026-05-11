@@ -30,7 +30,14 @@ const TransactionRow: React.FC<{ item: Transaction; onPress: (t: Transaction) =>
         <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>{item.description || item.category || (isIncome ? 'Gelir' : 'Gider')}</Text>
         <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>{formatDate(item.transactionDate)}</Text>
       </View>
-      <Text style={[styles.rowAmount, { color: amountColor }]}>{formatCurrency(displayAmount, true)}</Text>
+      <View style={styles.rowRight}>
+        <Text style={[styles.rowAmount, { color: amountColor }]}>{formatCurrency(displayAmount, true)}</Text>
+        {item.balanceAfter !== undefined && (
+          <Text style={[styles.rowBalanceAfter, { color: theme.colors.textTertiary }]}>
+            Kalan: {formatCurrency(item.balanceAfter)}
+          </Text>
+        )}
+      </View>
     </Pressable>
   );
 });
@@ -108,7 +115,19 @@ const TransactionsScreen: React.FC = () => {
             </View>
           </View>
         )}
-        ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Sonuç bulunamadı</Text> : null}
+        ListEmptyComponent={
+          !isLoading ? (
+            <View style={styles.emptyContainer}>
+              <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
+                <Icon name="file-text" size={40} color={theme.colors.accent} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>Kayıtlı İşlem Yok</Text>
+              <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
+                Henüz bir gelir veya gider kaydı girmediniz. İlk işleminizi yukarıdan ekleyebilirsiniz.
+              </Text>
+            </View>
+          ) : null
+        }
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
         onRefresh={() => fetchTransactions(1)}
@@ -143,8 +162,13 @@ const styles = StyleSheet.create({
   rowMiddle: { flex: 1 },
   rowCategory: { fontSize: 16, fontWeight: '500' },
   rowDate: { fontSize: 12, marginTop: 2 },
-  rowAmount: { fontSize: 16, fontWeight: '600' },
-  emptyText: { textAlign: 'center', marginTop: 40, opacity: 0.5 }
+  rowAmount: { fontSize: 16, fontWeight: '600', textAlign: 'right' },
+  rowRight: { alignItems: 'flex-end' },
+  rowBalanceAfter: { fontSize: 10, marginTop: 2, fontWeight: '400' },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 },
+  emptyIconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });
 
 export default TransactionsScreen;

@@ -12,6 +12,7 @@ import TransactionDetailModal from '../components/TransactionDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import FilterBar from '../components/FilterBar';
 import AddCard from '../components/AddCard';
+import { useContactStore } from '../store/useContactStore';
 import { formatCurrency, formatDate } from '../utils/format';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +24,7 @@ const PersonnelExpensesScreen: React.FC = () => {
   const { t } = useTranslation();
   const { transactions, deleteTransaction } = useLedgerStore();
   const { staffList, removeStaff, updateStaff, addStaff, fetchStaff } = useStaffStore();
+  const { contacts } = useContactStore();
   
   React.useEffect(() => {
     fetchStaff();
@@ -190,8 +192,7 @@ const PersonnelExpensesScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           ListHeaderComponent={(
             <View style={{ marginBottom: 20 }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>Yeni Personel Ekle</Text>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 8 }}>
                 <TextInput
                   style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
                   placeholder="Personel Adı Soyadı"
@@ -203,14 +204,42 @@ const PersonnelExpensesScreen: React.FC = () => {
                   <Icon name="plus" size={20} color="#fff" />
                 </Pressable>
               </View>
+
+              {/* Contact Suggestions */}
+              {newStaffName.length > 1 && (
+                <View style={[styles.suggestionBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                  {contacts
+                    .filter(c => c.name.toLowerCase().includes(newStaffName.toLowerCase()) && !staffList.find(s => s.name === c.name))
+                    .slice(0, 3)
+                    .map(contact => (
+                      <Pressable 
+                        key={contact.id} 
+                        style={styles.suggestionItem}
+                        onPress={() => {
+                          addStaff(contact.name);
+                          setNewStaffName('');
+                        }}
+                      >
+                        <Icon name="user-plus" size={14} color={theme.colors.accent} />
+                        <Text style={{ color: theme.colors.textPrimary, marginLeft: 8 }}>{contact.name} (Rehberden Ekle)</Text>
+                      </Pressable>
+                    ))
+                  }
+                </View>
+              )}
             </View>
           )}
           contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md, paddingBottom: insets.bottom + theme.spacing.xl }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing['4xl'], gap: theme.spacing.sm }}>
-              <Icon name="users" size={48} color={theme.colors.textTertiary} />
-              <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.lg, color: theme.colors.textSecondary, marginTop: theme.spacing.base }}>Rehber Boş</Text>
+            <View style={styles.emptyContainer}>
+              <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
+                <Icon name="users" size={40} color={theme.colors.accent} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>Personel Rehberi Boş</Text>
+              <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
+                Henüz personel kaydı yapmadınız. Yukarıdan isim yazarak veya rehberden seçerek ekleyebilirsiniz.
+              </Text>
             </View>
           }
         />
@@ -257,7 +286,13 @@ const styles = StyleSheet.create({
   staffRole: { fontSize: 13 },
   staffFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1 },
   input: { flex: 1, height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, fontSize: 15 },
-  addStaffBtn: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }
+  addStaffBtn: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  suggestionBox: { borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginTop: 4 },
+  suggestionItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 },
+  emptyIconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });
 
 export default PersonnelExpensesScreen;

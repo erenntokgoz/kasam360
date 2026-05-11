@@ -126,7 +126,19 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           syncId,
         });
       } else if (mainType === 'GİDER') {
-        const finalDesc = subType === 'Personel Gideri' && who 
+        const isPersonnel = subType === 'Personel Gideri';
+        let finalRelatedId = undefined;
+        let finalRelatedType = undefined;
+
+        if (isPersonnel && who) {
+          const staff = staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase());
+          if (staff) {
+            finalRelatedId = staff.id;
+            finalRelatedType = 'STAFF';
+          }
+        }
+
+        const finalDesc = isPersonnel && who 
           ? `${who} kişisine personel ödemesi${description ? ' - ' + description : ''}`
           : description.trim() || undefined;
 
@@ -138,13 +150,12 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           description: finalDesc,
           transactionDate: date.toISOString(),
           syncId,
+          relatedId: finalRelatedId,
+          relatedType: finalRelatedType as any,
         });
 
-        if (subType === 'Personel Gideri' && who) {
-          const staff = useStaffStore.getState().staffList.find(s => s.name.toLowerCase() === who.toLowerCase());
-          if (staff) {
-            useStaffStore.getState().addPaymentToStaff(staff.id, cents);
-          }
+        if (isPersonnel && finalRelatedId) {
+          addPaymentToStaff(finalRelatedId, cents);
         }
       } else if (mainType === 'BORÇ') {
         await addDebt({

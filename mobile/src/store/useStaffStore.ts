@@ -15,11 +15,16 @@ interface StaffStore {
   updateStaff: (id: string, updates: Partial<Staff>) => Promise<void>;
   removeStaff: (id: string) => Promise<void>;
   addPaymentToStaff: (id: string, amount: number) => Promise<void>;
+  reset: () => void;
 }
+
+const initialState = {
+  staffList: [],
+};
 
 export const useStaffStore = create<StaffStore>()(
   (set, get) => ({
-    staffList: [],
+    ...initialState,
 
     fetchStaff: async () => {
       try {
@@ -80,5 +85,7 @@ export const useStaffStore = create<StaffStore>()(
         console.error('[useStaffStore.addPaymentToStaff]', error);
       }
     },
+
+    reset: () => set(initialState),
   })
 );

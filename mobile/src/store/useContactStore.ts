@@ -10,22 +10,39 @@ export interface ContactInfo {
 
 interface ContactState {
   contacts: ContactInfo[];
+  isLoading: boolean;
   addContact: (name: string, date?: string, balance?: number) => Promise<void>;
   removeContact: (id: string) => Promise<void>;
   updateContact: (id: string, data: Partial<ContactInfo>) => Promise<void>;
   fetchContacts: () => Promise<void>;
+  reset: () => void;
 }
 
-export const useContactStore = create<ContactState>((set, get) => ({
+const initialState = {
   contacts: [],
+  isLoading: false,
+};
+
+export const useContactStore = create<ContactState>((set, get) => ({
+  ...initialState,
   
   fetchContacts: async () => {
+    set({ isLoading: true });
     try {
-      // Tüm rehber girişlerini çekiyoruz (CONTACT + STAFF)
-      const data = await getDirectory();
-      set({ contacts: data.map(d => ({ id: d._id, name: d.name, totalBalance: d.totalBalance, lastTransactionDate: d.lastTransactionDate })) });
+      // Sadece 'CONTACT' tipindeki rehber girişlerini çekiyoruz
+      const data = await getDirectory('CONTACT');
+      set({ 
+        contacts: data.map(d => ({ 
+          id: d._id, 
+          name: d.name, 
+          totalBalance: d.totalBalance, 
+          lastTransactionDate: d.lastTransactionDate 
+        })),
+        isLoading: false 
+      });
     } catch (error) {
       console.error('[useContactStore.fetchContacts]', error);
+      set({ isLoading: false });
     }
   },
   
@@ -34,9 +51,9 @@ export const useContactStore = create<ContactState>((set, get) => ({
     if (!trimmedName) return;
     
     const { contacts } = get();
-    // Try to find locally first to avoid unnecessary requests if exact match
-    if (contacts.find((c) => c.name.toLowerCase() === trimmedName.toLowerCase())) {
-      return;
+    // Unique check (case insensitive)
+    if (contacts.some((c) => c.name.toLocaleLowerCase('tr').trim() === trimmedName.toLocaleLowerCase('tr').trim())) {
+      throw new Error('Bu isimde bir kişi zaten kayıtlı.');
     }
     
     try {
@@ -44,6 +61,7 @@ export const useContactStore = create<ContactState>((set, get) => ({
       set({ contacts: [...contacts, { id: newEntry._id, name: newEntry.name, totalBalance: newEntry.totalBalance, lastTransactionDate: newEntry.lastTransactionDate }] });
     } catch (error) {
       console.error('[useContactStore.addContact]', error);
+      throw error;
     }
   },
 
@@ -68,4 +86,6 @@ export const useContactStore = create<ContactState>((set, get) => ({
       console.error('[useContactStore.removeContact]', error);
     }
   },
+
+  reset: () => set(initialState),
 }));

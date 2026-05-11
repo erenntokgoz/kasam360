@@ -20,10 +20,15 @@ interface NotificationState {
   clearAll: () => Promise<void>;
   hydrateNotifications: () => Promise<void>;
   getUnreadCount: () => number;
+  reset: () => void;
 }
 
-export const useNotificationStore = create<NotificationState>((set, get) => ({
+const initialState = {
   notifications: [],
+};
+
+export const useNotificationStore = create<NotificationState>((set, get) => ({
+  ...initialState,
 
   hydrateNotifications: async () => {
     try {
@@ -40,7 +45,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const state = get();
     const newNotif: AppNotification = {
       ...notification,
-      id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
+      id: Date.now().toString(36) + Math.random().toString(36).substring(2, 9),
       isRead: false,
       createdAt: new Date().toISOString(),
     };
@@ -77,4 +82,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   getUnreadCount: () => get().notifications.filter(n => !n.isRead).length,
+
+  reset: () => {
+    removeItem(StorageKeys.NOTIFICATIONS);
+    set(initialState);
+  },
 }));

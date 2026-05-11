@@ -41,7 +41,7 @@ export const useRecurringStore = create<RecurringStore>()(
       addRecurring: (item) => {
         const newItem: RecurringItem = {
           ...item,
-          id: Math.random().toString(36).substring(2, 9),
+          id: Date.now().toString(36) + Math.random().toString(36).substring(2, 9),
           active: true,
           nextDate: getNextDate(item.frequency),
         };

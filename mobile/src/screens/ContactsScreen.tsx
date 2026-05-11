@@ -158,7 +158,19 @@ const ContactsScreen: React.FC = () => {
             )}
           </View>
         )}
-        ListEmptyComponent={!search ? <Text style={styles.emptyText}>Henüz kayıtlı kişi yok</Text> : <Text style={styles.emptyText}>Sonuç bulunamadı</Text>}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
+              <Icon name={search ? "search" : "users"} size={40} color={theme.colors.accent} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>
+              {search ? "Sonuç Bulunamadı" : "Rehberiniz Henüz Boş"}
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
+              {search ? "Farklı bir isim aramayı deneyin." : "Borç ve alacak takibi için ilk kişiyi yukarıdan ekleyebilirsiniz."}
+            </Text>
+          </View>
+        }
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
       />
@@ -185,7 +197,10 @@ const styles = StyleSheet.create({
   rowDate: { fontSize: 12, marginTop: 2 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowAmount: { fontSize: 14, fontWeight: '700' },
-  emptyText: { textAlign: 'center', marginTop: 40, opacity: 0.5 }
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 },
+  emptyIconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });
 
 export default ContactsScreen;

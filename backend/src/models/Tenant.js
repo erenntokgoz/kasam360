@@ -31,6 +31,10 @@ const tenantSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    currentBalance: {
+      type: Number,
+      default: 0,
+    },
     subscriptionStatus: {
       type: String,
       enum: ['TRIAL', 'ACTIVE', 'EXPIRED', 'SUSPENDED'],

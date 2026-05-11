@@ -11,14 +11,19 @@ interface LogStore {
   logs: LogEntry[];
   addLog: (action: string, type?: 'info' | 'success' | 'error') => void;
   clearLogs: () => void;
+  reset: () => void;
 }
 
-export const useLogStore = create<LogStore>((set) => ({
+const initialState = {
   logs: [],
+};
+
+export const useLogStore = create<LogStore>((set) => ({
+  ...initialState,
   addLog: (action, type = 'info') =>
     set((state) => {
       const newLog: LogEntry = {
-        id: Math.random().toString(36).substring(2, 9),
+        id: Date.now().toString(36) + Math.random().toString(36).substring(2, 9),
         timestamp: new Date().toLocaleTimeString('tr-TR'),
         action,
         type,
@@ -27,4 +32,5 @@ export const useLogStore = create<LogStore>((set) => ({
       return { logs: [newLog, ...state.logs].slice(0, 100) };
     }),
   clearLogs: () => set({ logs: [] }),
+  reset: () => set(initialState),
 }));

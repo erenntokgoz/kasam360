@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const AuditLog = require('../models/AuditLog');
 
-const getAuditLogs = async (req, res) => {
+const getAuditLogs = async (req, res, next) => {
   try {
     const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
     
@@ -10,17 +10,8 @@ const getAuditLogs = async (req, res) => {
       .limit(100)
       .lean();
 
-    return res.status(200).json({
-      success: true,
-      data: logs,
-    });
-  } catch (error) {
-    console.error('[auditLogController.getAuditLogs]', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error fetching audit logs.',
-    });
-  }
+    return res.status(200).json({ success: true, data: logs });
+  } catch (err) { next(err); }
 };
 
 module.exports = { getAuditLogs };

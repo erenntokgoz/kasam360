@@ -103,90 +103,57 @@ const parseDateMatch = (match) => {
  * @access  Private (JWT required)
  * @body    { image: string }  — base64-encoded image (no data URI prefix)
  */
-const scanReceipt = async (req, res) => {
+const scanReceipt = async (req, res, next) => {
   try {
     const { image } = req.body;
+    if (!image) return res.status(400).json({ success: false, message: 'Görüntü verisi (base64) gereklidir.' });
 
-    if (!image) {
-      return res.status(400).json({
-        success: false,
-        message: 'Base64-encoded image is required in the "image" field.',
-      });
-    }
-
-    // Strip data URI prefix if present  (e.g. "data:image/jpeg;base64,...")
     const base64Clean = image.replace(/^data:image\/\w+;base64,/, '');
 
-    // ── Call Google Vision ────────────────────────────────────────────────
-    const [result] = await client.textDetection({
-      image: { content: base64Clean },
-    });
-
+    const [result] = await client.textDetection({ image: { content: base64Clean } });
     const detections = result.textAnnotations;
 
     if (!detections || detections.length === 0) {
       return res.status(422).json({
         success: false,
-        message: 'No text detected in the provided image.',
+        message: 'Görüntüde metin tespit edilemedi.',
         data: { rawText: null, amount: null, date: null },
       });
     }
 
-    // Full text is the first annotation entry
     const rawText = detections[0].description;
-
-    // ── Extract monetary values → pick highest (assumed total) ───────────
     let highestAmount = 0;
     let match;
 
-    while ((match = MONEY_REGEX.exec(rawText)) !== null) {
+    const moneyRegex = new RegExp(MONEY_REGEX.source, MONEY_REGEX.flags);
+    while ((match = moneyRegex.exec(rawText)) !== null) {
       const captured = match[1] || match[2];
       const value = parseMonetaryValue(captured);
-      if (value > highestAmount) {
-        highestAmount = value;
-      }
+      if (value > highestAmount) highestAmount = value;
     }
 
-    // Convert to integer cents/kuruş
     const amountCents = Math.round(highestAmount * 100);
-
-    // ── Extract date → pick first valid match ────────────────────────────
     let extractedDate = null;
     const dateRegex = new RegExp(DATE_REGEX.source, DATE_REGEX.flags);
 
     while ((match = dateRegex.exec(rawText)) !== null) {
       const parsed = parseDateMatch(match);
-      if (parsed) {
-        extractedDate = parsed;
-        break; // Use the first valid date found on the receipt
-      }
+      if (parsed) { extractedDate = parsed; break; }
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Receipt scanned successfully.',
+      message: 'Fiş başarıyla tarandı.',
       data: {
         rawText,
-        amount: amountCents,       // integer — smallest currency unit
-        amountDisplay: highestAmount, // float — for UI preview
+        amount: amountCents,
+        amountDisplay: highestAmount,
         date: extractedDate,
       },
     });
-  } catch (error) {
-    console.error('[ocrController.scanReceipt]', error);
-
-    // Specific Google Vision errors
-    if (error.code) {
-      return res.status(502).json({
-        success: false,
-        message: `Google Vision API error: ${error.message}`,
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error during receipt scanning.',
-    });
+  } catch (err) {
+    if (err.code) return res.status(502).json({ success: false, message: `Google Vision API hatası: ${err.message}` });
+    next(err);
   }
 };
 

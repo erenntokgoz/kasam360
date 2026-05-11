@@ -15,6 +15,9 @@ export interface Transaction {
   description: string | null;
   syncId?: string;
   transactionDate: string;  // ISO date
+  balanceAfter?: number;     // resulting balance after this tx
+  relatedId?: string;       // ID of linked Debt, Directory entry, etc.
+  relatedType?: 'DEBT' | 'STAFF' | 'CONTACT';
   createdAt: string;
   updatedAt: string;
 }
@@ -27,6 +30,8 @@ export interface CreateTransactionPayload {
   description?: string;
   transactionDate?: string;  // ISO date — defaults to now on server
   syncId?: string;
+  relatedId?: string;
+  relatedType?: 'DEBT' | 'STAFF' | 'CONTACT';
 }
 
 export interface UpdateTransactionPayload {

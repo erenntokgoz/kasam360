@@ -1,32 +1,34 @@
 const Directory = require('../models/Directory');
 
 // GET /api/directory?type=CONTACT|STAFF
-const getDirectory = async (req, res) => {
+const getDirectory = async (req, res, next) => {
   try {
     const { type } = req.query;
     const filter = { tenantId: req.tenantId };
-    if (type) {
-      filter.type = type;
-    }
+    if (type) filter.type = type;
     const list = await Directory.find(filter).sort({ name: 1 });
     return res.status(200).json({ success: true, data: list });
-  } catch (error) {
-    console.error('[directoryController.getDirectory]', error);
-    return res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
+  } catch (err) { next(err); }
 };
 
-// POST /api/directory
-const createEntry = async (req, res) => {
+const createEntry = async (req, res, next) => {
   try {
     const { name, type, role, totalPaid, totalBalance, lastTransactionDate } = req.body;
-    if (!name || !type) {
-      return res.status(400).json({ success: false, message: 'Name and type are required' });
-    }
+    if (!name || !type) return res.status(400).json({ success: false, message: 'İsim ve tip zorunludur.' });
+
+    const trimmedName = name.trim();
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const existing = await Directory.findOne({ 
+      tenantId: req.tenantId, 
+      name: { $regex: new RegExp(`^${escapedName}$`, 'i') } 
+    });
+
+    if (existing) return res.status(400).json({ success: false, message: 'Bu isimde bir kayıt zaten mevcut.' });
 
     const newEntry = await Directory.create({
       tenantId: req.tenantId,
-      name: name.trim(),
+      name: trimmedName,
       type,
       role,
       totalPaid: totalPaid || 0,
@@ -35,22 +37,17 @@ const createEntry = async (req, res) => {
     });
 
     return res.status(201).json({ success: true, data: newEntry });
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ success: false, message: 'Bu isimde bir kayıt zaten mevcut.' });
-    }
-    console.error('[directoryController.createEntry]', error);
-    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ success: false, message: 'Bu isimde bir kayıt zaten mevcut.' });
+    next(err);
   }
 };
 
-// PUT /api/directory/:id
-const updateEntry = async (req, res) => {
+const updateEntry = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updates = req.body;
     
-    // Prevent updating tenantId
     delete updates.tenantId;
     const ALLOWED_FIELDS = ['name', 'role', 'totalPaid', 'totalBalance', 'lastTransactionDate'];
     const safeUpdate = {};
@@ -64,30 +61,18 @@ const updateEntry = async (req, res) => {
       { new: true }
     );
 
-    if (!entry) {
-      return res.status(404).json({ success: false, message: 'Kayıt bulunamadı' });
-    }
-
+    if (!entry) return res.status(404).json({ success: false, message: 'Kayıt bulunamadı.' });
     return res.status(200).json({ success: true, data: entry });
-  } catch (error) {
-    console.error('[directoryController.updateEntry]', error);
-    return res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
+  } catch (err) { next(err); }
 };
 
-// DELETE /api/directory/:id
-const deleteEntry = async (req, res) => {
+const deleteEntry = async (req, res, next) => {
   try {
     const { id } = req.params;
     const entry = await Directory.findOneAndDelete({ _id: id, tenantId: req.tenantId });
-    if (!entry) {
-      return res.status(404).json({ success: false, message: 'Kayıt bulunamadı' });
-    }
-    return res.status(200).json({ success: true, message: 'Kayıt silindi' });
-  } catch (error) {
-    console.error('[directoryController.deleteEntry]', error);
-    return res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
+    if (!entry) return res.status(404).json({ success: false, message: 'Kayıt bulunamadı.' });
+    return res.status(200).json({ success: true, message: 'Kayıt silindi.' });
+  } catch (err) { next(err); }
 };
 
 module.exports = { getDirectory, createEntry, updateEntry, deleteEntry };

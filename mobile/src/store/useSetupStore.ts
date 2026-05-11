@@ -16,14 +16,19 @@ interface SetupState {
     openingDebts: number;
     openingReceivables: number;
   }) => Promise<void>;
+  reset: () => void;
 }
 
-export const useSetupStore = create<SetupState>((set) => ({
+const initialState = {
   isSetupComplete: false,
   hasSeenOnboarding: false,
   openingBalance: 0,
   openingDebts: 0,
   openingReceivables: 0,
+};
+
+export const useSetupStore = create<SetupState>((set) => ({
+  ...initialState,
 
   /**
    * Hydrates both the setup-complete flag and the onboarding-seen flag
@@ -68,4 +73,6 @@ export const useSetupStore = create<SetupState>((set) => ({
       set({ ...data });
     }
   },
+
+  reset: () => set(initialState),
 }));

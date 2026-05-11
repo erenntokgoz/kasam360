@@ -15,6 +15,8 @@ export const StorageKeys = {
   PHONE_NUMBER: 'auth.phoneNumber',
   CONTACTS: 'app.contacts',
   STAFF: 'app.staff',
+  LEDGER: 'app.ledger',
+  DEBTS: 'app.debts',
 } as const;
 
 export type StorageKey = (typeof StorageKeys)[keyof typeof StorageKeys];

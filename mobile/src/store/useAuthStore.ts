@@ -8,6 +8,11 @@ import {
 } from '../utils/storage';
 import { useLedgerStore } from './useLedgerStore';
 import { useDebtStore } from './useDebtStore';
+import { useContactStore } from './useContactStore';
+import { useStaffStore } from './useStaffStore';
+import { useNotificationStore } from './useNotificationStore';
+import { useLogStore } from './useLogStore';
+import { useSetupStore } from './useSetupStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -154,9 +159,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     clearAuth();
     set({ user: null, token: null, refreshToken: null, error: null });
-    // Reset data stores so a subsequent login won't briefly show stale data
+    // Reset all data stores to avoid stale data between accounts
     useLedgerStore.getState().reset();
     useDebtStore.getState().reset();
+    useContactStore.getState().reset();
+    useStaffStore.getState().reset();
+    useNotificationStore.getState().reset();
+    useLogStore.getState().reset();
+    useSetupStore.getState().reset();
   },
 
   /**
