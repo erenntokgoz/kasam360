@@ -7,5 +7,8 @@ const { requireAuth } = require('../middlewares/authMiddleware');
 router.use(requireAuth);
 
 router.put('/setup', tenantController.updateSetup);
+router.put('/device-token', tenantController.updateDeviceToken);
+router.post('/trigger-notifications', tenantController.triggerDueNotifications);
+router.delete('/clear', tenantController.clearData);
 
 module.exports = router;

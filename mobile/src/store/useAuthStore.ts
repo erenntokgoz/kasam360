@@ -21,6 +21,7 @@ export interface Tenant {
   phone: string;
   businessName: string;
   subscriptionStatus: 'TRIAL' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED';
+  isSetupComplete: boolean;
 }
 
 interface AuthState {
@@ -37,6 +38,7 @@ interface AuthState {
   hydrateFromStorage: () => Promise<void>;
   updateProfile: (payload: { businessName?: string; password?: string }) => Promise<void>;
   deleteAccount: () => Promise<void>;
+  clearData: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -119,7 +121,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Registration failed.';
+        err instanceof Error ? err.message : 'Kayıt işlemi başarısız oldu.';
       set({ error: message, isLoading: false });
       throw err; // re-throw so UI can react (e.g. show inline error)
     }
@@ -147,7 +149,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Login failed.';
+      const message = err instanceof Error ? err.message : 'Giriş işlemi başarısız oldu.';
       set({ error: message, isLoading: false });
       throw err;
     }
@@ -183,7 +185,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       setItem(StorageKeys.USER, JSON.stringify(data.tenant));
       set({ user: data.tenant, isLoading: false });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Update failed.';
+      const message = err instanceof Error ? err.message : 'Güncelleme başarısız oldu.';
       set({ error: message, isLoading: false });
       throw err;
     }
@@ -198,7 +200,34 @@ export const useAuthStore = create<AuthState>((set) => ({
       await apiClient.delete('/api/auth/account');
       useAuthStore.getState().logout();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Account deletion failed.';
+      const message = err instanceof Error ? err.message : 'Hesap silme işlemi başarısız oldu.';
+      set({ error: message, isLoading: false });
+      throw err;
+    }
+  },
+
+  /**
+   * Clears all tenant data without deleting the account.
+   */
+  clearData: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      await apiClient.delete('/api/tenant/clear');
+      
+      // Reset data stores
+      useLedgerStore.getState().reset();
+      useDebtStore.getState().reset();
+      useContactStore.getState().reset();
+      useStaffStore.getState().reset();
+      useNotificationStore.getState().reset();
+      useLogStore.getState().reset();
+      
+      // Re-hydrate Setup to false
+      useSetupStore.getState().reset();
+      
+      set({ isLoading: false });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Veri temizleme başarısız oldu.';
       set({ error: message, isLoading: false });
       throw err;
     }

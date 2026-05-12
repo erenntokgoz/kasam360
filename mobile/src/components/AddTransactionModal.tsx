@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, Pressable, TextInput,
-  Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator
+  Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Switch
 } from 'react-native';
 import DatePicker from 'react-native-date-picker';
 import Icon from 'react-native-vector-icons/Feather';
@@ -32,7 +32,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
   const { addTransaction, isCreating } = useLedgerStore();
   const { addDebt } = useDebtStore();
   const { contacts, addContact } = useContactStore();
-  const { staffList, addStaff, addPaymentToStaff } = useStaffStore();
+  const { staffList, addStaff } = useStaffStore();
 
   const [step, setStep] = useState<Step>('TYPE');
   const [mainType, setMainType] = useState<MainType | null>(null);
@@ -42,6 +42,9 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
   const [date, setDate] = useState(new Date());
   const [method, setMethod] = useState<'CASH' | 'POS' | 'IBAN'>('CASH');
   const [description, setDescription] = useState('');
+  const [isCash, setIsCash] = useState(false); // Default to Veresiye (false)
+  const [isProcessing, setIsProcessing] = useState(false);
+
 
   useEffect(() => {
     if (visible) {
@@ -53,37 +56,57 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       setDate(new Date());
       setMethod('CASH');
       setDescription('');
+      setIsCash(false);
     }
   }, [visible, initialType, initialSubType, initialWho]);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step === 'TYPE') {
       if (!mainType) return;
       setStep('AMOUNT');
     } else if (step === 'AMOUNT') {
       if (!amount) return;
-      if (mainType === 'GELİR') setStep('METHOD');
-      else if (mainType === 'GİDER') setStep('SUBTYPE');
-      else setStep('WHO');
-    } else if (step === 'SUBTYPE') {
-      if (!subType) return;
-      if (subType === 'Personel Gideri') setStep('WHO');
-      else setStep('METHOD');
-    } else if (step === 'WHO') {
-      if (!who) return;
-      if (subType === 'Personel Gideri') {
-        if (!staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase())) {
-          addStaff(who.trim());
+      if (mainType === 'GELİR') {
+        setStep('METHOD');
+      } else if (mainType === 'GİDER') {
+        if (initialSubType) {
+          setSubType(initialSubType);
+          if (initialSubType === 'Kişisel Gider') setStep('DESC');
+          else setStep('WHO');
+        } else {
+          setStep('SUBTYPE');
         }
       } else {
-        if (!contacts.find(c => c.name.toLowerCase() === who.trim().toLowerCase())) {
-          addContact(who.trim());
+        // BORÇ or ALACAK → kime/kimden sorusu
+        setStep('WHO');
+      }
+    } else if (step === 'SUBTYPE') {
+      if (!subType) return;
+      if (subType === 'Kişisel Gider') setStep('DESC');
+      else setStep('WHO');
+    } else if (step === 'WHO') {
+      if (!who && mainType !== 'GELİR') return;
+      
+      if (who) {
+        if (mainType === 'GİDER' && subType === 'Personel Gideri') {
+          if (!staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase())) {
+            try { await addStaff(who.trim()); } catch (e) {}
+          }
+        } else {
+          if (!contacts.find(c => c.name.toLowerCase() === who.trim().toLowerCase())) {
+            try { await addContact(who.trim()); } catch (e) {}
+          }
         }
       }
-      if (mainType === 'GELİR' || mainType === 'GİDER') setStep('METHOD');
-      else setStep('DATE');
+      
+      // BORÇ/ALACAK → vade tarihi seç, diğerleri → devam
+      if (mainType === 'BORÇ' || mainType === 'ALACAK') {
+        setStep('DATE');
+      } else {
+        setStep('DESC');
+      }
     } else if (step === 'METHOD') {
-      setStep('DATE');
+      setStep('DESC');
     } else if (step === 'DATE') {
       setStep('DESC');
     } else if (step === 'DESC') {
@@ -95,17 +118,37 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
     if (step === 'AMOUNT') {
       if (initialType) onClose(); else setStep('TYPE');
     }
-    else if (step === 'SUBTYPE') setStep('AMOUNT');
-    else if (step === 'WHO') {
-      setStep('SUBTYPE');
-    }
     else if (step === 'METHOD') {
-      if (mainType === 'GELİR') setStep('AMOUNT');
-      else if (subType === 'Personel Gideri') setStep('WHO');
-      else setStep('SUBTYPE');
+      setStep('AMOUNT');
     }
-    else if (step === 'DATE') setStep('METHOD');
-    else if (step === 'DESC') setStep('DATE');
+    else if (step === 'SUBTYPE') {
+      setStep('AMOUNT');
+    }
+    else if (step === 'WHO') {
+      if (mainType === 'GİDER') {
+        if (initialSubType) setStep('AMOUNT');
+        else setStep('SUBTYPE');
+      } else {
+        setStep('AMOUNT');
+      }
+    }
+    else if (step === 'DATE') {
+      setStep('WHO');
+    }
+    else if (step === 'DESC') {
+      if (mainType === 'GELİR') setStep('METHOD');
+      else if (mainType === 'GİDER') {
+        if (subType === 'Kişisel Gider') {
+          if (initialSubType) setStep('AMOUNT');
+          else setStep('SUBTYPE');
+        } else {
+          setStep('WHO');
+        }
+      } else {
+        // BORÇ/ALACAK → DATE'e geri dön
+        setStep('DATE');
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -116,62 +159,101 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       const syncId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       if (mainType === 'GELİR') {
+        const methodLabels: Record<string, string> = { 'CASH': 'Nakit', 'POS': 'POS', 'IBAN': 'Havale' };
+        const methodLabel = methodLabels[method] || method;
+        const finalDesc = `${methodLabel} Gelir${description ? ' - ' + description.trim() : ''}`;
+
         await addTransaction({
           type: 'INCOME',
           amount: cents,
           method: method,
           category: 'Gelir',
-          description: description.trim() || undefined,
+          description: finalDesc,
           transactionDate: date.toISOString(),
           syncId,
         });
       } else if (mainType === 'GİDER') {
-        const isPersonnel = subType === 'Personel Gideri';
         let finalRelatedId = undefined;
         let finalRelatedType = undefined;
+        const trimmedWho = who.trim();
 
-        if (isPersonnel && who) {
-          const staff = staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase());
-          if (staff) {
-            finalRelatedId = staff.id;
-            finalRelatedType = 'STAFF';
+        if (trimmedWho && subType !== 'Kişisel Gider') {
+          if (subType === 'Personel Gideri') {
+            const staff = useStaffStore.getState().staffList.find(s => s.name.toLowerCase() === trimmedWho.toLowerCase());
+            if (staff) {
+              finalRelatedId = staff.id;
+              finalRelatedType = 'STAFF';
+            }
+          } else {
+            const contact = useContactStore.getState().contacts.find(c => c.name.toLowerCase() === trimmedWho.toLowerCase());
+            if (contact) {
+              finalRelatedId = contact.id;
+              finalRelatedType = 'CONTACT';
+            }
           }
         }
 
-        const finalDesc = isPersonnel && who 
-          ? `${who} kişisine personel ödemesi${description ? ' - ' + description : ''}`
-          : description.trim() || undefined;
+        const methodLabels: Record<string, string> = { 'CASH': 'Nakit', 'POS': 'POS', 'IBAN': 'Havale' };
+        const methodLabel = methodLabels[method] || method;
+        
+        let formattedDesc = '';
+        if (subType === 'Kişisel Gider') {
+          formattedDesc = `Kişisel Gider${description ? ' - ' + description.trim() : ''}`;
+        } else if (subType === 'Personel Gideri') {
+          formattedDesc = `${trimmedWho} - ${subType} (${methodLabel})${description ? ' - ' + description.trim() : ''}`;
+        } else if (trimmedWho) {
+          formattedDesc = `${trimmedWho} - ${subType} (${methodLabel})${description ? ' - ' + description.trim() : ''}`;
+        } else {
+          formattedDesc = `${subType} (${methodLabel})${description ? ' - ' + description.trim() : ''}`;
+        }
 
         await addTransaction({
           type: 'EXPENSE',
           amount: cents,
           method: method,
           category: subType,
-          description: finalDesc,
+          description: formattedDesc,
           transactionDate: date.toISOString(),
           syncId,
           relatedId: finalRelatedId,
           relatedType: finalRelatedType as any,
+          directoryId: finalRelatedId,
+          directoryType: finalRelatedType as any
         });
 
-        if (isPersonnel && finalRelatedId) {
-          addPaymentToStaff(finalRelatedId, cents);
+      } else if (mainType === 'BORÇ' || mainType === 'ALACAK') {
+        const trimmedWho = who.trim();
+        let finalRelatedId = undefined;
+        let finalRelatedType: 'CONTACT' | 'STAFF' = 'CONTACT';
+
+        if (trimmedWho) {
+          const contact = useContactStore.getState().contacts.find(c => c.name.toLowerCase() === trimmedWho.toLowerCase());
+          if (contact) {
+            finalRelatedId = contact.id;
+            finalRelatedType = 'CONTACT';
+          } else {
+            const staff = useStaffStore.getState().staffList.find(s => s.name.toLowerCase() === trimmedWho.toLowerCase());
+            if (staff) {
+              finalRelatedId = staff.id;
+              finalRelatedType = 'STAFF';
+            }
+          }
         }
-      } else if (mainType === 'BORÇ') {
+
+        const desc = mainType === 'BORÇ' 
+          ? `${who} kişisinden borç alındı${description ? ' - ' + description.trim() : ''}`
+          : `${who} kişisine alacak kaydedildi${description ? ' - ' + description.trim() : ''}`;
+
         await addDebt({
           entityName: who,
-          type: 'TAKEN',
+          type: mainType === 'BORÇ' ? 'TAKEN' : 'GIVEN',
           totalAmount: cents,
           dueDate: date.toISOString().split('T')[0],
+          description: desc,
+          isCash,
           syncId,
-        });
-      } else if (mainType === 'ALACAK') {
-        await addDebt({
-          entityName: who,
-          type: 'GIVEN',
-          totalAmount: cents,
-          dueDate: date.toISOString().split('T')[0],
-          syncId,
+          relatedId: finalRelatedId,
+          relatedType: finalRelatedType
         });
       }
       onClose();
@@ -219,34 +301,55 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                   value={amount}
                   onChangeText={setAmount}
                 />
+                {(mainType === 'BORÇ' || mainType === 'ALACAK') && (
+                  <View style={[styles.switchContainer, { backgroundColor: theme.colors.card }]}>
+                    <View style={{ flex: 1, marginRight: 16 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 }}>
+                        Nakit İşlem mi?
+                      </Text>
+                      <Text style={{ fontSize: 12, color: theme.colors.textTertiary, lineHeight: 16 }}>
+                        Açık ise kasanız etkilenir (Örn: Nakit para borç verdim). Kapalı ise sadece deftere yazılır (Örn: Veresiye mal sattım).
+                      </Text>
+                    </View>
+                    <Switch
+                      value={isCash}
+                      onValueChange={setIsCash}
+                      trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+                )}
                 <NextBtn onPress={handleNext} theme={theme} />
               </Animated.View>
             )}
 
             {step === 'SUBTYPE' && (
               <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
-                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>{mainType === 'GELİR' ? 'Ödeme yöntemi seçiniz:' : 'Gider tipi seçiniz:'}</Text>
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>Gider tipi seçiniz:</Text>
                 <View style={styles.subtypeList}>
-                  {mainType === 'GELİR' ? (
-                    <>
-                      <SubtypeItem label="POS" icon="credit-card" active={subType === 'POS'} onSelect={() => { setSubType('POS'); setStep('DESC'); }} theme={theme} />
-                      <SubtypeItem label="Nakit" icon="dollar-sign" active={subType === 'CASH'} onSelect={() => { setSubType('CASH'); setStep('DESC'); }} theme={theme} />
-                      <SubtypeItem label="Havale" icon="send" active={subType === 'IBAN'} onSelect={() => { setSubType('IBAN'); setStep('DESC'); }} theme={theme} />
-                    </>
-                  ) : (
-                    <>
-                      <SubtypeItem label="İşletme Gideri" icon="briefcase" active={subType === 'İşletme Gideri'} onSelect={() => { setSubType('İşletme Gideri'); setStep('DESC'); }} theme={theme} />
-                      <SubtypeItem label="Personel Gideri" icon="users" active={subType === 'Personel Gideri'} onSelect={() => { setSubType('Personel Gideri'); setStep('DESC'); }} theme={theme} />
-                      <SubtypeItem label="Kişisel Gider" icon="user" active={subType === 'Kişisel Gider'} onSelect={() => { setSubType('Kişisel Gider'); setStep('DESC'); }} theme={theme} />
-                    </>
-                  )}
+                  <SubtypeItem label="İşletme Gideri" icon="briefcase" active={subType === 'İşletme Gideri'} onSelect={() => { setSubType('İşletme Gideri'); handleNext(); }} theme={theme} />
+                  <SubtypeItem label="Personel Gideri" icon="users" active={subType === 'Personel Gideri'} onSelect={() => { setSubType('Personel Gideri'); handleNext(); }} theme={theme} />
+                  <SubtypeItem label="Kişisel Gider" icon="user" active={subType === 'Kişisel Gider'} onSelect={() => { setSubType('Kişisel Gider'); handleNext(); }} theme={theme} />
+                </View>
+              </Animated.View>
+            )}
+
+            {step === 'METHOD' && (
+              <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>Ödeme yöntemi seçiniz:</Text>
+                <View style={styles.subtypeList}>
+                  <SubtypeItem label="Nakit" icon="dollar-sign" active={method === 'CASH'} onSelect={() => { setMethod('CASH'); handleNext(); }} theme={theme} />
+                  <SubtypeItem label="POS" icon="credit-card" active={method === 'POS'} onSelect={() => { setMethod('POS'); handleNext(); }} theme={theme} />
+                  <SubtypeItem label="Havale" icon="send" active={method === 'IBAN'} onSelect={() => { setMethod('IBAN'); handleNext(); }} theme={theme} />
                 </View>
               </Animated.View>
             )}
 
             {step === 'WHO' && (
               <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
-                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>{mainType === 'BORÇ' ? 'Kimden aldınız?' : (mainType === 'ALACAK' ? 'Kime verdiniz?' : 'Kime ödeme yapıldı?')}</Text>
+                <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>
+                  {mainType === 'BORÇ' ? 'Kimden aldınız?' : (mainType === 'ALACAK' ? 'Kime verdiniz?' : (mainType === 'GELİR' ? 'Kimden? (İsteğe bağlı)' : 'Kime?'))}
+                </Text>
                 <View style={[styles.searchBar, { backgroundColor: theme.colors.card, marginBottom: 12 }]}>
                   <Icon name="search" size={16} color={theme.colors.textTertiary} />
                   <TextInput
@@ -258,13 +361,13 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                   />
                 </View>
                 <ScrollView style={{ maxHeight: 200, marginBottom: 12 }}>
-                  {subType === 'Personel Gideri' ? (
+                  {mainType === 'GİDER' && subType === 'Personel Gideri' ? (
                     <>
                       {staffList.filter(s => s.name.toLowerCase().includes(who.toLowerCase())).map(s => (
                         <Pressable
-                          key={s.name}
+                          key={s.id}
                           style={[styles.contactItem, { backgroundColor: theme.colors.card }]}
-                          onPress={() => { setWho(s.name); setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE'); }}
+                          onPress={() => { setWho(s.name); handleNext(); }}
                         >
                           <Icon name="user" size={16} color={theme.colors.textSecondary} />
                           <Text style={{ color: theme.colors.textPrimary, fontWeight: '500' }}>{s.name}</Text>
@@ -273,9 +376,17 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                       {who.length > 0 && !staffList.find(s => s.name.toLowerCase() === who.toLowerCase()) && (
                         <Pressable
                           style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]}
-                          onPress={() => { 
-                            addStaff(who);
-                            setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE');
+                          onPress={async () => { 
+                            try {
+                              setIsProcessing(true);
+                              await useStaffStore.getState().addStaff(who);
+                              await useStaffStore.getState().fetchStaff();
+                              setIsProcessing(false);
+                              handleNext(); 
+                            } catch (e) {
+                              setIsProcessing(false);
+                              Alert.alert('Hata', 'Personel eklenemedi.');
+                            }
                           }}
                         >
                           <Icon name="user-plus" size={16} color={theme.colors.accent} />
@@ -287,9 +398,9 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                     <>
                       {contacts.filter(c => c.name.toLowerCase().includes(who.toLowerCase())).map(c => (
                         <Pressable
-                          key={c.name}
+                          key={c.id}
                           style={[styles.contactItem, { backgroundColor: theme.colors.card }]}
-                          onPress={() => { setWho(c.name); setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE'); }}
+                          onPress={() => { setWho(c.name); handleNext(); }}
                         >
                           <Icon name="user" size={16} color={theme.colors.textSecondary} />
                           <Text style={{ color: theme.colors.textPrimary, fontWeight: '500' }}>{c.name}</Text>
@@ -298,9 +409,17 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                       {who.length > 0 && !contacts.find(c => c.name.toLowerCase() === who.toLowerCase()) && (
                         <Pressable
                           style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]}
-                          onPress={() => { 
-                            addContact(who);
-                            setStep(mainType === 'GELİR' || mainType === 'GİDER' ? 'DESC' : 'DATE');
+                          onPress={async () => { 
+                            try {
+                              setIsProcessing(true);
+                              await useContactStore.getState().addContact(who);
+                              await useContactStore.getState().fetchContacts();
+                              setIsProcessing(false);
+                              handleNext(); 
+                            } catch (e) {
+                              setIsProcessing(false);
+                              Alert.alert('Hata', 'Kişi eklenemedi.');
+                            }
                           }}
                         >
                           <Icon name="user-plus" size={16} color={theme.colors.accent} />
@@ -400,7 +519,7 @@ const styles = StyleSheet.create({
   iconCircle: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   typeLabel: { fontSize: 16, fontWeight: '700' },
   typeSubLabel: { fontSize: 11, fontWeight: '500', marginTop: 4 },
-  bigInput: { fontSize: 48, fontWeight: '700', textAlign: 'center', marginVertical: 40 },
+  bigInput: { fontSize: 48, fontWeight: '700', textAlign: 'center', marginVertical: 20 },
   input: { fontSize: 24, fontWeight: '600', borderBottomWidth: 2, paddingVertical: 12, marginBottom: 40 },
   subtypeList: { gap: 12 },
   subtypeItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 16, borderWidth: 2, gap: 16 },
@@ -411,6 +530,7 @@ const styles = StyleSheet.create({
   finishBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
   searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, height: 44, borderRadius: 12 },
   contactItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10, marginBottom: 8, gap: 12 },
+  switchContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', marginBottom: 24 },
 });
 
 export default AddTransactionModal;

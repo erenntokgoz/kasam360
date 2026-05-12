@@ -12,6 +12,8 @@ import { useRecurringStore } from './src/store/useRecurringStore';
 import { getTheme } from './src/theme';
 import { hydrateLanguage } from './src/i18n';
 import { getTransactions } from './src/api/transactionService';
+import messaging from '@react-native-firebase/messaging';
+import apiClient from './src/api/client';
 
 function App(): React.JSX.Element {
   const [isReady, setIsReady] = useState(false);
@@ -47,6 +49,44 @@ function App(): React.JSX.Element {
       }
     };
     init();
+
+    // FCM token — arka planda, loading'i bloke etmeden
+    const setupFCM = async () => {
+      try {
+        const authStatus = await messaging().requestPermission();
+        const enabled = authStatus === messaging.AuthorizationStatus.AUTHORIZED || authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+        
+        if (enabled) {
+          const token = await messaging().getToken();
+          if (token) {
+            console.log('[FCM] Token:', token);
+            const authToken = useAuthStore.getState().token;
+            if (authToken) {
+              await apiClient.put('/api/tenant/device-token', { deviceToken: token }).catch(e => console.warn('Token sync failed', e));
+            }
+          }
+        } else {
+          console.warn('[FCM] Bildirim izni reddedildi.');
+        }
+      } catch (e) {
+        console.warn('[FCM] Setup error:', e);
+      }
+    };
+    // init bittikten sonra FCM'i başlat
+    init().then(() => setupFCM());
+
+    // Listen for foreground messages
+    const unsubscribe = messaging().onMessage(async remoteMessage => {
+      if (remoteMessage.notification) {
+        addNotification({
+          title: remoteMessage.notification.title || 'Yeni Bildirim',
+          body: remoteMessage.notification.body || '',
+          type: 'SYSTEM'
+        });
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   // ── Auto-detect setup: if user has a token but setup flag is missing
@@ -83,7 +123,7 @@ function App(): React.JSX.Element {
       <SafeAreaProvider>
         <StatusBar
           barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-          backgroundColor={theme.colors.primary}
+          backgroundColor="transparent"
           translucent={true}
         />
         <RootNavigator />

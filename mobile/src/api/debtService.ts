@@ -16,6 +16,8 @@ export interface Debt {
   status: DebtStatus;
   dueDate: string | null;   // ISO date
   syncId?: string;
+  relatedId?: string;
+  relatedType?: 'STAFF' | 'CONTACT';
   createdAt: string;
   updatedAt: string;
 }
@@ -25,7 +27,11 @@ export interface CreateDebtPayload {
   type: DebtType;
   totalAmount: number;      // integer cents/kuruş
   dueDate?: string;         // ISO date
+  description?: string;
+  isCash?: boolean;         // true = creates Kasa transaction, false = only debt record
   syncId?: string;
+  relatedId?: string;
+  relatedType?: 'STAFF' | 'CONTACT';
 }
 
 export interface UpdateDebtPayload {

@@ -30,7 +30,7 @@ const createDebt = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
     const { tenantId } = req;
-    const { entityName, type, totalAmount, dueDate, syncId } = req.body;
+    const { entityName, type, totalAmount, dueDate, syncId, description, isCash } = req.body;
 
     if (!entityName || !type || totalAmount == null) {
       return res.status(400).json({ success: false, message: 'İsim, tip ve tutar alanları zorunludur.' });
@@ -54,13 +54,32 @@ const createDebt = async (req, res, next) => {
         }
       }
 
-      const txType = type === 'GIVEN' ? 'EXPENSE' : 'INCOME';
-      const tenant = await Tenant.findByIdAndUpdate(
-        tenantId,
-        { $inc: { currentBalance: txType === 'INCOME' ? amountInt : -amountInt } },
-        { new: true, session }
-      );
-      const balanceAfter = tenant.currentBalance;
+      let relatedId = req.body.relatedId;
+      let relatedType = req.body.relatedType || 'CONTACT';
+
+      // Auto-link directory or CREATE if not exists
+      if (!relatedId && entityName) {
+        const Directory = require('../models/Directory');
+        const trimmedName = entityName.trim();
+        let entry = await Directory.findOne({ 
+          tenantId, 
+          name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+          isDeleted: false 
+        }).session(session);
+
+        if (!entry) {
+          // Yeni rehber kaydı oluştur
+          const [newEntry] = await Directory.create([{
+            tenantId,
+            name: trimmedName,
+            roles: ['CONTACT']
+          }], { session });
+          entry = newEntry;
+        }
+
+        relatedId = entry._id;
+        relatedType = entry.roles.includes('STAFF') ? 'STAFF' : 'CONTACT';
+      }
 
       const [debt] = await Debt.create([{
         tenantId,
@@ -70,20 +89,44 @@ const createDebt = async (req, res, next) => {
         remainingAmount: amountInt,
         status: 'PENDING',
         dueDate: dueDate ? new Date(dueDate) : null,
+        description: description ? String(description).trim() : null,
         syncId: syncId || undefined,
+        relatedId,
+        relatedType
       }], { session });
+
+      // Always create a transaction log for traceability, but only update balance if isCash is true
+      const txType = type === 'GIVEN' ? 'EXPENSE' : 'INCOME';
+      let balanceAfter;
+
+      if (isCash) {
+        const tenant = await Tenant.findByIdAndUpdate(
+          tenantId,
+          { $inc: { currentBalance: txType === 'INCOME' ? amountInt : -amountInt } },
+          { new: true, session }
+        );
+        balanceAfter = tenant.currentBalance;
+      } else {
+        // Get current balance without updating
+        const tenant = await Tenant.findById(tenantId).session(session);
+        balanceAfter = tenant.currentBalance;
+      }
 
       await Transaction.create([{
         tenantId,
         type: txType,
         amount: amountInt,
-        method: 'CASH',
-        category: type === 'GIVEN' ? 'Borç Verildi' : 'Borç Alındı',
-        description: `${type === 'GIVEN' ? 'Verilen' : 'Alınan'}: ${entityName}`,
+        method: isCash ? 'CASH' : 'VERESİYE',
+        category: type === 'GIVEN' ? 'Alacak' : 'Borç',
+        description: description ? String(description).trim() : (isCash 
+          ? `${entityName} ${type === 'GIVEN' ? 'kişisine alacak kaydedildi' : 'kişisinden borç alındı'}`
+          : `${entityName} - Veresiye ${type === 'GIVEN' ? 'Alacak' : 'Borç'} Kaydı`),
         transactionDate: new Date(),
         balanceAfter,
         relatedId: debt._id,
         relatedType: 'DEBT',
+        directoryId: relatedId,
+        directoryType: relatedType
       }], { session });
 
       createdDebt = debt;
@@ -198,11 +241,13 @@ const payDebt = async (req, res, next) => {
         amount: paymentAmount,
         method: method || 'CASH',
         category: debt.type === 'GIVEN' ? 'Alacak Tahsili' : 'Borç Ödemesi',
-        description: `${debt.type === 'GIVEN' ? 'Tahsil edilen:' : 'Ödenen:'} ${debt.entityName}`,
+        description: `${debt.entityName} kişisinden ${debt.type === 'GIVEN' ? 'alacak tahsil edildi' : 'borç ödemesi yapıldı'}`,
         transactionDate: new Date(),
         balanceAfter: tenantRecord.currentBalance,
         relatedId: debt._id,
         relatedType: 'DEBT',
+        directoryId: debt.relatedId, // Also link to directory for easy filtering
+        directoryType: debt.relatedType
       }], { session });
 
       updatedDebt = debt;
@@ -229,7 +274,7 @@ const updateDebt = async (req, res, next) => {
     if (!debt || debt.isDeleted) return res.status(404).json({ success: false, message: 'Borç bulunamadı.' });
 
     const oldData = debt.toObject();
-    const ALLOWED_FIELDS = ['entityName', 'dueDate', 'notes'];
+    const ALLOWED_FIELDS = ['entityName', 'dueDate', 'notes', 'description'];
     const safeUpdate = {};
     for (const field of ALLOWED_FIELDS) {
       if (req.body[field] !== undefined) safeUpdate[field] = req.body[field];
@@ -265,12 +310,15 @@ const deleteDebt = async (req, res, next) => {
       const initialTx = await Transaction.findOne({ 
         relatedId: debt._id, 
         tenantId,
-        category: { $in: ['Borç Verildi', 'Borç Alındı'] }
+        category: { $in: ['Alacak', 'Borç', 'Borç Verildi', 'Borç Alındı'] }
       }).session(session);
 
       if (initialTx && !initialTx.isDeleted) {
-        const rollbackImpact = initialTx.type === 'INCOME' ? -initialTx.amount : initialTx.amount;
-        await Tenant.findByIdAndUpdate(tenantId, { $inc: { currentBalance: rollbackImpact } }, { session });
+        // Muhasebe Kuralı: Eğer işlem veresiye (non-cash) ise kasaya iade yapılmaz.
+        if (initialTx.method !== 'VERESİYE') {
+          const rollbackImpact = initialTx.type === 'INCOME' ? -initialTx.amount : initialTx.amount;
+          await Tenant.findByIdAndUpdate(tenantId, { $inc: { currentBalance: rollbackImpact } }, { session });
+        }
         initialTx.isDeleted = true;
         await initialTx.save({ session });
       }
@@ -279,12 +327,16 @@ const deleteDebt = async (req, res, next) => {
         relatedId: debt._id, 
         tenantId, 
         isDeleted: false,
-        _id: { $ne: initialTx?._id } 
+        category: { $nin: ['Alacak', 'Borç', 'Borç Verildi', 'Borç Alındı'] }
       }).session(session);
 
       for (const pay of payments) {
-        const payRollback = pay.type === 'INCOME' ? -pay.amount : pay.amount;
-        await Tenant.findByIdAndUpdate(tenantId, { $inc: { currentBalance: payRollback } }, { session });
+        // Ödemeler genellikle nakit/iban olduğu için bunların iadesi yapılır.
+        // Ancak yine de kontrol eklemek güvenlidir.
+        if (pay.method !== 'VERESİYE') {
+          const payRollback = pay.type === 'INCOME' ? -pay.amount : pay.amount;
+          await Tenant.findByIdAndUpdate(tenantId, { $inc: { currentBalance: payRollback } }, { session });
+        }
         pay.isDeleted = true;
         await pay.save({ session });
       }

@@ -33,10 +33,17 @@ const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ item, onPres
         <Icon name={iconName} size={16} color={amountColor} />
       </View>
       <View style={styles.rowMiddle}>
-        <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>{item.category || (isIncome ? 'Gelir' : 'Gider')}</Text>
+        <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+          {item.description || item.category || (isIncome ? 'Gelir' : 'Gider')}
+        </Text>
         <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>{formatDate(item.transactionDate)}</Text>
       </View>
-      <Text style={[styles.rowAmount, { color: amountColor }]}>{formatCurrency(displayAmount, true)}</Text>
+      <View style={styles.rowRight}>
+        <Text style={[styles.rowAmount, { color: amountColor }]}>{formatCurrency(displayAmount, true)}</Text>
+        {item.balanceAfter !== undefined && (
+          <Text style={[styles.rowBalanceAfter, { color: theme.colors.textTertiary }]}>Kalan: {formatCurrency(item.balanceAfter)}</Text>
+        )}
+      </View>
     </Pressable>
   );
 });
@@ -168,7 +175,7 @@ const HomeScreen: React.FC = () => {
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.primary }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
@@ -233,6 +240,9 @@ const styles = StyleSheet.create({
   summaryBalance: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   summaryRow: { flexDirection: 'row', alignItems: 'center' },
   summaryMetric: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+  summaryMetricLabel: { fontSize: 12, fontWeight: '500' },
+  summaryMetricValue: { fontSize: 14, fontWeight: '700', marginTop: 1 },
   summaryDivider: { width: 1, height: 24, marginHorizontal: 16 },
   summaryDividerH: { height: 1, marginVertical: 12, opacity: 0.5 },
   rowContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
@@ -240,7 +250,9 @@ const styles = StyleSheet.create({
   rowMiddle: { flex: 1 },
   rowCategory: { fontSize: 16, fontWeight: '500' },
   rowDate: { fontSize: 12, marginTop: 2 },
+  rowRight: { alignItems: 'flex-end' },
   rowAmount: { fontSize: 16, fontWeight: '600' },
+  rowBalanceAfter: { fontSize: 10, marginTop: 2, fontWeight: '400' },
   viewMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20, gap: 4 },
   viewMoreText: { fontSize: 14, fontWeight: '600' },
   fab: { position: 'absolute', right: 24, width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },

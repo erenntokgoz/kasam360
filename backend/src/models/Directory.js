@@ -12,30 +12,26 @@ const directorySchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    type: {
-      type: String,
+    roles: {
+      type: [String],
       enum: ['CONTACT', 'STAFF'],
-      required: true,
+      default: ['CONTACT'],
     },
     role: {
-      type: String, // Yalnızca STAFF için eklenebilir
-    },
-    totalPaid: {
-      type: Number,
-      default: 0, // Yalnızca STAFF için, sent cinsinden
-    },
-    totalBalance: {
-      type: Number,
-      default: 0, // CONTACT için, sent cinsinden
+      type: String, // İş ünvanı (Yalnızca STAFF için eklenebilir)
     },
     lastTransactionDate: {
       type: Date,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }
 );
 
-// Aynı tenant altında aynı isimde ve aynı tipte ikinci kişi olmasın
-directorySchema.index({ tenantId: 1, name: 1, type: 1 }, { unique: true });
+// Aynı tenant altında aynı isimde tek bir aktif kişi olabilir (Unified Directory)
+directorySchema.index({ tenantId: 1, name: 1 }, { unique: true, partialFilterExpression: { isDeleted: false } });
 
 module.exports = mongoose.model('Directory', directorySchema);

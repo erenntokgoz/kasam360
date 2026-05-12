@@ -32,7 +32,7 @@ const ContactDetailScreen: React.FC = () => {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
   
-  const { contactName } = route.params;
+  const { contactName, contactId } = route.params as any;
   const { debts, fetchDebts } = useDebtStore();
   const { transactions, fetchTransactions } = useLedgerStore();
   
@@ -40,27 +40,27 @@ const ContactDetailScreen: React.FC = () => {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-
+ 
   useEffect(() => {
     fetchDebts(1).catch(() => {});
     fetchTransactions(1).catch(() => {});
   }, [fetchDebts, fetchTransactions]);
-
+ 
   const contactDebts = useMemo(() => {
     return debts
-      .filter(d => d.entityName === contactName)
+      .filter(d => (contactId ? d.relatedId === contactId : d.entityName === contactName))
       .sort((a, b) => {
         const dateA = new Date(a.createdAt || a.dueDate || 0).getTime();
         const dateB = new Date(b.createdAt || b.dueDate || 0).getTime();
         return dateB - dateA;
       });
-  }, [debts, contactName]);
-
+  }, [debts, contactName, contactId]);
+ 
   const contactTransactions = useMemo(() => {
     return transactions
-      .filter((t: Transaction) => t.description?.includes(contactName) || t.category?.includes(contactName))
+      .filter((t: Transaction) => (contactId ? (t.directoryId === contactId || t.relatedId === contactId) : (t.description?.includes(contactName) || t.category?.includes(contactName))))
       .sort((a: Transaction, b: Transaction) => new Date(b.transactionDate || b.createdAt).getTime() - new Date(a.transactionDate || a.createdAt).getTime());
-  }, [transactions, contactName]);
+  }, [transactions, contactName, contactId]);
 
   const { totalGiven, totalTaken, netStatus } = useMemo(() => {
     let given = 0;

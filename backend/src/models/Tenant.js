@@ -40,6 +40,14 @@ const tenantSchema = new mongoose.Schema(
       enum: ['TRIAL', 'ACTIVE', 'EXPIRED', 'SUSPENDED'],
       default: 'TRIAL',
     },
+    isSetupComplete: {
+      type: Boolean,
+      default: false,
+    },
+    deviceToken: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true, // adds createdAt + updatedAt automatically

@@ -21,14 +21,36 @@ const PersonnelExpensesScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
-  const { t } = useTranslation();
-  const { transactions, deleteTransaction } = useLedgerStore();
-  const { staffList, removeStaff, updateStaff, addStaff, fetchStaff } = useStaffStore();
+  const { transactions: globalTransactions, deleteTransaction } = useLedgerStore();
+  const { staffList, removeStaff, addStaff, fetchStaff } = useStaffStore();
   const { contacts } = useContactStore();
   
+  const [localStaffExpenses, setLocalStaffExpenses] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch from API directly
+  const fetchStaffExpenses = async () => {
+    setIsLoading(true);
+    try {
+      const { getTransactions } = require('../api/transactionService');
+      const result = await getTransactions(1, 100, { categories: ['Personel Gideri'] });
+      setLocalStaffExpenses(result.transactions);
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   React.useEffect(() => {
     fetchStaff();
+    fetchStaffExpenses();
   }, [fetchStaff]);
+
+  // Refetch if global transactions add/update
+  React.useEffect(() => {
+    fetchStaffExpenses();
+  }, [globalTransactions.length]);
   
   const [activeTab, setActiveTab] = useState<'HISTORY' | 'DIRECTORY'>('HISTORY');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -38,9 +60,8 @@ const PersonnelExpensesScreen: React.FC = () => {
   const [contactFilter, setContactFilter] = useState<string | null>(null);
   const [newStaffName, setNewStaffName] = useState('');
 
-  // Filter only personnel expenses and apply date/contact filters
-  const filteredPersonnelExpenses = useMemo(() => transactions.filter(t => {
-    if (t.category !== 'Personel Gideri') return false;
+  // Filter local state
+  const filteredPersonnelExpenses = useMemo(() => localStaffExpenses.filter(t => {
     if (contactFilter && !t.description?.toLowerCase().includes(contactFilter.toLowerCase())) return false;
     if (dateFilter.start) {
       const d = new Date(t.transactionDate || t.createdAt);
@@ -51,7 +72,7 @@ const PersonnelExpensesScreen: React.FC = () => {
       if (d > dateFilter.end) return false;
     }
     return true;
-  }), [transactions, contactFilter, dateFilter]);
+  }), [localStaffExpenses, contactFilter, dateFilter]);
 
   const totalSpent = useMemo(() => filteredPersonnelExpenses.reduce((sum, t) => sum + t.amount, 0), [filteredPersonnelExpenses]);
 
@@ -101,7 +122,7 @@ const PersonnelExpensesScreen: React.FC = () => {
   const renderStaffItem = ({ item }: { item: Staff }) => (
     <Pressable 
       style={[styles.staffCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-      onPress={() => navigation.navigate('ContactDetail', { contactName: item.name })}
+      onPress={() => navigation.navigate('ContactDetail', { contactName: item.name, contactId: item.id })}
     >
       <View style={styles.staffHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -132,7 +153,7 @@ const PersonnelExpensesScreen: React.FC = () => {
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.primary }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
@@ -265,7 +286,7 @@ const PersonnelExpensesScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1 },
   headerTitle: { fontSize: 18, fontWeight: '700' },
   tabs: { flexDirection: 'row', padding: 4, marginHorizontal: 20, marginTop: 16, borderRadius: 12, marginBottom: 8 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },

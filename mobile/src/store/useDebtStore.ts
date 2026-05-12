@@ -19,6 +19,7 @@ import {
 export type { Debt } from '../api/debtService';
 import { useLogStore } from './useLogStore';
 import { useNotificationStore } from './useNotificationStore';
+import { useLedgerStore } from './useLedgerStore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -85,7 +86,7 @@ export const useDebtStore = create<DebtState>()(
             isLoading: false,
           }));
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to fetch debts.';
+          const message = err instanceof Error ? err.message : 'Borçlar alınamadı.';
           set({ error: message, isLoading: false });
           throw err;
         }
@@ -102,6 +103,9 @@ export const useDebtStore = create<DebtState>()(
           }));
 
           get().fetchDebts(1).catch(() => {});
+          if (payload.isCash) {
+            useLedgerStore.getState().fetchTransactions(1).catch(() => {});
+          }
 
           const actionText = created.type === 'TAKEN'
             ? `${created.entityName} kişisinden ${(created.totalAmount / 100).toLocaleString('tr-TR')}₺ borç alındı.`
@@ -116,7 +120,7 @@ export const useDebtStore = create<DebtState>()(
 
           return created;
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to create debt.';
+          const message = err instanceof Error ? err.message : 'Borç oluşturulamadı.';
           set({ error: message, isCreating: false });
           throw err;
         }
@@ -135,6 +139,7 @@ export const useDebtStore = create<DebtState>()(
           }));
 
           get().fetchDebts(1).catch(() => {});
+          useLedgerStore.getState().fetchTransactions(1).catch(() => {});
 
           const debt = result.debt;
           const actionText = debt.type === 'TAKEN'
@@ -150,7 +155,7 @@ export const useDebtStore = create<DebtState>()(
 
           return result;
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to process payment.';
+          const message = err instanceof Error ? err.message : 'Ödeme işlemi başarısız oldu.';
           set({ error: message, isPaying: false });
           throw err;
         }
@@ -167,7 +172,7 @@ export const useDebtStore = create<DebtState>()(
           get().fetchDebts(1).catch(() => {});
           return updated;
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to update debt.';
+          const message = err instanceof Error ? err.message : 'Borç güncellenemedi.';
           set({ error: message, isLoading: false });
           throw err;
         }
@@ -183,7 +188,7 @@ export const useDebtStore = create<DebtState>()(
           }));
           get().fetchDebts(1).catch(() => {});
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to delete debt.';
+          const message = err instanceof Error ? err.message : 'Borç silinemedi.';
           set({ error: message, isLoading: false });
           throw err;
         }

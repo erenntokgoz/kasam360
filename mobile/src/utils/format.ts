@@ -1,12 +1,11 @@
 export const formatCurrency = (cents: number, signed = false): string => {
-    const lira = Math.abs(cents) / 100;
+    const lira = cents / 100;
     const formatted = new Intl.NumberFormat('tr-TR', {
         style: 'currency',
         currency: 'TRY',
     }).format(lira);
 
     if (signed && cents > 0) return `+${formatted}`;
-    if (signed && cents < 0) return `-${formatted}`;
     return formatted;
 };
 

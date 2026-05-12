@@ -22,7 +22,7 @@ const transactionSchema = new mongoose.Schema(
     },
     method: {
       type: String,
-      enum: ['CASH', 'POS', 'IBAN'],
+      enum: ['CASH', 'POS', 'IBAN', 'VERESİYE'],
       required: [true, 'Payment method is required'],
     },
     category: {
@@ -57,7 +57,17 @@ const transactionSchema = new mongoose.Schema(
     },
     relatedType: {
       type: String,
-      enum: ['DEBT', 'RECURRING', null],
+      enum: ['DEBT', 'RECURRING', 'STAFF', 'CONTACT', 'DIRECTORY', null],
+      default: null,
+    },
+    directoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Directory',
+      default: null,
+    },
+    directoryType: {
+      type: String,
+      enum: ['CONTACT', 'STAFF', null],
       default: null,
     },
     isDeleted: {

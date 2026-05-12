@@ -11,7 +11,7 @@ export interface ContactInfo {
 interface ContactState {
   contacts: ContactInfo[];
   isLoading: boolean;
-  addContact: (name: string, date?: string, balance?: number) => Promise<void>;
+  addContact: (name: string, date?: string) => Promise<void>;
   removeContact: (id: string) => Promise<void>;
   updateContact: (id: string, data: Partial<ContactInfo>) => Promise<void>;
   fetchContacts: () => Promise<void>;
@@ -46,7 +46,7 @@ export const useContactStore = create<ContactState>((set, get) => ({
     }
   },
   
-  addContact: async (name: string, date?: string, balance?: number) => {
+  addContact: async (name: string, date?: string) => {
     const trimmedName = name.trim();
     if (!trimmedName) return;
     
@@ -57,8 +57,8 @@ export const useContactStore = create<ContactState>((set, get) => ({
     }
     
     try {
-      const newEntry = await createEntry({ name: trimmedName, type: 'CONTACT', lastTransactionDate: date, totalBalance: balance });
-      set({ contacts: [...contacts, { id: newEntry._id, name: newEntry.name, totalBalance: newEntry.totalBalance, lastTransactionDate: newEntry.lastTransactionDate }] });
+      const newEntry = await createEntry({ name: trimmedName, type: 'CONTACT', lastTransactionDate: date });
+      await get().fetchContacts();
     } catch (error) {
       console.error('[useContactStore.addContact]', error);
       throw error;
@@ -68,10 +68,7 @@ export const useContactStore = create<ContactState>((set, get) => ({
   updateContact: async (id: string, data: Partial<ContactInfo>) => {
     try {
       await updateEntry(id, data);
-      const updated = get().contacts.map((c) => 
-        c.id === id ? { ...c, ...data } : c
-      );
-      set({ contacts: updated });
+      get().fetchContacts().catch(() => {});
     } catch (error) {
       console.error('[useContactStore.updateContact]', error);
     }
@@ -80,8 +77,7 @@ export const useContactStore = create<ContactState>((set, get) => ({
   removeContact: async (id: string) => {
     try {
       await deleteEntry(id);
-      const updated = get().contacts.filter((contact) => contact.id !== id);
-      set({ contacts: updated });
+      await get().fetchContacts();
     } catch (error) {
       console.error('[useContactStore.removeContact]', error);
     }

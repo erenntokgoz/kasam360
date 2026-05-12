@@ -156,6 +156,7 @@ const DebtsScreen: React.FC = () => {
   const theme = getTheme(isDark);
   const { t } = useTranslation();
   const { debts, isLoading, fetchDebts, summary } = useDebtStore();
+  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'PAST'>('ACTIVE');
   const [showAddModal, setShowAddModal] = useState(false);
   const [payTarget, setPayTarget] = useState<Debt | null>(null);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
@@ -165,8 +166,10 @@ const DebtsScreen: React.FC = () => {
 
   useEffect(() => { fetchDebts(1).catch(() => {}); }, [fetchDebts]);
 
-  const activeDebts = debts.filter(d => {
-    if (d.status === 'PAID') return false;
+  const filteredDebts = debts.filter(d => {
+    if (activeTab === 'ACTIVE' && d.status === 'PAID') return false;
+    if (activeTab === 'PAST' && d.status !== 'PAID') return false;
+    
     if (contactFilter && d.entityName !== contactFilter) return false;
     if (dateFilter.start) {
       const dDate = new Date(d.createdAt);
@@ -186,7 +189,7 @@ const DebtsScreen: React.FC = () => {
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
       
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.primary }]}>
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
@@ -194,25 +197,36 @@ const DebtsScreen: React.FC = () => {
         <View style={{ width: 24 }} />
       </View>
 
+      <View style={[styles.tabs, { backgroundColor: theme.colors.surface }]}>
+        <Pressable style={[styles.tab, activeTab === 'ACTIVE' && { backgroundColor: theme.colors.accent }]} onPress={() => setActiveTab('ACTIVE')}>
+          <Text style={[styles.tabText, { color: activeTab === 'ACTIVE' ? '#fff' : theme.colors.textSecondary }]}>Aktif Kayıtlar</Text>
+        </Pressable>
+        <Pressable style={[styles.tab, activeTab === 'PAST' && { backgroundColor: theme.colors.accent }]} onPress={() => setActiveTab('PAST')}>
+          <Text style={[styles.tabText, { color: activeTab === 'PAST' ? '#fff' : theme.colors.textSecondary }]}>Geçmiş Kayıtlar</Text>
+        </Pressable>
+      </View>
+
       <FlatList
-        data={activeDebts}
+        data={filteredDebts}
         renderItem={({ item }) => <DebtRow item={item} onPay={setPayTarget} onPress={setSelectedDebt} />}
         keyExtractor={(item) => item._id}
         ListHeaderComponent={(
           <View style={{ marginBottom: 24 }}>
-            <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card, marginBottom: 16 }]}>
-              <View style={styles.summaryRow}>
-                <View style={styles.summaryMetric}>
-                  <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Toplam Alacak</Text>
-                  <Text style={[styles.summaryMetricValue, { color: theme.colors.success }]}>{formatCurrency(totalGiven)}</Text>
-                </View>
-                <View style={[styles.summaryDivider, { backgroundColor: theme.colors.border }]} />
-                <View style={styles.summaryMetric}>
-                  <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Toplam Borç</Text>
-                  <Text style={[styles.summaryMetricValue, { color: theme.colors.danger }]}>{formatCurrency(totalTaken)}</Text>
+            {activeTab === 'ACTIVE' && (
+              <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card, marginBottom: 16 }]}>
+                <View style={styles.summaryRow}>
+                  <View style={styles.summaryMetric}>
+                    <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Toplam Alacak</Text>
+                    <Text style={[styles.summaryMetricValue, { color: theme.colors.success }]}>{formatCurrency(totalGiven)}</Text>
+                  </View>
+                  <View style={[styles.summaryDivider, { backgroundColor: theme.colors.border }]} />
+                  <View style={styles.summaryMetric}>
+                    <Text style={[styles.summaryMetricLabel, { color: theme.colors.textTertiary }]}>Toplam Borç</Text>
+                    <Text style={[styles.summaryMetricValue, { color: theme.colors.danger }]}>{formatCurrency(totalTaken)}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
+            )}
             
             <FilterBar 
               onDateChange={(start, end) => setDateFilter({ start, end })}
@@ -264,6 +278,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
   headerTitle: { fontSize: 18, fontWeight: '700' },
+  tabs: { flexDirection: 'row', padding: 4, marginHorizontal: 20, marginTop: 16, borderRadius: 12, marginBottom: 8 },
+  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
+  tabText: { fontSize: 14, fontWeight: '600' },
   listContent: { paddingHorizontal: 20, paddingTop: 16 },
   summaryCard: { borderRadius: 24, padding: 20 },
   summaryRow: { flexDirection: 'row', alignItems: 'center' },

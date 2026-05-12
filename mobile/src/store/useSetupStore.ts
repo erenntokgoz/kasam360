@@ -39,8 +39,13 @@ export const useSetupStore = create<SetupState>((set) => ({
       getItem(StorageKeys.SETUP_COMPLETE),
       getItem(StorageKeys.ONBOARDING_SEEN),
     ]);
+
+    // Optimize: If already setup in backend (user object), trust it
+    const { user } = require('./useAuthStore').useAuthStore.getState();
+    const isActuallyComplete = setupStored === 'true' || user?.isSetupComplete === true;
+
     set({
-      isSetupComplete: setupStored === 'true',
+      isSetupComplete: isActuallyComplete,
       hasSeenOnboarding: onboardingStored === 'true',
     });
   },
@@ -68,9 +73,8 @@ export const useSetupStore = create<SetupState>((set) => ({
       });
       set({ ...data });
     } catch (error) {
-      console.error('Failed to update opening data on backend', error);
-      // Still set locally to allow user to proceed
-      set({ ...data });
+      console.error('[useSetupStore.setOpeningData]', error);
+      throw error; // UI'da yakalanması için hatayı fırlat
     }
   },
 

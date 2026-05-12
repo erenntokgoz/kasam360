@@ -3,7 +3,7 @@ import apiClient from './client';
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type TransactionType = 'INCOME' | 'EXPENSE';
-export type PaymentMethod = 'CASH' | 'POS' | 'IBAN';
+export type PaymentMethod = 'CASH' | 'POS' | 'IBAN' | 'VERESİYE';
 
 export interface Transaction {
   _id: string;
@@ -18,6 +18,8 @@ export interface Transaction {
   balanceAfter?: number;     // resulting balance after this tx
   relatedId?: string;       // ID of linked Debt, Directory entry, etc.
   relatedType?: 'DEBT' | 'STAFF' | 'CONTACT';
+  directoryId?: string;
+  directoryType?: 'STAFF' | 'CONTACT';
   createdAt: string;
   updatedAt: string;
 }
@@ -32,6 +34,8 @@ export interface CreateTransactionPayload {
   syncId?: string;
   relatedId?: string;
   relatedType?: 'DEBT' | 'STAFF' | 'CONTACT';
+  directoryId?: string;
+  directoryType?: 'STAFF' | 'CONTACT';
 }
 
 export interface UpdateTransactionPayload {

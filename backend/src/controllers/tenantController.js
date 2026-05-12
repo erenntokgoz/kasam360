@@ -1,14 +1,19 @@
+const mongoose = require('mongoose');
 const Tenant = require('../models/Tenant');
+const Transaction = require('../models/Transaction');
+const Debt = require('../models/Debt');
+const Directory = require('../models/Directory');
+const AuditLog = require('../models/AuditLog');
 
 /**
- * Update tenant setup data (opening balance, etc.)
+ * Kurulum verilerini günceller (Açılış bakiyesi vb.)
  */
 const updateSetup = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
     const { tenantId } = req;
     const { openingBalance, openingDebts, openingReceivables } = req.body;
 
-    const Transaction = require('../models/Transaction');
     const existingTx = await Transaction.findOne({ tenantId, isDeleted: false });
     
     if (existingTx) {
@@ -18,29 +23,124 @@ const updateSetup = async (req, res, next) => {
       });
     }
 
-    const tenant = await Tenant.findByIdAndUpdate(
-      tenantId,
-      {
-        openingBalance: Math.round(Number(openingBalance) || 0),
-        openingDebts: Math.round(Number(openingDebts) || 0),
-        openingReceivables: Math.round(Number(openingReceivables) || 0),
-        currentBalance: Math.round(Number(openingBalance) || 0),
-      },
-      { new: true }
-    );
+    const obs = Math.round(Number(openingBalance) || 0);
+    const odb = Math.round(Number(openingDebts) || 0);
+    const orc = Math.round(Number(openingReceivables) || 0);
 
-    if (!tenant) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
+    let updatedTenant;
+    await session.withTransaction(async () => {
+      updatedTenant = await Tenant.findByIdAndUpdate(
+        tenantId,
+        {
+          openingBalance: obs,
+          openingDebts: odb,
+          openingReceivables: orc,
+          currentBalance: obs,
+          isSetupComplete: true,
+        },
+        { new: true, session }
+      );
+
+      // Açılış Borçları için Sistem Kaydı
+      if (odb > 0) {
+        await Debt.create([{
+          tenantId,
+          entityName: 'Açılış Borcu (Sistem)',
+          type: 'TAKEN',
+          totalAmount: odb,
+          remainingAmount: odb,
+          status: 'PENDING',
+          description: 'Sistem kurulumunda girilen açılış borcu',
+        }], { session });
+      }
+
+      // Açılış Alacakları için Sistem Kaydı
+      if (orc > 0) {
+        await Debt.create([{
+          tenantId,
+          entityName: 'Açılış Alacağı (Sistem)',
+          type: 'GIVEN',
+          totalAmount: orc,
+          remainingAmount: orc,
+          status: 'PENDING',
+          description: 'Sistem kurulumunda girilen açılış alacağı',
+        }], { session });
+      }
+    });
+
+    session.endSession();
+
+    if (!updatedTenant) return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
 
     return res.status(200).json({
       success: true,
       message: 'Kurulum verileri güncellendi.',
       data: {
-        openingBalance: tenant.openingBalance,
-        openingDebts: tenant.openingDebts,
-        openingReceivables: tenant.openingReceivables,
+        openingBalance: updatedTenant.openingBalance,
+        openingDebts: updatedTenant.openingDebts,
+        openingReceivables: updatedTenant.openingReceivables,
       },
     });
+  } catch (err) { 
+    session.endSession();
+    next(err); 
+  }
+};
+
+/**
+ * Kullanıcıya ait tüm işlemleri, borçları ve rehberi siler, bakiyeyi sıfırlar.
+ */
+const clearData = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  try {
+    const { tenantId } = req;
+    await session.withTransaction(async () => {
+      await Transaction.deleteMany({ tenantId }).session(session);
+      await Debt.deleteMany({ tenantId }).session(session);
+      await Directory.deleteMany({ tenantId }).session(session);
+      await AuditLog.deleteMany({ tenantId }).session(session);
+      
+      await Tenant.findByIdAndUpdate(
+        tenantId,
+        {
+          openingBalance: 0,
+          openingDebts: 0,
+          openingReceivables: 0,
+          currentBalance: 0,
+          isSetupComplete: false,
+        },
+        { session }
+      );
+    });
+    session.endSession();
+    return res.status(200).json({ success: true, message: 'Tüm verileriniz başarıyla temizlendi.' });
+  } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
+    session.endSession();
+    next(err);
+  }
+};
+const updateDeviceToken = async (req, res, next) => {
+  try {
+    const { tenantId } = req;
+    const { deviceToken } = req.body;
+    if (!deviceToken) return res.status(400).json({ success: false, message: 'Device token zorunludur.' });
+
+    await Tenant.findByIdAndUpdate(tenantId, { deviceToken });
+    return res.status(200).json({ success: true, message: 'Cihaz kimliği güncellendi.' });
   } catch (err) { next(err); }
 };
 
-module.exports = { updateSetup };
+const triggerDueNotifications = async (req, res, next) => {
+  try {
+    const { tenantId } = req;
+    const { checkAndNotifyDueDebts } = require('../services/notificationService');
+    
+    // Anlık olarak vadesi yaklaşanları kontrol et ve gönder
+    await checkAndNotifyDueDebts(tenantId);
+    
+    return res.status(200).json({ success: true, message: 'Bildirim kontrolü tetiklendi. Vadesi gelen varsa gönderilecektir.' });
+  } catch (err) { next(err); }
+};
+
+module.exports = { updateSetup, clearData, updateDeviceToken, triggerDueNotifications };

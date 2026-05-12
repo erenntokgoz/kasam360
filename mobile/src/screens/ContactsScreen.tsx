@@ -61,17 +61,22 @@ const ContactsScreen: React.FC = () => {
 
   const filteredContacts = contacts.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
-  const handleSaveContact = () => {
+  const handleSaveContact = async () => {
     if (!newName.trim()) {
       Alert.alert('Hata', 'Lütfen geçerli bir isim girin.');
       return;
     }
-    if (editingId) {
-      updateContact(editingId, { name: newName.trim() });
-      Alert.alert('Başarılı', 'Kişi güncellendi.');
-    } else {
-      addContact(newName.trim());
-      Alert.alert('Başarılı', 'Kişi rehbere eklendi.');
+    try {
+      if (editingId) {
+        await updateContact(editingId, { name: newName.trim() });
+        Alert.alert('Başarılı', 'Kişi güncellendi.');
+      } else {
+        await addContact(newName.trim());
+        Alert.alert('Başarılı', 'Kişi rehbere eklendi.');
+      }
+      await fetchContacts();
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'Kişi kaydedilemedi.');
     }
     setNewName('');
     setShowAddInput(false);
@@ -124,7 +129,7 @@ const ContactsScreen: React.FC = () => {
             item={item} 
             onDelete={handleDelete} 
             onEdit={handleEdit}
-            onPress={(c) => navigation.navigate('ContactDetail', { contactName: c.name })} 
+            onPress={() => navigation.navigate('ContactDetail', { contactName: item.name, contactId: item.id })}
           />
         )}
         ListHeaderComponent={(

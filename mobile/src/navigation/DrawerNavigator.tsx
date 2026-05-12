@@ -4,13 +4,14 @@ import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList } from '
 import Icon from 'react-native-vector-icons/Feather';
 import HomeScreen from '../screens/HomeScreen';
 import DebtsScreen from '../screens/DebtsScreen';
-import AnalyticsScreen from '../screens/AnalyticsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import StaffExpensesScreen from '../screens/StaffExpensesScreen';
+import PersonalExpensesScreen from '../screens/PersonalExpensesScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import TransactionsScreen from '../screens/TransactionsScreen';
 import ContactsScreen from '../screens/ContactsScreen';
 import ContactDetailScreen from '../screens/ContactDetailScreen';
+import DirectorySelectionScreen from '../screens/DirectorySelectionScreen';
 import GlassSidebar from '../components/GlassSidebar';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
@@ -31,8 +32,8 @@ const DrawerNavigator = () => {
         drawerInactiveTintColor: theme.colors.textSecondary,
         drawerLabelStyle: { marginLeft: -16, fontSize: 15, fontWeight: '500' },
         drawerStyle: { width: 280, backgroundColor: 'transparent' },
-        drawerType: 'front', // 'slide' yerine 'front' kullanarak ana ekranın kaymasını ve gölgelenmesini önledik
-        overlayColor: 'rgba(0,0,0,0.5)', // Drawer açıkken hafif bir karartma (standart)
+        drawerType: 'front', 
+        overlayColor: 'transparent', 
         sceneStyle: { backgroundColor: theme.colors.primary },
       }}
     >
@@ -53,27 +54,19 @@ const DrawerNavigator = () => {
         }}
       />
       <Drawer.Screen
-        name="Contacts"
-        component={ContactsScreen}
-        options={{
-          drawerLabel: 'Rehber',
-          drawerIcon: ({ color }) => <Icon name="users" size={20} color={color} />,
-        }}
-      />
-      <Drawer.Screen
         name="Debts"
         component={DebtsScreen}
         options={{
-          drawerLabel: 'Alacak & Borçlar',
+          drawerLabel: 'Borçlar & Alacaklar',
           drawerIcon: ({ color }) => <Icon name="credit-card" size={20} color={color} />,
         }}
       />
       <Drawer.Screen
-        name="Analytics"
-        component={AnalyticsScreen}
+        name="PersonalExpenses"
+        component={PersonalExpensesScreen}
         options={{
-          drawerLabel: 'Sistem Kayıtları',
-          drawerIcon: ({ color }) => <Icon name="bar-chart-2" size={20} color={color} />,
+          drawerLabel: 'Kişisel Giderler',
+          drawerIcon: ({ color }) => <Icon name="user" size={20} color={color} />,
         }}
       />
       <Drawer.Screen
@@ -93,11 +86,26 @@ const DrawerNavigator = () => {
         }}
       />
       <Drawer.Screen
+        name="Contacts"
+        component={ContactsScreen}
+        options={{
+          drawerLabel: 'Rehber',
+          drawerIcon: ({ color }) => <Icon name="users" size={20} color={color} />,
+        }}
+      />
+      <Drawer.Screen
         name="Settings"
         component={SettingsScreen}
         options={{
           drawerLabel: 'Ayarlar',
           drawerIcon: ({ color }) => <Icon name="settings" size={20} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="DirectorySelection"
+        component={DirectorySelectionScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
         }}
       />
       <Drawer.Screen

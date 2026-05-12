@@ -41,6 +41,11 @@ const debtSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    description: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     // Unique identifier from the mobile client for offline-sync deduplication
     syncId: {
       type: String,
@@ -50,6 +55,20 @@ const debtSchema = new mongoose.Schema(
     isDeleted: {
       type: Boolean,
       default: false,
+    },
+    relatedId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Directory',
+      default: null,
+    },
+    relatedType: {
+      type: String,
+      enum: ['CONTACT', 'STAFF'],
+      default: 'CONTACT',
+    },
+    lastNotifiedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

@@ -17,28 +17,44 @@ cron.schedule('0 2 * * *', async () => {
     const now = new Date();
 
     for (const debt of activeDebts) {
-      if (!debt.tenantId) continue; // İşletme silinmişse atla
+      if (!debt.tenantId) continue;
 
       const dueDate = new Date(debt.dueDate);
       const diffTime = dueDate.getTime() - now.getTime();
       const dueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-      // Sadece 3 gün kalanlar, tam vadesi gelenler veya gecikenler için uyarı üret
-      if (dueDays <= 3) {
+      // Kontrol 1: Bugün zaten bildirim gönderildi mi?
+      if (debt.lastNotifiedAt) {
+        const lastNotif = new Date(debt.lastNotifiedAt);
+        if (lastNotif.toDateString() === now.toDateString()) continue;
+      }
+
+      // Kontrol 2: Sadece kritik günlerde bildirim gönder (3 gün kala, 1 gün kala, 0 gün kala veya gecikmiş)
+      // dueDays < 0 ise gecikmiştir (her 3 günde bir hatırlatılabilir)
+      const shouldNotify = dueDays === 3 || dueDays === 1 || dueDays === 0 || (dueDays < 0 && Math.abs(dueDays) % 3 === 0);
+
+      if (shouldNotify) {
         const alertData = {
           userBusinessName: debt.tenantId.businessName,
           debtorName: debt.entityName,
-          amountTL: debt.totalAmount / 100, // Cents to TL
+          amountTL: debt.totalAmount / 100,
           dueDays: dueDays,
-          balanceTL: debt.remainingAmount / 100, // Cents to TL
-          status: debt.status === 'OVERDUE' || dueDays < 0 ? 'Gecikmiş' : 'Yaklaşan'
+          balanceTL: debt.remainingAmount / 100,
+          status: dueDays < 0 ? 'Gecikmiş' : 'Yaklaşan'
         };
 
         const message = await generateAlertFromAI(alertData);
-        
-        // Şimdilik tenant'ın bir deviceToken'ı olmadığı için telefonuna SMS gönderme simülasyonu yapıyoruz
         const title = `Kasam360: ${alertData.status} Borç Uyarısı`;
-        await notificationService.sendPushNotification(debt.tenantId.phone, title, message);
+        
+        let success = false;
+        if (debt.tenantId.deviceToken) {
+          success = await notificationService.sendPushNotification(debt.tenantId.deviceToken, title, message, { debtId: debt._id.toString() });
+        }
+        
+        if (success) {
+          debt.lastNotifiedAt = now;
+          await debt.save();
+        }
       }
     }
   } catch (error) {

@@ -46,9 +46,21 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ visible
 
           <View style={styles.infoGrid}>
             <InfoItem label="Kategori" value={transaction.category || 'Belirtilmemiş'} theme={theme} />
-            <InfoItem label="Ödeme Yöntemi" value={transaction.method} theme={theme} />
+            <InfoItem 
+              label="Ödeme Yöntemi" 
+              value={
+                transaction.method === 'CASH' ? 'KASA' : 
+                transaction.method === 'IBAN' ? 'HAVALE' : 
+                transaction.method === 'VERESİYE' ? 'VERESİYE' : 
+                transaction.method
+              } 
+              theme={theme} 
+            />
             <InfoItem label="Tarih" value={dateStr} theme={theme} />
             <InfoItem label="Saat" value={timeStr} theme={theme} />
+            {transaction.balanceAfter !== undefined && (
+              <InfoItem label="İşlem Sonrası Bakiye" value={formatCurrency(transaction.balanceAfter)} theme={theme} />
+            )}
           </View>
 
           {transaction.description && (

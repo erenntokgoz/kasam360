@@ -32,11 +32,11 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
   const MENU_ITEMS: MenuItem[] = [
     { label: t('sidebar.home'), icon: 'home', route: 'Home' },
     { label: t('sidebar.transactions'), icon: 'list', route: 'Transactions' },
-    { label: t('sidebar.contacts'), icon: 'users', route: 'Contacts' },
     { label: t('sidebar.debts'), icon: 'credit-card', route: 'Debts' },
-    { label: t('sidebar.analytics'), icon: 'bar-chart-2', route: 'Analytics' },
+    { label: t('sidebar.personalExpenses'), icon: 'user', route: 'PersonalExpenses' },
     { label: t('sidebar.recurrings'), icon: 'briefcase', route: 'StaffExpenses' },
     { label: t('sidebar.notifications'), icon: 'bell', route: 'Notifications', badge: unreadCount },
+    { label: t('sidebar.contacts'), icon: 'users', route: 'DirectorySelection' },
     { label: t('sidebar.settings'), icon: 'settings', route: 'Settings' },
   ];
 

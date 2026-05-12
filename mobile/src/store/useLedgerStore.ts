@@ -33,6 +33,7 @@ interface LedgerState {
   isLoading: boolean;
   isCreating: boolean;
   pendingOperations: CreateTransactionPayload[];
+  error: string | null;
   // ── Actions ────────────────────────────────────────────────────────────────
   fetchTransactions: (page?: number, limit?: number, filters?: TransactionFilters) => Promise<void>;
   addTransaction: (payload: CreateTransactionPayload) => Promise<Transaction>;
@@ -56,6 +57,7 @@ const initialState = {
   balance: 0,
   isLoading: false,
   isCreating: false,
+  pendingOperations: [] as CreateTransactionPayload[],
   error: null as string | null,
 };
 
@@ -85,7 +87,7 @@ export const useLedgerStore = create<LedgerState>()(
             isLoading: false,
           }));
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to fetch transactions.';
+          const message = err instanceof Error ? err.message : 'İşlemler alınamadı.';
           set({ error: message, isLoading: false });
           throw err;
         }
@@ -115,6 +117,10 @@ export const useLedgerStore = create<LedgerState>()(
             };
           });
 
+          // Async background sync for derived balances
+          useStaffStore.getState().fetchStaff().catch(() => {});
+          import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => {}));
+
           const amountStr = (created.amount / 100).toLocaleString('tr-TR') + '₺';
           const categoryText = created.category ? `[${created.category}] ` : '';
           const actionText = created.description 
@@ -133,19 +139,29 @@ export const useLedgerStore = create<LedgerState>()(
         } catch (err) {
           const isNetworkError = err instanceof Error && (err.message.includes('network') || err.message.includes('timeout'));
           if (isNetworkError) {
+            // Mock transaction for UI
+            const mockTx: Transaction = { 
+              _id: 'temp-' + Date.now(), 
+              ...payload, 
+              createdAt: new Date().toISOString(),
+              transactionDate: payload.transactionDate || new Date().toISOString(),
+            } as any;
+
             set(state => ({
               pendingOperations: [...state.pendingOperations, payload],
+              transactions: [mockTx, ...state.transactions],
+              balance: state.balance + (payload.type === 'INCOME' ? payload.amount : -payload.amount),
               isCreating: false
             }));
+
             useNotificationStore.getState().addNotification({
               title: 'Çevrimdışı Mod',
               body: 'Bağlantı hatası. İşlem internet geldiğinde senkronize edilecek.',
               type: 'WARNING'
             });
-            // Return a mock transaction to let UI continue
-            return { _id: 'temp-' + Date.now(), ...payload, createdAt: new Date().toISOString() } as any;
+            return mockTx;
           }
-          const message = err instanceof Error ? err.message : 'Failed to create transaction.';
+          const message = err instanceof Error ? err.message : 'İşlem oluşturulamadı.';
           set({ error: message, isCreating: false });
           throw err;
         }
@@ -178,9 +194,12 @@ export const useLedgerStore = create<LedgerState>()(
             isLoading: false,
           }));
           get().fetchTransactions(1).catch(() => {});
+          
+          useStaffStore.getState().fetchStaff().catch(() => {});
+          import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => {}));
           return updated;
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to update transaction.';
+          const message = err instanceof Error ? err.message : 'İşlem güncellenemedi.';
           set({ error: message, isLoading: false });
           throw err;
         }
@@ -191,24 +210,7 @@ export const useLedgerStore = create<LedgerState>()(
         try {
           const tx = get().transactions.find((t) => t._id === id);
           if (tx?.category === 'Personel Gideri') {
-            const { staffList, updateStaff } = useStaffStore.getState();
-            let staff = null;
-            
-            // Try relatedId first
-            if (tx.relatedType === 'STAFF' && tx.relatedId) {
-              staff = staffList.find(s => s.id === tx.relatedId);
-            }
-            
-            // Fallback to name parsing if no relatedId
-            if (!staff && tx.description) {
-              const staffName = tx.description.split(' kişisine')[0];
-              staff = staffList.find((s) => s.name === staffName);
-            }
-
-            if (staff) {
-              const newTotal = Math.max(0, staff.totalPaid - tx.amount);
-              updateStaff(staff.id, { totalPaid: newTotal }).catch(() => {});
-            }
+            useStaffStore.getState().fetchStaff().catch(() => {});
           }
 
           await deleteTxApi(id);
@@ -217,8 +219,11 @@ export const useLedgerStore = create<LedgerState>()(
             isLoading: false,
           }));
           get().fetchTransactions(1).catch(() => {});
+          
+          useStaffStore.getState().fetchStaff().catch(() => {});
+          import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => {}));
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to delete transaction.';
+          const message = err instanceof Error ? err.message : 'İşlem silinemedi.';
           set({ error: message, isLoading: false });
           throw err;
         }

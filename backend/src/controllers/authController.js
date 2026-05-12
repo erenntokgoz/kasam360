@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Tenant = require('../models/Tenant');
 const Transaction = require('../models/Transaction');
@@ -8,6 +8,8 @@ const AuditLog = require('../models/AuditLog');
 const Directory = require('../models/Directory');
 
 const { authSchemas } = require('../utils/validation');
+
+const SALT_ROUNDS = 10;
 
 const normalizePhone = (phone) => {
   if (!phone) return '';
@@ -51,7 +53,7 @@ const register = async (req, res, next) => {
       message: 'Kayıt başarılı.',
       token: accessToken,
       refreshToken,
-      tenant: { id: tenant._id, phone: tenant.phone, businessName: tenant.businessName, subscriptionStatus: tenant.subscriptionStatus },
+      tenant: { id: tenant._id, phone: tenant.phone, businessName: tenant.businessName, subscriptionStatus: tenant.subscriptionStatus, isSetupComplete: tenant.isSetupComplete },
     });
   } catch (err) { next(err); }
 };
@@ -70,13 +72,25 @@ const login = async (req, res, next) => {
     const isMatch = await bcrypt.compare(password, tenant.password);
     if (!isMatch) return res.status(401).json({ success: false, message: 'Hatalı telefon numarası veya şifre.' });
 
+    if (!tenant.isSetupComplete) {
+      const hasData = await Promise.any([
+        Transaction.exists({ tenantId: tenant._id, isDeleted: false }),
+        Debt.exists({ tenantId: tenant._id, isDeleted: false })
+      ]).catch(() => null);
+
+      if (hasData) {
+        tenant.isSetupComplete = true;
+        await tenant.save();
+      }
+    }
+
     const { accessToken, refreshToken } = generateTokens(tenant._id);
     return res.status(200).json({
       success: true,
       message: 'Giriş başarılı.',
       token: accessToken,
       refreshToken,
-      tenant: { id: tenant._id, phone: tenant.phone, businessName: tenant.businessName, subscriptionStatus: tenant.subscriptionStatus },
+      tenant: { id: tenant._id, phone: tenant.phone, businessName: tenant.businessName, subscriptionStatus: tenant.subscriptionStatus, isSetupComplete: tenant.isSetupComplete },
     });
   } catch (err) { next(err); }
 };
@@ -130,7 +144,7 @@ const updateProfile = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: 'Profil güncellendi.',
-      tenant: { id: tenant._id, phone: tenant.phone, businessName: tenant.businessName, subscriptionStatus: tenant.subscriptionStatus },
+      tenant: { id: tenant._id, phone: tenant.phone, businessName: tenant.businessName, subscriptionStatus: tenant.subscriptionStatus, isSetupComplete: tenant.isSetupComplete },
     });
   } catch (err) { next(err); }
 };

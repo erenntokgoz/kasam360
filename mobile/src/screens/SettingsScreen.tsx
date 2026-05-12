@@ -14,7 +14,7 @@ const SettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   
-  const { user, logout, updateProfile, deleteAccount, isLoading: isAuthLoading } = useAuthStore();
+  const { user, logout, updateProfile, deleteAccount, clearData, isLoading: isAuthLoading } = useAuthStore();
   const { toggleTheme, isDarkMode } = useThemeStore();
   const { transactions } = useLedgerStore();
   const { i18n } = useTranslation();
@@ -75,6 +75,17 @@ const SettingsScreen: React.FC = () => {
       [
         { text: 'İptal', style: 'cancel' },
         { text: 'Kalıcı Olarak Sil', style: 'destructive', onPress: deleteAccount },
+      ]
+    );
+  };
+
+  const handleClearData = () => {
+    Alert.alert(
+      'DİKKAT: Verileri Temizle',
+      'İşletmenize ait tüm işlemleri, borçları ve rehberi silmek istediğinize emin misiniz? Hesabınız silinmez ama veriler GERİ ALINAMAZ.',
+      [
+        { text: 'İptal', style: 'cancel' },
+        { text: 'Tüm Verileri Sil', style: 'destructive', onPress: clearData },
       ]
     );
   };
@@ -141,10 +152,32 @@ const SettingsScreen: React.FC = () => {
 
         <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
           <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>VERİ YÖNETİMİ</Text>
+          <Pressable style={styles.row} onPress={async () => {
+            try {
+              const { triggerDueNotifications } = require('../api/tenantService');
+              await triggerDueNotifications();
+              Alert.alert('Başarılı', 'Vadesi gelen borçlarınız için bildirim kontrolü tetiklendi.');
+            } catch (error) {
+              Alert.alert('Hata', 'Bildirim kontrolü tetiklenemedi.');
+            }
+          }}>
+            <View style={styles.rowLeft}>
+              <Icon name="bell" size={18} color={theme.colors.accent} />
+              <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Bildirimleri Test Et (Anlık)</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={theme.colors.textTertiary} />
+          </Pressable>
           <Pressable style={styles.row} onPress={handleExportCSV}>
             <View style={styles.rowLeft}>
               <Icon name="download" size={18} color={theme.colors.accent} />
               <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Excel (CSV) Olarak Aktar</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={theme.colors.textTertiary} />
+          </Pressable>
+          <Pressable style={styles.row} onPress={handleClearData}>
+            <View style={styles.rowLeft}>
+              <Icon name="refresh-ccw" size={18} color={theme.colors.danger} />
+              <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Tüm Verileri Temizle</Text>
             </View>
             <Icon name="chevron-right" size={16} color={theme.colors.textTertiary} />
           </Pressable>

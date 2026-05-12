@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Pressable,
-  KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator
+  KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator, Alert
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
@@ -30,9 +30,15 @@ const SetupScreen: React.FC = () => {
     const openingDebts = parseFloat(debts.replace(',', '.')) || 0;
     const openingReceivables = parseFloat(receivables.replace(',', '.')) || 0;
 
-    await setOpeningData({ openingBalance, openingDebts, openingReceivables });
-    setSetupComplete(true);
-    setIsSubmitting(false);
+    try {
+      await setOpeningData({ openingBalance, openingDebts, openingReceivables });
+      await setSetupComplete(true);
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Kurulum kaydedilemedi.';
+      Alert.alert('Hata', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

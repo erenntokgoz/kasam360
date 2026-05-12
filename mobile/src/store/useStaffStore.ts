@@ -1,5 +1,8 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDirectory, createEntry, updateEntry, deleteEntry } from '../api/directoryService';
+import { StorageKeys } from '../utils/storage';
 
 export interface Staff {
   id: string;
@@ -14,7 +17,6 @@ interface StaffStore {
   addStaff: (name: string, role?: string) => Promise<void>;
   updateStaff: (id: string, updates: Partial<Staff>) => Promise<void>;
   removeStaff: (id: string) => Promise<void>;
-  addPaymentToStaff: (id: string, amount: number) => Promise<void>;
   reset: () => void;
 }
 
@@ -23,69 +25,56 @@ const initialState = {
 };
 
 export const useStaffStore = create<StaffStore>()(
-  (set, get) => ({
-    ...initialState,
+  persist(
+    (set, get) => ({
+      ...initialState,
 
-    fetchStaff: async () => {
-      try {
-        const data = await getDirectory('STAFF');
-        set({ staffList: data.map(d => ({ id: d._id, name: d.name, role: d.role, totalPaid: d.totalPaid })) });
-      } catch (error) {
-        console.error('[useStaffStore.fetchStaff]', error);
-      }
-    },
+      fetchStaff: async () => {
+        try {
+          const data = await getDirectory('STAFF');
+          set({ staffList: data.map(d => ({ id: d._id, name: d.name, role: d.role, totalPaid: d.totalPaid })) });
+        } catch (error) {
+          console.error('[useStaffStore.fetchStaff]', error);
+        }
+      },
 
-    addStaff: async (name, role) => {
-      const { staffList } = get();
-      if (staffList.find(s => s.name.toLowerCase() === name.toLowerCase())) {
-        return;
-      }
-      try {
-        const newEntry = await createEntry({ name, type: 'STAFF', role, totalPaid: 0 });
-        set({ staffList: [...staffList, { id: newEntry._id, name: newEntry.name, role: newEntry.role, totalPaid: newEntry.totalPaid }] });
-      } catch (error) {
-        console.error('[useStaffStore.addStaff]', error);
-      }
-    },
+      addStaff: async (name, role) => {
+        const { staffList } = get();
+        const trimmedName = name.trim();
+        const existing = staffList.find(s => s.name.toLowerCase() === trimmedName.toLowerCase());
+        if (existing) return;
+        try {
+          await createEntry({ name: trimmedName, type: 'STAFF', role, totalPaid: 0 });
+          await get().fetchStaff();
+        } catch (error) {
+          console.error('[useStaffStore.addStaff]', error);
+          throw error;
+        }
+      },
 
-    updateStaff: async (id, updates) => {
-      try {
-        await updateEntry(id, updates);
-        set((state) => ({
-          staffList: state.staffList.map(s => s.id === id ? { ...s, ...updates } : s)
-        }));
-      } catch (error) {
-        console.error('[useStaffStore.updateStaff]', error);
-      }
-    },
+      updateStaff: async (id, updates) => {
+        try {
+          await updateEntry(id, updates);
+          get().fetchStaff().catch(() => {});
+        } catch (error) {
+          console.error('[useStaffStore.updateStaff]', error);
+        }
+      },
 
-    removeStaff: async (id) => {
-      try {
-        await deleteEntry(id);
-        set((state) => ({
-          staffList: state.staffList.filter(s => s.id !== id)
-        }));
-      } catch (error) {
-        console.error('[useStaffStore.removeStaff]', error);
-      }
-    },
+      removeStaff: async (id) => {
+        try {
+          await deleteEntry(id);
+          await get().fetchStaff();
+        } catch (error) {
+          console.error('[useStaffStore.removeStaff]', error);
+        }
+      },
 
-    addPaymentToStaff: async (id, amount) => {
-      try {
-        const staff = get().staffList.find(s => s.id === id);
-        if (!staff) return;
-        const newTotal = staff.totalPaid + amount;
-        await updateEntry(id, { totalPaid: newTotal });
-        set((state) => ({
-          staffList: state.staffList.map(s => 
-            s.id === id ? { ...s, totalPaid: newTotal } : s
-          )
-        }));
-      } catch (error) {
-        console.error('[useStaffStore.addPaymentToStaff]', error);
-      }
-    },
-
-    reset: () => set(initialState),
-  })
+      reset: () => set(initialState),
+    }),
+    {
+      name: StorageKeys.STAFF || 'kasam360-staff',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
 );

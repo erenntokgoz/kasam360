@@ -93,14 +93,86 @@ const createTransaction = async (req, res, next) => {
     await session.withTransaction(async () => {
       if (syncId) {
         const existing = await Transaction.findOne({ syncId }).session(session);
-        if (existing) { createdTx = existing; return; }
+        if (existing) {
+          const oldImpact = (existing.method === 'VERESİYE') ? 0 : (existing.type === 'INCOME' ? existing.amount : -existing.amount);
+          const newImpact = (method === 'VERESİYE') ? 0 : (type === 'INCOME' ? amountInt : -amountInt);
+          if (oldImpact !== newImpact) {
+            await Tenant.findByIdAndUpdate(tenantId, { $inc: { currentBalance: newImpact - oldImpact } }, { session });
+          }
+          existing.type = type;
+          existing.amount = amountInt;
+          existing.method = method;
+          existing.category = category || null;
+          existing.description = description || null;
+          if (transactionDate) existing.transactionDate = new Date(transactionDate);
+          
+          let finalDirId = undefined;
+          let finalDirType = undefined;
+          
+          if (relatedId !== undefined) {
+            existing.relatedId = relatedId;
+            if (relatedType === 'CONTACT' || relatedType === 'STAFF') {
+              finalDirId = relatedId;
+              finalDirType = relatedType;
+            }
+          }
+
+          if (!finalDirId && description && (category === 'Personel Gideri' || category === 'İşletme Gideri')) {
+            const Directory = require('../models/Directory');
+            const match = await Directory.findOne({
+              tenantId,
+              name: { $regex: new RegExp(`^${description.split(' - ')[0].trim()}$`, 'i') },
+              isDeleted: false
+            }).session(session);
+            if (match) {
+              finalDirId = match._id;
+              finalDirType = match.roles.includes('STAFF') ? 'STAFF' : 'CONTACT';
+            }
+          }
+
+          existing.directoryId = finalDirId || existing.directoryId;
+          existing.directoryType = finalDirType || existing.directoryType;
+          
+          await existing.save({ session });
+          createdTx = existing; 
+          return; 
+        }
       }
 
-      const tenant = await Tenant.findByIdAndUpdate(
-        tenantId,
-        { $inc: { currentBalance: type === 'INCOME' ? amountInt : -amountInt } },
-        { new: true, session }
-      );
+      let finalDirId = (relatedType === 'CONTACT' || relatedType === 'STAFF') ? relatedId : (req.body.directoryId || null);
+      let finalDirType = (relatedType === 'CONTACT' || relatedType === 'STAFF') ? relatedType : (req.body.directoryType || null);
+
+      if (!finalDirId && description && (category === 'Personel Gideri' || category === 'İşletme Gideri')) {
+        const Directory = require('../models/Directory');
+        const entityName = description.split(' - ')[0].trim();
+        if (entityName && entityName.length > 0 && entityName !== 'Kişisel Gider') {
+          let entry = await Directory.findOne({
+            tenantId,
+            name: { $regex: new RegExp(`^${entityName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            isDeleted: false
+          }).session(session);
+
+          if (!entry) {
+            const roleType = category === 'Personel Gideri' ? 'STAFF' : 'CONTACT';
+            entry = (await Directory.create([{
+              tenantId,
+              name: entityName,
+              roles: [roleType],
+              role: roleType === 'STAFF' ? 'Personel' : undefined
+            }], { session }))[0];
+          }
+          finalDirId = entry._id;
+          finalDirType = entry.roles.includes('STAFF') ? 'STAFF' : 'CONTACT';
+        }
+      }
+
+      if (method !== 'VERESİYE') {
+        await Tenant.findByIdAndUpdate(
+          tenantId,
+          { $inc: { currentBalance: type === 'INCOME' ? amountInt : -amountInt } },
+          { session }
+        );
+      }
 
       const [tx] = await Transaction.create([{
         tenantId,
@@ -113,6 +185,8 @@ const createTransaction = async (req, res, next) => {
         syncId: syncId || undefined,
         relatedId,
         relatedType,
+        directoryId: finalDirId,
+        directoryType: finalDirType,
         balanceAfter: tenant.currentBalance,
       }], { session });
       createdTx = tx;
@@ -146,14 +220,29 @@ const updateTransaction = async (req, res, next) => {
       if (transaction.relatedType === 'DEBT' && transaction.relatedId && (oldAmount !== newAmount || updateData.type)) {
         const debt = await Debt.findOne({ _id: transaction.relatedId, tenantId }).session(session);
         if (debt) {
-          debt.remainingAmount = (debt.remainingAmount + oldAmount) - newAmount;
-          debt.status = debt.remainingAmount <= 0 ? 'PAID' : (debt.remainingAmount >= debt.totalAmount ? 'PENDING' : 'PARTIAL');
+          const isInitial = ['Borç Verildi', 'Borç Alındı'].includes(transaction.category);
+          if (isInitial) {
+            const difference = newAmount - oldAmount;
+            debt.totalAmount += difference;
+            debt.remainingAmount += difference;
+            if (debt.remainingAmount < 0) {
+              throw Object.assign(new Error('Güncellenen tutar, daha önce yapılan ödemelerle çelişiyor (Kalan borç eksiye düşemez).'), { httpStatus: 400 });
+            }
+          } else {
+            const calculatedRemaining = (debt.remainingAmount + oldAmount) - newAmount;
+            if (calculatedRemaining < 0) {
+              throw Object.assign(new Error('Güncellenen tutar borç bakiyesini aşamaz.'), { httpStatus: 400 });
+            }
+            debt.remainingAmount = calculatedRemaining;
+          }
+          debt.status = debt.remainingAmount === 0 ? 'PAID' : (debt.remainingAmount >= debt.totalAmount ? 'PENDING' : 'PARTIAL');
           await debt.save({ session });
         }
       }
 
-      const oldImpact = oldData.type === 'INCOME' ? oldData.amount : -oldData.amount;
-      const newImpact = newType === 'INCOME' ? newAmount : -newAmount;
+      const oldImpact = (oldData.method === 'VERESİYE') ? 0 : (oldData.type === 'INCOME' ? oldData.amount : -oldData.amount);
+      const newMethod = updateData.method || oldData.method;
+      const newImpact = (newMethod === 'VERESİYE') ? 0 : (newType === 'INCOME' ? newAmount : -newAmount);
       const netChange = newImpact - oldImpact;
 
       const updatedTenant = await Tenant.findByIdAndUpdate(tenantId, { $inc: { currentBalance: netChange } }, { new: true, session });
@@ -178,6 +267,7 @@ const updateTransaction = async (req, res, next) => {
     session.endSession();
     return res.status(200).json({ success: true, message: 'İşlem güncellendi.', data: transaction });
   } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
     session.endSession();
     next(error);
   }
@@ -206,8 +296,11 @@ const deleteTransaction = async (req, res, next) => {
         }
       }
 
-      const rollbackImpact = transaction.type === 'INCOME' ? -transaction.amount : transaction.amount;
-      await Tenant.findByIdAndUpdate(tenantId, { $inc: { currentBalance: rollbackImpact } }, { session });
+      // Veresiye ise bakiyeye dokunma, nakit/iban ise iade et
+      if (transaction.method !== 'VERESİYE') {
+        const rollbackImpact = transaction.type === 'INCOME' ? -transaction.amount : transaction.amount;
+        await Tenant.findByIdAndUpdate(tenantId, { $inc: { currentBalance: rollbackImpact } }, { session });
+      }
 
       transaction.isDeleted = true;
       await transaction.save({ session });
