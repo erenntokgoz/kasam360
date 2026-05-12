@@ -7,6 +7,7 @@ export type PaymentMethod = 'CASH' | 'POS' | 'IBAN' | 'VERESİYE';
 
 export interface Transaction {
   _id: string;
+  id?: string; // Alias for compatibility
   tenantId: string;
   type: TransactionType;
   amount: number;           // integer — smallest currency unit (kuruş)

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useDebtStore, type Debt } from '../store/useDebtStore';
@@ -149,9 +148,12 @@ const DebtRow: React.FC<{ item: Debt; onPay: (d: Debt) => void; onPress: (d: Deb
 
 import { useTranslation } from 'react-i18next';
 
+import { useNavigation, DrawerActions, useRoute } from '@react-navigation/native';
+
 const DebtsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const { t } = useTranslation();
@@ -165,6 +167,19 @@ const DebtsScreen: React.FC = () => {
   const [contactFilter, setContactFilter] = useState<string | null>(null);
 
   useEffect(() => { fetchDebts(1).catch(() => {}); }, [fetchDebts]);
+
+  // Deep Linking handle
+  useEffect(() => {
+    const debtId = route.params?.debtId;
+    if (debtId && debts.length > 0) {
+      const debt = debts.find(d => d._id === debtId || d.id === debtId);
+      if (debt) {
+        setSelectedDebt(debt);
+        // Clear param to avoid re-opening if user navigates back and forth
+        navigation.setParams({ debtId: undefined });
+      }
+    }
+  }, [route.params?.debtId, debts, navigation]);
 
   const filteredDebts = debts.filter(d => {
     if (activeTab === 'ACTIVE' && d.status === 'PAID') return false;

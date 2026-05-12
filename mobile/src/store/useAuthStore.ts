@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import apiClient from '../api/client';
+import messaging from '@react-native-firebase/messaging';
 import {
   setItem,
   getItem,
@@ -40,6 +41,7 @@ interface AuthState {
   deleteAccount: () => Promise<void>;
   clearData: () => Promise<void>;
   clearError: () => void;
+  syncDeviceToken: () => Promise<void>;
 }
 
 interface RegisterPayload {
@@ -119,6 +121,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       );
       await persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
+      // Sync FCM token after registration
+      get().syncDeviceToken().catch(e => console.warn('[AuthStore] FCM sync failed after register', e));
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Kayıt işlemi başarısız oldu.';
@@ -148,6 +152,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       await persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
+      // Sync FCM token after login
+      get().syncDeviceToken().catch(e => console.warn('[AuthStore] FCM sync failed after login', e));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Giriş işlemi başarısız oldu.';
       set({ error: message, isLoading: false });
@@ -159,6 +165,12 @@ export const useAuthStore = create<AuthState>((set) => ({
    * Clears in-memory auth state and wipes persistent storage.
    */
   logout: () => {
+    // Attempt to delete token on backend before wiping state
+    const currentToken = get().token;
+    if (currentToken) {
+      apiClient.put('/api/tenant/device-token', { deviceToken: null }).catch(() => {});
+      messaging().deleteToken().catch(() => {});
+    }
     clearAuth();
     set({ user: null, token: null, refreshToken: null, error: null });
     // Reset all data stores to avoid stale data between accounts
@@ -235,4 +247,23 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   /** Clears any lingering error message (e.g. when user navigates away). */
   clearError: () => set({ error: null }),
+
+  syncDeviceToken: async () => {
+    try {
+      const authStatus = await messaging().requestPermission();
+      const enabled =
+        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+      if (enabled) {
+        const token = await messaging().getToken();
+        if (token && get().token) {
+          await apiClient.put('/api/tenant/device-token', { deviceToken: token });
+          console.log('[AuthStore] Device token synced successfully');
+        }
+      }
+    } catch (e) {
+      console.warn('[AuthStore] syncDeviceToken error:', e);
+    }
+  },
 }));

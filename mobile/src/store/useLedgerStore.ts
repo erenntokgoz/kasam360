@@ -73,11 +73,12 @@ export const useLedgerStore = create<LedgerState>()(
         try {
           const result = await getTransactions(page, limit, filters);
 
+          const transactions = result.transactions.map(t => ({ ...t, id: t._id }));
           set((state) => ({
             transactions:
               page === 1
-                ? result.transactions
-                : [...state.transactions, ...result.transactions],
+                ? transactions
+                : [...state.transactions, ...transactions],
             pagination: result.pagination,
             totalIncome: result.summary.totalIncome,
             totalExpense: result.summary.totalExpense,

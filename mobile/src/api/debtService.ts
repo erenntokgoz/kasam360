@@ -8,6 +8,7 @@ export type DebtStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE';
 
 export interface Debt {
   _id: string;
+  id?: string; // Alias for compatibility
   tenantId: string;
   entityName: string;
   type: DebtType;

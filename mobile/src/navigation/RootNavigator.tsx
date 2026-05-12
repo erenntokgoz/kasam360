@@ -18,6 +18,8 @@ import SetupScreen from '../screens/SetupScreen';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 
+import { navigationRef } from './navigationRef';
+
 const Stack = createNativeStackNavigator();
 
 const RootNavigator: React.FC = () => {
@@ -45,7 +47,7 @@ const RootNavigator: React.FC = () => {
   };
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer theme={navTheme} ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!token ? (
           <Stack.Screen name="Auth" component={AuthStack} />

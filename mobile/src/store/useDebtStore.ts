@@ -79,8 +79,9 @@ export const useDebtStore = create<DebtState>()(
           const { activeFilter } = get();
           const result = await getDebts(page, limit, activeFilter ?? undefined);
 
+          const debts = result.debts.map(d => ({ ...d, id: d._id }));
           set((state) => ({
-            debts: page === 1 ? result.debts : [...state.debts, ...result.debts],
+            debts: page === 1 ? debts : [...state.debts, ...debts],
             pagination: result.pagination,
             summary: result.summary,
             isLoading: false,
