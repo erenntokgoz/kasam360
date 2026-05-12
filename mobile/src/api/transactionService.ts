@@ -7,7 +7,6 @@ export type PaymentMethod = 'CASH' | 'POS' | 'IBAN' | 'VERESİYE';
 
 export interface Transaction {
   _id: string;
-  id?: string; // Alias for compatibility
   tenantId: string;
   type: TransactionType;
   amount: number;           // integer — smallest currency unit (kuruş)
@@ -56,10 +55,9 @@ export interface TransactionFilters {
 }
 
 export interface TransactionPagination {
-  page: number;
+  nextCursor: string | null;
   limit: number;
   total: number;
-  totalPages: number;
 }
 
 export interface TransactionSummary {
@@ -92,12 +90,13 @@ interface CreateTransactionResponse {
  * Results are sorted by transactionDate DESC.
  */
 export const getTransactions = async (
-  page = 1,
+  cursor: string | null = null,
   limit = 20,
   filters?: TransactionFilters,
 ): Promise<GetTransactionsResponse['data']> => {
-  const params: Record<string, string | number> = { page, limit };
+  const params: Record<string, string | number> = { limit };
   
+  if (cursor) params.cursor = cursor;
   if (filters?.type && filters.type !== 'ALL') params.type = filters.type;
   if (filters?.startDate) params.startDate = filters.startDate;
   if (filters?.endDate) params.endDate = filters.endDate;

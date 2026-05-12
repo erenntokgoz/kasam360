@@ -40,7 +40,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
   const [subType, setSubType] = useState(''); // POS, CASH, IBAN or Business, Personnel, Personal
   const [who, setWho] = useState('');
   const [date, setDate] = useState(new Date());
-  const [method, setMethod] = useState<'CASH' | 'POS' | 'IBAN'>('CASH');
+  const [method, setMethod] = useState<'CASH' | 'POS' | 'IBAN' | 'VERESİYE'>('CASH');
   const [description, setDescription] = useState('');
   const [isCash, setIsCash] = useState(false); // Default to Veresiye (false)
   const [isProcessing, setIsProcessing] = useState(false);
@@ -85,7 +85,10 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       if (subType === 'Kişisel Gider') setStep('DESC');
       else setStep('WHO');
     } else if (step === 'WHO') {
-      if (!who && mainType !== 'GELİR') return;
+      if (!who && (mainType !== 'GELİR' || method === 'VERESİYE')) {
+        Alert.alert('Uyarı', 'Veresiye işlemler için bir kişi seçmelisiniz.');
+        return;
+      }
       
       if (who) {
         if (mainType === 'GİDER' && subType === 'Personel Gideri') {
@@ -159,7 +162,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       const syncId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       if (mainType === 'GELİR') {
-        const methodLabels: Record<string, string> = { 'CASH': 'Nakit', 'POS': 'POS', 'IBAN': 'Havale' };
+        const methodLabels: Record<string, string> = { 'CASH': 'Nakit', 'POS': 'POS', 'IBAN': 'Havale', 'VERESİYE': 'Veresiye' };
         const methodLabel = methodLabels[method] || method;
         const finalDesc = `${methodLabel} Gelir${description ? ' - ' + description.trim() : ''}`;
 
@@ -193,7 +196,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           }
         }
 
-        const methodLabels: Record<string, string> = { 'CASH': 'Nakit', 'POS': 'POS', 'IBAN': 'Havale' };
+        const methodLabels: Record<string, string> = { 'CASH': 'Nakit', 'POS': 'POS', 'IBAN': 'Havale', 'VERESİYE': 'Veresiye' };
         const methodLabel = methodLabels[method] || method;
         
         let formattedDesc = '';
@@ -341,6 +344,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                   <SubtypeItem label="Nakit" icon="dollar-sign" active={method === 'CASH'} onSelect={() => { setMethod('CASH'); handleNext(); }} theme={theme} />
                   <SubtypeItem label="POS" icon="credit-card" active={method === 'POS'} onSelect={() => { setMethod('POS'); handleNext(); }} theme={theme} />
                   <SubtypeItem label="Havale" icon="send" active={method === 'IBAN'} onSelect={() => { setMethod('IBAN'); handleNext(); }} theme={theme} />
+                  <SubtypeItem label="Veresiye" icon="book-open" active={method === 'VERESİYE'} onSelect={() => { setMethod('VERESİYE'); setStep('WHO'); }} theme={theme} />
                 </View>
               </Animated.View>
             )}
@@ -507,7 +511,7 @@ const NextBtn = ({ onPress, theme }: any) => (
 );
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', zIndex: 1000, elevation: 10 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   content: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, minHeight: 450 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
   title: { fontSize: 18, fontWeight: '700' },

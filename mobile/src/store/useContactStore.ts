@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StorageKeys } from '../utils/storage';
 import { getDirectory, createEntry, updateEntry, deleteEntry, DirectoryEntry } from '../api/directoryService';
 
 export interface ContactInfo {
@@ -23,65 +26,72 @@ const initialState = {
   isLoading: false,
 };
 
-export const useContactStore = create<ContactState>((set, get) => ({
-  ...initialState,
-  
-  fetchContacts: async () => {
-    set({ isLoading: true });
-    try {
-      // Sadece 'CONTACT' tipindeki rehber girişlerini çekiyoruz
-      const data = await getDirectory('CONTACT');
-      set({ 
-        contacts: data.map(d => ({ 
-          id: d._id, 
-          name: d.name, 
-          totalBalance: d.totalBalance, 
-          lastTransactionDate: d.lastTransactionDate 
-        })),
-        isLoading: false 
-      });
-    } catch (error) {
-      console.error('[useContactStore.fetchContacts]', error);
-      set({ isLoading: false });
-    }
-  },
-  
-  addContact: async (name: string, date?: string) => {
-    const trimmedName = name.trim();
-    if (!trimmedName) return;
-    
-    const { contacts } = get();
-    // Unique check (case insensitive)
-    if (contacts.some((c) => c.name.toLocaleLowerCase('tr').trim() === trimmedName.toLocaleLowerCase('tr').trim())) {
-      throw new Error('Bu isimde bir kişi zaten kayıtlı.');
-    }
-    
-    try {
-      const newEntry = await createEntry({ name: trimmedName, type: 'CONTACT', lastTransactionDate: date });
-      await get().fetchContacts();
-    } catch (error) {
-      console.error('[useContactStore.addContact]', error);
-      throw error;
-    }
-  },
+export const useContactStore = create<ContactState>()(
+  persist(
+    (set, get) => ({
+      ...initialState,
+      
+      fetchContacts: async () => {
+        set({ isLoading: true });
+        try {
+          const data = await getDirectory('CONTACT');
+          set({ 
+            contacts: data.map(d => ({ 
+              id: d._id, 
+              name: d.name, 
+              totalBalance: d.totalBalance, 
+              lastTransactionDate: d.lastTransactionDate 
+            })),
+            isLoading: false 
+          });
+        } catch (error) {
+          console.error('[useContactStore.fetchContacts]', error);
+          set({ isLoading: false });
+        }
+      },
+      
+      addContact: async (name: string, date?: string) => {
+        const trimmedName = name.trim();
+        if (!trimmedName) return;
+        
+        const { contacts } = get();
+        if (contacts.some((c) => c.name.toLocaleLowerCase('tr').trim() === trimmedName.toLocaleLowerCase('tr').trim())) {
+          throw new Error('Bu isimde bir kişi zaten kayıtlı.');
+        }
+        
+        try {
+          await createEntry({ name: trimmedName, type: 'CONTACT', lastTransactionDate: date });
+          await get().fetchContacts();
+        } catch (error) {
+          console.error('[useContactStore.addContact]', error);
+          throw error;
+        }
+      },
 
-  updateContact: async (id: string, data: Partial<ContactInfo>) => {
-    try {
-      await updateEntry(id, data);
-      get().fetchContacts().catch(() => {});
-    } catch (error) {
-      console.error('[useContactStore.updateContact]', error);
-    }
-  },
+      updateContact: async (id: string, data: Partial<ContactInfo>) => {
+        try {
+          await updateEntry(id, data);
+          get().fetchContacts().catch(() => {});
+        } catch (error) {
+          console.error('[useContactStore.updateContact]', error);
+        }
+      },
 
-  removeContact: async (id: string) => {
-    try {
-      await deleteEntry(id);
-      await get().fetchContacts();
-    } catch (error) {
-      console.error('[useContactStore.removeContact]', error);
-    }
-  },
+      removeContact: async (id: string) => {
+        try {
+          await deleteEntry(id);
+          await get().fetchContacts();
+        } catch (error) {
+          console.error('[useContactStore.removeContact]', error);
+        }
+      },
 
-  reset: () => set(initialState),
-}));
+      reset: () => set(initialState),
+    }),
+    {
+      name: StorageKeys.CONTACTS,
+      storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+    }
+  )
+);

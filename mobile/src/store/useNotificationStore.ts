@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { getItem, setItem, removeItem, StorageKeys } from '../utils/storage';
 
-export type NotificationType = 'BUDGET' | 'DEBT' | 'RECURRING' | 'INFO' | 'WARNING' | 'SYSTEM';
+export type NotificationType = 'BUDGET' | 'DEBT' | 'RECURRING' | 'INFO' | 'WARNING';
 
 export interface AppNotification {
   id: string;

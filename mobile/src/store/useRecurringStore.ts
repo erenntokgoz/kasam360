@@ -23,7 +23,6 @@ interface RecurringStore {
   removeRecurring: (id: string) => void;
   toggleRecurring: (id: string) => void;
   checkAndNotify: () => RecurringItem[];
-  lastCheckRun?: string;
 }
 
 const getNextDate = (frequency: Frequency, fromDate: Date = new Date()) => {
@@ -39,7 +38,6 @@ export const useRecurringStore = create<RecurringStore>()(
   persist(
     (set, get) => ({
       recurrings: [],
-      lastCheckRun: undefined,
       addRecurring: (item) => {
         const newItem: RecurringItem = {
           ...item,
@@ -60,16 +58,14 @@ export const useRecurringStore = create<RecurringStore>()(
         }));
       },
       checkAndNotify: () => {
-        const { recurrings, lastCheckRun } = get();
+        const { recurrings } = get();
         const now = new Date();
         const todayStr = now.toISOString().split('T')[0];
         
-        // Mühürleme (Sealing): Eğer bugün zaten bir kontrol yapıldıysa boş dön
-        if (lastCheckRun === todayStr) return [];
-
         const dueItems = recurrings.filter(r => {
           if (!r.active) return false;
           const nextDateStr = r.nextDate.split('T')[0];
+          // Eger bugun veya daha gecmis bir tarihte ise ve son bildirim bugun degilse
           const isDue = nextDateStr <= todayStr;
           const alreadyNotified = r.lastNotified?.split('T')[0] === todayStr;
           return isDue && !alreadyNotified;
@@ -77,7 +73,6 @@ export const useRecurringStore = create<RecurringStore>()(
 
         if (dueItems.length > 0) {
           set((state) => ({
-             lastCheckRun: todayStr,
              recurrings: state.recurrings.map((r) => {
                if (dueItems.some(d => d.id === r.id)) {
                  return { ...r, lastNotified: now.toISOString(), nextDate: getNextDate(r.frequency, now) };
@@ -85,9 +80,6 @@ export const useRecurringStore = create<RecurringStore>()(
                return r;
              })
           }));
-        } else {
-          // Hiç due item yoksa bile "bugün kontrol edildi" olarak mühürle
-          set({ lastCheckRun: todayStr });
         }
 
         return dueItems;

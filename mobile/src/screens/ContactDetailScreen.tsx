@@ -43,7 +43,7 @@ const ContactDetailScreen: React.FC = () => {
  
   useEffect(() => {
     fetchDebts(1).catch(() => {});
-    fetchTransactions(1).catch(() => {});
+    fetchTransactions(null).catch(() => {});
   }, [fetchDebts, fetchTransactions]);
  
   const contactDebts = useMemo(() => {
@@ -244,7 +244,7 @@ const ContactDetailScreen: React.FC = () => {
       )}
       <AddTransactionModal 
         visible={showAddModal} 
-        onClose={() => { setShowAddModal(false); fetchDebts(1); fetchTransactions(1); }} 
+        onClose={() => { setShowAddModal(false); fetchDebts(1); fetchTransactions(null); }} 
         initialType="BORÇ"
         initialWho={contactName}
       />

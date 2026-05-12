@@ -200,7 +200,7 @@ const PersonnelExpensesScreen: React.FC = () => {
           contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm, paddingBottom: insets.bottom + theme.spacing.xl }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing['4xl'], gap: theme.spacing.sm }}>
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing['3xl'], gap: theme.spacing.sm }}>
               <Icon name="list" size={48} color={theme.colors.textTertiary} />
               <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.lg, color: theme.colors.textSecondary, marginTop: theme.spacing.base }}>Kayıt Bulunamadı</Text>
             </View>

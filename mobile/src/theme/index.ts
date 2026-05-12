@@ -42,7 +42,7 @@ export const darkTheme = {
     primary: '#0A0E17',       // Koyu gece mavisi
     surface: '#141925',       // Kartların oturduğu zemin
     card: '#1E2433',          // Yükseltilmiş kart — yüzeyden net ayrılır
-    border: 'rgba(255, 255, 255, 0.18)',  // Daha belirgin kenarlıklar
+    border: 'rgba(255, 255, 255, 0.12)',  // Daha belirgin kenarlıklar
     
     // Accents (Indigo & Violet)
     accent: '#6366F1',        // Indigo 500
@@ -69,7 +69,7 @@ export const darkTheme = {
     dangerTransparent: 'rgba(244, 63, 94, 0.18)',
     warningTransparent: 'rgba(245, 158, 11, 0.18)',
     whiteTransparent: 'rgba(255, 255, 255, 0.08)',
-    overlay: 'rgba(10, 14, 23, 0.82)', // Primary tabanlı, daha doğal geçiş
+    overlay: 'rgba(0, 0, 0, 0.85)',
   },
   shadows: {
     card: {

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, StatusBar } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useLedgerStore } from '../store/useLedgerStore';
@@ -41,12 +42,9 @@ const TransactionRow: React.FC<{ item: Transaction; onPress: (t: Transaction) =>
   );
 });
 
-import { useNavigation, DrawerActions, useRoute } from '@react-navigation/native';
-
 const TransactionsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const route = useRoute<any>();
   const { transactions, isLoading, fetchTransactions, totalIncome, totalExpense } = useLedgerStore();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
@@ -56,19 +54,7 @@ const TransactionsScreen: React.FC = () => {
   const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
   const [contactFilter, setContactFilter] = useState<string | null>(null);
 
-  useEffect(() => { fetchTransactions(1).catch(() => { }); }, [fetchTransactions]);
-
-  // Deep Linking handle
-  useEffect(() => {
-    const txId = route.params?.transactionId;
-    if (txId && transactions.length > 0) {
-      const tx = transactions.find(t => t._id === txId || t.id === txId);
-      if (tx) {
-        setSelectedTx(tx);
-        navigation.setParams({ transactionId: undefined });
-      }
-    }
-  }, [route.params?.transactionId, transactions, navigation]);
+  useEffect(() => { fetchTransactions(null).catch(() => { }); }, [fetchTransactions]);
 
   const filteredData = useMemo(() => transactions.filter(t => {
     if (contactFilter && !t.description?.toLowerCase().includes(contactFilter.toLowerCase()) && !t.category?.toLowerCase().includes(contactFilter.toLowerCase())) return false;
@@ -144,7 +130,7 @@ const TransactionsScreen: React.FC = () => {
         }
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
-        onRefresh={() => fetchTransactions(1)}
+        onRefresh={() => fetchTransactions(null)}
         refreshing={isLoading}
       />
 
@@ -155,7 +141,7 @@ const TransactionsScreen: React.FC = () => {
           onClose={() => setSelectedTx(null)}
         />
       )}
-      <AddTransactionModal visible={showAddModal} onClose={() => { setShowAddModal(false); fetchTransactions(1); }} />
+      <AddTransactionModal visible={showAddModal} onClose={() => { setShowAddModal(false); fetchTransactions(null); }} />
     </View>
   );
 };

@@ -134,7 +134,7 @@ const HomeScreen: React.FC = () => {
   const [contactFilter, setContactFilter] = useState<string | null>(null);
 
   useEffect(() => { 
-    fetchTransactions(1).catch(() => { });
+    fetchTransactions(null).catch(() => { });
     fetchContacts();
     fetchStaff();
   }, [fetchTransactions, fetchContacts, fetchStaff]);
@@ -205,7 +205,7 @@ const HomeScreen: React.FC = () => {
         ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Henüz işlem yok</Text> : null}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
-        onRefresh={() => fetchTransactions(1)}
+        onRefresh={() => fetchTransactions(null)}
         refreshing={isLoading}
         ListFooterComponent={transactions.length > 20 ? (
           <Pressable style={styles.viewMoreBtn} onPress={() => navigation.navigate('Transactions')}>
@@ -217,7 +217,7 @@ const HomeScreen: React.FC = () => {
       <Pressable style={[styles.fab, { bottom: insets.bottom + 32, backgroundColor: theme.colors.accent }, isScanning && { opacity: 0.6 }]} onPress={handleScanReceipt} disabled={isScanning}>
         {isScanning ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="camera" size={24} color="#fff" />}
       </Pressable>
-      <AddTransactionModal visible={showAddModal} onClose={() => { setShowAddModal(false); fetchTransactions(1); }} />
+      <AddTransactionModal visible={showAddModal} onClose={() => { setShowAddModal(false); fetchTransactions(null); }} />
       {selectedTx && (
         <TransactionDetailModal
           visible={!!selectedTx}

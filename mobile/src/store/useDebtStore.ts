@@ -79,9 +79,8 @@ export const useDebtStore = create<DebtState>()(
           const { activeFilter } = get();
           const result = await getDebts(page, limit, activeFilter ?? undefined);
 
-          const debts = result.debts.map(d => ({ ...d, id: d._id }));
           set((state) => ({
-            debts: page === 1 ? debts : [...state.debts, ...debts],
+            debts: page === 1 ? result.debts : [...state.debts, ...result.debts],
             pagination: result.pagination,
             summary: result.summary,
             isLoading: false,
@@ -105,7 +104,7 @@ export const useDebtStore = create<DebtState>()(
 
           get().fetchDebts(1).catch(() => {});
           if (payload.isCash) {
-            useLedgerStore.getState().fetchTransactions(1).catch(() => {});
+            useLedgerStore.getState().fetchTransactions(null).catch(() => {});
           }
 
           const actionText = created.type === 'TAKEN'
@@ -140,7 +139,7 @@ export const useDebtStore = create<DebtState>()(
           }));
 
           get().fetchDebts(1).catch(() => {});
-          useLedgerStore.getState().fetchTransactions(1).catch(() => {});
+          useLedgerStore.getState().fetchTransactions(null).catch(() => {});
 
           const debt = result.debt;
           const actionText = debt.type === 'TAKEN'

@@ -81,7 +81,7 @@ const createDebt = async (req, res, next) => {
         relatedType = entry.roles.includes('STAFF') ? 'STAFF' : 'CONTACT';
       }
 
-      await Debt.create([{
+      const [debt] = await Debt.create([{
         tenantId,
         entityName,
         type,
@@ -95,11 +95,41 @@ const createDebt = async (req, res, next) => {
         relatedType
       }], { session });
 
-      // Note: Transaction creation is now handled by Transaction model post-save hooks
-      // because Transaction.create (VERESİYE) is the source of truth, or if created via Debt, 
-      // Debt model hooks will handle it.
-      
-      createdDebt = await Debt.findOne({ syncId }).session(session);
+      // Always create a transaction log for traceability, but only update balance if isCash is true
+      const txType = type === 'GIVEN' ? 'EXPENSE' : 'INCOME';
+      let balanceAfter;
+
+      if (isCash) {
+        const tenant = await Tenant.findByIdAndUpdate(
+          tenantId,
+          { $inc: { currentBalance: txType === 'INCOME' ? amountInt : -amountInt } },
+          { new: true, session }
+        );
+        balanceAfter = tenant.currentBalance;
+      } else {
+        // Get current balance without updating
+        const tenant = await Tenant.findById(tenantId).session(session);
+        balanceAfter = tenant.currentBalance;
+      }
+
+      await Transaction.create([{
+        tenantId,
+        type: txType,
+        amount: amountInt,
+        method: isCash ? 'CASH' : 'VERESİYE',
+        category: type === 'GIVEN' ? 'Alacak' : 'Borç',
+        description: description ? String(description).trim() : (isCash 
+          ? `${entityName} ${type === 'GIVEN' ? 'kişisine alacak kaydedildi' : 'kişisinden borç alındı'}`
+          : `${entityName} - Veresiye ${type === 'GIVEN' ? 'Alacak' : 'Borç'} Kaydı`),
+        transactionDate: new Date(),
+        balanceAfter,
+        relatedId: debt._id,
+        relatedType: 'DEBT',
+        directoryId: relatedId,
+        directoryType: relatedType
+      }], { session });
+
+      createdDebt = debt;
     });
 
     session.endSession();
@@ -198,8 +228,27 @@ const payDebt = async (req, res, next) => {
       debt.status = newRemaining === 0 ? 'PAID' : 'PARTIAL';
       await debt.save({ session });
 
-      // Note: Transaction creation and Tenant balance updates are now handled 
-      // by Debt model post-save hooks (Double-entry logic).
+      const txType = debt.type === 'GIVEN' ? 'INCOME' : 'EXPENSE';
+      const tenantRecord = await Tenant.findByIdAndUpdate(
+        tenantId,
+        { $inc: { currentBalance: txType === 'INCOME' ? paymentAmount : -paymentAmount } },
+        { new: true, session }
+      );
+
+      const [transaction] = await Transaction.create([{
+        tenantId,
+        type: txType,
+        amount: paymentAmount,
+        method: method || 'CASH',
+        category: debt.type === 'GIVEN' ? 'Alacak Tahsili' : 'Borç Ödemesi',
+        description: `${debt.entityName} kişisinden ${debt.type === 'GIVEN' ? 'alacak tahsil edildi' : 'borç ödemesi yapıldı'}`,
+        transactionDate: new Date(),
+        balanceAfter: tenantRecord.currentBalance,
+        relatedId: debt._id,
+        relatedType: 'DEBT',
+        directoryId: debt.relatedId, // Also link to directory for easy filtering
+        directoryType: debt.relatedType
+      }], { session });
 
       updatedDebt = debt;
       createdTransaction = transaction;

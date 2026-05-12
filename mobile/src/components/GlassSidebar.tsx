@@ -116,7 +116,7 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
 };
 
 const styles = StyleSheet.create({
-  root: { flex: 1, zIndex: 0 },
+  root: { flex: 1 },
   overlay: { ...StyleSheet.absoluteFill },
   menuSection: { gap: 4 },
 });

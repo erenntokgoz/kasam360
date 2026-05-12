@@ -22,26 +22,18 @@ const tenantSchema = new mongoose.Schema(
     openingBalance: {
       type: Number,
       default: 0,
-      get: (v) => Math.round(v),
-      set: (v) => Math.round(v),
     },
     openingDebts: {
       type: Number,
       default: 0,
-      get: (v) => Math.round(v),
-      set: (v) => Math.round(v),
     },
     openingReceivables: {
       type: Number,
       default: 0,
-      get: (v) => Math.round(v),
-      set: (v) => Math.round(v),
     },
     currentBalance: {
       type: Number,
       default: 0,
-      get: (v) => Math.round(v),
-      set: (v) => Math.round(v),
     },
     subscriptionStatus: {
       type: String,

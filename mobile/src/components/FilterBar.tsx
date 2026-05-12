@@ -122,7 +122,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onDateChange, onContactChange, sh
 };
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 16, zIndex: 1 },
+  container: { marginBottom: 16 },
   scrollContent: { paddingHorizontal: 4, gap: 8 },
   chip: {
     paddingHorizontal: 16,

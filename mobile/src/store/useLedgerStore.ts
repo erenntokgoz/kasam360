@@ -16,6 +16,7 @@ import {
 import { useLogStore } from './useLogStore';
 import { useNotificationStore } from './useNotificationStore';
 import { useStaffStore } from './useStaffStore';
+import { generateUUID } from '../utils/uuid';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -34,13 +35,16 @@ interface LedgerState {
   isCreating: boolean;
   pendingOperations: CreateTransactionPayload[];
   error: string | null;
-  // ── Actions ────────────────────────────────────────────────────────────────
-  fetchTransactions: (page?: number, limit?: number, filters?: TransactionFilters) => Promise<void>;
+  /** Actions */
+  fetchTransactions: (cursor?: string | null, limit?: number, filters?: TransactionFilters) => Promise<void>;
   addTransaction: (payload: CreateTransactionPayload) => Promise<Transaction>;
   updateTransaction: (id: string, payload: UpdateTransactionPayload) => Promise<Transaction>;
   deleteTransaction: (id: string) => Promise<void>;
   processOfflineQueue: () => Promise<void>;
   refreshLedger: () => Promise<void>;
+  syncLocked: boolean;
+  authError: boolean;
+  breakSyncLock: () => void;
   clearError: () => void;
   reset: () => void;
 }
@@ -58,8 +62,12 @@ const initialState = {
   isLoading: false,
   isCreating: false,
   pendingOperations: [] as CreateTransactionPayload[],
+  syncLocked: false,
+  authError: false,
   error: null as string | null,
 };
+
+const TRANSACTION_LIMIT = 200;
 
 // ─── Store ───────────────────────────────────────────────────────────────────
 
@@ -68,17 +76,16 @@ export const useLedgerStore = create<LedgerState>()(
     (set, get) => ({
       ...initialState,
 
-      fetchTransactions: async (page = 1, limit = 20, filters?: TransactionFilters) => {
-        set({ isLoading: true, error: null });
+      fetchTransactions: async (cursor: string | null = null, limit = 20, filters?: TransactionFilters) => {
+        set({ isLoading: true, error: null, authError: false, syncLocked: false });
         try {
-          const result = await getTransactions(page, limit, filters);
-
-          const transactions = result.transactions.map(t => ({ ...t, id: t._id }));
+          const result = await getTransactions(cursor, limit, filters);
+          
           set((state) => ({
             transactions:
-              page === 1
-                ? transactions
-                : [...state.transactions, ...transactions],
+              cursor === null
+                ? result.transactions.slice(0, TRANSACTION_LIMIT)
+                : [...state.transactions, ...result.transactions].slice(0, TRANSACTION_LIMIT),
             pagination: result.pagination,
             totalIncome: result.summary.totalIncome,
             totalExpense: result.summary.totalExpense,
@@ -110,7 +117,7 @@ export const useLedgerStore = create<LedgerState>()(
                 : state.totalExpense;
 
             return {
-              transactions: [created, ...state.transactions],
+              transactions: [created, ...state.transactions].slice(0, TRANSACTION_LIMIT),
               totalIncome: newIncome,
               totalExpense: newExpense,
               balance: state.balance + (created.type === 'INCOME' ? created.amount : -created.amount),
@@ -140,17 +147,20 @@ export const useLedgerStore = create<LedgerState>()(
         } catch (err) {
           const isNetworkError = err instanceof Error && (err.message.includes('network') || err.message.includes('timeout'));
           if (isNetworkError) {
+            const tempId = generateUUID();
+            const payloadWithSync = { ...payload, syncId: tempId };
+            
             // Mock transaction for UI
             const mockTx: Transaction = { 
-              _id: 'temp-' + Date.now(), 
-              ...payload, 
+              _id: tempId, 
+              ...payloadWithSync, 
               createdAt: new Date().toISOString(),
               transactionDate: payload.transactionDate || new Date().toISOString(),
             } as any;
 
             set(state => ({
-              pendingOperations: [...state.pendingOperations, payload],
-              transactions: [mockTx, ...state.transactions],
+              pendingOperations: [...state.pendingOperations, payloadWithSync],
+              transactions: [mockTx, ...state.transactions].slice(0, TRANSACTION_LIMIT),
               balance: state.balance + (payload.type === 'INCOME' ? payload.amount : -payload.amount),
               isCreating: false
             }));
@@ -169,20 +179,50 @@ export const useLedgerStore = create<LedgerState>()(
       },
 
       processOfflineQueue: async () => {
-        const { pendingOperations } = get();
-        if (pendingOperations.length === 0) return;
+        const { pendingOperations, syncLocked } = get();
+        if (pendingOperations.length === 0 || syncLocked) return;
 
+        set({ syncLocked: true });
         const remaining: CreateTransactionPayload[] = [];
+        
         for (const op of pendingOperations) {
           try {
-            await createTransaction(op);
-          } catch (err) {
-            remaining.push(op);
+            const created = await createTransaction(op);
+            
+            // Eşleştirip ID'yi güncelleme logic'i
+            if (op.syncId) {
+              set((state) => ({
+                transactions: state.transactions.map((t) => 
+                  t._id === op.syncId ? { ...t, _id: created._id } : t
+                )
+              }));
+            }
+          } catch (err: any) {
+            const status = err?.status;
+            
+            if (status === 401) {
+              // Auth hatası: Kuyruğu durdur ve kilitli bırak
+              set({ syncLocked: true, authError: true });
+              return; 
+            }
+            
+            if (status >= 500 || !status) {
+              // Server hatası veya network: Sonra tekrar dene
+              remaining.push(op);
+            } else {
+              // 400 gibi hatalarda işlemi kuyruktan at (ya da logla)
+              console.error('Kritik senkronizasyon hatası:', err);
+            }
           }
         }
-        set({ pendingOperations: remaining });
+
+        set({ 
+          pendingOperations: remaining,
+          syncLocked: false 
+        });
+
         if (remaining.length === 0 && pendingOperations.length > 0) {
-          get().fetchTransactions(1).catch(() => {});
+          get().fetchTransactions(null).catch(() => {});
         }
       },
 
@@ -194,7 +234,7 @@ export const useLedgerStore = create<LedgerState>()(
             transactions: state.transactions.map((t) => (t._id === id ? updated : t)),
             isLoading: false,
           }));
-          get().fetchTransactions(1).catch(() => {});
+          get().fetchTransactions(null).catch(() => {});
           
           useStaffStore.getState().fetchStaff().catch(() => {});
           import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => {}));
@@ -219,7 +259,7 @@ export const useLedgerStore = create<LedgerState>()(
             transactions: state.transactions.filter((t) => t._id !== id),
             isLoading: false,
           }));
-          get().fetchTransactions(1).catch(() => {});
+          get().fetchTransactions(null).catch(() => {});
           
           useStaffStore.getState().fetchStaff().catch(() => {});
           import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => {}));
@@ -231,8 +271,10 @@ export const useLedgerStore = create<LedgerState>()(
       },
 
       refreshLedger: async () => {
-        await get().fetchTransactions(1);
+        await get().fetchTransactions(null);
       },
+
+      breakSyncLock: () => set({ syncLocked: false, authError: false }),
 
       clearError: () => set({ error: null }),
 
@@ -241,6 +283,20 @@ export const useLedgerStore = create<LedgerState>()(
     {
       name: StorageKeys.LEDGER,
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Rehydration anında bekleyen işlemleri otomatik tetikle
+          state.processOfflineQueue().catch(() => {});
+        }
+      },
+      migrate: (persistedState: any, version: number) => {
+        if (version === 0) {
+          // Gelecekteki migration'lar için hazırlık
+          return persistedState;
+        }
+        return persistedState;
+      },
     }
   )
 );
