@@ -4,6 +4,7 @@ import {
   setItem,
   getItem,
   removeItem,
+  clearStorage,
   StorageKeys,
 } from '../utils/storage';
 import { useLedgerStore } from './useLedgerStore';
@@ -34,7 +35,7 @@ interface AuthState {
   // Actions
   register: (payload: RegisterPayload) => Promise<void>;
   login: (payload: LoginPayload, rememberMe?: boolean) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   hydrateFromStorage: () => Promise<void>;
   updateProfile: (payload: { businessName?: string; password?: string }) => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -158,10 +159,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   /**
    * Clears in-memory auth state and wipes persistent storage.
    */
-  logout: () => {
-    clearAuth();
+  logout: async () => {
     set({ user: null, token: null, refreshToken: null, error: null });
-    // Reset all data stores to avoid stale data between accounts
+    
+    // Purge EVERYTHING from persistent storage to prevent any data leakage
+    await clearStorage();
+
+    // Reset all in-memory states
     useLedgerStore.getState().reset();
     useDebtStore.getState().reset();
     useContactStore.getState().reset();
