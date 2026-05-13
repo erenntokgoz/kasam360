@@ -34,48 +34,48 @@ const shared = {
   },
 };
 
-// ─── Dark Theme (Midnight Premium) ──────────────────────────────────────────────
+// ─── Dark Theme (Slate Premium) ──────────────────────────────────────────────
 export const darkTheme = {
   ...shared,
   colors: {
-    // Core — Daha okunabilir ve yumuşak tonlar (üst üste binmeyi engellemek için)
-    primary: '#121212',       // Çok koyu gri (neredeyse siyah) zemin
-    surface: '#1E1E1E',       // Kartların oturduğu zemin (bir tık açık)
-    card: '#2C2C2C',          // Yükseltilmiş kart
-    border: 'rgba(255, 255, 255, 0.15)',  // Daha dengeli kenarlıklar
+    // Core — "Crushed Black" yığılmasını önleyen Slate (Mavi-Gri) paleti. Hiyerarşi belirginleştirildi.
+    primary: '#0F172A',       // Slate 900: Ana zemin (Önceki #121212 çok boğucuydu)
+    surface: '#1E293B',       // Slate 800: Katman 1 (Kart zeminleri, Header)
+    card: '#334155',          // Slate 700: Katman 2 (Pop-up, Modal, Vurgulu alanlar)
+    border: 'rgba(255, 255, 255, 0.12)',  // Kontrast dengesi için opaklık düşürüldü
 
     // Accents (Indigo & Violet)
-    accent: '#818CF8',        // Indigo 400 (Daha parlak ve belirgin)
-    accentLight: '#A5B4FC',   // Indigo 300
-    accentDark: '#6366F1',    // Indigo 500
-    accentGradient: ['#818CF8', '#C084FC'], // Indigo to Purple
+    accent: '#818CF8',
+    accentLight: '#A5B4FC',
+    accentDark: '#6366F1',
+    accentGradient: ['#818CF8', '#C084FC'],
 
     // Semantic
-    success: '#34D399',       // Emerald 400
+    success: '#34D399',
     successLight: '#6EE7B7',
-    danger: '#FB7185',        // Rose 400
+    danger: '#FB7185',
     dangerLight: '#FDA4AF',
-    warning: '#FBBF24',       // Amber 400
+    warning: '#FBBF24',
     warningLight: '#FDE047',
 
-    // Text — net kontrast
-    textPrimary: '#F8FAFC',   // Neredeyse beyaz
-    textSecondary: '#CBD5E1', // Açık gri
-    textTertiary: '#94A3B8',  // Orta gri
+    // Text — Slate uyumlu okuma kontrastı
+    textPrimary: '#F8FAFC',   // Slate 50
+    textSecondary: '#CBD5E1', // Slate 300
+    textTertiary: '#94A3B8',  // Slate 400
 
-    // Transparency — Düşük opaklıklar
+    // Transparency
     accentTransparent: 'rgba(129, 140, 248, 0.15)',
     successTransparent: 'rgba(52, 211, 153, 0.15)',
     dangerTransparent: 'rgba(251, 113, 133, 0.15)',
     warningTransparent: 'rgba(251, 191, 36, 0.15)',
     whiteTransparent: 'rgba(255, 255, 255, 0.10)',
-    overlay: 'rgba(0, 0, 0, 0.65)', // Modallar için standart overlay rengi
+    overlay: 'rgba(15, 23, 42, 0.75)', // Slate tabanlı modal arkaplanı
   },
   shadows: {
     card: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.4,
+      shadowOpacity: 0.5,
       shadowRadius: 20,
       elevation: 8,
     },
@@ -93,32 +93,27 @@ export const darkTheme = {
 export const lightTheme = {
   ...shared,
   colors: {
-    // Core
-    primary: '#F8FAFC',       // Slate 50
-    surface: '#FFFFFF',       // Pure White
-    card: '#F1F5F9',          // Slate 100
-    border: 'rgba(15, 23, 42, 0.08)', // Slate 900 very light
+    primary: '#F8FAFC',
+    surface: '#FFFFFF',
+    card: '#F1F5F9',
+    border: 'rgba(15, 23, 42, 0.08)',
 
-    // Accents
-    accent: '#4F46E5',        // Indigo 600
-    accentLight: '#6366F1',   // Indigo 500
-    accentDark: '#3730A3',    // Indigo 800
-    accentGradient: ['#4F46E5', '#7C3AED'], // Indigo to Violet
+    accent: '#4F46E5',
+    accentLight: '#6366F1',
+    accentDark: '#3730A3',
+    accentGradient: ['#4F46E5', '#7C3AED'],
 
-    // Semantic
-    success: '#059669',       // Emerald 600
+    success: '#059669',
     successLight: '#10B981',
-    danger: '#E11D48',        // Rose 600
+    danger: '#E11D48',
     dangerLight: '#F43F5E',
-    warning: '#D97706',       // Amber 600
+    warning: '#D97706',
     warningLight: '#F59E0B',
 
-    // Text
-    textPrimary: '#0F172A',   // Slate 900
-    textSecondary: '#475569', // Slate 600
-    textTertiary: '#94A3B8',  // Slate 400
+    textPrimary: '#0F172A',
+    textSecondary: '#475569',
+    textTertiary: '#94A3B8',
 
-    // Transparency
     accentTransparent: 'rgba(79, 70, 229, 0.06)',
     successTransparent: 'rgba(5, 150, 105, 0.06)',
     dangerTransparent: 'rgba(225, 29, 72, 0.06)',

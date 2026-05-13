@@ -18,24 +18,18 @@ import { useNotificationStore } from './useNotificationStore';
 import { useStaffStore } from './useStaffStore';
 import { generateUUID } from '../utils/uuid';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 interface LedgerState {
   transactions: Transaction[];
   pagination: TransactionPagination | null;
-
-  /** All values in integer cents/kuruş */
   totalIncome: number;
   totalExpense: number;
   totalDebt: number;
   totalReceivable: number;
   balance: number;
-
   isLoading: boolean;
   isCreating: boolean;
   pendingOperations: CreateTransactionPayload[];
   error: string | null;
-  /** Actions */
   fetchTransactions: (cursor?: string | null, limit?: number, filters?: TransactionFilters) => Promise<void>;
   addTransaction: (payload: CreateTransactionPayload) => Promise<Transaction>;
   updateTransaction: (id: string, payload: UpdateTransactionPayload) => Promise<Transaction>;
@@ -48,8 +42,6 @@ interface LedgerState {
   clearError: () => void;
   reset: () => void;
 }
-
-// ─── Initial State ───────────────────────────────────────────────────────────
 
 const initialState = {
   transactions: [] as Transaction[],
@@ -69,8 +61,6 @@ const initialState = {
 
 const TRANSACTION_LIMIT = 200;
 
-// ─── Store ───────────────────────────────────────────────────────────────────
-
 export const useLedgerStore = create<LedgerState>()(
   persist(
     (set, get) => ({
@@ -80,7 +70,7 @@ export const useLedgerStore = create<LedgerState>()(
         set({ isLoading: true, error: null, authError: false, syncLocked: false });
         try {
           const result = await getTransactions(cursor, limit, filters);
-          
+
           set((state) => ({
             transactions:
               cursor === null
@@ -107,34 +97,28 @@ export const useLedgerStore = create<LedgerState>()(
           const created = await createTransaction(payload);
 
           set((state) => {
-            const newIncome =
-              created.type === 'INCOME'
-                ? state.totalIncome + created.amount
-                : state.totalIncome;
-            const newExpense =
-              created.type === 'EXPENSE'
-                ? state.totalExpense + created.amount
-                : state.totalExpense;
+            const newIncome = created.type === 'INCOME' ? state.totalIncome + created.amount : state.totalIncome;
+            const newExpense = created.type === 'EXPENSE' ? state.totalExpense + created.amount : state.totalExpense;
+            const balanceImpact = created.method === 'VERESİYE' ? 0 : (created.type === 'INCOME' ? created.amount : -created.amount);
 
             return {
               transactions: [created, ...state.transactions].slice(0, TRANSACTION_LIMIT),
               totalIncome: newIncome,
               totalExpense: newExpense,
-              balance: state.balance + (created.type === 'INCOME' ? created.amount : -created.amount),
+              balance: state.balance + balanceImpact,
               isCreating: false,
             };
           });
 
-          // Async background sync for derived balances
-          useStaffStore.getState().fetchStaff().catch(() => {});
-          import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => {}));
+          useStaffStore.getState().fetchStaff().catch(() => { });
+          import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => { }));
 
           const amountStr = (created.amount / 100).toLocaleString('tr-TR') + '₺';
           const categoryText = created.category ? `[${created.category}] ` : '';
-          const actionText = created.description 
+          const actionText = created.description
             ? `${categoryText}${created.description} (${amountStr})`
             : `${categoryText}${amountStr} tutarında ${created.type === 'INCOME' ? 'gelir eklendi' : 'gider kaydedildi'}.`;
-          
+
           useLogStore.getState().addLog(actionText, 'success');
 
           useNotificationStore.getState().addNotification({
@@ -149,21 +133,23 @@ export const useLedgerStore = create<LedgerState>()(
           if (isNetworkError) {
             const tempId = generateUUID();
             const payloadWithSync = { ...payload, syncId: tempId };
-            
-            // Mock transaction for UI
-            const mockTx: Transaction = { 
-              _id: tempId, 
-              ...payloadWithSync, 
+
+            const mockTx: Transaction = {
+              _id: tempId,
+              ...payloadWithSync,
               createdAt: new Date().toISOString(),
               transactionDate: payload.transactionDate || new Date().toISOString(),
             } as any;
 
-            set(state => ({
-              pendingOperations: [...state.pendingOperations, payloadWithSync],
-              transactions: [mockTx, ...state.transactions].slice(0, TRANSACTION_LIMIT),
-              balance: state.balance + (payload.type === 'INCOME' ? payload.amount : -payload.amount),
-              isCreating: false
-            }));
+            set(state => {
+              const balanceImpact = payload.method === 'VERESİYE' ? 0 : (payload.type === 'INCOME' ? payload.amount : -payload.amount);
+              return {
+                pendingOperations: [...state.pendingOperations, payloadWithSync],
+                transactions: [mockTx, ...state.transactions].slice(0, TRANSACTION_LIMIT),
+                balance: state.balance + balanceImpact,
+                isCreating: false
+              };
+            });
 
             useNotificationStore.getState().addNotification({
               title: 'Çevrimdışı Mod',
@@ -184,45 +170,35 @@ export const useLedgerStore = create<LedgerState>()(
 
         set({ syncLocked: true });
         const remaining: CreateTransactionPayload[] = [];
-        
+
         for (const op of pendingOperations) {
           try {
             const created = await createTransaction(op);
-            
-            // Eşleştirip ID'yi güncelleme logic'i
             if (op.syncId) {
               set((state) => ({
-                transactions: state.transactions.map((t) => 
+                transactions: state.transactions.map((t) =>
                   t._id === op.syncId || t.syncId === op.syncId ? created : t
                 )
               }));
             }
           } catch (err: any) {
             const status = err?.status;
-            
             if (status === 401) {
-              // Auth hatası: Kuyruğu durdur ve kilitli bırak
               set({ syncLocked: true, authError: true });
-              return; 
+              return;
             }
-            
             if (status >= 500 || !status) {
-              // Server hatası veya network: Sonra tekrar dene
               remaining.push(op);
             } else {
-              // 400 gibi hatalarda işlemi kuyruktan at (ya da logla)
               console.error('Kritik senkronizasyon hatası:', err);
             }
           }
         }
 
-        set({ 
-          pendingOperations: remaining,
-          syncLocked: false 
-        });
+        set({ pendingOperations: remaining, syncLocked: false });
 
-        if (remaining.length === 0 && pendingOperations.length > 0) {
-          get().fetchTransactions(null).catch(() => {});
+        if (pendingOperations.length > 0) {
+          get().fetchTransactions(null).catch(() => { });
         }
       },
 
@@ -234,10 +210,10 @@ export const useLedgerStore = create<LedgerState>()(
             transactions: state.transactions.map((t) => (t._id === id ? updated : t)),
             isLoading: false,
           }));
-          get().fetchTransactions(null).catch(() => {});
-          
-          useStaffStore.getState().fetchStaff().catch(() => {});
-          import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => {}));
+          get().fetchTransactions(null).catch(() => { });
+
+          useStaffStore.getState().fetchStaff().catch(() => { });
+          import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => { }));
           return updated;
         } catch (err) {
           const message = err instanceof Error ? err.message : 'İşlem güncellenemedi.';
@@ -251,7 +227,7 @@ export const useLedgerStore = create<LedgerState>()(
         try {
           const tx = get().transactions.find((t) => t._id === id);
           if (tx?.category === 'Personel Gideri') {
-            useStaffStore.getState().fetchStaff().catch(() => {});
+            useStaffStore.getState().fetchStaff().catch(() => { });
           }
 
           await deleteTxApi(id);
@@ -259,10 +235,10 @@ export const useLedgerStore = create<LedgerState>()(
             transactions: state.transactions.filter((t) => t._id !== id),
             isLoading: false,
           }));
-          get().fetchTransactions(null).catch(() => {});
-          
-          useStaffStore.getState().fetchStaff().catch(() => {});
-          import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => {}));
+          get().fetchTransactions(null).catch(() => { });
+
+          useStaffStore.getState().fetchStaff().catch(() => { });
+          import('./useContactStore').then(m => m.useContactStore.getState().fetchContacts().catch(() => { }));
         } catch (err) {
           const message = err instanceof Error ? err.message : 'İşlem silinemedi.';
           set({ error: message, isLoading: false });
@@ -286,15 +262,11 @@ export const useLedgerStore = create<LedgerState>()(
       version: 1,
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Rehydration anında bekleyen işlemleri otomatik tetikle
-          state.processOfflineQueue().catch(() => {});
+          state.processOfflineQueue().catch(() => { });
         }
       },
       migrate: (persistedState: any, version: number) => {
-        if (version === 0) {
-          // Gelecekteki migration'lar için hazırlık
-          return persistedState;
-        }
+        if (version === 0) return persistedState;
         return persistedState;
       },
     }

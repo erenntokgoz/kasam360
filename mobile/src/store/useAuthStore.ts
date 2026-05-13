@@ -15,8 +15,6 @@ import { useNotificationStore } from './useNotificationStore';
 import { useLogStore } from './useLogStore';
 import { useSetupStore } from './useSetupStore';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 export interface Tenant {
   id: string;
   phone: string;
@@ -32,7 +30,6 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
 
-  // Actions
   register: (payload: RegisterPayload) => Promise<void>;
   login: (payload: LoginPayload, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
@@ -62,8 +59,6 @@ interface AuthApiResponse {
   tenant: Tenant;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const persistAuth = async (token: string, refreshToken: string, user: Tenant): Promise<void> => {
   await Promise.all([
     setItem(StorageKeys.TOKEN, token),
@@ -78,20 +73,13 @@ const clearAuth = async (): Promise<void> => {
   await removeItem(StorageKeys.USER);
 };
 
-// ─── Store ────────────────────────────────────────────────────────────────────
-
 export const useAuthStore = create<AuthState>((set) => ({
-  // Initial state — always start unauthenticated; hydration happens explicitly.
   user: null,
   token: null,
   refreshToken: null,
   isLoading: false,
   error: null,
 
-  /**
-   * Restores auth state from MMKV on app launch.
-   * Call this in the root component (e.g. App.tsx) inside a useEffect.
-   */
   hydrateFromStorage: async () => {
     const token = await getItem(StorageKeys.TOKEN);
     const refreshToken = await getItem(StorageKeys.REFRESH_TOKEN);
@@ -102,15 +90,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         const user: Tenant = JSON.parse(userRaw);
         set({ token, refreshToken, user });
       } catch {
-        // Corrupted storage — wipe only auth keys
         await clearAuth();
       }
     }
   },
 
-  /**
-   * Registers a new tenant and immediately logs them in upon success.
-   */
   register: async (payload: RegisterPayload) => {
     set({ isLoading: true, error: null });
     try {
@@ -121,16 +105,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       await persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Kayıt işlemi başarısız oldu.';
+      const message = err instanceof Error ? err.message : 'Kayıt işlemi başarısız oldu.';
       set({ error: message, isLoading: false });
-      throw err; // re-throw so UI can react (e.g. show inline error)
+      throw err;
     }
   },
 
-  /**
-   * Authenticates an existing tenant.
-   */
   login: async (payload: LoginPayload, rememberMe?: boolean) => {
     set({ isLoading: true, error: null });
     try {
@@ -138,7 +118,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         '/api/auth/login',
         payload,
       );
-      
+
       if (rememberMe) {
         await setItem(StorageKeys.REMEMBER_ME, 'true');
         await setItem(StorageKeys.PHONE_NUMBER, payload.phone);
@@ -156,16 +136,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  /**
-   * Clears in-memory auth state and wipes persistent storage.
-   */
   logout: async () => {
     set({ user: null, token: null, refreshToken: null, error: null });
-    
-    // Purge EVERYTHING from persistent storage to prevent any data leakage
+
     await clearStorage();
 
-    // Clear Zustand persist storage explicitly
     useLedgerStore.persist.clearStorage();
     useDebtStore.persist.clearStorage();
     useContactStore.persist.clearStorage();
@@ -174,12 +149,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { useRecurringStore } = await import('./useRecurringStore');
       useRecurringStore.persist.clearStorage();
-    } catch (e) {
-      // Ignore if not found or error
-    }
-    useAuthStore.persist.clearStorage();
+    } catch (e) { }
 
-    // Reset all in-memory states
+    // [DÜZELTME 1]: useAuthStore.persist.clearStorage(); çağrısı KESİNLİKLE YASAKLANDI.
+    // useAuthStore, persist middleware'i ile sarılmadığı için (custom hydration kullanıyor)
+    // logout tetiklendiğinde TypeError verip uygulamayı çökertecekti.
+
     useLedgerStore.getState().reset();
     useDebtStore.getState().reset();
     useContactStore.getState().reset();
@@ -189,9 +164,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     useSetupStore.getState().reset();
   },
 
-  /**
-   * Updates current tenant profile details.
-   */
   updateProfile: async (payload: { businessName?: string; password?: string }) => {
     set({ isLoading: true, error: null });
     try {
@@ -199,7 +171,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         '/api/auth/profile',
         payload,
       );
-      // Update persistent storage with new user data (token remains same)
       setItem(StorageKeys.USER, JSON.stringify(data.tenant));
       set({ user: data.tenant, isLoading: false });
     } catch (err) {
@@ -209,9 +180,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  /**
-   * Deletes the user account permanently.
-   */
   deleteAccount: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -224,25 +192,19 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  /**
-   * Clears all tenant data without deleting the account.
-   */
   clearData: async () => {
     set({ isLoading: true, error: null });
     try {
       await apiClient.delete('/api/tenant/clear');
-      
-      // Reset data stores
+
       useLedgerStore.getState().reset();
       useDebtStore.getState().reset();
       useContactStore.getState().reset();
       useStaffStore.getState().reset();
       useNotificationStore.getState().reset();
       useLogStore.getState().reset();
-      
-      // Re-hydrate Setup to false
       useSetupStore.getState().reset();
-      
+
       set({ isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Veri temizleme başarısız oldu.';
@@ -251,6 +213,5 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  /** Clears any lingering error message (e.g. when user navigates away). */
   clearError: () => set({ error: null }),
 }));

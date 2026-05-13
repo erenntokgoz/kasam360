@@ -30,35 +30,36 @@ export const useContactStore = create<ContactState>()(
   persist(
     (set, get) => ({
       ...initialState,
-      
+
       fetchContacts: async () => {
         set({ isLoading: true });
         try {
           const data = await getDirectory('CONTACT');
-          set({ 
-            contacts: data.map(d => ({ 
-              id: d._id, 
-              name: d.name, 
-              totalBalance: d.totalBalance, 
-              lastTransactionDate: d.lastTransactionDate 
+          set({
+            contacts: data.map((d: any) => ({
+              id: d.id || d._id,
+              name: d.name,
+              totalBalance: d.totalBalance || 0,
+              lastTransactionDate: d.lastTransactionDate
             })),
-            isLoading: false 
+            isLoading: false
           });
         } catch (error) {
           console.error('[useContactStore.fetchContacts]', error);
           set({ isLoading: false });
+          throw error;
         }
       },
-      
+
       addContact: async (name: string, date?: string) => {
         const trimmedName = name.trim();
-        if (!trimmedName) return;
-        
+        if (!trimmedName) throw new Error('Geçersiz isim.');
+
         const { contacts } = get();
-        if (contacts.some((c) => c.name.toLocaleLowerCase('tr').trim() === trimmedName.toLocaleLowerCase('tr').trim())) {
+        if (contacts.some((c) => c.name.toLocaleLowerCase('tr-TR').trim() === trimmedName.toLocaleLowerCase('tr-TR'))) {
           throw new Error('Bu isimde bir kişi zaten kayıtlı.');
         }
-        
+
         try {
           await createEntry({ name: trimmedName, type: 'CONTACT', lastTransactionDate: date });
           await get().fetchContacts();
@@ -71,9 +72,10 @@ export const useContactStore = create<ContactState>()(
       updateContact: async (id: string, data: Partial<ContactInfo>) => {
         try {
           await updateEntry(id, data);
-          get().fetchContacts().catch(() => {});
+          await get().fetchContacts();
         } catch (error) {
           console.error('[useContactStore.updateContact]', error);
+          throw error;
         }
       },
 
@@ -83,6 +85,7 @@ export const useContactStore = create<ContactState>()(
           await get().fetchContacts();
         } catch (error) {
           console.error('[useContactStore.removeContact]', error);
+          throw error;
         }
       },
 

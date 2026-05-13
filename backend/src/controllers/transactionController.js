@@ -4,12 +4,6 @@ const Tenant = require('../models/Tenant');
 const Debt = require('../models/Debt');
 const AuditLog = require('../models/AuditLog');
 
-/**
- * Transaction CRUD Controller
- * ──────────────────────────────────────────────────────────────────────────────
- * All amounts are stored and returned as integers (cents/kuruş).
- */
-
 const { transactionSchemas } = require('../utils/validation');
 
 const getTransactions = async (req, res, next) => {
@@ -18,15 +12,15 @@ const getTransactions = async (req, res, next) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
 
     const baseFilter = { tenantId: tenantObjectId, isDeleted: false };
-    
+
     if (req.query.type && req.query.type !== 'ALL' && ['INCOME', 'EXPENSE'].includes(req.query.type)) baseFilter.type = req.query.type;
-    
+
     if (req.query.startDate || req.query.endDate) {
       baseFilter.transactionDate = {};
       if (req.query.startDate) baseFilter.transactionDate.$gte = new Date(req.query.startDate);
       if (req.query.endDate) baseFilter.transactionDate.$lte = new Date(req.query.endDate);
     }
-    
+
     if (req.query.categories) {
       const cats = req.query.categories.split(',');
       baseFilter.category = { $in: cats };
@@ -34,20 +28,19 @@ const getTransactions = async (req, res, next) => {
 
     const filter = { ...baseFilter };
 
-    // Cursor-based pagination (Base64)
     if (req.query.cursor) {
       try {
         const decoded = JSON.parse(Buffer.from(req.query.cursor, 'base64').toString('utf8'));
         if (decoded.date && decoded.id) {
           filter.$or = [
             { transactionDate: { $lt: new Date(decoded.date) } },
-            { 
-              transactionDate: new Date(decoded.date), 
-              _id: { $lt: new mongoose.Types.ObjectId(decoded.id) } 
+            {
+              transactionDate: new Date(decoded.date),
+              _id: { $lt: new mongoose.Types.ObjectId(decoded.id) }
             }
           ];
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const [transactions, total, tenant] = await Promise.all([
@@ -108,7 +101,7 @@ const createTransaction = async (req, res, next) => {
     const { tenantId } = req;
     const { type, amount, method, category, description, transactionDate, syncId, relatedId, relatedType } = req.body;
     const amountInt = Math.round(Number(amount));
-    
+
     let createdTx;
     await session.withTransaction(async () => {
       if (syncId) {
@@ -125,10 +118,10 @@ const createTransaction = async (req, res, next) => {
           existing.category = category || null;
           existing.description = description || null;
           if (transactionDate) existing.transactionDate = new Date(transactionDate);
-          
+
           let finalDirId = undefined;
           let finalDirType = undefined;
-          
+
           if (relatedId !== undefined) {
             existing.relatedId = relatedId;
             if (relatedType === 'CONTACT' || relatedType === 'STAFF') {
@@ -152,10 +145,10 @@ const createTransaction = async (req, res, next) => {
 
           existing.directoryId = finalDirId || existing.directoryId;
           existing.directoryType = finalDirType || existing.directoryType;
-          
+
           await existing.save({ session });
-          createdTx = existing; 
-          return; 
+          createdTx = existing;
+          return;
         }
       }
 
@@ -163,14 +156,14 @@ const createTransaction = async (req, res, next) => {
       let finalDirType = (relatedType === 'CONTACT' || relatedType === 'STAFF') ? relatedType : (req.body.directoryType || null);
 
       if (method === 'VERESİYE' && !finalDirId && !description) {
-         throw Object.assign(new Error('Veresiye işlemlerde kişi/cari seçimi zorunludur.'), { httpStatus: 400 });
+        throw Object.assign(new Error('Veresiye işlemlerde kişi/cari seçimi zorunludur.'), { httpStatus: 400 });
       }
 
       if (method === 'VERESİYE' && !finalDirId && description) {
-         const entityName = description.split(' - ')[0].trim();
-         if (!entityName || entityName === 'Kişisel Gider') {
-           throw Object.assign(new Error('Veresiye işlemlerde kişi/cari seçimi zorunludur.'), { httpStatus: 400 });
-         }
+        const entityName = description.split(' - ')[0].trim();
+        if (!entityName || entityName === 'Kişisel Gider') {
+          throw Object.assign(new Error('Veresiye işlemlerde kişi/cari seçimi zorunludur.'), { httpStatus: 400 });
+        }
       }
 
       if (!finalDirId && description && (category === 'Personel Gideri' || category === 'İşletme Gideri')) {
@@ -278,6 +271,14 @@ const updateTransaction = async (req, res, next) => {
       const newAmount = updateData.amount !== undefined ? Math.round(Number(updateData.amount)) : oldAmount;
       const newType = updateData.type || oldData.type;
 
+      const newMethod = updateData.method || oldData.method;
+      const wasVeresiye = oldData.method === 'VERESİYE';
+      const isNowVeresiye = newMethod === 'VERESİYE';
+
+      if (wasVeresiye !== isNowVeresiye) {
+        throw Object.assign(new Error('Muhasebe bütünlüğü ihlali: Nakit ve Veresiye metotları arasında sonradan değişim yapılamaz. İşlemi iptal edip yeniden oluşturun.'), { httpStatus: 400 });
+      }
+
       if (transaction.relatedType === 'DEBT' && transaction.relatedId && (oldAmount !== newAmount || updateData.type)) {
         const debt = await Debt.findOne({ _id: transaction.relatedId, tenantId }).session(session);
         if (debt) {
@@ -302,7 +303,6 @@ const updateTransaction = async (req, res, next) => {
       }
 
       const oldImpact = (oldData.method === 'VERESİYE') ? 0 : (oldData.type === 'INCOME' ? oldData.amount : -oldData.amount);
-      const newMethod = updateData.method || oldData.method;
       const newImpact = (newMethod === 'VERESİYE') ? 0 : (newType === 'INCOME' ? newAmount : -newAmount);
       const netChange = newImpact - oldImpact;
 
@@ -347,9 +347,9 @@ const deleteTransaction = async (req, res, next) => {
       if (transaction.relatedType === 'DEBT' && transaction.relatedId) {
         const debt = await Debt.findOne({ _id: transaction.relatedId, tenantId }).session(session);
         if (debt) {
-          const isInitial = ['Borç Verildi', 'Borç Alındı'].includes(transaction.category);
-          if (isInitial) debt.isDeleted = true;
-          else {
+          if (transaction.method === 'VERESİYE') {
+            debt.isDeleted = true;
+          } else {
             debt.remainingAmount += transaction.amount;
             debt.status = debt.remainingAmount >= debt.totalAmount ? 'PENDING' : 'PARTIAL';
           }
@@ -357,7 +357,6 @@ const deleteTransaction = async (req, res, next) => {
         }
       }
 
-      // Veresiye ise bakiyeye dokunma, nakit/iban ise iade et
       if (transaction.method !== 'VERESİYE') {
         const rollbackImpact = transaction.type === 'INCOME' ? -transaction.amount : transaction.amount;
         await Tenant.findByIdAndUpdate(tenantId, { $inc: { currentBalance: rollbackImpact } }, { session });

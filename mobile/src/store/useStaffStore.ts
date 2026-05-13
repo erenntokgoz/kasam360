@@ -32,9 +32,10 @@ export const useStaffStore = create<StaffStore>()(
       fetchStaff: async () => {
         try {
           const data = await getDirectory('STAFF');
-          set({ staffList: data.map(d => ({ id: d._id, name: d.name, role: d.role, totalPaid: d.totalPaid })) });
+          set({ staffList: data.map((d: any) => ({ id: d.id || d._id, name: d.name, role: d.role, totalPaid: d.totalPaid || 0 })) });
         } catch (error) {
           console.error('[useStaffStore.fetchStaff]', error);
+          throw error;
         }
       },
 
@@ -42,7 +43,9 @@ export const useStaffStore = create<StaffStore>()(
         const { staffList } = get();
         const trimmedName = name.trim();
         const existing = staffList.find(s => s.name.toLowerCase() === trimmedName.toLowerCase());
-        if (existing) return;
+        if (existing) {
+          throw new Error('Bu personel zaten rehberde kayıtlı.');
+        }
         try {
           await createEntry({ name: trimmedName, type: 'STAFF', role, totalPaid: 0 });
           await get().fetchStaff();
@@ -55,9 +58,10 @@ export const useStaffStore = create<StaffStore>()(
       updateStaff: async (id, updates) => {
         try {
           await updateEntry(id, updates);
-          get().fetchStaff().catch(() => {});
+          await get().fetchStaff();
         } catch (error) {
           console.error('[useStaffStore.updateStaff]', error);
+          throw error;
         }
       },
 
@@ -67,6 +71,7 @@ export const useStaffStore = create<StaffStore>()(
           await get().fetchStaff();
         } catch (error) {
           console.error('[useStaffStore.removeStaff]', error);
+          throw error;
         }
       },
 

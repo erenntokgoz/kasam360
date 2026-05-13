@@ -8,6 +8,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useLedgerStore } from '../store/useLedgerStore';
 import { useStaffStore, Staff } from '../store/useStaffStore';
 import type { Transaction } from '../api/transactionService';
+import { getTransactions } from '../api/transactionService';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import FilterBar from '../components/FilterBar';
@@ -24,16 +25,14 @@ const PersonnelExpensesScreen: React.FC = () => {
   const { transactions: globalTransactions, deleteTransaction } = useLedgerStore();
   const { staffList, removeStaff, addStaff, fetchStaff } = useStaffStore();
   const { contacts } = useContactStore();
-  
+
   const [localStaffExpenses, setLocalStaffExpenses] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
 
-  // Fetch transactions for Personel Gideri category
   const fetchStaffExpenses = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { getTransactions } = require('../api/transactionService');
       const result = await getTransactions(null, 100, { categories: ['Personel Gideri'] });
       if (!result || !Array.isArray(result.transactions)) {
         console.warn('[StaffExpensesScreen] fetchStaffExpenses: unexpected result shape', result);
@@ -49,7 +48,6 @@ const PersonnelExpensesScreen: React.FC = () => {
     }
   }, []);
 
-  // Fetch staff directory with graceful error handling (DIRECTORYISNOTFOUND fix)
   const fetchStaffSafe = useCallback(async () => {
     try {
       setDirectoryError(null);
@@ -65,20 +63,18 @@ const PersonnelExpensesScreen: React.FC = () => {
     fetchStaffExpenses();
   }, [fetchStaffSafe, fetchStaffExpenses]);
 
-  // Refetch if global transactions add/update
   React.useEffect(() => {
     fetchStaffExpenses();
   }, [globalTransactions.length, fetchStaffExpenses]);
-  
+
   const [activeTab, setActiveTab] = useState<'HISTORY' | 'DIRECTORY'>('HISTORY');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-  
-  const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
+
+  const [dateFilter, setDateFilter] = useState<{ start: Date | null, end: Date | null }>({ start: null, end: null });
   const [contactFilter, setContactFilter] = useState<string | null>(null);
   const [newStaffName, setNewStaffName] = useState('');
 
-  // Filter local state
   const filteredPersonnelExpenses = useMemo(() => localStaffExpenses.filter(t => {
     if (contactFilter && !t.description?.toLowerCase().includes(contactFilter.toLowerCase())) return false;
     if (dateFilter.start) {
@@ -143,7 +139,7 @@ const PersonnelExpensesScreen: React.FC = () => {
   );
 
   const renderStaffItem = ({ item }: { item: Staff }) => (
-    <Pressable 
+    <Pressable
       style={[styles.staffCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
       onPress={() => navigation.navigate('ContactDetail', { contactName: item.name, contactId: item.id })}
     >
@@ -157,7 +153,6 @@ const PersonnelExpensesScreen: React.FC = () => {
             {item.role && <Text style={[styles.staffRole, { color: theme.colors.textSecondary }]}>{item.role}</Text>}
           </View>
         </View>
-        {/* MODÜL 4: onStartShouldSetResponder stops touch from propagating to parent card */}
         <View
           style={{ flexDirection: 'row', gap: 12 }}
           onStartShouldSetResponder={() => true}
@@ -210,7 +205,7 @@ const PersonnelExpensesScreen: React.FC = () => {
           <Text style={[styles.tabText, { color: activeTab === 'DIRECTORY' ? '#fff' : theme.colors.textSecondary }]}>Personel Rehberi</Text>
         </Pressable>
       </View>
-      
+
       {activeTab === 'HISTORY' ? (
         <FlatList
           data={filteredPersonnelExpenses}
@@ -223,17 +218,17 @@ const PersonnelExpensesScreen: React.FC = () => {
                 <Text style={{ fontSize: 24, color: theme.colors.danger, fontWeight: '700' }}>{formatCurrency(totalSpent)}</Text>
               </View>
 
-              <FilterBar 
+              <FilterBar
                 onDateChange={(start, end) => setDateFilter({ start, end })}
                 onContactChange={setContactFilter}
               />
 
               <View style={{ marginTop: 16 }}>
-                <AddCard 
-                  title="Yeni Personel Gideri Ekle" 
-                  subtitle="Personel maaş veya avans ödemesi yapın" 
-                  icon="plus-circle" 
-                  onPress={() => setShowAddModal(true)} 
+                <AddCard
+                  title="Yeni Personel Gideri Ekle"
+                  subtitle="Personel maaş veya avans ödemesi yapın"
+                  icon="plus-circle"
+                  onPress={() => setShowAddModal(true)}
                 />
               </View>
             </View>
@@ -267,15 +262,14 @@ const PersonnelExpensesScreen: React.FC = () => {
                 </Pressable>
               </View>
 
-              {/* Contact Suggestions */}
               {newStaffName.length > 1 && (
                 <View style={[styles.suggestionBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
                   {contacts
                     .filter(c => c.name.toLowerCase().includes(newStaffName.toLowerCase()) && !staffList.find(s => s.name === c.name))
                     .slice(0, 3)
                     .map(contact => (
-                      <Pressable 
-                        key={contact.id} 
+                      <Pressable
+                        key={contact.id}
                         style={styles.suggestionItem}
                         onPress={() => {
                           addStaff(contact.name);
