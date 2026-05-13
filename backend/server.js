@@ -34,8 +34,12 @@ app.use(cors({ origin: ['com.kasam360.app://', 'http://localhost:3000'] }));
 app.use(helmet());
 app.use(mongoSanitize());
 app.use(morgan('dev'));
-app.use(express.json({ limit: '10mb' }));            // ← increased for base64 receipt images
 
+// Router-level middleware: Allow 10mb only for OCR route
+app.use('/api/ocr', express.json({ limit: '10mb' }));
+app.use('/api/ocr', express.urlencoded({ extended: true, limit: '10mb' }));
+
+app.use(express.json({ limit: '1mb' }));
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -63,8 +67,7 @@ const ocrLimiter = rateLimit({
 });
 app.use('/api/ocr', ocrLimiter);
 
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/ocr', ocrRoutes);

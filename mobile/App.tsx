@@ -107,18 +107,7 @@ function App(): React.JSX.Element {
         if (found) {
           setSelectedDebt(found);
         } else {
-          setSelectedDebt({
-            _id: targetId,
-            entityName: remoteMessage.data.entityName || 'Bilinmeyen Kayıt',
-            type: remoteMessage.data.debtType || 'GIVEN',
-            totalAmount: Number(remoteMessage.data.totalAmount) || 0,
-            remainingAmount: Number(remoteMessage.data.remainingAmount) || 0,
-            status: 'PENDING',
-            dueDate: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            tenantId: ''
-          } as Debt);
+          return;
         }
       }
     };
@@ -153,7 +142,10 @@ function App(): React.JSX.Element {
             setSetupComplete(true);
           }
         })
-        .catch(() => {});
+        .catch((error) => {
+          console.error('[CRITICAL] Setup getTransactions hatası:', error);
+          setSetupComplete(false);
+        });
     }
   }, [token, isSetupComplete, setSetupComplete]);
 
