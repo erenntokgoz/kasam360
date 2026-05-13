@@ -42,7 +42,7 @@ export const PaymentModal: React.FC<{ visible: boolean; debt: any | null; onClos
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
+      <View style={{ flex: 1, backgroundColor: theme.colors.overlay, justifyContent: 'center', padding: 20 }}>
         <View style={{ backgroundColor: theme.colors.surface, borderRadius: 24, padding: 24 }}>
           <Text style={{ fontSize: 20, fontWeight: '700', textAlign: 'center', marginBottom: 20, color: theme.colors.textPrimary }}>{isGiven ? 'Tahsilat Yap' : 'Ödeme Yap'}</Text>
           <Text style={{ textAlign: 'center', color: theme.colors.textSecondary, marginBottom: 12 }}>{debt.entityName} - Kalan: {formatCurrency(debt.remainingAmount)}</Text>

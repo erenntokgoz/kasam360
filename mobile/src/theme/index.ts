@@ -38,38 +38,38 @@ const shared = {
 export const darkTheme = {
   ...shared,
   colors: {
-    // Core
-    primary: '#020617',       // Slate 950 (Deepest)
-    surface: '#0F172A',       // Slate 900
-    card: '#1E293B',          // Slate 800
-    border: 'rgba(51, 65, 85, 0.5)', // Slate 700 with opacity
-    
-    // Accents
-    accent: '#6366F1',        // Indigo 500
-    accentLight: '#818CF8',   // Indigo 400
-    accentDark: '#4F46E5',    // Indigo 600
-    accentGradient: ['#6366F1', '#8B5CF6'], // Indigo to Violet
-    
+    // Core — Daha okunabilir ve yumuşak tonlar (üst üste binmeyi engellemek için)
+    primary: '#121212',       // Çok koyu gri (neredeyse siyah) zemin
+    surface: '#1E1E1E',       // Kartların oturduğu zemin (bir tık açık)
+    card: '#2C2C2C',          // Yükseltilmiş kart
+    border: 'rgba(255, 255, 255, 0.15)',  // Daha dengeli kenarlıklar
+
+    // Accents (Indigo & Violet)
+    accent: '#818CF8',        // Indigo 400 (Daha parlak ve belirgin)
+    accentLight: '#A5B4FC',   // Indigo 300
+    accentDark: '#6366F1',    // Indigo 500
+    accentGradient: ['#818CF8', '#C084FC'], // Indigo to Purple
+
     // Semantic
-    success: '#10B981',       // Emerald 500
-    successLight: '#34D399',
-    danger: '#F43F5E',        // Rose 500
-    dangerLight: '#FB7185',
-    warning: '#F59E0B',       // Amber 500
-    warningLight: '#FBBF24',
-    
-    // Text
-    textPrimary: '#F8FAFC',   // Slate 50
-    textSecondary: '#94A3B8', // Slate 400
-    textTertiary: '#64748B',  // Slate 500
-    
-    // Transparency
-    accentTransparent: 'rgba(99, 102, 241, 0.12)',
-    successTransparent: 'rgba(16, 185, 129, 0.12)',
-    dangerTransparent: 'rgba(244, 63, 94, 0.12)',
-    warningTransparent: 'rgba(245, 158, 11, 0.12)',
-    whiteTransparent: 'rgba(255, 255, 255, 0.04)',
-    overlay: 'rgba(0, 0, 0, 0.7)',
+    success: '#34D399',       // Emerald 400
+    successLight: '#6EE7B7',
+    danger: '#FB7185',        // Rose 400
+    dangerLight: '#FDA4AF',
+    warning: '#FBBF24',       // Amber 400
+    warningLight: '#FDE047',
+
+    // Text — net kontrast
+    textPrimary: '#F8FAFC',   // Neredeyse beyaz
+    textSecondary: '#CBD5E1', // Açık gri
+    textTertiary: '#94A3B8',  // Orta gri
+
+    // Transparency — Düşük opaklıklar
+    accentTransparent: 'rgba(129, 140, 248, 0.15)',
+    successTransparent: 'rgba(52, 211, 153, 0.15)',
+    dangerTransparent: 'rgba(251, 113, 133, 0.15)',
+    warningTransparent: 'rgba(251, 191, 36, 0.15)',
+    whiteTransparent: 'rgba(255, 255, 255, 0.10)',
+    overlay: 'rgba(0, 0, 0, 0.65)', // Modallar için standart overlay rengi
   },
   shadows: {
     card: {
@@ -98,13 +98,13 @@ export const lightTheme = {
     surface: '#FFFFFF',       // Pure White
     card: '#F1F5F9',          // Slate 100
     border: 'rgba(15, 23, 42, 0.08)', // Slate 900 very light
-    
+
     // Accents
     accent: '#4F46E5',        // Indigo 600
     accentLight: '#6366F1',   // Indigo 500
     accentDark: '#3730A3',    // Indigo 800
     accentGradient: ['#4F46E5', '#7C3AED'], // Indigo to Violet
-    
+
     // Semantic
     success: '#059669',       // Emerald 600
     successLight: '#10B981',
@@ -112,12 +112,12 @@ export const lightTheme = {
     dangerLight: '#F43F5E',
     warning: '#D97706',       // Amber 600
     warningLight: '#F59E0B',
-    
+
     // Text
     textPrimary: '#0F172A',   // Slate 900
     textSecondary: '#475569', // Slate 600
     textTertiary: '#94A3B8',  // Slate 400
-    
+
     // Transparency
     accentTransparent: 'rgba(79, 70, 229, 0.06)',
     successTransparent: 'rgba(5, 150, 105, 0.06)',

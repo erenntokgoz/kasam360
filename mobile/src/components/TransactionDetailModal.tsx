@@ -25,7 +25,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ visible
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={[styles.overlay, { backgroundColor: theme.colors.overlay }]} onPress={onClose}>
         <Pressable style={[styles.content, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.textPrimary }]}>İşlem Detayı</Text>
@@ -87,7 +87,7 @@ const InfoItem = ({ label, value, theme }: { label: string; value: string; theme
 );
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   content: { width: '100%', borderRadius: 24, padding: 24 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   title: { fontSize: 18, fontWeight: '700' },

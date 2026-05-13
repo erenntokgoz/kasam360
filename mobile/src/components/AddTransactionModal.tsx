@@ -320,7 +320,8 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.overlay, { backgroundColor: theme.colors.overlay }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.content, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
           <View style={styles.header}>
             <Pressable onPress={step === 'TYPE' ? onClose : handleBack} hitSlop={12}>
@@ -562,7 +563,7 @@ const NextBtn = ({ onPress, theme }: any) => (
 );
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, justifyContent: 'flex-end' },
   content: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, minHeight: 450 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
   title: { fontSize: 18, fontWeight: '700' },
