@@ -24,6 +24,8 @@ const transactionSchemas = {
     syncId: Joi.string().allow('', null),
     relatedId: Joi.string().allow('', null),
     relatedType: Joi.string().valid('DEBT', 'RECURRING', 'STAFF', 'CONTACT', 'DIRECTORY').allow('', null),
+    directoryId: Joi.string().allow('', null),
+    directoryType: Joi.string().allow('', null),
   }),
 };
 
