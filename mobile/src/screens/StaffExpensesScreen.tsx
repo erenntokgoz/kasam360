@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert, TextInput } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert, TextInput, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -27,30 +27,48 @@ const PersonnelExpensesScreen: React.FC = () => {
   
   const [localStaffExpenses, setLocalStaffExpenses] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [directoryError, setDirectoryError] = useState<string | null>(null);
 
-  // Fetch from API directly
-  const fetchStaffExpenses = async () => {
+  // Fetch transactions for Personel Gideri category
+  const fetchStaffExpenses = useCallback(async () => {
     setIsLoading(true);
     try {
       const { getTransactions } = require('../api/transactionService');
-      const result = await getTransactions(1, 100, { categories: ['Personel Gideri'] });
+      const result = await getTransactions(null, 100, { categories: ['Personel Gideri'] });
+      if (!result || !Array.isArray(result.transactions)) {
+        console.warn('[StaffExpensesScreen] fetchStaffExpenses: unexpected result shape', result);
+        setLocalStaffExpenses([]);
+        return;
+      }
       setLocalStaffExpenses(result.transactions);
-    } catch (e) {
-      console.log(e);
+    } catch (e: any) {
+      console.error('[StaffExpensesScreen] fetchStaffExpenses error:\n', e?.stack || e);
+      setLocalStaffExpenses([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Fetch staff directory with graceful error handling (DIRECTORYISNOTFOUND fix)
+  const fetchStaffSafe = useCallback(async () => {
+    try {
+      setDirectoryError(null);
+      await fetchStaff();
+    } catch (e: any) {
+      console.error('[StaffExpensesScreen] fetchStaff error:\n', e?.stack || e);
+      setDirectoryError('Rehber Henüz Oluşturulmadı');
+    }
+  }, [fetchStaff]);
 
   React.useEffect(() => {
-    fetchStaff();
+    fetchStaffSafe();
     fetchStaffExpenses();
-  }, [fetchStaff]);
+  }, [fetchStaffSafe, fetchStaffExpenses]);
 
   // Refetch if global transactions add/update
   React.useEffect(() => {
     fetchStaffExpenses();
-  }, [globalTransactions.length]);
+  }, [globalTransactions.length, fetchStaffExpenses]);
   
   const [activeTab, setActiveTab] = useState<'HISTORY' | 'DIRECTORY'>('HISTORY');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -83,10 +101,15 @@ const PersonnelExpensesScreen: React.FC = () => {
     ]);
   };
 
-  const handleAddStaff = () => {
+  const handleAddStaff = async () => {
     if (!newStaffName.trim()) return;
-    addStaff(newStaffName.trim());
-    setNewStaffName('');
+    try {
+      await addStaff(newStaffName.trim());
+      setNewStaffName('');
+      Alert.alert('Başarılı', 'Personel rehbere eklendi.');
+    } catch (e: any) {
+      Alert.alert('Hata', e?.message || 'Personel eklenemedi.');
+    }
   };
 
   const handleRemoveStaff = (id: string) => {
@@ -134,11 +157,29 @@ const PersonnelExpensesScreen: React.FC = () => {
             {item.role && <Text style={[styles.staffRole, { color: theme.colors.textSecondary }]}>{item.role}</Text>}
           </View>
         </View>
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <Pressable hitSlop={12} onPress={() => { /* Edit logic if needed */ }}>
+        {/* MODÜL 4: onStartShouldSetResponder stops touch from propagating to parent card */}
+        <View
+          style={{ flexDirection: 'row', gap: 12 }}
+          onStartShouldSetResponder={() => true}
+        >
+          <Pressable
+            hitSlop={16}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              Alert.alert('Personeli Düzenle', `"${item.name}" için düzenleme yakında eklenecek.`);
+            }}
+            style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+          >
             <Icon name="edit-2" size={18} color={theme.colors.textSecondary} />
           </Pressable>
-          <Pressable hitSlop={12} onPress={() => handleRemoveStaff(item.id)}>
+          <Pressable
+            hitSlop={16}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              handleRemoveStaff(item.id);
+            }}
+            style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+          >
             <Icon name="trash-2" size={18} color={theme.colors.dangerLight} />
           </Pressable>
         </View>
@@ -253,15 +294,27 @@ const PersonnelExpensesScreen: React.FC = () => {
           contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md, paddingBottom: insets.bottom + theme.spacing.xl }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
-                <Icon name="users" size={40} color={theme.colors.accent} />
+            directoryError ? (
+              <View style={styles.emptyContainer}>
+                <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.warningTransparent }]}>
+                  <Icon name="alert-circle" size={40} color={theme.colors.warning} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>{directoryError}</Text>
+                <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
+                  Yukarıdan personel adı yazarak rehberi oluşturmaya başlayabilirsiniz.
+                </Text>
               </View>
-              <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>Personel Rehberi Boş</Text>
-              <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
-                Henüz personel kaydı yapmadınız. Yukarıdan isim yazarak veya rehberden seçerek ekleyebilirsiniz.
-              </Text>
-            </View>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
+                  <Icon name="users" size={40} color={theme.colors.accent} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>Personel Rehberi Boş</Text>
+                <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
+                  Henüz personel kaydı yapmadınız. Yukarıdan isim yazarak veya rehberden seçerek ekleyebilirsiniz.
+                </Text>
+              </View>
+            )
           }
         />
       )}

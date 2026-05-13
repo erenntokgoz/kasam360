@@ -2,12 +2,12 @@ const Joi = require('joi');
 
 const authSchemas = {
   register: Joi.object({
-    shopName: Joi.string().required(),
-    phoneNumber: Joi.string().required(),
+    businessName: Joi.string().required(),
+    phone: Joi.string().required(),
     password: Joi.string().min(6).required(),
   }),
   login: Joi.object({
-    phoneNumber: Joi.string().required(),
+    phone: Joi.string().required(),
     password: Joi.string().required(),
     rememberMe: Joi.boolean().default(false),
   }),

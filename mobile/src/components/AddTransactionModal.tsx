@@ -60,6 +60,39 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
     }
   }, [visible, initialType, initialSubType, initialWho]);
 
+  // MODÜL 3: handleSelectPerson eliminates async state lag.
+  // Previously: setWho(name) + handleNext() — handleNext reads stale 'who' (empty string).
+  // Fix: pass the resolved name synchronously into the navigation logic.
+  const handleSelectPerson = async (name: string) => {
+    setWho(name); // update UI
+
+    // Ensure directory entries exist before navigating forward
+    if (name) {
+      if (mainType === 'GİDER' && subType === 'Personel Gideri') {
+        const exists = staffList.find(s => s.name.toLowerCase() === name.trim().toLowerCase());
+        if (!exists) {
+          try { await addStaff(name.trim()); } catch (e) {
+            console.warn('[AddTransactionModal] Auto-add staff failed:', e);
+          }
+        }
+      } else if (name.trim() !== 'Kişisel Gider') {
+        const exists = contacts.find(c => c.name.toLowerCase() === name.trim().toLowerCase());
+        if (!exists) {
+          try { await addContact(name.trim()); } catch (e) {
+            console.warn('[AddTransactionModal] Auto-add contact failed:', e);
+          }
+        }
+      }
+    }
+
+    // Navigate forward using the resolved name directly — avoids stale closure
+    if (mainType === 'BORÇ' || mainType === 'ALACAK') {
+      setStep('DATE');
+    } else {
+      setStep('DESC');
+    }
+  };
+
   const handleNext = async () => {
     if (step === 'TYPE') {
       if (!mainType) return;
@@ -83,21 +116,33 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
     } else if (step === 'SUBTYPE') {
       if (!subType) return;
       if (subType === 'Kişisel Gider') setStep('DESC');
+      else if (subType === 'İşletme Gideri') {
+        // İşletme gideri nakit ise WHO adımını atla
+        if (method !== 'VERESİYE') setStep('DESC');
+        else setStep('WHO');
+      }
       else setStep('WHO');
     } else if (step === 'WHO') {
-      if (!who && (mainType !== 'GELİR' || method === 'VERESİYE')) {
-        Alert.alert('Uyarı', 'Veresiye işlemler için bir kişi seçmelisiniz.');
+      const needsWho = method === 'VERESİYE' || mainType === 'BORÇ' || mainType === 'ALACAK' || subType === 'Personel Gideri';
+      if (!who && needsWho) {
+        Alert.alert('Uyarı', method === 'VERESİYE' ? 'Veresiye işlemler için bir kişi seçmelisiniz.' : 'Bu işlem için bir kişi seçmelisiniz.');
         return;
       }
       
       if (who) {
         if (mainType === 'GİDER' && subType === 'Personel Gideri') {
-          if (!staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase())) {
-            try { await addStaff(who.trim()); } catch (e) {}
+          const exists = staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase());
+          if (!exists) {
+            try { await addStaff(who.trim()); } catch (e) {
+              console.log('Auto-add staff failed:', e);
+            }
           }
-        } else {
-          if (!contacts.find(c => c.name.toLowerCase() === who.trim().toLowerCase())) {
-            try { await addContact(who.trim()); } catch (e) {}
+        } else if (who.trim() !== 'Kişisel Gider') {
+          const exists = contacts.find(c => c.name.toLowerCase() === who.trim().toLowerCase());
+          if (!exists) {
+            try { await addContact(who.trim()); } catch (e) {
+              console.log('Auto-add contact failed:', e);
+            }
           }
         }
       }
@@ -156,6 +201,10 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
 
   const handleSubmit = async () => {
     const numericAmount = parseFloat(amount.replace(',', '.'));
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      Alert.alert('Hata', 'Lütfen geçerli bir tutar giriniz.');
+      return;
+    }
     const cents = Math.round(numericAmount * 100);
 
     try {
@@ -260,8 +309,10 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
         });
       }
       onClose();
-    } catch (err) {
-      Alert.alert('Hata', 'İşlem kaydedilemedi.');
+    } catch (err: any) {
+      console.error('[AddTransactionModal.handleSubmit]', err);
+      const msg = err?.message || 'İşlem kaydedilemedi.';
+      Alert.alert('Hata', msg);
     }
   };
 
@@ -364,14 +415,14 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                     onChangeText={setWho}
                   />
                 </View>
-                <ScrollView style={{ maxHeight: 200, marginBottom: 12 }}>
+            <ScrollView style={{ maxHeight: 200, marginBottom: 12 }}>
                   {mainType === 'GİDER' && subType === 'Personel Gideri' ? (
                     <>
                       {staffList.filter(s => s.name.toLowerCase().includes(who.toLowerCase())).map(s => (
                         <Pressable
                           key={s.id}
                           style={[styles.contactItem, { backgroundColor: theme.colors.card }]}
-                          onPress={() => { setWho(s.name); handleNext(); }}
+                          onPress={() => handleSelectPerson(s.name)}
                         >
                           <Icon name="user" size={16} color={theme.colors.textSecondary} />
                           <Text style={{ color: theme.colors.textPrimary, fontWeight: '500' }}>{s.name}</Text>
@@ -386,7 +437,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                               await useStaffStore.getState().addStaff(who);
                               await useStaffStore.getState().fetchStaff();
                               setIsProcessing(false);
-                              handleNext(); 
+                              handleSelectPerson(who);
                             } catch (e) {
                               setIsProcessing(false);
                               Alert.alert('Hata', 'Personel eklenemedi.');
@@ -404,7 +455,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                         <Pressable
                           key={c.id}
                           style={[styles.contactItem, { backgroundColor: theme.colors.card }]}
-                          onPress={() => { setWho(c.name); handleNext(); }}
+                          onPress={() => handleSelectPerson(c.name)}
                         >
                           <Icon name="user" size={16} color={theme.colors.textSecondary} />
                           <Text style={{ color: theme.colors.textPrimary, fontWeight: '500' }}>{c.name}</Text>
@@ -419,7 +470,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                               await useContactStore.getState().addContact(who);
                               await useContactStore.getState().fetchContacts();
                               setIsProcessing(false);
-                              handleNext(); 
+                              handleSelectPerson(who);
                             } catch (e) {
                               setIsProcessing(false);
                               Alert.alert('Hata', 'Kişi eklenemedi.');

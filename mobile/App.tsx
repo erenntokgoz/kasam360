@@ -48,77 +48,88 @@ function App(): React.JSX.Element {
           });
         }
       } catch (e) {
-        console.error('Initialization error:', e);
+        console.error('[App] Initialization error:\n', (e as any)?.stack || e);
       } finally {
         setIsReady(true);
       }
     };
-    init();
 
     // FCM token — arka planda, loading'i bloke etmeden
     const setupFCM = async () => {
       try {
         const authStatus = await messaging().requestPermission();
-        const enabled = authStatus === messaging.AuthorizationStatus.AUTHORIZED || authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-        
+        const enabled =
+          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
         if (enabled) {
           const token = await messaging().getToken();
           if (token) {
             console.log('[FCM] Token:', token);
             const authToken = useAuthStore.getState().token;
             if (authToken) {
-              await apiClient.put('/api/tenant/device-token', { deviceToken: token }).catch(e => console.warn('Token sync failed', e));
+              await apiClient
+                .put('/api/tenant/device-token', { deviceToken: token })
+                .catch((e) => console.warn('[FCM] Token sync failed', e));
             }
           }
         } else {
           console.warn('[FCM] Bildirim izni reddedildi.');
         }
       } catch (e) {
-        console.warn('[FCM] Setup error:', e);
+        console.warn('[FCM] Setup error:', (e as any)?.stack || e);
       }
     };
-    // init bittikten sonra FCM'i başlat
+
+    // Init once, then FCM — init is NOT called twice anymore
     init().then(() => setupFCM());
 
     // Listen for foreground messages
-    const unsubscribe = messaging().onMessage(async remoteMessage => {
+    const unsubscribe = messaging().onMessage(async (remoteMessage) => {
       if (remoteMessage.notification) {
         addNotification({
           title: remoteMessage.notification.title || 'Yeni Bildirim',
           body: remoteMessage.notification.body || '',
-          type: 'INFO'
+          type: 'INFO',
         });
       }
     });
 
     const handleNotificationOpen = async (remoteMessage: any) => {
-      if ((remoteMessage?.data?.type === 'DEBT' || remoteMessage?.data?.type === 'VERESIYE') && (remoteMessage?.data?.debtId || remoteMessage?.data?.id)) {
+      if (
+        (remoteMessage?.data?.type === 'DEBT' || remoteMessage?.data?.type === 'VERESIYE') &&
+        (remoteMessage?.data?.debtId || remoteMessage?.data?.id)
+      ) {
         const targetId = remoteMessage.data.debtId || remoteMessage.data.id;
         const debts = useDebtStore.getState().debts;
         let found = debts.find((d: Debt) => d._id === targetId || d.relatedId === targetId);
-        
+
         if (!found) {
           try {
             await useDebtStore.getState().fetchDebts(1);
-            found = useDebtStore.getState().debts.find((d: Debt) => d._id === targetId || d.relatedId === targetId);
-          } catch (e) {}
+            found = useDebtStore
+              .getState()
+              .debts.find((d: Debt) => d._id === targetId || d.relatedId === targetId);
+          } catch (e) {
+            console.warn('[App] fetchDebts for notification failed:', e);
+          }
         }
-        
+
         if (found) {
           setSelectedDebt(found);
-        } else {
-          return;
         }
       }
     };
 
-    messaging().getInitialNotification().then(remoteMessage => {
-      if (remoteMessage) {
-        setTimeout(() => handleNotificationOpen(remoteMessage), 1000);
-      }
-    });
+    messaging()
+      .getInitialNotification()
+      .then((remoteMessage) => {
+        if (remoteMessage) {
+          setTimeout(() => handleNotificationOpen(remoteMessage), 1000);
+        }
+      });
 
-    const unsubscribeOpenedApp = messaging().onNotificationOpenedApp(remoteMessage => {
+    const unsubscribeOpenedApp = messaging().onNotificationOpenedApp((remoteMessage) => {
       handleNotificationOpen(remoteMessage);
     });
 

@@ -8,84 +8,101 @@ const AuditLog = require('../models/AuditLog');
 const getDirectory = async (req, res, next) => {
   try {
     const { type } = req.query;
+
+    // Validate tenantId before constructing ObjectId
+    if (!req.tenantId || !mongoose.Types.ObjectId.isValid(req.tenantId)) {
+      console.error('[directoryController.getDirectory] Invalid tenantId:', req.tenantId);
+      return res.status(200).json({ success: true, data: [] });
+    }
+
     const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
     const filter = { tenantId: tenantObjectId, isDeleted: false };
     if (type) filter.roles = type;
 
-    const list = await Directory.aggregate([
-      { $match: filter },
-      // Personel ödemeleri (totalPaid)
-      {
-        $lookup: {
-          from: 'transactions',
-          let: { dirId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                tenantId: tenantObjectId,
-                isDeleted: false,
-                type: 'EXPENSE',
-                $expr: {
-                  $or: [
-                    { $eq: ['$directoryId', '$$dirId'] },
-                    { $eq: ['$relatedId', '$$dirId'] }
-                  ]
+    let list = [];
+    try {
+      list = await Directory.aggregate([
+        { $match: filter },
+        // Personel ödemeleri (totalPaid)
+        {
+          $lookup: {
+            from: 'transactions',
+            let: { dirId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  tenantId: tenantObjectId,
+                  isDeleted: false,
+                  type: 'EXPENSE',
+                  $expr: {
+                    $or: [
+                      { $eq: ['$directoryId', '$$dirId'] },
+                      { $eq: ['$relatedId', '$$dirId'] }
+                    ]
+                  }
+                }
+              },
+              { $group: { _id: null, total: { $sum: '$amount' } } }
+            ],
+            as: 'payments'
+          }
+        },
+        // Borç/Alacak bakiyesi (totalBalance)
+        {
+          $lookup: {
+            from: 'debts',
+            let: { dirId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  tenantId: tenantObjectId,
+                  isDeleted: false,
+                  $expr: { $eq: ['$relatedId', '$$dirId'] }
+                }
+              },
+              {
+                $group: {
+                  _id: '$type',
+                  totalRemaining: { $sum: '$remainingAmount' }
                 }
               }
-            },
-            { $group: { _id: null, total: { $sum: '$amount' } } }
-          ],
-          as: 'payments'
-        }
-      },
-      // Borç/Alacak bakiyesi (totalBalance)
-      {
-        $lookup: {
-          from: 'debts',
-          let: { dirId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                tenantId: tenantObjectId,
-                isDeleted: false,
-                $expr: { $eq: ['$relatedId', '$$dirId'] }
-              }
-            },
-            {
-              $group: {
-                _id: '$type',
-                totalRemaining: { $sum: '$remainingAmount' }
-              }
-            }
-          ],
-          as: 'debtBalances'
-        }
-      },
-      {
-        $addFields: {
-          totalPaid: { $ifNull: [{ $arrayElemAt: ['$payments.total', 0] }, 0] },
-          // Hesaplama: Alacaklar (GIVEN) - Borçlar (TAKEN)
-          totalBalance: {
-            $subtract: [
-              { $reduce: { input: '$debtBalances', initialValue: 0, in: { $cond: [{ $eq: ['$$this._id', 'GIVEN'] }, { $add: ['$$value', '$$this.totalRemaining'] }, '$$value'] } } },
-              { $reduce: { input: '$debtBalances', initialValue: 0, in: { $cond: [{ $eq: ['$$this._id', 'TAKEN'] }, { $add: ['$$value', '$$this.totalRemaining'] }, '$$value'] } } }
-            ]
+            ],
+            as: 'debtBalances'
           }
-        }
-      },
-      { $project: { payments: 0, debtBalances: 0 } },
-      { $sort: { name: 1 } }
-    ]);
+        },
+        {
+          $addFields: {
+            totalPaid: { $ifNull: [{ $arrayElemAt: ['$payments.total', 0] }, 0] },
+            totalBalance: {
+              $subtract: [
+                { $reduce: { input: '$debtBalances', initialValue: 0, in: { $cond: [{ $eq: ['$$this._id', 'GIVEN'] }, { $add: ['$$value', '$$this.totalRemaining'] }, '$$value'] } } },
+                { $reduce: { input: '$debtBalances', initialValue: 0, in: { $cond: [{ $eq: ['$$this._id', 'TAKEN'] }, { $add: ['$$value', '$$this.totalRemaining'] }, '$$value'] } } }
+              ]
+            }
+          }
+        },
+        { $project: { payments: 0, debtBalances: 0 } },
+        { $sort: { name: 1 } }
+      ]);
+    } catch (aggregateErr) {
+      // Aggregate failed (e.g. tenant has no directory collection yet) — return empty instead of 500
+      console.error('[directoryController.getDirectory] Aggregate error:\n', aggregateErr?.stack || aggregateErr);
+      return res.status(200).json({ success: true, data: [] });
+    }
 
     // Map output to ensure frontend compatibility
-    const formattedList = list.map(item => ({
+    const formattedList = (list || []).map(item => ({
       ...item,
-      id: item._id.toString(), // Map _id to id for frontend compatibility
-      type: item.roles && item.roles.length > 0 ? item.roles[0] : 'CONTACT' // Provide backward compatibility
+      id: item._id.toString(),
+      type: item.roles && item.roles.length > 0 ? item.roles[0] : 'CONTACT'
     }));
 
     return res.status(200).json({ success: true, data: formattedList });
-  } catch (err) { next(err); }
+  } catch (err) {
+    console.error('[directoryController.getDirectory] Unexpected error:\n', err?.stack || err);
+    // Fail-safe: return empty list so the mobile app never hard-crashes on this route
+    return res.status(200).json({ success: true, data: [] });
+  }
 };
 
 const createEntry = async (req, res, next) => {

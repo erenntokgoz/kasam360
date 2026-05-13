@@ -36,16 +36,16 @@ const register = async (req, res, next) => {
     const { error } = authSchemas.register.validate(req.body);
     if (error) return res.status(400).json({ success: false, message: error.details[0].message });
 
-    let { phoneNumber, password, shopName } = req.body;
-    const phone = normalizePhone(phoneNumber);
+    let { phone, password, businessName } = req.body;
+    const phoneNormalized = normalizePhone(phone);
 
-    if (!isValidPhone(phone)) return res.status(400).json({ success: false, message: 'Geçersiz telefon formatı.' });
+    if (!isValidPhone(phoneNormalized)) return res.status(400).json({ success: false, message: 'Geçersiz telefon formatı.' });
 
-    const existingTenant = await Tenant.findOne({ phone });
+    const existingTenant = await Tenant.findOne({ phone: phoneNormalized });
     if (existingTenant) return res.status(409).json({ success: false, message: 'Bu telefon numarası zaten kayıtlı.' });
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-    const tenant = await Tenant.create({ phone, password: hashedPassword, businessName: shopName });
+    const tenant = await Tenant.create({ phone: phoneNormalized, password: hashedPassword, businessName: businessName });
 
     const { accessToken, refreshToken } = generateTokens(tenant._id);
     return res.status(201).json({
@@ -63,22 +63,21 @@ const login = async (req, res, next) => {
     const { error } = authSchemas.login.validate(req.body);
     if (error) return res.status(400).json({ success: false, message: error.details[0].message });
 
-    let { phoneNumber, password } = req.body;
-    const phone = normalizePhone(phoneNumber);
+    let { phone, password } = req.body;
+    const phoneNormalized = normalizePhone(phone);
 
-    const tenant = await Tenant.findOne({ phone }).select('+password');
+    const tenant = await Tenant.findOne({ phone: phoneNormalized }).select('+password');
     if (!tenant) return res.status(401).json({ success: false, message: 'Hatalı telefon numarası veya şifre.' });
 
     const isMatch = await bcrypt.compare(password, tenant.password);
     if (!isMatch) return res.status(401).json({ success: false, message: 'Hatalı telefon numarası veya şifre.' });
 
     if (!tenant.isSetupComplete) {
-      const hasData = await Promise.any([
-        Transaction.exists({ tenantId: tenant._id, isDeleted: false }),
-        Debt.exists({ tenantId: tenant._id, isDeleted: false })
-      ]).catch(() => null);
-
-      if (hasData) {
+      // Check if there is any data to mark setup as complete
+      const transactionExists = await Transaction.exists({ tenantId: tenant._id, isDeleted: false });
+      const debtExists = await Debt.exists({ tenantId: tenant._id, isDeleted: false });
+      
+      if (transactionExists || debtExists) {
         tenant.isSetupComplete = true;
         await tenant.save();
       }

@@ -16,8 +16,8 @@ const shared = {
     base: 16,
     lg: 18,
     xl: 22,
-    '2xl': 30,
-    '3xl': 40,
+    '2xl': 28,
+    '3xl': 36,
   },
   fonts: {
     regular: 'System',
@@ -26,31 +26,31 @@ const shared = {
     bold: 'System',
   },
   radii: {
-    sm: 10,
-    base: 16,
-    lg: 24,
-    xl: 32,
+    sm: 8,
+    base: 14,
+    lg: 20,
+    xl: 28,
     full: 9999,
   },
 };
 
-// ─── Dark Theme (Midnight Solid) ──────────────────────────────────────────────
+// ─── Dark Theme (Midnight Premium) ──────────────────────────────────────────────
 export const darkTheme = {
   ...shared,
   colors: {
-    // Core — net, keskin, bulanıklık yok
-    primary: '#0A0E17',       // Koyu gece mavisi
-    surface: '#141925',       // Kartların oturduğu zemin
-    card: '#1E2433',          // Yükseltilmiş kart — yüzeyden net ayrılır
-    border: 'rgba(255, 255, 255, 0.12)',  // Daha belirgin kenarlıklar
+    // Core
+    primary: '#020617',       // Slate 950 (Deepest)
+    surface: '#0F172A',       // Slate 900
+    card: '#1E293B',          // Slate 800
+    border: 'rgba(51, 65, 85, 0.5)', // Slate 700 with opacity
     
-    // Accents (Indigo & Violet)
+    // Accents
     accent: '#6366F1',        // Indigo 500
     accentLight: '#818CF8',   // Indigo 400
     accentDark: '#4F46E5',    // Indigo 600
-    accentGradient: ['#6366F1', '#A855F7'], // Indigo to Purple
+    accentGradient: ['#6366F1', '#8B5CF6'], // Indigo to Violet
     
-    // Semantic — parlak ve net
+    // Semantic
     success: '#10B981',       // Emerald 500
     successLight: '#34D399',
     danger: '#F43F5E',        // Rose 500
@@ -58,46 +58,46 @@ export const darkTheme = {
     warning: '#F59E0B',       // Amber 500
     warningLight: '#FBBF24',
     
-    // Text — yüksek kontrast
-    textPrimary: '#F1F5F9',   // Slate 100
-    textSecondary: '#CBD5E1', // Slate 300
-    textTertiary: '#94A3B8',  // Slate 400 (eski 500'den parlak)
+    // Text
+    textPrimary: '#F8FAFC',   // Slate 50
+    textSecondary: '#94A3B8', // Slate 400
+    textTertiary: '#64748B',  // Slate 500
     
-    // Transparency — daha belirgin
-    accentTransparent: 'rgba(99, 102, 241, 0.18)',
-    successTransparent: 'rgba(16, 185, 129, 0.18)',
-    dangerTransparent: 'rgba(244, 63, 94, 0.18)',
-    warningTransparent: 'rgba(245, 158, 11, 0.18)',
-    whiteTransparent: 'rgba(255, 255, 255, 0.08)',
-    overlay: 'rgba(0, 0, 0, 0.4)',
+    // Transparency
+    accentTransparent: 'rgba(99, 102, 241, 0.12)',
+    successTransparent: 'rgba(16, 185, 129, 0.12)',
+    dangerTransparent: 'rgba(244, 63, 94, 0.12)',
+    warningTransparent: 'rgba(245, 158, 11, 0.12)',
+    whiteTransparent: 'rgba(255, 255, 255, 0.04)',
+    overlay: 'rgba(0, 0, 0, 0.7)',
   },
   shadows: {
     card: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.4,
+      shadowRadius: 20,
+      elevation: 8,
     },
     button: {
       shadowColor: '#6366F1',
-      shadowOffset: { width: 0, height: 4 },
+      shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 4,
+      shadowRadius: 12,
+      elevation: 6,
     },
   },
 };
 
-// ─── Light Theme (Arctic Glass) ───────────────────────────────────────────────
+// ─── Light Theme (Arctic Premium) ───────────────────────────────────────────────
 export const lightTheme = {
   ...shared,
   colors: {
     // Core
     primary: '#F8FAFC',       // Slate 50
-    surface: '#FFFFFF',       // Pure white
+    surface: '#FFFFFF',       // Pure White
     card: '#F1F5F9',          // Slate 100
-    border: 'rgba(15, 23, 42, 0.06)',
+    border: 'rgba(15, 23, 42, 0.08)', // Slate 900 very light
     
     // Accents
     accent: '#4F46E5',        // Indigo 600
@@ -119,27 +119,27 @@ export const lightTheme = {
     textTertiary: '#94A3B8',  // Slate 400
     
     // Transparency
-    accentTransparent: 'rgba(79, 70, 229, 0.08)',
-    successTransparent: 'rgba(5, 150, 105, 0.08)',
-    dangerTransparent: 'rgba(225, 29, 72, 0.08)',
-    warningTransparent: 'rgba(217, 119, 6, 0.08)',
+    accentTransparent: 'rgba(79, 70, 229, 0.06)',
+    successTransparent: 'rgba(5, 150, 105, 0.06)',
+    dangerTransparent: 'rgba(225, 29, 72, 0.06)',
+    warningTransparent: 'rgba(217, 119, 6, 0.06)',
     whiteTransparent: 'rgba(255, 255, 255, 0.8)',
     overlay: 'rgba(15, 23, 42, 0.4)',
   },
   shadows: {
     card: {
-      shadowColor: '#475569',
-      shadowOffset: { width: 0, height: 16 },
-      shadowOpacity: 0.1,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.08,
       shadowRadius: 24,
-      elevation: 5,
+      elevation: 4,
     },
     button: {
       shadowColor: '#4F46E5',
       shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.25,
+      shadowOpacity: 0.2,
       shadowRadius: 16,
-      elevation: 8,
+      elevation: 6,
     },
   },
 };
