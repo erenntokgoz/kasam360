@@ -5,12 +5,12 @@ const authSchemas = {
     businessName: Joi.string().required(),
     phone: Joi.string().required(),
     password: Joi.string().min(6).required(),
-  }),
+  }).unknown(true),
   login: Joi.object({
     phone: Joi.string().required(),
     password: Joi.string().required(),
     rememberMe: Joi.boolean().default(false),
-  }),
+  }).unknown(true),
 };
 
 const transactionSchemas = {
@@ -26,7 +26,7 @@ const transactionSchemas = {
     relatedType: Joi.string().valid('DEBT', 'RECURRING', 'STAFF', 'CONTACT', 'DIRECTORY').allow('', null),
     directoryId: Joi.string().allow('', null),
     directoryType: Joi.string().allow('', null),
-  }),
+  }).unknown(true),
 };
 
 const debtSchemas = {
@@ -40,11 +40,11 @@ const debtSchemas = {
     isCash: Joi.boolean().default(false),
     relatedId: Joi.string().allow('', null),
     relatedType: Joi.string().valid('CONTACT', 'STAFF', 'DIRECTORY').allow('', null),
-  }),
+  }).unknown(true),
   pay: Joi.object({
     amount: Joi.number().integer().positive().required(),
     method: Joi.string().valid('CASH', 'POS', 'IBAN').allow('', null),
-  }),
+  }).unknown(true),
 };
 
 module.exports = { authSchemas, transactionSchemas, debtSchemas };
