@@ -125,16 +125,12 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
         if (mainType === 'GİDER' && subType === 'Personel Gideri') {
           const exists = staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase());
           if (!exists) {
-            try { await addStaff(who.trim()); } catch (e) {
-              console.log('Auto-add staff failed:', e);
-            }
+            try { await addStaff(who.trim()); } catch (e) { }
           }
         } else if (who.trim() !== 'Kişisel Gider') {
           const exists = contacts.find(c => c.name.toLowerCase() === who.trim().toLowerCase());
           if (!exists) {
-            try { await addContact(who.trim()); } catch (e) {
-              console.log('Auto-add contact failed:', e);
-            }
+            try { await addContact(who.trim()); } catch (e) { }
           }
         }
       }
@@ -228,9 +224,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           transactionDate: date.toISOString(),
           syncId,
           relatedId: finalRelatedId,
-          relatedType: finalRelatedType as any,
-          directoryId: finalRelatedId,
-          directoryType: finalRelatedType as any
+          relatedType: finalRelatedType as any
         });
       } else if (mainType === 'GİDER') {
         let finalRelatedId = undefined;
@@ -276,9 +270,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           transactionDate: date.toISOString(),
           syncId,
           relatedId: finalRelatedId,
-          relatedType: finalRelatedType as any,
-          directoryId: finalRelatedId,
-          directoryType: finalRelatedType as any
+          relatedType: finalRelatedType as any
         });
 
       } else if (mainType === 'BORÇ' || mainType === 'ALACAK') {
@@ -319,8 +311,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       onClose();
     } catch (err: any) {
       console.error('[AddTransactionModal.handleSubmit]', err);
-      const msg = err?.message || 'İşlem kaydedilemedi.';
-      Alert.alert('Hata', msg);
+      Alert.alert('Hata', err?.message || 'İşlem kaydedilemedi.');
     }
   };
 
@@ -371,7 +362,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                         Nakit İşlem mi?
                       </Text>
                       <Text style={{ fontSize: 12, color: theme.colors.textTertiary, lineHeight: 16 }}>
-                        Açık ise kasanız etkilenir (Örn: Nakit para borç verdim). Kapalı ise sadece deftere yazılır (Örn: Veresiye mal sattım).
+                        Açık ise kasanız etkilenir. Kapalı ise sadece deftere yazılır (Örn: Veresiye).
                       </Text>
                     </View>
                     <Switch
@@ -428,31 +419,15 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                   {mainType === 'GİDER' && subType === 'Personel Gideri' ? (
                     <>
                       {staffList.filter(s => s.name.toLowerCase().includes(who.toLowerCase())).map(s => (
-                        <Pressable
-                          key={s.id}
-                          style={[styles.contactItem, { backgroundColor: theme.colors.card }]}
-                          onPress={() => handleSelectPerson(s.name)}
-                        >
+                        <Pressable key={s.id} style={[styles.contactItem, { backgroundColor: theme.colors.card }]} onPress={() => handleSelectPerson(s.name)}>
                           <Icon name="user" size={16} color={theme.colors.textSecondary} />
                           <Text style={{ color: theme.colors.textPrimary, fontWeight: '500' }}>{s.name}</Text>
                         </Pressable>
                       ))}
                       {who.length > 0 && !staffList.find(s => s.name.toLowerCase() === who.toLowerCase()) && (
-                        <Pressable
-                          style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]}
-                          onPress={async () => {
-                            try {
-                              setIsProcessing(true);
-                              await useStaffStore.getState().addStaff(who);
-                              await useStaffStore.getState().fetchStaff();
-                              setIsProcessing(false);
-                              handleSelectPerson(who);
-                            } catch (e) {
-                              setIsProcessing(false);
-                              Alert.alert('Hata', 'Personel eklenemedi.');
-                            }
-                          }}
-                        >
+                        <Pressable style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]} onPress={async () => {
+                          try { setIsProcessing(true); await useStaffStore.getState().addStaff(who); await useStaffStore.getState().fetchStaff(); setIsProcessing(false); handleSelectPerson(who); } catch (e) { setIsProcessing(false); Alert.alert('Hata', 'Personel eklenemedi.'); }
+                        }}>
                           <Icon name="user-plus" size={16} color={theme.colors.accent} />
                           <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>Yeni Personel Ekle ("{who}")</Text>
                         </Pressable>
@@ -461,31 +436,15 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                   ) : (
                     <>
                       {contacts.filter(c => c.name.toLowerCase().includes(who.toLowerCase())).map(c => (
-                        <Pressable
-                          key={c.id}
-                          style={[styles.contactItem, { backgroundColor: theme.colors.card }]}
-                          onPress={() => handleSelectPerson(c.name)}
-                        >
+                        <Pressable key={c.id} style={[styles.contactItem, { backgroundColor: theme.colors.card }]} onPress={() => handleSelectPerson(c.name)}>
                           <Icon name="user" size={16} color={theme.colors.textSecondary} />
                           <Text style={{ color: theme.colors.textPrimary, fontWeight: '500' }}>{c.name}</Text>
                         </Pressable>
                       ))}
                       {who.length > 0 && !contacts.find(c => c.name.toLowerCase() === who.toLowerCase()) && (
-                        <Pressable
-                          style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]}
-                          onPress={async () => {
-                            try {
-                              setIsProcessing(true);
-                              await useContactStore.getState().addContact(who);
-                              await useContactStore.getState().fetchContacts();
-                              setIsProcessing(false);
-                              handleSelectPerson(who);
-                            } catch (e) {
-                              setIsProcessing(false);
-                              Alert.alert('Hata', 'Kişi eklenemedi.');
-                            }
-                          }}
-                        >
+                        <Pressable style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]} onPress={async () => {
+                          try { setIsProcessing(true); await useContactStore.getState().addContact(who); await useContactStore.getState().fetchContacts(); setIsProcessing(false); handleSelectPerson(who); } catch (e) { setIsProcessing(false); Alert.alert('Hata', 'Kişi eklenemedi.'); }
+                        }}>
                           <Icon name="user-plus" size={16} color={theme.colors.accent} />
                           <Text style={{ color: theme.colors.accent, fontWeight: '700' }}>Yeni Kişi Ekle ("{who}")</Text>
                         </Pressable>
@@ -501,13 +460,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
               <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
                 <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>Vade/İşlem Tarihi Seçiniz:</Text>
                 <View style={{ alignItems: 'center', marginVertical: 20 }}>
-                  <DatePicker
-                    date={date}
-                    onDateChange={setDate}
-                    mode="date"
-                    locale="tr"
-                    theme={isDarkMode ? 'dark' : 'light'}
-                  />
+                  <DatePicker date={date} onDateChange={setDate} mode="date" locale="tr" theme={isDarkMode ? 'dark' : 'light'} />
                 </View>
                 <NextBtn onPress={handleNext} theme={theme} />
               </Animated.View>
@@ -516,19 +469,8 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
             {step === 'DESC' && (
               <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
                 <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>Açıklama (isteğe bağlı):</Text>
-                <TextInput
-                  style={[styles.input, { color: theme.colors.textPrimary, borderBottomColor: theme.colors.border }]}
-                  placeholder="Bir şeyler yazın..."
-                  placeholderTextColor={theme.colors.textTertiary}
-                  autoFocus
-                  value={description}
-                  onChangeText={setDescription}
-                />
-                <Pressable
-                  style={[styles.finishBtn, { backgroundColor: theme.colors.accent }]}
-                  onPress={handleSubmit}
-                  disabled={isCreating}
-                >
+                <TextInput style={[styles.input, { color: theme.colors.textPrimary, borderBottomColor: theme.colors.border }]} placeholder="Bir şeyler yazın..." placeholderTextColor={theme.colors.textTertiary} autoFocus value={description} onChangeText={setDescription} />
+                <Pressable style={[styles.finishBtn, { backgroundColor: theme.colors.accent }]} onPress={handleSubmit} disabled={isCreating}>
                   {isCreating ? <ActivityIndicator color="#fff" /> : <Text style={styles.finishBtnText}>İŞLEMİ TAMAMLA</Text>}
                 </Pressable>
               </Animated.View>
@@ -541,10 +483,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
 };
 
 const TypeBox = ({ icon, label, subLabel, color, active, onSelect, theme }: any) => (
-  <Pressable
-    style={[styles.typeBox, { backgroundColor: theme.colors.card, borderColor: active ? color : 'transparent' }]}
-    onPress={onSelect}
-  >
+  <Pressable style={[styles.typeBox, { backgroundColor: theme.colors.card, borderColor: active ? color : 'transparent' }]} onPress={onSelect}>
     <View style={[styles.iconCircle, { backgroundColor: color + '20' }]}>
       <Icon name={icon} size={24} color={color} />
     </View>
@@ -554,10 +493,7 @@ const TypeBox = ({ icon, label, subLabel, color, active, onSelect, theme }: any)
 );
 
 const SubtypeItem = ({ label, icon, active, onSelect, theme }: any) => (
-  <Pressable
-    style={[styles.subtypeItem, { backgroundColor: theme.colors.card, borderColor: active ? theme.colors.accent : 'transparent' }]}
-    onPress={onSelect}
-  >
+  <Pressable style={[styles.subtypeItem, { backgroundColor: theme.colors.card, borderColor: active ? theme.colors.accent : 'transparent' }]} onPress={onSelect}>
     <Icon name={icon} size={20} color={active ? theme.colors.accent : theme.colors.textSecondary} />
     <Text style={[styles.subtypeLabel, { color: active ? theme.colors.accent : theme.colors.textPrimary }]}>{label}</Text>
   </Pressable>
