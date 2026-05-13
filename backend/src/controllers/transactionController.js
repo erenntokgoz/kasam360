@@ -15,35 +15,55 @@ const { transactionSchemas } = require('../utils/validation');
 const getTransactions = async (req, res, next) => {
   try {
     const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
-    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
-    const skip = (page - 1) * limit;
 
-    const filter = { tenantId: tenantObjectId, isDeleted: false };
+    const baseFilter = { tenantId: tenantObjectId, isDeleted: false };
     
-    // Cursor-based pagination support
-    if (req.query.before) {
-      filter.transactionDate = { $lt: new Date(req.query.before) };
-    }
-
-    if (req.query.type && req.query.type !== 'ALL' && ['INCOME', 'EXPENSE'].includes(req.query.type)) filter.type = req.query.type;
+    if (req.query.type && req.query.type !== 'ALL' && ['INCOME', 'EXPENSE'].includes(req.query.type)) baseFilter.type = req.query.type;
     
     if (req.query.startDate || req.query.endDate) {
-      if (!filter.transactionDate) filter.transactionDate = {};
-      if (req.query.startDate) filter.transactionDate.$gte = new Date(req.query.startDate);
-      if (req.query.endDate) filter.transactionDate.$lte = new Date(req.query.endDate);
+      baseFilter.transactionDate = {};
+      if (req.query.startDate) baseFilter.transactionDate.$gte = new Date(req.query.startDate);
+      if (req.query.endDate) baseFilter.transactionDate.$lte = new Date(req.query.endDate);
     }
     
     if (req.query.categories) {
       const cats = req.query.categories.split(',');
-      filter.category = { $in: cats };
+      baseFilter.category = { $in: cats };
+    }
+
+    const filter = { ...baseFilter };
+
+    // Cursor-based pagination (Base64)
+    if (req.query.cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(req.query.cursor, 'base64').toString('utf8'));
+        if (decoded.date && decoded.id) {
+          filter.$or = [
+            { transactionDate: { $lt: new Date(decoded.date) } },
+            { 
+              transactionDate: new Date(decoded.date), 
+              _id: { $lt: new mongoose.Types.ObjectId(decoded.id) } 
+            }
+          ];
+        }
+      } catch (e) {}
     }
 
     const [transactions, total, tenant] = await Promise.all([
-      Transaction.find(filter).sort({ transactionDate: -1 }).skip(skip).limit(limit).lean(),
-      Transaction.countDocuments(filter),
+      Transaction.find(filter).sort({ transactionDate: -1, _id: -1 }).limit(limit).lean(),
+      Transaction.countDocuments(baseFilter),
       Tenant.findById(req.tenantId).select('openingBalance currentBalance').lean(),
     ]);
+
+    let nextCursor = null;
+    if (transactions.length === limit) {
+      const lastTx = transactions[transactions.length - 1];
+      nextCursor = Buffer.from(JSON.stringify({
+        date: lastTx.transactionDate,
+        id: lastTx._id
+      })).toString('base64');
+    }
 
     const currentBalance = tenant?.currentBalance || 0;
     const totals = await Transaction.aggregate([
@@ -72,7 +92,7 @@ const getTransactions = async (req, res, next) => {
       success: true,
       data: {
         transactions,
-        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+        pagination: { limit, total, nextCursor },
         summary: { totalIncome, totalExpense, balance: currentBalance, totalDebt, totalReceivable },
       },
     });
@@ -142,6 +162,17 @@ const createTransaction = async (req, res, next) => {
       let finalDirId = (relatedType === 'CONTACT' || relatedType === 'STAFF') ? relatedId : (req.body.directoryId || null);
       let finalDirType = (relatedType === 'CONTACT' || relatedType === 'STAFF') ? relatedType : (req.body.directoryType || null);
 
+      if (method === 'VERESİYE' && !finalDirId && !description) {
+         throw Object.assign(new Error('Veresiye işlemlerde kişi/cari seçimi zorunludur.'), { httpStatus: 400 });
+      }
+
+      if (method === 'VERESİYE' && !finalDirId && description) {
+         const entityName = description.split(' - ')[0].trim();
+         if (!entityName || entityName === 'Kişisel Gider') {
+           throw Object.assign(new Error('Veresiye işlemlerde kişi/cari seçimi zorunludur.'), { httpStatus: 400 });
+         }
+      }
+
       if (!finalDirId && description && (category === 'Personel Gideri' || category === 'İşletme Gideri')) {
         const Directory = require('../models/Directory');
         const entityName = description.split(' - ')[0].trim();
@@ -166,12 +197,42 @@ const createTransaction = async (req, res, next) => {
         }
       }
 
+      let tenant = await Tenant.findById(tenantId).session(session);
+
       if (method !== 'VERESİYE') {
-        await Tenant.findByIdAndUpdate(
+        tenant = await Tenant.findByIdAndUpdate(
           tenantId,
           { $inc: { currentBalance: type === 'INCOME' ? amountInt : -amountInt } },
-          { session }
+          { new: true, session }
         );
+      }
+
+      let finalRelatedId = relatedId;
+      let finalRelatedType = relatedType;
+
+      if (method === 'VERESİYE' && (!relatedType || relatedType !== 'DEBT')) {
+        const debtType = type === 'EXPENSE' ? 'TAKEN' : 'GIVEN';
+        let entityName = description ? description.split(' - ')[0].trim() : (category || 'Veresiye İşlem');
+        if (finalDirId) {
+          const Directory = require('../models/Directory');
+          const dirEntry = await Directory.findById(finalDirId).session(session);
+          if (dirEntry) entityName = dirEntry.name;
+        }
+
+        const [debt] = await Debt.create([{
+          tenantId,
+          entityName,
+          type: debtType,
+          totalAmount: amountInt,
+          remainingAmount: amountInt,
+          status: 'PENDING',
+          description: description || 'Otomatik oluşturulan veresiye',
+          relatedId: finalDirId,
+          relatedType: finalDirType,
+        }], { session });
+
+        finalRelatedId = debt._id;
+        finalRelatedType = 'DEBT';
       }
 
       const [tx] = await Transaction.create([{
@@ -183,11 +244,11 @@ const createTransaction = async (req, res, next) => {
         description: description || null,
         transactionDate: transactionDate ? new Date(transactionDate) : new Date(),
         syncId: syncId || undefined,
-        relatedId,
-        relatedType,
+        relatedId: finalRelatedId,
+        relatedType: finalRelatedType,
         directoryId: finalDirId,
         directoryType: finalDirType,
-        balanceAfter: tenant.currentBalance,
+        balanceAfter: tenant ? tenant.currentBalance : 0,
       }], { session });
       createdTx = tx;
     });

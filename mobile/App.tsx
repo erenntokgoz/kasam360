@@ -14,9 +14,12 @@ import { hydrateLanguage } from './src/i18n';
 import { getTransactions } from './src/api/transactionService';
 import messaging from '@react-native-firebase/messaging';
 import apiClient from './src/api/client';
+import DebtDetailModal from './src/components/DebtDetailModal';
+import { useDebtStore, type Debt } from './src/store/useDebtStore';
 
 function App(): React.JSX.Element {
   const [isReady, setIsReady] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
   const { isDarkMode, hydrateTheme } = useThemeStore();
   const hydrateNotifications = useNotificationStore((s) => s.hydrateNotifications);
@@ -27,11 +30,13 @@ function App(): React.JSX.Element {
   useEffect(() => {
     const init = async () => {
       try {
-        await hydrateLanguage();
-        await hydrateFromStorage();
-        await hydrateTheme();
-        await hydrateNotifications();
-        await hydrateSetup();
+        await Promise.all([
+          hydrateLanguage(),
+          hydrateFromStorage(),
+          hydrateTheme(),
+          hydrateNotifications(),
+          hydrateSetup()
+        ]);
 
         // Check recurring items and create notifications for due ones
         const dueItems = checkAndNotify();
@@ -86,7 +91,52 @@ function App(): React.JSX.Element {
       }
     });
 
-    return unsubscribe;
+    const handleNotificationOpen = async (remoteMessage: any) => {
+      if ((remoteMessage?.data?.type === 'DEBT' || remoteMessage?.data?.type === 'VERESIYE') && (remoteMessage?.data?.debtId || remoteMessage?.data?.id)) {
+        const targetId = remoteMessage.data.debtId || remoteMessage.data.id;
+        const debts = useDebtStore.getState().debts;
+        let found = debts.find((d: Debt) => d._id === targetId || d.relatedId === targetId);
+        
+        if (!found) {
+          try {
+            await useDebtStore.getState().fetchDebts(1);
+            found = useDebtStore.getState().debts.find((d: Debt) => d._id === targetId || d.relatedId === targetId);
+          } catch (e) {}
+        }
+        
+        if (found) {
+          setSelectedDebt(found);
+        } else {
+          setSelectedDebt({
+            _id: targetId,
+            entityName: remoteMessage.data.entityName || 'Bilinmeyen Kayıt',
+            type: remoteMessage.data.debtType || 'GIVEN',
+            totalAmount: Number(remoteMessage.data.totalAmount) || 0,
+            remainingAmount: Number(remoteMessage.data.remainingAmount) || 0,
+            status: 'PENDING',
+            dueDate: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            tenantId: ''
+          } as Debt);
+        }
+      }
+    };
+
+    messaging().getInitialNotification().then(remoteMessage => {
+      if (remoteMessage) {
+        setTimeout(() => handleNotificationOpen(remoteMessage), 1000);
+      }
+    });
+
+    const unsubscribeOpenedApp = messaging().onNotificationOpenedApp(remoteMessage => {
+      handleNotificationOpen(remoteMessage);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeOpenedApp();
+    };
   }, []);
 
   // ── Auto-detect setup: if user has a token but setup flag is missing
@@ -127,6 +177,13 @@ function App(): React.JSX.Element {
           translucent={true}
         />
         <RootNavigator />
+        {selectedDebt && (
+          <DebtDetailModal
+            visible={!!selectedDebt}
+            debt={selectedDebt}
+            onClose={() => setSelectedDebt(null)}
+          />
+        )}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

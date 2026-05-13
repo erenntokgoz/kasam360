@@ -16,7 +16,8 @@ import {
 import { useLogStore } from './useLogStore';
 import { useNotificationStore } from './useNotificationStore';
 import { useStaffStore } from './useStaffStore';
-import { generateUUID } from '../utils/uuid';
+import { v4 as uuidv4 } from 'uuid';
+import 'react-native-get-random-values';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -147,12 +148,12 @@ export const useLedgerStore = create<LedgerState>()(
         } catch (err) {
           const isNetworkError = err instanceof Error && (err.message.includes('network') || err.message.includes('timeout'));
           if (isNetworkError) {
-            const tempId = generateUUID();
-            const payloadWithSync = { ...payload, syncId: tempId };
+            const syncUuid = uuidv4();
+            const payloadWithSync = { ...payload, syncId: syncUuid };
             
             // Mock transaction for UI
             const mockTx: Transaction = { 
-              _id: tempId, 
+              _id: syncUuid, 
               ...payloadWithSync, 
               createdAt: new Date().toISOString(),
               transactionDate: payload.transactionDate || new Date().toISOString(),
@@ -193,7 +194,7 @@ export const useLedgerStore = create<LedgerState>()(
             if (op.syncId) {
               set((state) => ({
                 transactions: state.transactions.map((t) => 
-                  t._id === op.syncId ? { ...t, _id: created._id } : t
+                  t._id === op.syncId || t.syncId === op.syncId ? created : t
                 )
               }));
             }

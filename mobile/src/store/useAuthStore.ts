@@ -165,6 +165,20 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Purge EVERYTHING from persistent storage to prevent any data leakage
     await clearStorage();
 
+    // Clear Zustand persist storage explicitly
+    useLedgerStore.persist.clearStorage();
+    useDebtStore.persist.clearStorage();
+    useContactStore.persist.clearStorage();
+    useStaffStore.persist.clearStorage();
+    useSetupStore.persist.clearStorage();
+    try {
+      const { useRecurringStore } = await import('./useRecurringStore');
+      useRecurringStore.persist.clearStorage();
+    } catch (e) {
+      // Ignore if not found or error
+    }
+    useAuthStore.persist.clearStorage();
+
     // Reset all in-memory states
     useLedgerStore.getState().reset();
     useDebtStore.getState().reset();

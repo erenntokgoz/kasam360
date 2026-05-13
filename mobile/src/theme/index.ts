@@ -69,7 +69,7 @@ export const darkTheme = {
     dangerTransparent: 'rgba(244, 63, 94, 0.18)',
     warningTransparent: 'rgba(245, 158, 11, 0.18)',
     whiteTransparent: 'rgba(255, 255, 255, 0.08)',
-    overlay: 'rgba(0, 0, 0, 0.85)',
+    overlay: 'rgba(0, 0, 0, 0.4)',
   },
   shadows: {
     card: {

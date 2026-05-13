@@ -44,8 +44,10 @@ const RootNavigator: React.FC = () => {
     },
   };
 
+import { navigationRef } from './navigationRef';
+
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!token ? (
           <Stack.Screen name="Auth" component={AuthStack} />
