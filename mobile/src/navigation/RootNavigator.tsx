@@ -17,6 +17,7 @@ import AuthStack from './AuthStack';
 import SetupScreen from '../screens/SetupScreen';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
+import { navigationRef } from './navigationRef';
 
 const Stack = createNativeStackNavigator();
 
@@ -44,7 +45,8 @@ const RootNavigator: React.FC = () => {
     },
   };
 
-import { navigationRef } from './navigationRef';
+
+
 
   return (
     <NavigationContainer ref={navigationRef} theme={navTheme}>
