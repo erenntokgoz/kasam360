@@ -37,14 +37,13 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
   const [step, setStep] = useState<Step>('TYPE');
   const [mainType, setMainType] = useState<MainType | null>(null);
   const [amount, setAmount] = useState('');
-  const [subType, setSubType] = useState(''); // POS, CASH, IBAN or Business, Personnel, Personal
+  const [subType, setSubType] = useState('');
   const [who, setWho] = useState('');
   const [date, setDate] = useState(new Date());
   const [method, setMethod] = useState<'CASH' | 'POS' | 'IBAN' | 'VERESİYE'>('CASH');
   const [description, setDescription] = useState('');
-  const [isCash, setIsCash] = useState(false); // Default to Veresiye (false)
+  const [isCash, setIsCash] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-
 
   useEffect(() => {
     if (visible) {
@@ -60,13 +59,9 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
     }
   }, [visible, initialType, initialSubType, initialWho]);
 
-  // MODÜL 3: handleSelectPerson eliminates async state lag.
-  // Previously: setWho(name) + handleNext() — handleNext reads stale 'who' (empty string).
-  // Fix: pass the resolved name synchronously into the navigation logic.
   const handleSelectPerson = async (name: string) => {
-    setWho(name); // update UI
+    setWho(name);
 
-    // Ensure directory entries exist before navigating forward
     if (name) {
       if (mainType === 'GİDER' && subType === 'Personel Gideri') {
         const exists = staffList.find(s => s.name.toLowerCase() === name.trim().toLowerCase());
@@ -85,7 +80,6 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       }
     }
 
-    // Navigate forward using the resolved name directly — avoids stale closure
     if (mainType === 'BORÇ' || mainType === 'ALACAK') {
       setStep('DATE');
     } else {
@@ -110,14 +104,12 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           setStep('SUBTYPE');
         }
       } else {
-        // BORÇ or ALACAK → kime/kimden sorusu
         setStep('WHO');
       }
     } else if (step === 'SUBTYPE') {
       if (!subType) return;
       if (subType === 'Kişisel Gider') setStep('DESC');
       else if (subType === 'İşletme Gideri') {
-        // İşletme gideri nakit ise WHO adımını atla
         if (method !== 'VERESİYE') setStep('DESC');
         else setStep('WHO');
       }
@@ -128,7 +120,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
         Alert.alert('Uyarı', method === 'VERESİYE' ? 'Veresiye işlemler için bir kişi seçmelisiniz.' : 'Bu işlem için bir kişi seçmelisiniz.');
         return;
       }
-      
+
       if (who) {
         if (mainType === 'GİDER' && subType === 'Personel Gideri') {
           const exists = staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase());
@@ -146,8 +138,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           }
         }
       }
-      
-      // BORÇ/ALACAK → vade tarihi seç, diğerleri → devam
+
       if (mainType === 'BORÇ' || mainType === 'ALACAK') {
         setStep('DATE');
       } else {
@@ -193,7 +184,6 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           setStep('WHO');
         }
       } else {
-        // BORÇ/ALACAK → DATE'e geri dön
         setStep('DATE');
       }
     }
@@ -211,9 +201,23 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       const syncId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       if (mainType === 'GELİR') {
+        let finalRelatedId = undefined;
+        let finalRelatedType = undefined;
+        const trimmedWho = who.trim();
+
+        if (trimmedWho) {
+          const contact = useContactStore.getState().contacts.find(c => c.name.toLowerCase() === trimmedWho.toLowerCase());
+          if (contact) {
+            finalRelatedId = contact.id;
+            finalRelatedType = 'CONTACT';
+          }
+        }
+
         const methodLabels: Record<string, string> = { 'CASH': 'Nakit', 'POS': 'POS', 'IBAN': 'Havale', 'VERESİYE': 'Veresiye' };
         const methodLabel = methodLabels[method] || method;
-        const finalDesc = `${methodLabel} Gelir${description ? ' - ' + description.trim() : ''}`;
+        const finalDesc = trimmedWho
+          ? `${trimmedWho} - ${methodLabel} Gelir${description ? ' - ' + description.trim() : ''}`
+          : `${methodLabel} Gelir${description ? ' - ' + description.trim() : ''}`;
 
         await addTransaction({
           type: 'INCOME',
@@ -223,6 +227,10 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           description: finalDesc,
           transactionDate: date.toISOString(),
           syncId,
+          relatedId: finalRelatedId,
+          relatedType: finalRelatedType as any,
+          directoryId: finalRelatedId,
+          directoryType: finalRelatedType as any
         });
       } else if (mainType === 'GİDER') {
         let finalRelatedId = undefined;
@@ -247,7 +255,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
 
         const methodLabels: Record<string, string> = { 'CASH': 'Nakit', 'POS': 'POS', 'IBAN': 'Havale', 'VERESİYE': 'Veresiye' };
         const methodLabel = methodLabels[method] || method;
-        
+
         let formattedDesc = '';
         if (subType === 'Kişisel Gider') {
           formattedDesc = `Kişisel Gider${description ? ' - ' + description.trim() : ''}`;
@@ -292,7 +300,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           }
         }
 
-        const desc = mainType === 'BORÇ' 
+        const desc = mainType === 'BORÇ'
           ? `${who} kişisinden borç alındı${description ? ' - ' + description.trim() : ''}`
           : `${who} kişisine alacak kaydedildi${description ? ' - ' + description.trim() : ''}`;
 
@@ -416,7 +424,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                     onChangeText={setWho}
                   />
                 </View>
-            <ScrollView style={{ maxHeight: 200, marginBottom: 12 }}>
+                <ScrollView style={{ maxHeight: 200, marginBottom: 12 }}>
                   {mainType === 'GİDER' && subType === 'Personel Gideri' ? (
                     <>
                       {staffList.filter(s => s.name.toLowerCase().includes(who.toLowerCase())).map(s => (
@@ -432,7 +440,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                       {who.length > 0 && !staffList.find(s => s.name.toLowerCase() === who.toLowerCase()) && (
                         <Pressable
                           style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]}
-                          onPress={async () => { 
+                          onPress={async () => {
                             try {
                               setIsProcessing(true);
                               await useStaffStore.getState().addStaff(who);
@@ -465,7 +473,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                       {who.length > 0 && !contacts.find(c => c.name.toLowerCase() === who.toLowerCase()) && (
                         <Pressable
                           style={[styles.contactItem, { backgroundColor: theme.colors.accentTransparent }]}
-                          onPress={async () => { 
+                          onPress={async () => {
                             try {
                               setIsProcessing(true);
                               await useContactStore.getState().addContact(who);

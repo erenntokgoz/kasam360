@@ -36,6 +36,10 @@ const debtSchemas = {
     totalAmount: Joi.number().integer().positive().required(),
     dueDate: Joi.date().iso().allow(null),
     syncId: Joi.string().allow('', null),
+    description: Joi.string().allow('', null),
+    isCash: Joi.boolean().default(false),
+    relatedId: Joi.string().allow('', null),
+    relatedType: Joi.string().valid('CONTACT', 'STAFF', 'DIRECTORY').allow('', null),
   }),
   pay: Joi.object({
     amount: Joi.number().integer().positive().required(),
