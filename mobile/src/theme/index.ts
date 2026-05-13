@@ -38,38 +38,38 @@ const shared = {
 export const darkTheme = {
   ...shared,
   colors: {
-    // Core — net, keskin, bulanıklık yok
-    primary: '#0A0E17',       // Koyu gece mavisi
-    surface: '#141925',       // Kartların oturduğu zemin
-    card: '#1E2433',          // Yükseltilmiş kart — yüzeyden net ayrılır
-    border: 'rgba(255, 255, 255, 0.12)',  // Daha belirgin kenarlıklar
+    // Core — Daha okunabilir ve yumuşak tonlar (üst üste binmeyi engellemek için)
+    primary: '#121212',       // Çok koyu gri (neredeyse siyah) zemin
+    surface: '#1E1E1E',       // Kartların oturduğu zemin (bir tık açık)
+    card: '#2C2C2C',          // Yükseltilmiş kart
+    border: 'rgba(255, 255, 255, 0.15)',  // Daha dengeli kenarlıklar
     
     // Accents (Indigo & Violet)
-    accent: '#6366F1',        // Indigo 500
-    accentLight: '#818CF8',   // Indigo 400
-    accentDark: '#4F46E5',    // Indigo 600
-    accentGradient: ['#6366F1', '#A855F7'], // Indigo to Purple
+    accent: '#818CF8',        // Indigo 400 (Daha parlak ve belirgin)
+    accentLight: '#A5B4FC',   // Indigo 300
+    accentDark: '#6366F1',    // Indigo 500
+    accentGradient: ['#818CF8', '#C084FC'], // Indigo to Purple
     
-    // Semantic — parlak ve net
-    success: '#10B981',       // Emerald 500
-    successLight: '#34D399',
-    danger: '#F43F5E',        // Rose 500
-    dangerLight: '#FB7185',
-    warning: '#F59E0B',       // Amber 500
-    warningLight: '#FBBF24',
+    // Semantic
+    success: '#34D399',       // Emerald 400
+    successLight: '#6EE7B7',
+    danger: '#FB7185',        // Rose 400
+    dangerLight: '#FDA4AF',
+    warning: '#FBBF24',       // Amber 400
+    warningLight: '#FDE047',
     
-    // Text — yüksek kontrast
-    textPrimary: '#F1F5F9',   // Slate 100
-    textSecondary: '#CBD5E1', // Slate 300
-    textTertiary: '#94A3B8',  // Slate 400 (eski 500'den parlak)
+    // Text — net kontrast
+    textPrimary: '#F8FAFC',   // Neredeyse beyaz
+    textSecondary: '#CBD5E1', // Açık gri
+    textTertiary: '#94A3B8',  // Orta gri
     
-    // Transparency — daha belirgin
-    accentTransparent: 'rgba(99, 102, 241, 0.18)',
-    successTransparent: 'rgba(16, 185, 129, 0.18)',
-    dangerTransparent: 'rgba(244, 63, 94, 0.18)',
-    warningTransparent: 'rgba(245, 158, 11, 0.18)',
-    whiteTransparent: 'rgba(255, 255, 255, 0.08)',
-    overlay: 'rgba(0, 0, 0, 0.4)',
+    // Transparency — Düşük opaklıklar
+    accentTransparent: 'rgba(129, 140, 248, 0.15)',
+    successTransparent: 'rgba(52, 211, 153, 0.15)',
+    dangerTransparent: 'rgba(251, 113, 133, 0.15)',
+    warningTransparent: 'rgba(251, 191, 36, 0.15)',
+    whiteTransparent: 'rgba(255, 255, 255, 0.10)',
+    overlay: 'rgba(0, 0, 0, 0.65)', // Modallar için standart overlay rengi
   },
   shadows: {
     card: {
