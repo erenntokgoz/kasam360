@@ -70,7 +70,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
             console.warn('[AddTransactionModal] Auto-add staff failed:', e);
           }
         }
-      } else if (name.trim() !== 'Kişisel Gider') {
+      } else if (name.trim() !== 'Kişisel Gider' && name.trim() !== 'İşletme Gideri') {
         const exists = contacts.find(c => c.name.toLowerCase() === name.trim().toLowerCase());
         if (!exists) {
           try { await addContact(name.trim()); } catch (e) {
@@ -127,7 +127,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
           if (!exists) {
             try { await addStaff(who.trim()); } catch (e) { }
           }
-        } else if (who.trim() !== 'Kişisel Gider') {
+        } else if (who.trim() !== 'Kişisel Gider' && who.trim() !== 'İşletme Gideri') {
           const exists = contacts.find(c => c.name.toLowerCase() === who.trim().toLowerCase());
           if (!exists) {
             try { await addContact(who.trim()); } catch (e) { }

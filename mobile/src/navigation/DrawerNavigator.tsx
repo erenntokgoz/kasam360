@@ -11,6 +11,7 @@ import EmployeeDetailScreen from '../screens/EmployeeDetailScreen';
 import GlassSidebar from '../components/GlassSidebar';
 import TransactionsScreen from '../screens/TransactionsScreen';
 import PersonalExpensesScreen from '../screens/PersonalExpensesScreen';
+import PersonnelExpensesScreen from '../screens/StaffExpensesScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ContactsScreen from '../screens/ContactsScreen';
 import ContactDetailScreen from '../screens/ContactDetailScreen';
@@ -79,6 +80,14 @@ const DrawerNavigator = () => {
         options={{
           drawerLabel: 'Kişisel Giderler',
           drawerIcon: ({ color }) => <Icon name="user" size={20} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="PersonnelExpenses"
+        component={PersonnelExpensesScreen}
+        options={{
+          drawerLabel: 'Personel Giderleri',
+          drawerIcon: ({ color }) => <Icon name="users" size={20} color={color} />,
         }}
       />
       <Drawer.Screen

@@ -69,7 +69,13 @@ export const useLedgerStore = create<LedgerState>()(
       fetchTransactions: async (cursor: string | null = null, limit = 20, filters?: TransactionFilters) => {
         set({ isLoading: true, error: null, authError: false, syncLocked: false });
         try {
-          const result = await getTransactions(cursor, limit, filters);
+          const defaultFilters = { ...filters };
+          if (!defaultFilters.startDate) {
+            const now = new Date();
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            defaultFilters.startDate = firstDay.toISOString();
+          }
+          const result = await getTransactions(cursor, limit, defaultFilters);
 
           set((state) => ({
             transactions:

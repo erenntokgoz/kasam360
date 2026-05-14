@@ -76,6 +76,7 @@ const PersonnelExpensesScreen: React.FC = () => {
   const [dateFilter, setDateFilter] = useState<{ start: Date | null, end: Date | null }>({ start: null, end: null });
   const [contactFilter, setContactFilter] = useState<string | null>(null);
   const [newStaffName, setNewStaffName] = useState('');
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
 
   const filteredPersonnelExpenses = useMemo(() => localStaffExpenses.filter(t => {
     if (contactFilter && !t.description?.toLowerCase().includes(contactFilter.toLowerCase())) return false;
@@ -102,11 +103,17 @@ const PersonnelExpensesScreen: React.FC = () => {
   const handleAddStaff = async () => {
     if (!newStaffName.trim()) return;
     try {
-      await addStaff(newStaffName.trim());
+      if (editingStaffId) {
+        await useStaffStore.getState().updateStaff(editingStaffId, { name: newStaffName.trim() });
+        Alert.alert('Başarılı', 'Personel güncellendi.');
+        setEditingStaffId(null);
+      } else {
+        await addStaff(newStaffName.trim());
+        Alert.alert('Başarılı', 'Personel rehbere eklendi.');
+      }
       setNewStaffName('');
-      Alert.alert('Başarılı', 'Personel rehbere eklendi.');
     } catch (e: any) {
-      Alert.alert('Hata', e?.message || 'Personel eklenemedi.');
+      Alert.alert('Hata', e?.message || 'İşlem başarısız.');
     }
   };
 
@@ -164,7 +171,9 @@ const PersonnelExpensesScreen: React.FC = () => {
               hitSlop={16}
               onPress={(e) => {
                 e.stopPropagation?.();
-                Alert.alert('Personeli Düzenle', `"${item.name}" için düzenleme yakında eklenecek.`);
+                setNewStaffName(item.name);
+                setEditingStaffId(item.id);
+                setActiveTab('DIRECTORY');
               }}
               style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
             >
@@ -252,9 +261,14 @@ const PersonnelExpensesScreen: React.FC = () => {
                   value={newStaffName}
                   onChangeText={setNewStaffName}
                 />
-                <Pressable style={[styles.addStaffBtn, { backgroundColor: theme.colors.accent }]} onPress={handleAddStaff}>
-                  <Icon name="plus" size={20} color="#fff" />
+                <Pressable style={[styles.addStaffBtn, { backgroundColor: editingStaffId ? theme.colors.success : theme.colors.accent }]} onPress={handleAddStaff}>
+                  <Icon name={editingStaffId ? "check" : "plus"} size={20} color="#fff" />
                 </Pressable>
+                {editingStaffId && (
+                  <Pressable style={[styles.addStaffBtn, { backgroundColor: theme.colors.card }]} onPress={() => { setEditingStaffId(null); setNewStaffName(''); }}>
+                    <Icon name="x" size={20} color={theme.colors.textPrimary} />
+                  </Pressable>
+                )}
               </View>
 
               {newStaffName.length > 1 && (

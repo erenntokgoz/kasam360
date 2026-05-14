@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,37 +6,55 @@ import {
   FlatList,
   Pressable,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useLedgerStore } from '../store/useLedgerStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
 import { EmptyState } from '../components/EmptyState';
 import { formatCurrency, formatDate } from '../utils/format';
 import type { Transaction } from '../api/transactionService';
+import { getTransactions } from '../api/transactionService';
 
 export const PastTransactionsDetailScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute<any>();
   const { category, month, monthTitle } = route.params;
-  const { transactions } = useLedgerStore();
   const { isDarkMode } = useThemeStore();
   const theme = getTheme(isDarkMode);
 
+  const [localTransactions, setLocalTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetch = async () => {
+      setIsLoading(true);
+      try {
+        const [year, monthNum] = month.split('-').map(Number);
+        const startDate = new Date(year, monthNum - 1, 1).toISOString();
+        const endDate = new Date(year, monthNum, 0, 23, 59, 59).toISOString();
+        
+        const result = await getTransactions(null, 100, { startDate, endDate });
+        setLocalTransactions(result.transactions);
+      } catch (error) {
+        console.error('[PastTransactionsDetailScreen] fetch error:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetch();
+  }, [month]);
+
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((t) => {
-      const d = new Date(t.transactionDate || t.createdAt);
-      const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      
-      const matchesMonth = mStr === month;
+    return localTransactions.filter((t) => {
       const matchesCategory = category === 'all' || t.type === category || t.category === category;
-      
-      return matchesMonth && matchesCategory;
+      return matchesCategory;
     });
-  }, [transactions, category, month]);
+  }, [localTransactions, category]);
+
 
   const renderItem = ({ item }: { item: Transaction }) => {
     const isIncome = item.type === 'INCOME';

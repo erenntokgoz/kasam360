@@ -54,7 +54,14 @@ const ContactsScreen: React.FC = () => {
   const [search, setSearch] = useState('');
   
   React.useEffect(() => {
-    fetchContacts();
+    const load = async () => {
+      try {
+        await fetchContacts();
+      } catch (err) {
+        Alert.alert('Hata', 'Rehber yüklenemedi.');
+      }
+    };
+    load();
   }, [fetchContacts]);
   const [showAddInput, setShowAddInput] = useState(false);
   const [newName, setNewName] = useState('');
