@@ -109,6 +109,9 @@ const createTransaction = async (req, res, next) => {
         const existing = await Transaction.findOne({ syncId }).session(session);
         if (existing) {
           if (existing.isDeleted === true) {
+            return res.status(200).json({ success: true, message: 'İşlem silinmiş, atlandı.', data: existing });
+          }
+          if (existing.isDeleted === true) {
             isDeletedHandled = true;
             return;
           }

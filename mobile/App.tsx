@@ -24,6 +24,15 @@ import AppLockScreen from './src/screens/AppLockScreen';
 import { AppState, AppStateStatus } from 'react-native';
 
 function App(): React.JSX.Element {
+  const { isLocked, setLocked, pin } = useSecurityStore();
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', next => {
+      if (next === 'background' || next === 'inactive') {
+        if (pin) setLocked(true);
+      }
+    });
+    return () => subscription.remove();
+  }, [pin, setLocked]);
   const [isReady, setIsReady] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
@@ -33,7 +42,6 @@ function App(): React.JSX.Element {
   const hydrateSetup = useSetupStore((s) => s.hydrateSetup);
   const checkAndNotify = useRecurringStore((s) => s.checkAndNotify);
   const addNotification = useNotificationStore((s) => s.addNotification);
-  const { isLocked, setLocked, pin } = useSecurityStore();
 
   useEffect(() => {
     const init = async () => {
@@ -88,14 +96,7 @@ function App(): React.JSX.Element {
       }
     };
 
-    // AppState listener for locking
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'background' && pin) {
-        setLocked(true);
-      }
-    };
 
-    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
 
     // Init once, then FCM — init is NOT called twice anymore
     init().then(() => {
@@ -157,7 +158,6 @@ function App(): React.JSX.Element {
     return () => {
       unsubscribe();
       unsubscribeOpenedApp();
-      appStateSubscription.remove();
     };
   }, [pin, setLocked]);
 
@@ -193,7 +193,7 @@ function App(): React.JSX.Element {
     );
   }
 
-  if (isLocked && token && pin) {
+  if (isLocked && pin) {
     return <AppLockScreen />;
   }
 

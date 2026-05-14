@@ -41,6 +41,16 @@ const DrawerNavigator = () => {
         sceneStyle: { backgroundColor: theme.colors.primary },
       }}
     >
+      <Drawer.Screen 
+        name="Dashboard" 
+        component={DashboardScreen} 
+        options={{ drawerLabel: 'Finansal Özet', title: 'Dashboard' }} 
+      />
+      <Drawer.Screen 
+        name="Employees" 
+        component={EmployeeListScreen} 
+        options={{ drawerLabel: 'Personel Yönetimi', title: 'Personeller' }} 
+      />
       <Drawer.Screen
         name="Home"
         component={HomeScreen}

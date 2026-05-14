@@ -1,9 +1,9 @@
 import axios from 'axios';
 import { getItem, setItem, clearStorage, StorageKeys } from '../utils/storage';
 
-import { ENV } from '../env';
+import { ENV } from '../config/env';
 
-const BASE_URL = ENV.BASE_URL;
+const BASE_URL = ENV.API_URL;
 
 const apiClient = axios.create({
   baseURL: BASE_URL,

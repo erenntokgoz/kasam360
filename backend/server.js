@@ -1,5 +1,6 @@
 const dotenv = require('dotenv');
 dotenv.config();
+const errorHandler = require('./src/middlewares/errorHandler');
 
 // Assert required environment variables
 const REQUIRED_ENV = ['JWT_SECRET', 'MONGO_URI', 'JWT_REFRESH_SECRET'];
@@ -25,7 +26,6 @@ const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const tenantRoutes = require('./src/routes/tenantRoutes');
 const directoryRoutes = require('./src/routes/directoryRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
-const errorHandler = require('./src/middlewares/errorHandler');
 
 const app = express();
 

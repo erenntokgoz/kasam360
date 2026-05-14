@@ -53,25 +53,12 @@ const createDebt = async (req, res, next) => {
         const existing = await Debt.findOne({ syncId }).session(session);
         if (existing) {
           if (existing.isDeleted === true) {
-            isDeletedHandled = true;
-            return;
+            return res.status(200).json({ success: true, message: 'Borç silinmiş.' });
           }
-          
-          existing.entityName = entityName;
-          existing.type = type;
-          
-          const oldAmount = existing.totalAmount;
-          const difference = amountInt - oldAmount;
-          existing.totalAmount = amountInt;
-          existing.remainingAmount += difference;
-          
-          if (dueDate) existing.dueDate = new Date(dueDate);
-          if (description) existing.description = String(description).trim();
-          
+          existing.totalAmount = req.body.totalAmount || existing.totalAmount;
+          existing.remainingAmount = req.body.remainingAmount !== undefined ? req.body.remainingAmount : existing.remainingAmount;
           await existing.save({ session });
-          createdDebt = existing;
-          isUpdated = true;
-          return;
+          return res.status(200).json({ success: true, message: 'Borç güncellendi (Upsert).', data: existing });
         }
       }
 
