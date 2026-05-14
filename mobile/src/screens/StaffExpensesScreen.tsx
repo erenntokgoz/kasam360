@@ -101,7 +101,10 @@ const PersonnelExpensesScreen: React.FC = () => {
   };
 
   const handleAddStaff = async () => {
-    if (!newStaffName.trim()) return;
+    if (!newStaffName.trim()) {
+      Alert.alert('Hata', 'Lütfen personel adı girin.');
+      return;
+    }
     try {
       if (editingStaffId) {
         await useStaffStore.getState().updateStaff(editingStaffId, { name: newStaffName.trim() });

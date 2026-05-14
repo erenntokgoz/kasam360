@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,33 +6,19 @@ import {
   FlatList,
   Pressable,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
+import { getTransactions } from '../api/transactionService';
 
-// Generate last 12 months
-const generateMonths = () => {
-  const months = [];
-  const now = new Date();
-  const monthNames = [
-    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
-  ];
-
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({
-      id: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-      title: `${monthNames[d.getMonth()]} ${d.getFullYear()}`,
-      year: d.getFullYear(),
-      month: d.getMonth() + 1,
-    });
-  }
-  return months;
-};
+const monthNames = [
+  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+];
 
 export const PastTransactionsMonthScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -42,9 +28,46 @@ export const PastTransactionsMonthScreen: React.FC = () => {
   const { isDarkMode } = useThemeStore();
   const theme = getTheme(isDarkMode);
 
-  const months = generateMonths();
+  const [availableMonths, setAvailableMonths] = useState<{ id: string; title: string; year: number; month: number }[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const renderItem = ({ item }: { item: typeof months[0] }) => (
+  useEffect(() => {
+    const fetch = async () => {
+      setIsLoading(true);
+      try {
+        const result = await getTransactions(null, 200); // Fetch last 200 transactions
+        const monthsMap: Record<string, { id: string; title: string; year: number; month: number }> = {};
+        
+        const now = new Date();
+        const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        result.transactions.forEach((t) => {
+          const d = new Date(t.transactionDate || t.createdAt);
+          const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          
+          // Only include months before the current month
+          if (mStr < currentMonthStr) {
+            monthsMap[mStr] = {
+              id: mStr,
+              title: `${monthNames[d.getMonth()]} ${d.getFullYear()}`,
+              year: d.getFullYear(),
+              month: d.getMonth() + 1,
+            };
+          }
+        });
+
+        const sortedMonths = Object.values(monthsMap).sort((a, b) => b.id.localeCompare(a.id));
+        setAvailableMonths(sortedMonths);
+      } catch (error) {
+        console.error('[PastTransactionsMonthScreen] fetch error:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetch();
+  }, []);
+
+  const renderItem = ({ item }: { item: typeof availableMonths[0] }) => (
     <Pressable
       style={[styles.card, { backgroundColor: theme.colors.surface }]}
       onPress={() => navigation.navigate('PastTransactionsDetail', { category, month: item.id, monthTitle: item.title })}
@@ -68,17 +91,28 @@ export const PastTransactionsMonthScreen: React.FC = () => {
         <View style={{ width: 24 }} />
       </View>
 
-      <FlatList
-        data={months}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Görüntülemek istediğiniz ayı seçiniz
-          </Text>
-        }
-      />
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+        </View>
+      ) : (
+        <FlatList
+          data={availableMonths}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={
+            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+              Görüntülemek istediğiniz ayı seçiniz
+            </Text>
+          }
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 16 }}>Bu kategori için geçmiş veri bulunamadı.</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 };

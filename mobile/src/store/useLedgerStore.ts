@@ -127,12 +127,6 @@ export const useLedgerStore = create<LedgerState>()(
 
           useLogStore.getState().addLog(actionText, 'success');
 
-          useNotificationStore.getState().addNotification({
-            title: created.type === 'INCOME' ? 'Yeni Gelir Eklendi' : 'Yeni Gider Eklendi',
-            body: actionText,
-            type: 'INFO',
-          });
-
           return created;
         } catch (err) {
           const isNetworkError = err instanceof Error && (err.message.includes('network') || err.message.includes('timeout'));

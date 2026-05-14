@@ -62,7 +62,7 @@ export const lightTheme = {
   colors: {
     primary: '#F8FAFC',
     surface: '#FFFFFF',
-    card: '#F1F5F9',
+    card: '#E2E8F0',
     border: 'rgba(15, 23, 42, 0.08)',
     accent: '#4F46E5',
     accentLight: '#6366F1',
