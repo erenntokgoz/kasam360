@@ -14,6 +14,7 @@ import { useStaffStore } from '../store/useStaffStore';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import FilterBar from '../components/FilterBar';
+import { EmptyState } from '../components/EmptyState';
 import { formatCurrency, formatDate } from '../utils/format';
 
 import AddCard from '../components/AddCard';
@@ -207,7 +208,13 @@ const HomeScreen: React.FC = () => {
             />
           </View>
         )}
-        ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Henüz işlem yok</Text> : null}
+        ListEmptyComponent={!isLoading ? (
+          <EmptyState
+            title="Henüz işlem yok"
+            message="Yeni bir işlem ekleyerek başlayabilirsiniz."
+            icon={<Icon name="list" size={48} color={theme.colors.textTertiary} />}
+          />
+        ) : null}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
         onRefresh={() => fetchTransactions(null)}

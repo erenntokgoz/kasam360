@@ -14,6 +14,8 @@ import AddTransactionModal from '../components/AddTransactionModal';
 import FilterBar from '../components/FilterBar';
 import AddCard from '../components/AddCard';
 import { useContactStore } from '../store/useContactStore';
+import { EmptyState } from '../components/EmptyState';
+import { SwipeRow } from '../components/SwipeRow';
 import { formatCurrency, formatDate } from '../utils/format';
 import { useTranslation } from 'react-i18next';
 
@@ -139,51 +141,43 @@ const PersonnelExpensesScreen: React.FC = () => {
   );
 
   const renderStaffItem = ({ item }: { item: Staff }) => (
-    <Pressable
-      style={[styles.staffCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-      onPress={() => navigation.navigate('ContactDetail', { contactName: item.name, contactId: item.id })}
-    >
-      <View style={styles.staffHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <View style={[styles.staffIcon, { backgroundColor: theme.colors.accentTransparent }]}>
-            <Icon name="user" size={20} color={theme.colors.accent} />
+    <SwipeRow onDelete={() => handleRemoveStaff(item.id)}>
+      <Pressable
+        style={[styles.staffCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, marginBottom: 0 }]}
+        onPress={() => navigation.navigate('ContactDetail', { contactName: item.name, contactId: item.id })}
+      >
+        <View style={styles.staffHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={[styles.staffIcon, { backgroundColor: theme.colors.accentTransparent }]}>
+              <Icon name="user" size={20} color={theme.colors.accent} />
+            </View>
+            <View>
+              <Text style={[styles.staffName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
+              {item.role && <Text style={[styles.staffRole, { color: theme.colors.textSecondary }]}>{item.role}</Text>}
+            </View>
           </View>
-          <View>
-            <Text style={[styles.staffName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
-            {item.role && <Text style={[styles.staffRole, { color: theme.colors.textSecondary }]}>{item.role}</Text>}
+          <View
+            style={{ flexDirection: 'row', gap: 12 }}
+            onStartShouldSetResponder={() => true}
+          >
+            <Pressable
+              hitSlop={16}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                Alert.alert('Personeli Düzenle', `"${item.name}" için düzenleme yakında eklenecek.`);
+              }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Icon name="edit-2" size={18} color={theme.colors.textSecondary} />
+            </Pressable>
           </View>
         </View>
-        <View
-          style={{ flexDirection: 'row', gap: 12 }}
-          onStartShouldSetResponder={() => true}
-        >
-          <Pressable
-            hitSlop={16}
-            onPress={(e) => {
-              e.stopPropagation?.();
-              Alert.alert('Personeli Düzenle', `"${item.name}" için düzenleme yakında eklenecek.`);
-            }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
-          >
-            <Icon name="edit-2" size={18} color={theme.colors.textSecondary} />
-          </Pressable>
-          <Pressable
-            hitSlop={16}
-            onPress={(e) => {
-              e.stopPropagation?.();
-              handleRemoveStaff(item.id);
-            }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
-          >
-            <Icon name="trash-2" size={18} color={theme.colors.dangerLight} />
-          </Pressable>
+        <View style={[styles.staffFooter, { borderTopColor: theme.colors.border }]}>
+          <Text style={{ fontSize: 12, color: theme.colors.textTertiary, fontWeight: '500' }}>TOPLAM ÖDENEN</Text>
+          <Text style={{ fontSize: 14, color: theme.colors.success, fontWeight: '700' }}>{formatCurrency(item.totalPaid)}</Text>
         </View>
-      </View>
-      <View style={[styles.staffFooter, { borderTopColor: theme.colors.border }]}>
-        <Text style={{ fontSize: 12, color: theme.colors.textTertiary, fontWeight: '500' }}>TOPLAM ÖDENEN</Text>
-        <Text style={{ fontSize: 14, color: theme.colors.success, fontWeight: '700' }}>{formatCurrency(item.totalPaid)}</Text>
-      </View>
-    </Pressable>
+      </Pressable>
+    </SwipeRow>
   );
 
   return (
@@ -236,10 +230,11 @@ const PersonnelExpensesScreen: React.FC = () => {
           contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm, paddingBottom: insets.bottom + theme.spacing.xl }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing['3xl'], gap: theme.spacing.sm }}>
-              <Icon name="list" size={48} color={theme.colors.textTertiary} />
-              <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.lg, color: theme.colors.textSecondary, marginTop: theme.spacing.base }}>Kayıt Bulunamadı</Text>
-            </View>
+            <EmptyState
+              title="Kayıt Bulunamadı"
+              message="Bu dönemde veya arama kriterlerinizde personel gideri bulunamadı."
+              icon={<Icon name="list" size={48} color={theme.colors.textTertiary} />}
+            />
           }
         />
       ) : (
@@ -289,25 +284,17 @@ const PersonnelExpensesScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             directoryError ? (
-              <View style={styles.emptyContainer}>
-                <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.warningTransparent }]}>
-                  <Icon name="alert-circle" size={40} color={theme.colors.warning} />
-                </View>
-                <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>{directoryError}</Text>
-                <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
-                  Yukarıdan personel adı yazarak rehberi oluşturmaya başlayabilirsiniz.
-                </Text>
-              </View>
+              <EmptyState
+                title={directoryError}
+                message="Yukarıdan personel adı yazarak rehberi oluşturmaya başlayabilirsiniz."
+                icon={<Icon name="alert-circle" size={40} color={theme.colors.warning} />}
+              />
             ) : (
-              <View style={styles.emptyContainer}>
-                <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
-                  <Icon name="users" size={40} color={theme.colors.accent} />
-                </View>
-                <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>Personel Rehberi Boş</Text>
-                <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
-                  Henüz personel kaydı yapmadınız. Yukarıdan isim yazarak veya rehberden seçerek ekleyebilirsiniz.
-                </Text>
-              </View>
+              <EmptyState
+                title="Personel Rehberi Boş"
+                message="Henüz personel kaydı yapmadınız. Yukarıdan isim yazarak veya rehberden seçerek ekleyebilirsiniz."
+                icon={<Icon name="users" size={40} color={theme.colors.accent} />}
+              />
             )
           }
         />

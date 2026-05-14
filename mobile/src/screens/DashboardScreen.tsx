@@ -18,6 +18,7 @@ import { getDashboardData, type DashboardData } from '../api/dashboardService';
 import SummaryCards from '../components/SummaryCards';
 import TrendChart from '../components/TrendChart';
 import CategoryPieChart from '../components/CategoryPieChart';
+import { Skeleton } from '../components/Skeleton';
 
 // ─── Hata Durumu ──────────────────────────────────────────────────────────────
 const ErrorView: React.FC<{ message: string; onRetry: () => void }> = ({ message, onRetry }) => {
@@ -42,20 +43,7 @@ const ErrorView: React.FC<{ message: string; onRetry: () => void }> = ({ message
 };
 
 // ─── İskelet Yükleme ──────────────────────────────────────────────────────────
-const SkeletonBlock: React.FC<{ height: number; borderRadius?: number }> = ({
-  height,
-  borderRadius = 16,
-}) => {
-  const isDark = useThemeStore((s) => s.isDarkMode);
-  const theme = getTheme(isDark);
-  return (
-    <View
-      style={[
-        { height, borderRadius, backgroundColor: theme.colors.surface, marginBottom: 16 },
-      ]}
-    />
-  );
-};
+// Using imported Skeleton component instead of local SkeletonBlock
 
 // ─── Bölüm Başlığı ───────────────────────────────────────────────────────────
 const SectionHeader: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => {
@@ -131,10 +119,10 @@ const DashboardScreen: React.FC = () => {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
         >
-          <SkeletonBlock height={120} borderRadius={20} />
-          <SkeletonBlock height={80} borderRadius={16} />
-          <SkeletonBlock height={220} borderRadius={20} />
-          <SkeletonBlock height={200} borderRadius={20} />
+          <Skeleton height={120} borderRadius={20} style={{ marginBottom: 16 }} />
+          <Skeleton height={80} borderRadius={16} style={{ marginBottom: 16 }} />
+          <Skeleton height={220} borderRadius={20} style={{ marginBottom: 16 }} />
+          <Skeleton height={200} borderRadius={20} style={{ marginBottom: 16 }} />
         </ScrollView>
       </View>
     );

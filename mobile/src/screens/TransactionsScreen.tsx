@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -12,6 +12,9 @@ import TransactionDetailModal from '../components/TransactionDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import FilterBar from '../components/FilterBar';
 import AddCard from '../components/AddCard';
+import { EmptyState } from '../components/EmptyState';
+import { SwipeRow } from '../components/SwipeRow';
+import { useToastStore } from '../store/useToastStore';
 
 const TransactionRow: React.FC<{ item: Transaction; onPress: (t: Transaction) => void }> = React.memo(({ item, onPress }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
@@ -45,7 +48,8 @@ const TransactionRow: React.FC<{ item: Transaction; onPress: (t: Transaction) =>
 const TransactionsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { transactions, isLoading, fetchTransactions, totalIncome, totalExpense } = useLedgerStore();
+  const { transactions, isLoading, fetchTransactions, totalIncome, totalExpense, deleteTransaction } = useLedgerStore();
+  const { showToast } = useToastStore();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -82,7 +86,23 @@ const TransactionsScreen: React.FC = () => {
 
       <FlatList
         data={filteredData}
-        renderItem={({ item }) => <TransactionRow item={item} onPress={setSelectedTx} />}
+        renderItem={({ item }) => (
+          <SwipeRow onDelete={() => {
+            Alert.alert('İşlemi Sil', 'Bu işlemi silmek istediğinize emin misiniz?', [
+              { text: 'İptal', style: 'cancel' },
+              { text: 'Sil', style: 'destructive', onPress: async () => {
+                try {
+                  await deleteTransaction(item._id);
+                  showToast('İşlem başarıyla silindi.', 'success');
+                } catch (err) {
+                  showToast('İşlem silinemedi.', 'danger');
+                }
+              }}
+            ]);
+          }}>
+            <TransactionRow item={item} onPress={setSelectedTx} />
+          </SwipeRow>
+        )}
         keyExtractor={(item) => item._id}
         ListHeaderComponent={(
           <View style={{ marginBottom: 16 }}>
@@ -117,15 +137,11 @@ const TransactionsScreen: React.FC = () => {
         )}
         ListEmptyComponent={
           !isLoading ? (
-            <View style={styles.emptyContainer}>
-              <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
-                <Icon name="file-text" size={40} color={theme.colors.accent} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>Kayıtlı İşlem Yok</Text>
-              <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
-                Henüz bir gelir veya gider kaydı girmediniz. İlk işleminizi yukarıdan ekleyebilirsiniz.
-              </Text>
-            </View>
+            <EmptyState
+              title="Kayıtlı İşlem Yok"
+              message="Henüz bir gelir veya gider kaydı girmediniz. İlk işleminizi yukarıdan ekleyebilirsiniz."
+              icon={<Icon name="file-text" size={40} color={theme.colors.accent} />}
+            />
           ) : null
         }
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}

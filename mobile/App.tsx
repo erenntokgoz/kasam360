@@ -17,6 +17,8 @@ import apiClient from './src/api/client';
 import DebtDetailModal from './src/components/DebtDetailModal';
 import { useDebtStore, type Debt } from './src/store/useDebtStore';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { Toast } from './src/components/Toast';
+import { useToastStore } from './src/store/useToastStore';
 import { useSecurityStore } from './src/store/useSecurityStore';
 import AppLockScreen from './src/screens/AppLockScreen';
 import { AppState, AppStateStatus } from 'react-native';
@@ -25,6 +27,7 @@ function App(): React.JSX.Element {
   const [isReady, setIsReady] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
+  const { message, type, visible, hideToast } = useToastStore();
   const { isDarkMode, hydrateTheme } = useThemeStore();
   const hydrateNotifications = useNotificationStore((s) => s.hydrateNotifications);
   const hydrateSetup = useSetupStore((s) => s.hydrateSetup);
@@ -211,6 +214,12 @@ function App(): React.JSX.Element {
               onClose={() => setSelectedDebt(null)}
             />
           )}
+          <Toast
+            message={message}
+            type={type}
+            visible={visible}
+            onHide={hideToast}
+          />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

@@ -6,6 +6,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
 import { useNotificationStore, AppNotification } from '../store/useNotificationStore';
+import { EmptyState } from '../components/EmptyState';
 
 import { formatDate } from '../utils/format';
 
@@ -94,11 +95,11 @@ export const NotificationsScreen: React.FC = () => {
         ListHeaderComponent={renderHeader}
         contentContainerStyle={[styles.listContent, notifications.length === 0 && styles.emptyContent]}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon name="bell-off" size={48} color={theme.colors.textTertiary} style={{ marginBottom: 16 }} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary, fontFamily: theme.fonts.semiBold }]}>Henüz bildirim yok</Text>
-            <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary, fontFamily: theme.fonts.regular }]}>Yeni bildirimler burada görünecek.</Text>
-          </View>
+          <EmptyState
+            title="Henüz bildirim yok"
+            message="Yeni bildirimler burada görünecek."
+            icon={<Icon name="bell-off" size={48} color={theme.colors.textTertiary} />}
+          />
         }
       />
     </View>

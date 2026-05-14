@@ -7,6 +7,8 @@ import AddCard from '../components/AddCard';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useContactStore, ContactInfo } from '../store/useContactStore';
+import { EmptyState } from '../components/EmptyState';
+import { SwipeRow } from '../components/SwipeRow';
 import { formatCurrency, formatDate } from '../utils/format';
 
 const ContactRow: React.FC<{ item: ContactInfo; onPress: (c: ContactInfo) => void; onDelete: (id: string) => void; onEdit: (c: ContactInfo) => void }> = ({ item, onPress, onDelete, onEdit }) => {
@@ -14,33 +16,32 @@ const ContactRow: React.FC<{ item: ContactInfo; onPress: (c: ContactInfo) => voi
   const theme = getTheme(isDark);
 
   return (
-    <Pressable style={[styles.rowContainer, { backgroundColor: theme.colors.surface }]} onPress={() => onPress(item)}>
-      <View style={[styles.rowIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
-        <Icon name="user" size={20} color={theme.colors.accent} />
-      </View>
-      <View style={styles.rowMiddle}>
-        <Text style={[styles.rowName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
-        {item.lastTransactionDate && (
-          <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>Son İşlem: {formatDate(item.lastTransactionDate)}</Text>
-        )}
-      </View>
-      <View style={styles.rowRight}>
-        <View style={{ flexDirection: 'row', gap: 12, marginRight: 12 }}>
-          <Pressable hitSlop={8} onPress={() => onEdit(item)}>
-            <Icon name="edit-2" size={18} color={theme.colors.textSecondary} />
-          </Pressable>
-          <Pressable hitSlop={8} onPress={() => onDelete(item.id)}>
-            <Icon name="trash-2" size={18} color={theme.colors.dangerLight} />
-          </Pressable>
+    <SwipeRow onDelete={() => onDelete(item.id)}>
+      <Pressable style={[styles.rowContainer, { backgroundColor: theme.colors.surface }]} onPress={() => onPress(item)}>
+        <View style={[styles.rowIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
+          <Icon name="user" size={20} color={theme.colors.accent} />
         </View>
-        {item.totalBalance !== undefined && (
-          <Text style={[styles.rowAmount, { color: item.totalBalance >= 0 ? theme.colors.success : theme.colors.danger }]}>
-            {formatCurrency(item.totalBalance, true)}
-          </Text>
-        )}
-        <Icon name="chevron-right" size={16} color={theme.colors.textTertiary} />
-      </View>
-    </Pressable>
+        <View style={styles.rowMiddle}>
+          <Text style={[styles.rowName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
+          {item.lastTransactionDate && (
+            <Text style={[styles.rowDate, { color: theme.colors.textTertiary }]}>Son İşlem: {formatDate(item.lastTransactionDate)}</Text>
+          )}
+        </View>
+        <View style={styles.rowRight}>
+          <View style={{ flexDirection: 'row', gap: 12, marginRight: 12 }}>
+            <Pressable hitSlop={8} onPress={() => onEdit(item)}>
+              <Icon name="edit-2" size={18} color={theme.colors.textSecondary} />
+            </Pressable>
+          </View>
+          {item.totalBalance !== undefined && (
+            <Text style={[styles.rowAmount, { color: item.totalBalance >= 0 ? theme.colors.success : theme.colors.danger }]}>
+              {formatCurrency(item.totalBalance, true)}
+            </Text>
+          )}
+          <Icon name="chevron-right" size={16} color={theme.colors.textTertiary} />
+        </View>
+      </Pressable>
+    </SwipeRow>
   );
 };
 
@@ -164,17 +165,11 @@ const ContactsScreen: React.FC = () => {
           </View>
         )}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <View style={[styles.emptyIconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
-              <Icon name={search ? "search" : "users"} size={40} color={theme.colors.accent} />
-            </View>
-            <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>
-              {search ? "Sonuç Bulunamadı" : "Rehberiniz Henüz Boş"}
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: theme.colors.textTertiary }]}>
-              {search ? "Farklı bir isim aramayı deneyin." : "Borç ve alacak takibi için ilk kişiyi yukarıdan ekleyebilirsiniz."}
-            </Text>
-          </View>
+          <EmptyState
+            title={search ? "Sonuç Bulunamadı" : "Rehberiniz Henüz Boş"}
+            message={search ? "Farklı bir isim aramayı deneyin." : "Borç ve alacak takibi için ilk kişiyi yukarıdan ekleyebilirsiniz."}
+            icon={<Icon name={search ? "search" : "users"} size={40} color={theme.colors.accent} />}
+          />
         }
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}

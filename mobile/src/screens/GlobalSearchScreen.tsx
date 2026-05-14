@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native'; // Varsayılan navigasyon
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // Varsayılan icon kütüphanesi
 import api from '../api/client'; // Varsayılan axios instance
+import { EmptyState } from '../components/EmptyState';
 
 // Çıktı formatı tipleri
 type SearchResult = {
@@ -142,15 +143,17 @@ const GlobalSearchScreen = () => {
           keyboardShouldPersistTaps="handled"
         />
       ) : query.length > 2 ? (
-        <View style={styles.centerContainer}>
-          <Icon name="file-search-outline" size={64} color="#bdc3c7" />
-          <Text style={styles.emptyText}>Sonuç bulunamadı</Text>
-        </View>
+        <EmptyState
+          title="Sonuç bulunamadı"
+          message="Aramanızla eşleşen kayıt bulunamadı."
+          icon={<Icon name="file-search-outline" size={64} color="#bdc3c7" />}
+        />
       ) : (
-        <View style={styles.centerContainer}>
-          <Icon name="magnify" size={64} color="#ecf0f1" />
-          <Text style={styles.startText}>Aramaya başlamak için yazın</Text>
-        </View>
+        <EmptyState
+          title="Aramaya Başlayın"
+          message="İşlem, kişi, rehber veya borç aramak için yazın."
+          icon={<Icon name="magnify" size={64} color="#bdc3c7" />}
+        />
       )}
     </View>
   );

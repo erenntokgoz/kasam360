@@ -13,6 +13,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useEmployeeStore } from '../store/useEmployeeStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
+import { EmptyState } from '../components/EmptyState';
 
 export const EmployeeDetailScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -68,7 +69,11 @@ export const EmployeeDetailScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Maaş Geçmişi</Text>
           {employee.salaries.length === 0 ? (
-            <Text style={{ color: theme.colors.textTertiary }}>Maaş kaydı bulunamadı.</Text>
+            <EmptyState
+              title="Maaş Kaydı Yok"
+              message="Bu personele ait maaş ödeme kaydı bulunamadı."
+              icon={<Icon name="credit-card" size={32} color={theme.colors.textTertiary} />}
+            />
           ) : (
             employee.salaries.map((salary) => (
               <View key={salary.id} style={[styles.itemCard, { backgroundColor: theme.colors.surface }]}>
@@ -88,7 +93,11 @@ export const EmployeeDetailScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Gider Geçmişi</Text>
           {employee.expenses.length === 0 ? (
-            <Text style={{ color: theme.colors.textTertiary }}>Gider kaydı bulunamadı.</Text>
+            <EmptyState
+              title="Gider Kaydı Yok"
+              message="Bu personele ait gider kaydı bulunamadı."
+              icon={<Icon name="file-text" size={32} color={theme.colors.textTertiary} />}
+            />
           ) : (
             employee.expenses.map((expense) => (
               <View key={expense.id} style={[styles.itemCard, { backgroundColor: theme.colors.surface }]}>

@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useEmployeeStore, Employee } from '../store/useEmployeeStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
+import { EmptyState } from '../components/EmptyState';
 
 export const EmployeeListScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -73,9 +74,11 @@ export const EmployeeListScreen: React.FC = () => {
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={{ color: theme.colors.textSecondary }}>Henüz personel bulunamadı.</Text>
-          </View>
+          <EmptyState
+            title="Henüz Personel Yok"
+            message="Şirketinize kayıtlı personel bulunamadı."
+            icon={<Icon name="users" size={48} color={theme.colors.textTertiary} />}
+          />
         }
       />
     </View>

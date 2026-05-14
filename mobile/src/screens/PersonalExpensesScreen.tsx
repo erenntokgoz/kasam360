@@ -13,6 +13,8 @@ import AddTransactionModal from '../components/AddTransactionModal';
 import FilterBar from '../components/FilterBar';
 import AddCard from '../components/AddCard';
 import { useContactStore } from '../store/useContactStore';
+import { EmptyState } from '../components/EmptyState';
+import { SwipeRow } from '../components/SwipeRow';
 import { formatCurrency, formatDate } from '../utils/format';
 import { useTranslation } from 'react-i18next';
 
@@ -67,26 +69,27 @@ const PersonalExpensesScreen: React.FC = () => {
   };
 
   const renderTxItem = ({ item }: { item: Transaction }) => (
-    <View style={[styles.rowContainer, { backgroundColor: theme.colors.surface }]}>
-      <Pressable
-        style={styles.rowContent}
-        onPress={() => setSelectedTx(item)}
-        onLongPress={() => handleLongPressTx(item._id)}
-      >
-        <View style={[styles.rowIconCircle, { backgroundColor: theme.colors.warningTransparent }]}>
-          <Icon name="user" size={16} color={theme.colors.warning} />
-        </View>
-        <View style={styles.rowMiddle}>
-          <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>
-            {item.description || 'Kişisel Harcama'}
-          </Text>
-          <Text style={[styles.rowFreq, { color: theme.colors.textTertiary }]}>{formatDate(item.transactionDate || item.createdAt)}</Text>
-        </View>
-        <View style={styles.rowRight}>
-          <Text style={[styles.rowAmount, { color: theme.colors.dangerLight }]}>{formatCurrency(item.amount, true)}</Text>
-        </View>
-      </Pressable>
-    </View>
+    <SwipeRow onDelete={() => handleLongPressTx(item._id)}>
+      <View style={[styles.rowContainer, { backgroundColor: theme.colors.surface, marginBottom: 0 }]}>
+        <Pressable
+          style={styles.rowContent}
+          onPress={() => setSelectedTx(item)}
+        >
+          <View style={[styles.rowIconCircle, { backgroundColor: theme.colors.warningTransparent }]}>
+            <Icon name="user" size={16} color={theme.colors.warning} />
+          </View>
+          <View style={styles.rowMiddle}>
+            <Text style={[styles.rowCategory, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+              {item.description || 'Kişisel Harcama'}
+            </Text>
+            <Text style={[styles.rowFreq, { color: theme.colors.textTertiary }]}>{formatDate(item.transactionDate || item.createdAt)}</Text>
+          </View>
+          <View style={styles.rowRight}>
+            <Text style={[styles.rowAmount, { color: theme.colors.dangerLight }]}>{formatCurrency(item.amount, true)}</Text>
+          </View>
+        </Pressable>
+      </View>
+    </SwipeRow>
   );
 
   return (
@@ -136,10 +139,11 @@ const PersonalExpensesScreen: React.FC = () => {
         contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm, paddingBottom: insets.bottom + theme.spacing.xl }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: theme.spacing['3xl'], gap: theme.spacing.sm }}>
-            <Icon name="list" size={48} color={theme.colors.textTertiary} />
-            <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.lg, color: theme.colors.textSecondary, marginTop: theme.spacing.base }}>Kayıt Bulunamadı</Text>
-          </View>
+          <EmptyState
+            title="Kayıt Bulunamadı"
+            message="Kişisel giderlerinize ait bir kayıt bulunmuyor."
+            icon={<Icon name="list" size={48} color={theme.colors.textTertiary} />}
+          />
         }
       />
 

@@ -13,6 +13,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useLedgerStore } from '../store/useLedgerStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
+import { EmptyState } from '../components/EmptyState';
 import { formatCurrency, formatDate } from '../utils/format';
 import type { Transaction } from '../api/transactionService';
 
@@ -86,9 +87,11 @@ export const PastTransactionsDetailScreen: React.FC = () => {
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={{ color: theme.colors.textSecondary }}>Bu dönemde işlem bulunamadı.</Text>
-          </View>
+          <EmptyState
+            title="İşlem Bulunamadı"
+            message="Bu dönemde seçtiğiniz kriterlere uygun işlem kaydı bulunmuyor."
+            icon={<Icon name="inbox" size={48} color={theme.colors.textTertiary} />}
+          />
         }
       />
     </View>

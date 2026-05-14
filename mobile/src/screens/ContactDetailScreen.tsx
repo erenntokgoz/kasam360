@@ -17,6 +17,7 @@ import TransactionDetailModal from '../components/TransactionDetailModal';
 import DebtDetailModal from '../components/DebtDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
 import AddCard from '../components/AddCard';
+import { EmptyState } from '../components/EmptyState';
 
 type ParamList = {
   ContactDetail: { contactName: string };
@@ -219,10 +220,11 @@ const ContactDetailScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />}
         ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Icon name="inbox" size={48} color={theme.colors.textTertiary} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.textSecondary }]}>Henüz bir işlem kaydı bulunmuyor.</Text>
-          </View>
+          <EmptyState
+            title="Henüz İşlem Yok"
+            message="Bu kişi ile ilgili henüz bir işlem kaydı bulunmuyor."
+            icon={<Icon name="inbox" size={48} color={theme.colors.textTertiary} />}
+          />
         }
       />
 

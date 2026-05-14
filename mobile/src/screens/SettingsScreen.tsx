@@ -9,6 +9,7 @@ import { getTheme } from '../theme';
 import { changeLanguage } from '../i18n';
 import { useTranslation } from 'react-i18next';
 import { useLedgerStore } from '../store/useLedgerStore';
+import { useHaptics } from '../hooks/useHaptics';
 
 const SettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -17,6 +18,7 @@ const SettingsScreen: React.FC = () => {
   const { user, logout, updateProfile, deleteAccount, clearData, isLoading: isAuthLoading } = useAuthStore();
   const { toggleTheme, isDarkMode } = useThemeStore();
   const { transactions } = useLedgerStore();
+  const { trigger } = useHaptics();
   const { i18n } = useTranslation();
   const theme = getTheme(isDarkMode);
   const currentLang = i18n.language === 'en' ? 'EN' : 'TR';
@@ -129,7 +131,14 @@ const SettingsScreen: React.FC = () => {
               <Icon name={isDarkMode ? 'moon' : 'sun'} size={18} color={theme.colors.accent} />
               <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Karanlık Mod</Text>
             </View>
-            <Switch value={isDarkMode} onValueChange={toggleTheme} trackColor={{ false: theme.colors.border, true: theme.colors.accent }} />
+            <Switch
+              value={isDarkMode}
+              onValueChange={(value) => {
+                trigger('light');
+                toggleTheme();
+              }}
+              trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
+            />
           </View>
           <View style={styles.row}>
             <View style={styles.rowLeft}>

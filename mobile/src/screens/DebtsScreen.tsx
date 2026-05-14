@@ -12,6 +12,7 @@ import AddTransactionModal from '../components/AddTransactionModal';
 import DebtDetailModal from '../components/DebtDetailModal';
 import FilterBar from '../components/FilterBar';
 import AddCard from '../components/AddCard';
+import { EmptyState } from '../components/EmptyState';
 
 // --- Payment Modal (Repayment logic) ---
 export const PaymentModal: React.FC<{ visible: boolean; debt: any | null; onClose: () => void }> = ({ visible, debt, onClose }) => {
@@ -243,7 +244,15 @@ const DebtsScreen: React.FC = () => {
             </View>
           </View>
         )}
-        ListEmptyComponent={!isLoading ? <Text style={styles.emptyText}>Sonuç bulunamadı</Text> : null}
+        ListEmptyComponent={
+          !isLoading ? (
+            <EmptyState
+              title="Sonuç Bulunamadı"
+              message="Arama kriterlerinize uygun kayıt bulunamadı veya henüz borç/alacak eklemediniz."
+              icon={<Icon name="book" size={40} color={theme.colors.textTertiary} />}
+            />
+          ) : null
+        }
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
         onRefresh={() => fetchDebts(1)}
