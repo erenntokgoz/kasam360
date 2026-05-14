@@ -16,6 +16,10 @@ import messaging from '@react-native-firebase/messaging';
 import apiClient from './src/api/client';
 import DebtDetailModal from './src/components/DebtDetailModal';
 import { useDebtStore, type Debt } from './src/store/useDebtStore';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { useSecurityStore } from './src/store/useSecurityStore';
+import AppLockScreen from './src/screens/AppLockScreen';
+import { AppState, AppStateStatus } from 'react-native';
 
 function App(): React.JSX.Element {
   const [isReady, setIsReady] = useState(false);
@@ -26,6 +30,7 @@ function App(): React.JSX.Element {
   const hydrateSetup = useSetupStore((s) => s.hydrateSetup);
   const checkAndNotify = useRecurringStore((s) => s.checkAndNotify);
   const addNotification = useNotificationStore((s) => s.addNotification);
+  const { isLocked, setLocked, pin } = useSecurityStore();
 
   useEffect(() => {
     const init = async () => {
@@ -65,7 +70,6 @@ function App(): React.JSX.Element {
         if (enabled) {
           const token = await messaging().getToken();
           if (token) {
-            console.log('[FCM] Token:', token);
             const authToken = useAuthStore.getState().token;
             if (authToken) {
               await apiClient
@@ -81,8 +85,22 @@ function App(): React.JSX.Element {
       }
     };
 
+    // AppState listener for locking
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'background' && pin) {
+        setLocked(true);
+      }
+    };
+
+    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+
     // Init once, then FCM — init is NOT called twice anymore
-    init().then(() => setupFCM());
+    init().then(() => {
+      setupFCM();
+      if (pin) {
+        setLocked(true);
+      }
+    });
 
     // Listen for foreground messages
     const unsubscribe = messaging().onMessage(async (remoteMessage) => {
@@ -136,8 +154,9 @@ function App(): React.JSX.Element {
     return () => {
       unsubscribe();
       unsubscribeOpenedApp();
+      appStateSubscription.remove();
     };
-  }, []);
+  }, [pin, setLocked]);
 
   // ── Auto-detect setup: if user has a token but setup flag is missing
   //    Check backend for existing data whenever token becomes available.
@@ -171,24 +190,30 @@ function App(): React.JSX.Element {
     );
   }
 
+  if (isLocked && token && pin) {
+    return <AppLockScreen />;
+  }
+
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.primary }}>
-      <SafeAreaProvider>
-        <StatusBar
-          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-          backgroundColor="transparent"
-          translucent={true}
-        />
-        <RootNavigator />
-        {selectedDebt && (
-          <DebtDetailModal
-            visible={!!selectedDebt}
-            debt={selectedDebt}
-            onClose={() => setSelectedDebt(null)}
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.primary }}>
+        <SafeAreaProvider>
+          <StatusBar
+            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+            backgroundColor="transparent"
+            translucent={true}
           />
-        )}
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+          <RootNavigator />
+          {selectedDebt && (
+            <DebtDetailModal
+              visible={!!selectedDebt}
+              debt={selectedDebt}
+              onClose={() => setSelectedDebt(null)}
+            />
+          )}
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 

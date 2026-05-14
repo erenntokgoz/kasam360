@@ -24,6 +24,8 @@ const debtRoutes = require('./src/routes/debtRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const tenantRoutes = require('./src/routes/tenantRoutes');
 const directoryRoutes = require('./src/routes/directoryRoutes');
+const dashboardRoutes = require('./src/routes/dashboardRoutes');
+const errorHandler = require('./src/middlewares/errorHandler');
 
 const app = express();
 
@@ -76,20 +78,17 @@ app.use('/api/debts', debtRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/tenant', tenantRoutes);
 app.use('/api/directory', directoryRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 require('./src/cron/dailyAlertCheck');
+require('./src/cron/monthTransitionJob');
 
 // ── Error Handling ────────────────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-  console.error(`[ERROR] ${req.method} ${req.url}`, err);
-  const status = err.httpStatus || 500;
-  const message = err.message || 'Sunucu tarafında bir hata oluştu.';
-  res.status(status).json({ success: false, message });
-});
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 

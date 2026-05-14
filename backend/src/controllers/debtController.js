@@ -46,11 +46,32 @@ const createDebt = async (req, res, next) => {
     }
 
     let createdDebt;
+    let isDeletedHandled = false;
+    let isUpdated = false;
     await session.withTransaction(async () => {
       if (syncId) {
         const existing = await Debt.findOne({ syncId }).session(session);
         if (existing) {
-          throw Object.assign(new Error('Bu borç kaydı zaten mevcut (syncId çakışması).'), { httpStatus: 200, data: existing });
+          if (existing.isDeleted === true) {
+            isDeletedHandled = true;
+            return;
+          }
+          
+          existing.entityName = entityName;
+          existing.type = type;
+          
+          const oldAmount = existing.totalAmount;
+          const difference = amountInt - oldAmount;
+          existing.totalAmount = amountInt;
+          existing.remainingAmount += difference;
+          
+          if (dueDate) existing.dueDate = new Date(dueDate);
+          if (description) existing.description = String(description).trim();
+          
+          await existing.save({ session });
+          createdDebt = existing;
+          isUpdated = true;
+          return;
         }
       }
 
@@ -133,6 +154,14 @@ const createDebt = async (req, res, next) => {
     });
 
     session.endSession();
+    
+    if (isDeletedHandled) {
+      return res.status(200).json({ success: true, message: 'Borç silinmiş olduğu için atlandı.' });
+    }
+    if (isUpdated) {
+      return res.status(200).json({ success: true, message: 'Borç kaydı güncellendi.', data: createdDebt });
+    }
+    
     return res.status(201).json({ success: true, message: 'Borç kaydı oluşturuldu.', data: createdDebt });
   } catch (error) {
     session.endSession();
@@ -216,7 +245,7 @@ const payDebt = async (req, res, next) => {
 
     let updatedDebt, createdTransaction;
     await session.withTransaction(async () => {
-      const debt = await Debt.findOne({ _id: id, tenantId }).session(session);
+      const debt = await Debt.findOne({ _id: id, tenantId, isDeleted: false }).session(session);
       if (!debt) throw Object.assign(new Error('Borç kaydı bulunamadı.'), { httpStatus: 404 });
       if (debt.status === 'PAID') throw Object.assign(new Error('Bu borç zaten tamamen ödenmiş.'), { httpStatus: 400 });
       if (paymentAmount > debt.remainingAmount) {
@@ -270,8 +299,8 @@ const updateDebt = async (req, res, next) => {
   try {
     const { tenantId } = req;
     const { id } = req.params;
-    const debt = await Debt.findOne({ _id: id, tenantId });
-    if (!debt || debt.isDeleted) return res.status(404).json({ success: false, message: 'Borç bulunamadı.' });
+    const debt = await Debt.findOne({ _id: id, tenantId, isDeleted: false });
+    if (!debt) return res.status(404).json({ success: false, message: 'Borç bulunamadı.' });
 
     const oldData = debt.toObject();
     const ALLOWED_FIELDS = ['entityName', 'dueDate', 'notes', 'description'];

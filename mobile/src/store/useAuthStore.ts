@@ -145,7 +145,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     useDebtStore.persist.clearStorage();
     useContactStore.persist.clearStorage();
     useStaffStore.persist.clearStorage();
-    useSetupStore.persist.clearStorage();
     try {
       const { useRecurringStore } = await import('./useRecurringStore');
       useRecurringStore.persist.clearStorage();

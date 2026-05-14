@@ -103,10 +103,15 @@ const createTransaction = async (req, res, next) => {
     const amountInt = Math.round(Number(amount));
 
     let createdTx;
+    let isDeletedHandled = false;
     await session.withTransaction(async () => {
       if (syncId) {
         const existing = await Transaction.findOne({ syncId }).session(session);
         if (existing) {
+          if (existing.isDeleted === true) {
+            isDeletedHandled = true;
+            return;
+          }
           const oldImpact = (existing.method === 'VERESİYE') ? 0 : (existing.type === 'INCOME' ? existing.amount : -existing.amount);
           const newImpact = (method === 'VERESİYE') ? 0 : (type === 'INCOME' ? amountInt : -amountInt);
           if (oldImpact !== newImpact) {
@@ -247,6 +252,11 @@ const createTransaction = async (req, res, next) => {
     });
 
     session.endSession();
+
+    if (isDeletedHandled) {
+      return res.status(200).json({ success: true, message: 'İşlem silinmiş olduğu için atlandı.' });
+    }
+
     return res.status(201).json({ success: true, message: 'İşlem oluşturuldu.', data: createdTx });
   } catch (error) {
     session.endSession();

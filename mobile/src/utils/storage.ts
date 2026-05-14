@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Keychain from 'react-native-keychain';
 
 // ─── Keys ────────────────────────────────────────────────────────────────────
 
@@ -30,7 +31,11 @@ export const setItem = async (key: StorageKey, value: string): Promise<void> => 
     return;
   }
   try {
-    await AsyncStorage.setItem(key, value);
+    if (key === StorageKeys.TOKEN || key === StorageKeys.REFRESH_TOKEN) {
+      await Keychain.setGenericPassword(key, value, { service: key });
+    } else {
+      await AsyncStorage.setItem(key, value);
+    }
   } catch (e) {
     console.error(`[Storage] setItem error for key ${key}:`, e);
   }
@@ -43,6 +48,13 @@ export const getItem = async (key: StorageKey): Promise<string | null> => {
     return null;
   }
   try {
+    if (key === StorageKeys.TOKEN || key === StorageKeys.REFRESH_TOKEN) {
+      const credentials = await Keychain.getGenericPassword({ service: key });
+      if (credentials) {
+        return credentials.password;
+      }
+      return null;
+    }
     const val = await AsyncStorage.getItem(key);
     return val;
   } catch (e) {
@@ -58,7 +70,11 @@ export const removeItem = async (key: StorageKey): Promise<void> => {
     return;
   }
   try {
-    await AsyncStorage.removeItem(key);
+    if (key === StorageKeys.TOKEN || key === StorageKeys.REFRESH_TOKEN) {
+      await Keychain.resetGenericPassword({ service: key });
+    } else {
+      await AsyncStorage.removeItem(key);
+    }
   } catch (e) {
     console.error(`[Storage] removeItem error for key ${key}:`, e);
   }
@@ -67,6 +83,8 @@ export const removeItem = async (key: StorageKey): Promise<void> => {
 /** Clear all stored data. */
 export const clearStorage = async (): Promise<void> => {
   try {
+    await Keychain.resetGenericPassword({ service: StorageKeys.TOKEN });
+    await Keychain.resetGenericPassword({ service: StorageKeys.REFRESH_TOKEN });
     await AsyncStorage.clear();
   } catch (e) {
     console.error('[Storage] clearStorage error', e);

@@ -130,7 +130,12 @@ const HomeScreen: React.FC = () => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
 
-  const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
+  const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    return { start, end };
+  });
   const [contactFilter, setContactFilter] = useState<string | null>(null);
 
   useEffect(() => { 

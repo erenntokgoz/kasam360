@@ -3,16 +3,20 @@ import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import Icon from 'react-native-vector-icons/Feather';
 import HomeScreen from '../screens/HomeScreen';
+import DashboardScreen from '../screens/DashboardScreen';
 import DebtsScreen from '../screens/DebtsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
-import StaffExpensesScreen from '../screens/StaffExpensesScreen';
+import EmployeeListScreen from '../screens/EmployeeListScreen';
+import EmployeeDetailScreen from '../screens/EmployeeDetailScreen';
+import GlassSidebar from '../components/GlassSidebar';
+import TransactionsScreen from '../screens/TransactionsScreen';
 import PersonalExpensesScreen from '../screens/PersonalExpensesScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
-import TransactionsScreen from '../screens/TransactionsScreen';
 import ContactsScreen from '../screens/ContactsScreen';
 import ContactDetailScreen from '../screens/ContactDetailScreen';
-import DirectorySelectionScreen from '../screens/DirectorySelectionScreen';
-import GlassSidebar from '../components/GlassSidebar';
+import PastTransactionsCategoryScreen from '../screens/PastTransactionsCategoryScreen';
+import PastTransactionsMonthScreen from '../screens/PastTransactionsMonthScreen';
+import PastTransactionsDetailScreen from '../screens/PastTransactionsDetailScreen';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 
@@ -46,6 +50,14 @@ const DrawerNavigator = () => {
         }}
       />
       <Drawer.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{
+          drawerLabel: 'Dashboard',
+          drawerIcon: ({ color }) => <Icon name="bar-chart-2" size={20} color={color} />,
+        }}
+      />
+      <Drawer.Screen
         name="Transactions"
         component={TransactionsScreen}
         options={{
@@ -70,11 +82,40 @@ const DrawerNavigator = () => {
         }}
       />
       <Drawer.Screen
-        name="StaffExpenses"
-        component={StaffExpensesScreen}
+        name="EmployeeList"
+        component={EmployeeListScreen}
         options={{
-          drawerLabel: 'Personel Giderleri',
-          drawerIcon: ({ color }) => <Icon name="briefcase" size={20} color={color} />,
+          drawerLabel: 'Personel Listesi',
+          drawerIcon: ({ color }) => <Icon name="users" size={20} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="PastTransactionsCategory"
+        component={PastTransactionsCategoryScreen}
+        options={{
+          drawerLabel: 'Geçmiş İşlemler',
+          drawerIcon: ({ color }) => <Icon name="archive" size={20} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="PastTransactionsMonth"
+        component={PastTransactionsMonthScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
+        }}
+      />
+      <Drawer.Screen
+        name="PastTransactionsDetail"
+        component={PastTransactionsDetailScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
+        }}
+      />
+      <Drawer.Screen
+        name="EmployeeDetail"
+        component={EmployeeDetailScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
         }}
       />
       <Drawer.Screen
@@ -101,13 +142,7 @@ const DrawerNavigator = () => {
           drawerIcon: ({ color }) => <Icon name="settings" size={20} color={color} />,
         }}
       />
-      <Drawer.Screen
-        name="DirectorySelection"
-        component={DirectorySelectionScreen}
-        options={{
-          drawerItemStyle: { display: 'none' },
-        }}
-      />
+
       <Drawer.Screen
         name="ContactDetail"
         component={ContactDetailScreen}

@@ -4,6 +4,7 @@ const Transaction = require('../models/Transaction');
 const Debt = require('../models/Debt');
 const Directory = require('../models/Directory');
 const AuditLog = require('../models/AuditLog');
+const { softDeleteMany } = require('../utils/softDelete');
 
 /**
  * Kurulum verilerini günceller (Açılış bakiyesi vb.)
@@ -95,10 +96,10 @@ const clearData = async (req, res, next) => {
   try {
     const { tenantId } = req;
     await session.withTransaction(async () => {
-      await Transaction.deleteMany({ tenantId }).session(session);
-      await Debt.deleteMany({ tenantId }).session(session);
-      await Directory.deleteMany({ tenantId }).session(session);
-      await AuditLog.deleteMany({ tenantId }).session(session);
+      await softDeleteMany(Transaction, { tenantId }, { deletedAt: new Date(), deletedBy: tenantId }, { session });
+      await softDeleteMany(Debt, { tenantId }, { deletedAt: new Date(), deletedBy: tenantId }, { session });
+      await softDeleteMany(Directory, { tenantId }, { deletedAt: new Date(), deletedBy: tenantId }, { session });
+      await softDeleteMany(AuditLog, { tenantId }, { deletedAt: new Date(), deletedBy: tenantId }, { session });
       
       await Tenant.findByIdAndUpdate(
         tenantId,

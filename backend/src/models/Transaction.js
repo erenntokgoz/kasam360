@@ -20,6 +20,15 @@ const transactionSchema = new mongoose.Schema(
       get: (v) => Math.round(v),
       set: (v) => Math.round(v),
     },
+    currency: {
+      type: String,
+      enum: ['TRY', 'USD', 'EUR', 'GBP'],
+      default: 'TRY',
+    },
+    exchangeRate: {
+      type: Number,
+      default: 1,
+    },
     method: {
       type: String,
       enum: ['CASH', 'POS', 'IBAN', 'VERESİYE'],
@@ -73,6 +82,15 @@ const transactionSchema = new mongoose.Schema(
     isDeleted: {
       type: Boolean,
       default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Tenant',
+      default: null,
     },
   },
   {

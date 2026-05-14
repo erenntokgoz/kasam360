@@ -48,6 +48,19 @@ const tenantSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Tenant',
+      default: null,
+    },
   },
   {
     timestamps: true, // adds createdAt + updatedAt automatically
