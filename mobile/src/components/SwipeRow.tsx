@@ -9,6 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { tokens, darkColors } from '../theme/tokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { useThemeStore } from '../store/useThemeStore';
+import { getTheme } from '../theme';
 
 interface SwipeRowProps {
   children: React.ReactNode;
@@ -40,22 +42,25 @@ export const SwipeRow = ({ children, onDelete }: SwipeRowProps) => {
     transform: [{ translateX: translateX.value }],
   }));
 
+  const isDark = useThemeStore((s) => s.isDarkMode);
+  const theme = getTheme(isDark);
+
   return (
-    <View style={styles.container}>
-      <View style={styles.backRow}>
+    <View style={[styles.container, { backgroundColor: theme.colors.primary }]}>
+      <View style={[styles.backRow, { backgroundColor: theme.colors.dangerTransparent }]}>
         <Pressable
-          style={styles.deleteButton}
+          style={[styles.deleteButton, { backgroundColor: theme.colors.danger }]}
           onPress={() => {
             trigger('heavy');
             onDelete();
             translateX.value = withSpring(0);
           }}
         >
-          <Text style={styles.deleteText}>Sil</Text>
+          <Text style={[styles.deleteText, { color: '#fff' }]}>Sil</Text>
         </Pressable>
       </View>
       <GestureDetector gesture={panGesture}>
-        <Animated.View style={[styles.frontRow, animatedStyle]}>
+        <Animated.View style={[styles.frontRow, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }, animatedStyle]}>
           {children}
         </Animated.View>
       </GestureDetector>
