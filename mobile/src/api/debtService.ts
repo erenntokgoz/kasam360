@@ -18,6 +18,7 @@ export interface Debt {
   syncId?: string;
   relatedId?: string;
   relatedType?: 'STAFF' | 'CONTACT';
+  description?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,6 +41,7 @@ export interface UpdateDebtPayload {
   totalAmount?: number;
   remainingAmount?: number;
   dueDate?: string | null;
+  description?: string;
 }
 
 export interface DebtPagination {
@@ -93,10 +95,12 @@ export const getDebts = async (
   limit = 20,
   type?: DebtType,
   status?: DebtStatus,
+  relatedId?: string,
 ): Promise<GetDebtsResponse['data']> => {
   const params: Record<string, string | number> = { page, limit };
   if (type) params.type = type;
   if (status) params.status = status;
+  if (relatedId) params.relatedId = relatedId;
 
   const { data } = await apiClient.get<GetDebtsResponse>('/api/debts', { params });
   return data.data;

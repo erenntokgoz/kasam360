@@ -60,10 +60,10 @@ export const darkColors = {
 };
 
 export const lightColors = {
-  primary: '#F8FAFC',
-  surface: '#FFFFFF',
-  card: '#F1F5F9',
-  border: 'rgba(15, 23, 42, 0.08)',
+  primary: '#FFFFFF',
+  surface: '#F8F9FA',
+  card: '#FFFFFF',
+  border: '#E5E7EB',
   accent: '#4F46E5',
   accentLight: '#6366F1',
   accentDark: '#3730A3',
@@ -74,15 +74,15 @@ export const lightColors = {
   dangerLight: '#F43F5E',
   warning: '#D97706',
   warningLight: '#F59E0B',
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textTertiary: '#94A3B8',
-  accentTransparent: 'rgba(79, 70, 229, 0.06)',
-  successTransparent: 'rgba(5, 150, 105, 0.06)',
-  dangerTransparent: 'rgba(225, 29, 72, 0.06)',
-  warningTransparent: 'rgba(217, 119, 6, 0.06)',
+  textPrimary: '#000000',
+  textSecondary: '#333333',
+  textTertiary: '#666666',
+  accentTransparent: 'rgba(79, 70, 229, 0.08)',
+  successTransparent: 'rgba(5, 150, 105, 0.08)',
+  dangerTransparent: 'rgba(225, 29, 72, 0.08)',
+  warningTransparent: 'rgba(217, 119, 6, 0.08)',
   whiteTransparent: 'rgba(255, 255, 255, 0.8)',
-  overlay: 'rgba(15, 23, 42, 0.4)',
+  overlay: 'rgba(0, 0, 0, 0.6)',
 };
 
 export const shadows = {

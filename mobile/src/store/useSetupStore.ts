@@ -51,8 +51,8 @@ export const useSetupStore = create<SetupState>((set) => ({
   },
 
   setSetupComplete: async (isComplete) => {
-    await setItem(StorageKeys.SETUP_COMPLETE, String(isComplete));
     set({ isSetupComplete: isComplete });
+    await setItem(StorageKeys.SETUP_COMPLETE, String(isComplete));
   },
 
   /**

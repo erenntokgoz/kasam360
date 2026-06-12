@@ -38,7 +38,8 @@ const DrawerNavigator = () => {
         drawerLabelStyle: { marginLeft: -16, fontSize: 15, fontWeight: '500' },
         drawerStyle: { width: 280, backgroundColor: 'transparent' },
         drawerType: 'front', 
-        overlayColor: 'transparent', 
+        overlayColor: 'rgba(0,0,0,0.5)',
+        swipeEdgeWidth: 30,
         sceneStyle: { backgroundColor: theme.colors.primary },
       }}
     >
@@ -87,7 +88,7 @@ const DrawerNavigator = () => {
         component={PersonnelExpensesScreen}
         options={{
           drawerLabel: 'Personel Giderleri',
-          drawerIcon: ({ color }) => <Icon name="users" size={20} color={color} />,
+          drawerIcon: ({ color }) => <Icon name="briefcase" size={20} color={color} />,
         }}
       />
       <Drawer.Screen
@@ -95,7 +96,7 @@ const DrawerNavigator = () => {
         component={EmployeeListScreen}
         options={{
           drawerLabel: 'Personel Listesi',
-          drawerIcon: ({ color }) => <Icon name="users" size={20} color={color} />,
+          drawerIcon: ({ color }) => <Icon name="clipboard" size={20} color={color} />,
         }}
       />
       <Drawer.Screen
@@ -127,14 +128,7 @@ const DrawerNavigator = () => {
           drawerItemStyle: { display: 'none' },
         }}
       />
-      <Drawer.Screen
-        name="Notifications"
-        component={NotificationsScreen}
-        options={{
-          drawerLabel: 'Bildirimler',
-          drawerIcon: ({ color }) => <Icon name="bell" size={20} color={color} />,
-        }}
-      />
+
       <Drawer.Screen
         name="Contacts"
         component={ContactsScreen}

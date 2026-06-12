@@ -19,7 +19,6 @@ const rateLimit = require('express-rate-limit');
 
 const connectDB = require('./src/config/db');
 const authRoutes = require('./src/routes/authRoutes');
-const ocrRoutes = require('./src/routes/ocrRoutes');
 const transactionRoutes = require('./src/routes/transactionRoutes');
 const debtRoutes = require('./src/routes/debtRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
@@ -37,14 +36,12 @@ app.use(helmet());
 app.use(mongoSanitize());
 app.use(morgan('dev'));
 
-// Router-level middleware: Allow 10mb only for OCR route
-app.use('/api/ocr', express.json({ limit: '10mb' }));
-app.use('/api/ocr', express.urlencoded({ extended: true, limit: '10mb' }));
+// Router-level middleware: Allow 10mb only for OCR route (REMOVED)
 
 app.use(express.json({ limit: '1mb' }));
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 500,
   message: { success: false, message: 'Too many requests. Try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -60,19 +57,11 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth', authLimiter);
 
-const ocrLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: { success: false, message: 'Too many OCR scans. Try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/ocr', ocrLimiter);
+
 
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
-app.use('/api/ocr', ocrRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/debts', debtRoutes);
 app.use('/api/audit-logs', auditLogRoutes);

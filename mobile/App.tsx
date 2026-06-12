@@ -22,7 +22,16 @@ import { useToastStore } from './src/store/useToastStore';
 import { useSecurityStore } from './src/store/useSecurityStore';
 import AppLockScreen from './src/screens/AppLockScreen';
 import { AppState, AppStateStatus } from 'react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 dakika cache süresi
+      retry: 1,
+    },
+  },
+});
 function App(): React.JSX.Element {
   const { isLocked, setLocked, pin } = useSecurityStore();
   useEffect(() => {
@@ -161,26 +170,9 @@ function App(): React.JSX.Element {
     };
   }, [pin, setLocked]);
 
-  // ── Auto-detect setup: if user has a token but setup flag is missing
-  //    Check backend for existing data whenever token becomes available.
   const token = useAuthStore((s) => s.token);
   const isSetupComplete = useSetupStore((s) => s.isSetupComplete);
   const setSetupComplete = useSetupStore((s) => s.setSetupComplete);
-
-  useEffect(() => {
-    if (token && !isSetupComplete) {
-      getTransactions(null, 1)
-        .then((result) => {
-          if (result.transactions.length > 0) {
-            setSetupComplete(true);
-          }
-        })
-        .catch((error) => {
-          console.error('[CRITICAL] Setup getTransactions hatası:', error);
-          setSetupComplete(false);
-        });
-    }
-  }, [token, isSetupComplete, setSetupComplete]);
 
   const theme = getTheme(isDarkMode);
 
@@ -198,31 +190,33 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <ErrorBoundary>
-      <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.primary }}>
-        <SafeAreaProvider>
-          <StatusBar
-            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-            backgroundColor="transparent"
-            translucent={true}
-          />
-          <RootNavigator />
-          {selectedDebt && (
-            <DebtDetailModal
-              visible={!!selectedDebt}
-              debt={selectedDebt}
-              onClose={() => setSelectedDebt(null)}
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.primary }}>
+          <SafeAreaProvider>
+            <StatusBar
+              barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+              backgroundColor="transparent"
+              translucent={true}
             />
-          )}
-          <Toast
-            message={message}
-            type={type}
-            visible={visible}
-            onHide={hideToast}
-          />
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
-    </ErrorBoundary>
+            <RootNavigator />
+            {selectedDebt && (
+              <DebtDetailModal
+                visible={!!selectedDebt}
+                debt={selectedDebt}
+                onClose={() => setSelectedDebt(null)}
+              />
+            )}
+            <Toast
+              message={message}
+              type={type}
+              visible={visible}
+              onHide={hideToast}
+            />
+          </SafeAreaProvider>
+        </GestureHandlerRootView>
+      </ErrorBoundary>
+    </QueryClientProvider>
   );
 }
 

@@ -89,19 +89,63 @@ const createDebt = async (req, res, next) => {
         relatedType = entry.roles.includes('STAFF') ? 'STAFF' : 'CONTACT';
       }
 
-      const [debt] = await Debt.create([{
-        tenantId,
-        entityName,
-        type,
-        totalAmount: amountInt,
-        remainingAmount: amountInt,
-        status: 'PENDING',
-        dueDate: dueDate ? new Date(dueDate) : null,
-        description: description ? String(description).trim() : null,
-        syncId: syncId || undefined,
-        relatedId,
-        relatedType
-      }], { session });
+      let existingDebt = null;
+      if (relatedId) {
+        existingDebt = await Debt.findOne({
+          tenantId,
+          relatedId,
+          status: 'PENDING',
+          isDeleted: false
+        }).session(session);
+      } else {
+        existingDebt = await Debt.findOne({
+          tenantId,
+          entityName,
+          status: 'PENDING',
+          isDeleted: false
+        }).collation({ locale: 'tr', strength: 2 }).session(session);
+      }
+
+      let debtDoc;
+      if (existingDebt) {
+        let oldBalance = existingDebt.type === 'GIVEN' ? existingDebt.remainingAmount : -existingDebt.remainingAmount;
+        let newAmount = type === 'GIVEN' ? amountInt : -amountInt;
+        let finalBalance = oldBalance + newAmount;
+
+        if (finalBalance === 0) {
+          existingDebt.status = 'PAID';
+          existingDebt.remainingAmount = 0;
+        } else if (finalBalance > 0) {
+          existingDebt.type = 'GIVEN';
+          existingDebt.remainingAmount = finalBalance;
+          existingDebt.totalAmount = finalBalance; 
+        } else {
+          existingDebt.type = 'TAKEN';
+          existingDebt.remainingAmount = Math.abs(finalBalance);
+          existingDebt.totalAmount = Math.abs(finalBalance);
+        }
+        
+        if (dueDate) existingDebt.dueDate = new Date(dueDate);
+        if (description) existingDebt.description = String(description).trim();
+        
+        await existingDebt.save({ session });
+        debtDoc = existingDebt;
+      } else {
+        const [debt] = await Debt.create([{
+          tenantId,
+          entityName,
+          type,
+          totalAmount: amountInt,
+          remainingAmount: amountInt,
+          status: 'PENDING',
+          dueDate: dueDate ? new Date(dueDate) : null,
+          description: description ? String(description).trim() : null,
+          syncId: syncId || undefined,
+          relatedId,
+          relatedType
+        }], { session });
+        debtDoc = debt;
+      }
 
       // Always create a transaction log for traceability, but only update balance if isCash is true
       const txType = type === 'GIVEN' ? 'EXPENSE' : 'INCOME';
@@ -131,13 +175,13 @@ const createDebt = async (req, res, next) => {
           : `${entityName} - Veresiye ${type === 'GIVEN' ? 'Alacak' : 'Borç'} Kaydı`),
         transactionDate: new Date(),
         balanceAfter,
-        relatedId: debt._id,
+        relatedId: debtDoc._id,
         relatedType: 'DEBT',
         directoryId: relatedId,
         directoryType: relatedType
       }], { session });
 
-      createdDebt = debt;
+      createdDebt = debtDoc;
     });
 
     session.endSession();
@@ -169,6 +213,7 @@ const getDebts = async (req, res, next) => {
     const filter = { tenantId: tenantObjectId, isDeleted: false };
     if (req.query.type && ['GIVEN', 'TAKEN'].includes(req.query.type)) filter.type = req.query.type;
     if (req.query.status && ['PENDING', 'PARTIAL', 'PAID', 'OVERDUE'].includes(req.query.status)) filter.status = req.query.status;
+    if (req.query.relatedId) filter.relatedId = req.query.relatedId;
 
     const [debts, total] = await Promise.all([
       Debt.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),

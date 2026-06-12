@@ -36,9 +36,9 @@ export const Skeleton = ({ width, height, borderRadius, style }: SkeletonProps) 
       style={[
         styles.skeleton,
         {
-          width: width || '100%',
-          height: height || 20,
-          borderRadius: borderRadius || tokens.radii.sm,
+          width: width === undefined ? '100%' : (width as any),
+          height: height === undefined ? 20 : (height as any),
+          borderRadius: borderRadius === undefined ? tokens.radii.sm : borderRadius,
           opacity: pulseAnim,
         },
         style,

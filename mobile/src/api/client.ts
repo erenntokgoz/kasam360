@@ -101,6 +101,16 @@ apiClient.interceptors.response.use(
       }
     }
 
+    // ── Subscription / Account errors (403) ─────────────────────────────────
+    if (error?.response?.status === 403) {
+      const code = error?.response?.data?.code;
+      const message: string = error?.response?.data?.message ?? 'Erişim reddedildi.';
+      const subscriptionError = new Error(message) as Error & { status?: number; code?: string };
+      subscriptionError.status = 403;
+      subscriptionError.code = code; // 'SUBSCRIPTION_EXPIRED' | 'ACCOUNT_SUSPENDED'
+      return Promise.reject(subscriptionError);
+    }
+
     const message: string =
       error?.response?.data?.message ??
       error?.message ??

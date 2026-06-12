@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { useContactStore } from '../store/useContactStore';
 import { useStaffStore } from '../store/useStaffStore';
+import type { Transaction } from '../api/transactionService';
 
 interface AddTransactionModalProps {
   visible: boolean;
@@ -20,16 +21,17 @@ interface AddTransactionModalProps {
   initialType?: MainType;
   initialSubType?: string;
   initialWho?: string;
+  editTransaction?: any;
 }
 
 type Step = 'TYPE' | 'AMOUNT' | 'SUBTYPE' | 'METHOD' | 'WHO' | 'DATE' | 'DESC';
 export type MainType = 'BORÇ' | 'ALACAK' | 'GELİR' | 'GİDER';
 
-const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialType, initialSubType, initialWho }) => {
+const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onClose, initialType, initialSubType, initialWho, editTransaction }) => {
   const { t } = useTranslation();
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
-  const { addTransaction, isCreating } = useLedgerStore();
+  const { addTransaction, updateTransaction, isCreating } = useLedgerStore();
   const { addDebt } = useDebtStore();
   const { contacts, addContact } = useContactStore();
   const { staffList, addStaff } = useStaffStore();
@@ -56,8 +58,15 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
       setMethod('CASH');
       setDescription('');
       setIsCash(false);
+      
+      if (editTransaction) {
+        setAmount((editTransaction.amount / 100).toString());
+        setMethod(editTransaction.method);
+        setDate(new Date(editTransaction.transactionDate));
+        setDescription(editTransaction.description || '');
+      }
     }
-  }, [visible, initialType, initialSubType, initialWho]);
+  }, [visible, initialType, initialSubType, initialWho, editTransaction]);
 
   const handleSelectPerson = async (name: string) => {
     setWho(name);
@@ -123,12 +132,12 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
 
       if (who) {
         if (mainType === 'GİDER' && subType === 'Personel Gideri') {
-          const exists = staffList.find(s => s.name.toLowerCase() === who.trim().toLowerCase());
+          const exists = staffList.find(s => s.name.trim().localeCompare(who.trim(), 'tr', { sensitivity: 'base' }) === 0);
           if (!exists) {
             try { await addStaff(who.trim()); } catch (e) { }
           }
         } else if (who.trim() !== 'Kişisel Gider' && who.trim() !== 'İşletme Gideri') {
-          const exists = contacts.find(c => c.name.toLowerCase() === who.trim().toLowerCase());
+          const exists = contacts.find(c => c.name.trim().localeCompare(who.trim(), 'tr', { sensitivity: 'base' }) === 0);
           if (!exists) {
             try { await addContact(who.trim()); } catch (e) { }
           }
@@ -315,6 +324,28 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
     }
   };
 
+  const handleEditSubmit = async () => {
+    if (!editTransaction) return;
+    const numericAmount = parseFloat(amount.replace(',', '.'));
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      Alert.alert('Hata', 'Lütfen geçerli bir tutar giriniz.');
+      return;
+    }
+    const cents = Math.round(numericAmount * 100);
+
+    try {
+      await updateTransaction(editTransaction._id, {
+        amount: cents,
+        method: method,
+        description: description,
+        transactionDate: date.toISOString(),
+      });
+      onClose();
+    } catch (err: any) {
+      Alert.alert('Hata', err?.message || 'İşlem güncellenemedi.');
+    }
+  };
+
   if (!visible) return null;
 
   return (
@@ -323,14 +354,50 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.content, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
           <View style={styles.header}>
-            <Pressable onPress={step === 'TYPE' ? onClose : handleBack} hitSlop={12}>
-              <Icon name={step === 'TYPE' ? 'x' : 'arrow-left'} size={24} color={theme.colors.textPrimary} />
+            <Pressable onPress={step === 'TYPE' || editTransaction ? onClose : handleBack} hitSlop={12}>
+              <Icon name={step === 'TYPE' || editTransaction ? 'x' : 'arrow-left'} size={24} color={theme.colors.textPrimary} />
             </Pressable>
-            <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Yeni İşlem</Text>
+            <Text style={[styles.title, { color: theme.colors.textPrimary }]}>{editTransaction ? 'İşlemi Düzenle' : 'Yeni İşlem'}</Text>
             <View style={{ width: 24 }} />
           </View>
 
           <View style={styles.stepContainer}>
+            {editTransaction ? (
+              <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
+                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                  <Text style={[styles.stepLabel, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Tutar:</Text>
+                  <TextInput
+                    style={[styles.bigInput, { color: theme.colors.textPrimary, marginBottom: 24 }]}
+                    placeholder="0.00 ₺"
+                    placeholderTextColor={theme.colors.textTertiary}
+                    keyboardType="decimal-pad"
+                    value={amount}
+                    onChangeText={setAmount}
+                  />
+
+                  <Text style={[styles.stepLabel, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Ödeme Yöntemi:</Text>
+                  <View style={[styles.subtypeList, { marginBottom: 24 }]}>
+                    <SubtypeItem label="Nakit" icon="dollar-sign" active={method === 'CASH'} onSelect={() => setMethod('CASH')} theme={theme} />
+                    <SubtypeItem label="POS" icon="credit-card" active={method === 'POS'} onSelect={() => setMethod('POS')} theme={theme} />
+                    <SubtypeItem label="Havale" icon="send" active={method === 'IBAN'} onSelect={() => setMethod('IBAN')} theme={theme} />
+                    <SubtypeItem label="Veresiye" icon="book-open" active={method === 'VERESİYE'} onSelect={() => setMethod('VERESİYE')} theme={theme} />
+                  </View>
+
+                  <Text style={[styles.stepLabel, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Tarih:</Text>
+                  <View style={{ alignItems: 'center', marginBottom: 24 }}>
+                    <DatePicker date={date} onDateChange={setDate} mode="date" locale="tr" theme={isDarkMode ? 'dark' : 'light'} />
+                  </View>
+
+                  <Text style={[styles.stepLabel, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Açıklama:</Text>
+                  <TextInput style={[styles.input, { color: theme.colors.textPrimary, borderBottomColor: theme.colors.border }]} placeholder="Bir şeyler yazın..." placeholderTextColor={theme.colors.textTertiary} value={description} onChangeText={setDescription} />
+
+                  <Pressable style={[styles.finishBtn, { backgroundColor: theme.colors.accent, marginTop: 24 }]} onPress={handleEditSubmit} disabled={isCreating}>
+                    {isCreating ? <ActivityIndicator color="#fff" /> : <Text style={styles.finishBtnText}>GÜNCELLE</Text>}
+                  </Pressable>
+                </ScrollView>
+              </Animated.View>
+            ) : (
+              <>
             {step === 'TYPE' && (
               <Animated.View entering={FadeInRight} exiting={FadeOutLeft} style={styles.stepContent}>
                 <Text style={[styles.stepLabel, { color: theme.colors.textSecondary }]}>İşlem tipi seçiniz:</Text>
@@ -415,7 +482,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                     onChangeText={setWho}
                   />
                 </View>
-                <ScrollView style={{ maxHeight: 200, marginBottom: 12 }}>
+                <ScrollView style={{ maxHeight: 200, marginBottom: 12 }} keyboardShouldPersistTaps="handled">
                   {mainType === 'GİDER' && subType === 'Personel Gideri' ? (
                     <>
                       {staffList.filter(s => s.name.toLowerCase().includes(who.toLowerCase())).map(s => (
@@ -474,6 +541,8 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ visible, onCl
                   {isCreating ? <ActivityIndicator color="#fff" /> : <Text style={styles.finishBtnText}>İŞLEMİ TAMAMLA</Text>}
                 </Pressable>
               </Animated.View>
+            )}
+            </>
             )}
           </View>
         </View>

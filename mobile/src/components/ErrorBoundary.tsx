@@ -10,7 +10,7 @@ export class ErrorBoundary extends React.Component<{children: React.ReactNode}, 
       return (
         <View style={styles.container}>
           <Text style={styles.title}>Kritik Hata</Text>
-          <Text style={styles.text}>{this.state.error?.message}</Text>
+          <Text style={styles.text}>{this.state.error ? (this.state.error as Error).message : 'Bilinmeyen Hata'}</Text>
         </View>
       );
     }

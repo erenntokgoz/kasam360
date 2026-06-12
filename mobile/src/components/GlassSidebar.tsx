@@ -59,12 +59,9 @@ const GlassSidebar: React.FC<DrawerContentComponentProps> = (props) => {
         contentContainerStyle={{ paddingHorizontal: theme.spacing.md, paddingTop: insets.top + theme.spacing.lg }}
       >
         <View style={{ alignItems: 'center', marginBottom: theme.spacing.xl }}>
-          <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: theme.colors.accentTransparent, alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.sm }}>
-            <Icon name="layers" size={22} color={theme.colors.accent} />
-          </View>
           <Image source={require('../assets/logo-text.png')} style={{ width: 160, height: 40, resizeMode: 'contain' }} />
           {user?.businessName && (
-            <Text style={{ fontFamily: theme.fonts.regular, fontSize: theme.fontSizes.xs, color: theme.colors.textTertiary, marginTop: 2 }} numberOfLines={1}>{user.businessName}</Text>
+            <Text style={{ fontFamily: theme.fonts.semiBold, fontSize: theme.fontSizes.sm, color: theme.colors.textPrimary, marginTop: 8 }} numberOfLines={1}>{user.businessName}</Text>
           )}
         </View>
 

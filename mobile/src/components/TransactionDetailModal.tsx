@@ -10,9 +10,10 @@ interface TransactionDetailModalProps {
   visible: boolean;
   transaction: Transaction;
   onClose: () => void;
+  onEdit?: () => void;
 }
 
-const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ visible, transaction, onClose }) => {
+const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ visible, transaction, onClose, onEdit }) => {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
 
@@ -70,9 +71,16 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ visible
             </View>
           )}
 
-          <Pressable style={[styles.closeBtn, { backgroundColor: theme.colors.card }]} onPress={onClose}>
-            <Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>Kapat</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 32, gap: 12 }}>
+            <Pressable style={[styles.closeBtn, { backgroundColor: theme.colors.card, flex: 1 }]} onPress={onClose}>
+              <Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>Kapat</Text>
+            </Pressable>
+            {onEdit && (
+              <Pressable style={[styles.closeBtn, { backgroundColor: theme.colors.accent, flex: 1 }]} onPress={onEdit}>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Düzenle</Text>
+              </Pressable>
+            )}
+          </View>
         </Pressable>
       </Pressable>
     </Modal>

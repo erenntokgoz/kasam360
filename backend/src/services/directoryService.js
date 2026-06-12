@@ -94,13 +94,12 @@ const createEntry = async (tenantId, data) => {
   }
 
   const trimmedName = name.trim();
-  const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   let entry = await Directory.findOne({ 
     tenantId, 
-    name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
+    name: trimmedName,
     isDeleted: false
-  });
+  }).collation({ locale: 'tr', strength: 2 });
 
   if (entry) {
     if (!entry.roles.includes(type)) {

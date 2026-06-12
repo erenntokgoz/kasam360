@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Modal, TextInput } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -9,21 +9,20 @@ import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useDebtStore } from '../store/useDebtStore';
 import { useLedgerStore } from '../store/useLedgerStore';
+import { useStaffStore } from '../store/useStaffStore';
+import { getDebts } from '../api/debtService';
+import { getTransactions, Transaction } from '../api/transactionService';
 import type { Debt } from '../api/debtService';
-import type { Transaction } from '../api/transactionService';
 import { PaymentModal } from './DebtsScreen';
 import { formatCurrency, formatDate } from '../utils/format';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import DebtDetailModal from '../components/DebtDetailModal';
 import AddTransactionModal from '../components/AddTransactionModal';
-import AddCard from '../components/AddCard';
 import { EmptyState } from '../components/EmptyState';
 
 type ParamList = {
-  ContactDetail: { contactName: string };
+  ContactDetail: { contactName: string, contactId: string };
 };
-
-
 
 const ContactDetailScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -33,35 +32,42 @@ const ContactDetailScreen: React.FC = () => {
   const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDarkMode);
   
-  const { contactName, contactId } = route.params as any;
-  const { debts, fetchDebts } = useDebtStore();
-  const { transactions, fetchTransactions } = useLedgerStore();
+  const { contactName, contactId } = route.params;
+  const { fetchDebts } = useDebtStore();
+  const { fetchTransactions } = useLedgerStore();
+  const { updateStaff } = useStaffStore();
   
   const [payTarget, setPayTarget] = useState<Debt | null>(null);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
  
+  const [localDebts, setLocalDebts] = useState<Debt[]>([]);
+  const [localTransactions, setLocalTransactions] = useState<Transaction[]>([]);
+  const [isEditingContact, setIsEditingContact] = useState(false);
+  const [editName, setEditName] = useState(contactName);
+
+  const fetchContactData = useCallback(async () => {
+    try {
+      if (!contactId && !contactName) return;
+
+      const [debtsData, txData] = await Promise.all([
+        getDebts(1, 100, undefined, undefined, contactId),
+        getTransactions(null, 100, { relatedId: contactId, search: contactId ? undefined : contactName })
+      ]);
+      setLocalDebts(debtsData.debts);
+      setLocalTransactions(txData.transactions);
+    } catch (e) {
+      console.error('[ContactDetailScreen] fetchContactData error:', e);
+    }
+  }, [contactId, contactName]);
+
   useEffect(() => {
-    fetchDebts(1).catch(() => {});
-    fetchTransactions(null).catch(() => {});
-  }, [fetchDebts, fetchTransactions]);
+    fetchContactData();
+  }, [fetchContactData]);
  
-  const contactDebts = useMemo(() => {
-    return debts
-      .filter(d => (contactId ? d.relatedId === contactId : d.entityName === contactName))
-      .sort((a, b) => {
-        const dateA = new Date(a.createdAt || a.dueDate || 0).getTime();
-        const dateB = new Date(b.createdAt || b.dueDate || 0).getTime();
-        return dateB - dateA;
-      });
-  }, [debts, contactName, contactId]);
- 
-  const contactTransactions = useMemo(() => {
-    return transactions
-      .filter((t: Transaction) => (contactId ? (t.directoryId === contactId || t.relatedId === contactId) : (t.description?.includes(contactName) || t.category?.includes(contactName))))
-      .sort((a: Transaction, b: Transaction) => new Date(b.transactionDate || b.createdAt).getTime() - new Date(a.transactionDate || a.createdAt).getTime());
-  }, [transactions, contactName, contactId]);
+  const contactDebts = localDebts;
+  const contactTransactions = localTransactions;
 
   const { totalGiven, totalTaken, netStatus } = useMemo(() => {
     let given = 0;
@@ -73,7 +79,7 @@ const ContactDetailScreen: React.FC = () => {
     return {
       totalGiven: given,
       totalTaken: taken,
-      netStatus: given - taken, // positive means they owe us
+      netStatus: given - taken,
     };
   }, [contactDebts]);
 
@@ -157,27 +163,30 @@ const ContactDetailScreen: React.FC = () => {
     
     try {
       await Share.open({ message });
-    } catch (err) {
-      // User cancelled or error
-    }
+    } catch (err) {}
   };
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
       
-      {/* Header */}
       <View style={styles.header}>
         <Pressable hitSlop={12} onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Icon name="arrow-left" size={22} color={theme.colors.textPrimary} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]} numberOfLines={1}>{contactName}</Text>
-        <Pressable hitSlop={12} onPress={handleShare}>
-          <Icon name="share-2" size={22} color={theme.colors.accent} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          {contactId && (
+            <Pressable hitSlop={12} onPress={() => { setEditName(contactName); setIsEditingContact(true); }}>
+              <Icon name="edit-2" size={20} color={theme.colors.textSecondary} />
+            </Pressable>
+          )}
+          <Pressable hitSlop={12} onPress={handleShare}>
+            <Icon name="share-2" size={20} color={theme.colors.accent} />
+          </Pressable>
+        </View>
       </View>
 
-      {/* Summary Card */}
       <View style={styles.cardContainer}>
         <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, padding: theme.spacing.xl }]}>
           <View style={styles.cardTop}>
@@ -201,7 +210,6 @@ const ContactDetailScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Transactions List */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginBottom: 16 }}>
         <Text style={[styles.listTitle, { color: theme.colors.textPrimary, paddingHorizontal: 0, marginBottom: 0 }]}>İşlemler & Borçlar</Text>
         <Pressable 
@@ -234,6 +242,10 @@ const ContactDetailScreen: React.FC = () => {
           visible={!!selectedTx} 
           transaction={selectedTx} 
           onClose={() => setSelectedTx(null)} 
+          onEdit={() => {
+            setSelectedTx(null);
+            setTimeout(() => { setShowAddModal(true); }, 300);
+          }}
         />
       )}
       {selectedDebt && (
@@ -246,10 +258,41 @@ const ContactDetailScreen: React.FC = () => {
       )}
       <AddTransactionModal 
         visible={showAddModal} 
-        onClose={() => { setShowAddModal(false); fetchDebts(1); fetchTransactions(null); }} 
+        onClose={() => { setShowAddModal(false); fetchContactData(); }} 
         initialType="BORÇ"
         initialWho={contactName}
+        editTransaction={selectedTx}
       />
+      
+      <Modal visible={isEditingContact} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setIsEditingContact(false)}>
+          <Pressable style={[styles.modalContent, { backgroundColor: theme.colors.surface }]} onPress={e => e.stopPropagation()}>
+            <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>Kişi Adını Düzenle</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.colors.card, color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Ad Soyad"
+              placeholderTextColor={theme.colors.textTertiary}
+            />
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+              <Pressable style={[styles.btn, { backgroundColor: theme.colors.card, flex: 1 }]} onPress={() => setIsEditingContact(false)}>
+                <Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>İptal</Text>
+              </Pressable>
+              <Pressable style={[styles.btn, { backgroundColor: theme.colors.accent, flex: 1 }]} onPress={async () => {
+                if (!editName.trim() || !contactId) return;
+                try {
+                  await updateStaff(contactId, { name: editName.trim() });
+                  setIsEditingContact(false);
+                  navigation.setParams({ contactName: editName.trim() } as any);
+                } catch(e) {}
+              }}>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Kaydet</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 };

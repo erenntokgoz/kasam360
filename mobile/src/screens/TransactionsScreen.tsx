@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
@@ -48,30 +48,29 @@ const TransactionRow: React.FC<{ item: Transaction; onPress: (t: Transaction) =>
 const TransactionsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { transactions, isLoading, fetchTransactions, totalIncome, totalExpense, deleteTransaction } = useLedgerStore();
+  const { transactions, isLoading, fetchTransactions, loadMoreTransactions, totalIncome, totalExpense, deleteTransaction } = useLedgerStore();
   const { showToast } = useToastStore();
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editTx, setEditTx] = useState<Transaction | undefined>(undefined);
   
   const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>({ start: null, end: null });
   const [contactFilter, setContactFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
 
-  useEffect(() => { fetchTransactions(null).catch(() => { }); }, [fetchTransactions]);
-
-  const filteredData = useMemo(() => transactions.filter(t => {
-    if (contactFilter && !t.description?.toLowerCase().includes(contactFilter.toLowerCase()) && !t.category?.toLowerCase().includes(contactFilter.toLowerCase())) return false;
-    if (dateFilter.start) {
-      const d = new Date(t.transactionDate || t.createdAt);
-      if (d < dateFilter.start) return false;
-    }
-    if (dateFilter.end) {
-      const d = new Date(t.transactionDate || t.createdAt);
-      if (d > dateFilter.end) return false;
-    }
-    return true;
-  }), [transactions, contactFilter, dateFilter]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchTransactions(null, 20, {
+        type: typeFilter,
+        search: contactFilter || undefined,
+        startDate: dateFilter.start ? dateFilter.start.toISOString() : undefined,
+        endDate: dateFilter.end ? dateFilter.end.toISOString() : undefined,
+      }).catch(() => {});
+    }, 400); // 400ms debounce
+    return () => clearTimeout(timer);
+  }, [contactFilter, dateFilter, typeFilter, fetchTransactions]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
@@ -85,7 +84,7 @@ const TransactionsScreen: React.FC = () => {
       </View>
 
       <FlatList
-        data={filteredData}
+        data={transactions}
         renderItem={({ item }) => (
           <SwipeRow onDelete={() => {
             Alert.alert('İşlemi Sil', 'Bu işlemi silmek istediğinize emin misiniz?', [
@@ -123,6 +122,7 @@ const TransactionsScreen: React.FC = () => {
               <FilterBar 
                 onDateChange={(start, end) => setDateFilter({ start, end })}
                 onContactChange={setContactFilter}
+                onTypeChange={setTypeFilter}
               />
             </View>
             <View style={{ marginTop: 16 }}>
@@ -130,7 +130,7 @@ const TransactionsScreen: React.FC = () => {
                 title="Yeni Gelir/Gider Ekle" 
                 subtitle="Kasa giriş veya çıkış işlemi yapın" 
                 icon="plus-circle" 
-                onPress={() => setShowAddModal(true)} 
+                onPress={() => { setEditTx(undefined); setShowAddModal(true); }} 
               />
             </View>
           </View>
@@ -148,6 +148,9 @@ const TransactionsScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         onRefresh={() => fetchTransactions(null)}
         refreshing={isLoading}
+        onEndReached={loadMoreTransactions}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={isLoading && transactions.length > 0 ? <ActivityIndicator size="small" color={theme.colors.accent} style={{ margin: 20 }} /> : null}
       />
 
       {selectedTx && (
@@ -155,9 +158,20 @@ const TransactionsScreen: React.FC = () => {
           visible={!!selectedTx}
           transaction={selectedTx}
           onClose={() => setSelectedTx(null)}
+          onEdit={() => {
+            setSelectedTx(null);
+            setTimeout(() => {
+              setEditTx(selectedTx);
+              setShowAddModal(true);
+            }, 300);
+          }}
         />
       )}
-      <AddTransactionModal visible={showAddModal} onClose={() => { setShowAddModal(false); fetchTransactions(null); }} />
+      <AddTransactionModal 
+        visible={showAddModal} 
+        editTransaction={editTx}
+        onClose={() => { setShowAddModal(false); setEditTx(undefined); fetchTransactions(null); }} 
+      />
     </View>
   );
 };

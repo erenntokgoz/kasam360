@@ -52,6 +52,8 @@ export interface TransactionFilters {
   startDate?: string;
   endDate?: string;
   categories?: string[];
+  search?: string;
+  relatedId?: string;
 }
 
 export interface TransactionPagination {
@@ -95,7 +97,7 @@ export const getTransactions = async (
   filters?: TransactionFilters,
 ): Promise<GetTransactionsResponse['data']> => {
   const params: Record<string, string | number> = { limit };
-  
+
   if (cursor) params.cursor = cursor;
   if (filters?.type && filters.type !== 'ALL') params.type = filters.type;
   if (filters?.startDate) params.startDate = filters.startDate;
@@ -103,6 +105,8 @@ export const getTransactions = async (
   if (filters?.categories && filters.categories.length > 0) {
     params.categories = filters.categories.join(',');
   }
+  if (filters?.search) params.search = filters.search;
+  if (filters?.relatedId) params.relatedId = filters.relatedId;
 
   const { data } = await apiClient.get<GetTransactionsResponse>(
     '/api/transactions',

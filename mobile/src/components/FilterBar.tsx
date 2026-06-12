@@ -8,15 +8,17 @@ import { useContactStore } from '../store/useContactStore';
 interface FilterBarProps {
   onDateChange: (start: Date | null, end: Date | null) => void;
   onContactChange: (contactName: string | null) => void;
+  onTypeChange?: (type: 'ALL' | 'INCOME' | 'EXPENSE') => void;
   showContactFilter?: boolean;
 }
 
-const FilterBar: React.FC<FilterBarProps> = ({ onDateChange, onContactChange, showContactFilter = true }) => {
+const FilterBar: React.FC<FilterBarProps> = ({ onDateChange, onContactChange, onTypeChange, showContactFilter = true }) => {
   const isDark = useThemeStore((s) => s.isDarkMode);
   const theme = getTheme(isDark);
   const { contacts } = useContactStore();
   
-  const [selectedRange, setSelectedRange] = useState<'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'CUSTOM'>('ALL');
+  const [selectedRange, setSelectedRange] = useState<'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'CUSTOM'>('MONTH');
+  const [selectedType, setSelectedType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
 
@@ -86,6 +88,37 @@ const FilterBar: React.FC<FilterBarProps> = ({ onDateChange, onContactChange, sh
           </Pressable>
         )}
       </ScrollView>
+
+      {onTypeChange && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { marginTop: 8 }]}>
+          <Pressable
+            style={[styles.chip, { backgroundColor: selectedType === 'ALL' ? theme.colors.accent : theme.colors.surface }]}
+            onPress={() => { setSelectedType('ALL'); onTypeChange('ALL'); }}
+          >
+            <Text style={[styles.chipText, { color: selectedType === 'ALL' ? '#fff' : theme.colors.textSecondary }]}>
+              Tüm İşlemler
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.chip, { backgroundColor: selectedType === 'INCOME' ? theme.colors.success : theme.colors.surface }]}
+            onPress={() => { setSelectedType('INCOME'); onTypeChange('INCOME'); }}
+          >
+            <Icon name="arrow-down-left" size={14} color={selectedType === 'INCOME' ? '#fff' : theme.colors.success} style={{ marginRight: 4 }} />
+            <Text style={[styles.chipText, { color: selectedType === 'INCOME' ? '#fff' : theme.colors.textSecondary }]}>
+              Sadece Gelir
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.chip, { backgroundColor: selectedType === 'EXPENSE' ? theme.colors.danger : theme.colors.surface }]}
+            onPress={() => { setSelectedType('EXPENSE'); onTypeChange('EXPENSE'); }}
+          >
+            <Icon name="arrow-up-right" size={14} color={selectedType === 'EXPENSE' ? '#fff' : theme.colors.danger} style={{ marginRight: 4 }} />
+            <Text style={[styles.chipText, { color: selectedType === 'EXPENSE' ? '#fff' : theme.colors.textSecondary }]}>
+              Sadece Gider
+            </Text>
+          </Pressable>
+        </ScrollView>
+      )}
 
       <Modal visible={showFilterModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>

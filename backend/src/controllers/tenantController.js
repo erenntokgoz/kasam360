@@ -42,6 +42,20 @@ const updateSetup = async (req, res, next) => {
         { new: true, session }
       );
 
+      // Açılış Bakiyesi için Sistem İşlem Kaydı
+      if (obs > 0) {
+        await Transaction.create([{
+          tenantId,
+          type: 'INCOME',
+          amount: obs,
+          currency: 'TRY',
+          method: 'CASH',
+          category: 'Açılış Bakiyesi',
+          description: 'Sistem kurulumunda girilen açılış bakiyesi',
+          transactionDate: new Date()
+        }], { session });
+      }
+
       // Açılış Borçları için Sistem Kaydı
       if (odb > 0) {
         await Debt.create([{

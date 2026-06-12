@@ -329,6 +329,12 @@ const PersonnelExpensesScreen: React.FC = () => {
           visible={!!selectedTx}
           transaction={selectedTx}
           onClose={() => setSelectedTx(null)}
+          onEdit={() => {
+            setSelectedTx(null);
+            setTimeout(() => {
+              setShowAddModal(true);
+            }, 300);
+          }}
         />
       )}
     </View>

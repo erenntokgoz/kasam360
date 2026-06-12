@@ -27,20 +27,45 @@ const getTransactions = async (req, res, next) => {
     }
 
     const filter = { ...baseFilter };
+    const andConditions = [];
+
+    if (req.query.search) {
+      andConditions.push({
+        $or: [
+          { description: { $regex: req.query.search, $options: 'i' } },
+          { category: { $regex: req.query.search, $options: 'i' } }
+        ]
+      });
+    }
+
+    if (req.query.relatedId) {
+      andConditions.push({
+        $or: [
+          { directoryId: req.query.relatedId },
+          { relatedId: req.query.relatedId }
+        ]
+      });
+    }
 
     if (req.query.cursor) {
       try {
         const decoded = JSON.parse(Buffer.from(req.query.cursor, 'base64').toString('utf8'));
         if (decoded.date && decoded.id) {
-          filter.$or = [
-            { transactionDate: { $lt: new Date(decoded.date) } },
-            {
-              transactionDate: new Date(decoded.date),
-              _id: { $lt: new mongoose.Types.ObjectId(decoded.id) }
-            }
-          ];
+          andConditions.push({
+            $or: [
+              { transactionDate: { $lt: new Date(decoded.date) } },
+              {
+                transactionDate: new Date(decoded.date),
+                _id: { $lt: new mongoose.Types.ObjectId(decoded.id) }
+              }
+            ]
+          });
         }
       } catch (e) { }
+    }
+
+    if (andConditions.length > 0) {
+      filter.$and = andConditions;
     }
 
     const [transactions, total, tenant] = await Promise.all([
@@ -142,9 +167,9 @@ const createTransaction = async (req, res, next) => {
             const Directory = require('../models/Directory');
             const match = await Directory.findOne({
               tenantId,
-              name: { $regex: new RegExp(`^${description.split(' - ')[0].trim()}$`, 'i') },
+              name: description.split(' - ')[0].trim(),
               isDeleted: false
-            }).session(session);
+            }).collation({ locale: 'tr', strength: 2 }).session(session);
             if (match) {
               finalDirId = match._id;
               finalDirType = match.roles.includes('STAFF') ? 'STAFF' : 'CONTACT';
@@ -174,15 +199,15 @@ const createTransaction = async (req, res, next) => {
         }
       }
 
-      if (!finalDirId && description && (category === 'Personel Gideri' || category === 'İşletme Gideri')) {
+      if (!finalDirId && description && (category === 'Personel Gideri' || category === 'İşletme Gideri' || method === 'VERESİYE')) {
         const Directory = require('../models/Directory');
         const entityName = description.split(' - ')[0].trim();
         if (entityName && entityName.length > 0 && entityName !== 'Kişisel Gider') {
           let entry = await Directory.findOne({
             tenantId,
-            name: { $regex: new RegExp(`^${entityName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            name: entityName,
             isDeleted: false
-          }).session(session);
+          }).collation({ locale: 'tr', strength: 2 }).session(session);
 
           if (!entry) {
             const roleType = category === 'Personel Gideri' ? 'STAFF' : 'CONTACT';
@@ -220,19 +245,61 @@ const createTransaction = async (req, res, next) => {
           if (dirEntry) entityName = dirEntry.name;
         }
 
-        const [debt] = await Debt.create([{
-          tenantId,
-          entityName,
-          type: debtType,
-          totalAmount: amountInt,
-          remainingAmount: amountInt,
-          status: 'PENDING',
-          description: description || 'Otomatik oluşturulan veresiye',
-          relatedId: finalDirId,
-          relatedType: finalDirType,
-        }], { session });
+        let existingDebt = null;
+        if (finalDirId) {
+          existingDebt = await Debt.findOne({
+            tenantId,
+            relatedId: finalDirId,
+            status: 'PENDING',
+            isDeleted: false
+          }).session(session);
+        } else {
+          existingDebt = await Debt.findOne({
+            tenantId,
+            entityName,
+            status: 'PENDING',
+            isDeleted: false
+          }).collation({ locale: 'tr', strength: 2 }).session(session);
+        }
 
-        finalRelatedId = debt._id;
+        let debtDoc;
+        if (existingDebt) {
+          let oldBalance = existingDebt.type === 'GIVEN' ? existingDebt.remainingAmount : -existingDebt.remainingAmount;
+          let newAmount = debtType === 'GIVEN' ? amountInt : -amountInt;
+          let finalBalance = oldBalance + newAmount;
+
+          if (finalBalance === 0) {
+            existingDebt.status = 'PAID';
+            existingDebt.remainingAmount = 0;
+          } else if (finalBalance > 0) {
+            existingDebt.type = 'GIVEN';
+            existingDebt.remainingAmount = finalBalance;
+            existingDebt.totalAmount = finalBalance; 
+          } else {
+            existingDebt.type = 'TAKEN';
+            existingDebt.remainingAmount = Math.abs(finalBalance);
+            existingDebt.totalAmount = Math.abs(finalBalance);
+          }
+          
+          existingDebt.description = description || 'Otomatik oluşturulan veresiye';
+          await existingDebt.save({ session });
+          debtDoc = existingDebt;
+        } else {
+          const [debt] = await Debt.create([{
+            tenantId,
+            entityName,
+            type: debtType,
+            totalAmount: amountInt,
+            remainingAmount: amountInt,
+            status: 'PENDING',
+            description: description || 'Otomatik oluşturulan veresiye',
+            relatedId: finalDirId,
+            relatedType: finalDirType,
+          }], { session });
+          debtDoc = debt;
+        }
+
+        finalRelatedId = debtDoc._id;
         finalRelatedType = 'DEBT';
       }
 

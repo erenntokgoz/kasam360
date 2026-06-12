@@ -12,13 +12,13 @@ export default function EmployeeListScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.primary }]}>
-      <Text style={[styles.header, { color: theme.colors.text }]}>Personel Yönetimi</Text>
+      <Text style={[styles.header, { color: theme.colors.textPrimary }]}>Personel Yönetimi</Text>
       
       <FlatList
         data={emptyData}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={{ color: theme.colors.textMuted }}>Kayıtlı personel bulunamadı.</Text>
+            <Text style={{ color: theme.colors.textSecondary }}>Kayıtlı personel bulunamadı.</Text>
           </View>
         }
         renderItem={({ item }) => <View />}

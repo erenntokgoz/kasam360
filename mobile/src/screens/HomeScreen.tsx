@@ -7,7 +7,6 @@ import { launchCamera } from 'react-native-image-picker';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useLedgerStore } from '../store/useLedgerStore';
-import { scanReceipt } from '../api/ocrService';
 import type { Transaction } from '../api/transactionService';
 import { useContactStore } from '../store/useContactStore';
 import { useStaffStore } from '../store/useStaffStore';
@@ -121,10 +120,10 @@ const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
-  const [isScanning, setIsScanning] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editTx, setEditTx] = useState<Transaction | undefined>(undefined);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-  const { transactions, totalIncome, totalExpense, totalDebt, totalReceivable, balance, isLoading, fetchTransactions, addTransaction } = useLedgerStore();
+  const { transactions, totalIncome, totalExpense, totalDebt, totalReceivable, balance, isLoading, pagination, fetchTransactions, addTransaction, loadMoreTransactions } = useLedgerStore();
   const fetchContacts = useContactStore(s => s.fetchContacts);
   const fetchStaff = useStaffStore(s => s.fetchStaff);
   
@@ -133,50 +132,28 @@ const HomeScreen: React.FC = () => {
 
   const [dateFilter, setDateFilter] = useState<{start: Date | null, end: Date | null}>(() => {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-    return { start, end };
+    const start = new Date(now.setMonth(now.getMonth() - 1));
+    return { start, end: new Date() };
   });
   const [contactFilter, setContactFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
 
   useEffect(() => { 
-    fetchTransactions(null).catch(() => { });
+    const timer = setTimeout(() => {
+      fetchTransactions(null, 20, {
+        type: typeFilter !== 'ALL' ? typeFilter : undefined,
+        search: contactFilter || undefined,
+        startDate: dateFilter.start ? dateFilter.start.toISOString() : undefined,
+        endDate: dateFilter.end ? dateFilter.end.toISOString() : undefined,
+      }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [fetchTransactions, contactFilter, dateFilter, typeFilter]);
+
+  useEffect(() => { 
     fetchContacts();
     fetchStaff();
-  }, [fetchTransactions, fetchContacts, fetchStaff]);
-
-  const handleScanReceipt = useCallback(async () => {
-    try {
-      const result = await launchCamera({ mediaType: 'photo', includeBase64: true, quality: 0.8, maxWidth: 1920, maxHeight: 1920 });
-      if (result.didCancel || !result.assets?.[0]?.base64) return;
-      setIsScanning(true);
-      const ocrResult = await scanReceipt(result.assets[0].base64);
-      if (!ocrResult.amount) {
-        Alert.alert('Hata', 'Fiş üzerinde tutar bulunamadı.');
-        return;
-      }
-      Alert.alert('Fiş Tarandı', `Tutar: ₺${ocrResult.amountDisplay.toFixed(2)}`, [
-        { text: 'İptal', style: 'cancel' },
-        { text: 'Gider Ekle', onPress: () => addTransaction({ type: 'EXPENSE', amount: ocrResult.amount, method: 'CASH', category: 'Fiş Tarama', description: 'Kamera ile tarandı', transactionDate: ocrResult.date || undefined }) },
-      ]);
-    } catch (err) { Alert.alert('Hata', 'Fiş taranırken bir hata oluştu.'); }
-    finally { setIsScanning(false); }
-  }, [addTransaction]);
-
-  const filteredTransactions = useMemo(() => transactions.filter(t => {
-    if (contactFilter && !t.description?.toLowerCase().includes(contactFilter.toLowerCase()) && !t.category?.toLowerCase().includes(contactFilter.toLowerCase())) return false;
-    if (dateFilter.start) {
-      const d = new Date(t.transactionDate || t.createdAt);
-      if (d < dateFilter.start) return false;
-    }
-    if (dateFilter.end) {
-      const d = new Date(t.transactionDate || t.createdAt);
-      if (d > dateFilter.end) return false;
-    }
-    return true;
-  }), [transactions, contactFilter, dateFilter]);
-
-  const displayTransactions = useMemo(() => filteredTransactions.slice(0, 20), [filteredTransactions]);
+  }, [fetchContacts, fetchStaff]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, backgroundColor: theme.colors.primary }]}>
@@ -189,7 +166,7 @@ const HomeScreen: React.FC = () => {
         <View style={{ width: 24 }} />
       </View>
       <FlatList
-        data={displayTransactions}
+        data={transactions}
         renderItem={({ item, index }) => <TransactionRow item={item} index={index} onPress={setSelectedTx} />}
         keyExtractor={(item) => item._id}
         ListHeaderComponent={(
@@ -200,12 +177,15 @@ const HomeScreen: React.FC = () => {
               totalOut={totalExpense} 
               totalDebt={totalDebt}
               totalReceivable={totalReceivable}
-              onAdd={() => setShowAddModal(true)} 
+              onAdd={() => { setEditTx(undefined); setShowAddModal(true); }} 
             />
-            <FilterBar 
-              onDateChange={(start, end) => setDateFilter({ start, end })}
-              onContactChange={setContactFilter}
-            />
+            <View style={{ marginTop: 24, marginBottom: 16 }}>
+              <FilterBar 
+                onDateChange={(start, end) => setDateFilter({ start, end })}
+                onContactChange={setContactFilter}
+                onTypeChange={setTypeFilter}
+              />
+            </View>
           </View>
         )}
         ListEmptyComponent={!isLoading ? (
@@ -219,22 +199,28 @@ const HomeScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         onRefresh={() => fetchTransactions(null)}
         refreshing={isLoading}
-        ListFooterComponent={transactions.length > 20 ? (
-          <Pressable style={styles.viewMoreBtn} onPress={() => navigation.navigate('Transactions')}>
-            <Text style={[styles.viewMoreText, { color: theme.colors.accent }]}>Tüm İşlemleri Gör</Text>
-            <Icon name="chevron-right" size={16} color={theme.colors.accent} />
-          </Pressable>
-        ) : null}
+        onEndReached={loadMoreTransactions}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={isLoading && transactions.length > 0 ? <ActivityIndicator size="small" color={theme.colors.accent} style={{ margin: 20 }} /> : null}
       />
-      <Pressable style={[styles.fab, { bottom: insets.bottom + 32, backgroundColor: theme.colors.accent }, isScanning && { opacity: 0.6 }]} onPress={handleScanReceipt} disabled={isScanning}>
-        {isScanning ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="camera" size={24} color="#fff" />}
-      </Pressable>
-      <AddTransactionModal visible={showAddModal} onClose={() => { setShowAddModal(false); fetchTransactions(null); }} />
+
+      <AddTransactionModal 
+        visible={showAddModal} 
+        editTransaction={editTx}
+        onClose={() => { setShowAddModal(false); setEditTx(undefined); fetchTransactions(null); }} 
+      />
       {selectedTx && (
         <TransactionDetailModal
           visible={!!selectedTx}
           transaction={selectedTx}
           onClose={() => setSelectedTx(null)}
+          onEdit={() => {
+            setSelectedTx(null);
+            setTimeout(() => {
+              setEditTx(selectedTx);
+              setShowAddModal(true);
+            }, 300);
+          }}
         />
       )}
     </View>
@@ -267,7 +253,6 @@ const styles = StyleSheet.create({
   rowBalanceAfter: { fontSize: 10, marginTop: 2, fontWeight: '400' },
   viewMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20, gap: 4 },
   viewMoreText: { fontSize: 14, fontWeight: '600' },
-  fab: { position: 'absolute', right: 24, width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
   emptyText: { textAlign: 'center', marginTop: 40, opacity: 0.5 }
 });
 

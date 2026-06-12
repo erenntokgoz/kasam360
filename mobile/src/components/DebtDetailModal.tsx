@@ -1,10 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Modal, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { getTheme } from '../theme';
 import { useThemeStore } from '../store/useThemeStore';
 import type { Debt } from '../api/debtService';
 import { formatCurrency, formatDate } from '../utils/format';
+import { useDebtStore } from '../store/useDebtStore';
+import DatePicker from 'react-native-date-picker';
 
 interface DebtDetailModalProps {
   visible: boolean;
@@ -22,17 +24,73 @@ const DebtDetailModal: React.FC<DebtDetailModalProps> = ({ visible, debt, onClos
   const progress = debt.totalAmount > 0 ? 1 - debt.remainingAmount / debt.totalAmount : 0;
   const isPaid = debt.status === 'PAID';
 
+  const { updateDebt, isLoading } = useDebtStore();
+  const [isEditing, setIsEditing] = useState(false);
+  const [entityName, setEntityName] = useState(debt.entityName);
+  const [dueDate, setDueDate] = useState(debt.dueDate ? new Date(debt.dueDate) : new Date());
+  const [description, setDescription] = useState(debt.description || '');
+
+  useEffect(() => {
+    if (visible) {
+      setIsEditing(false);
+      setEntityName(debt.entityName);
+      setDueDate(debt.dueDate ? new Date(debt.dueDate) : new Date());
+      setDescription(debt.description || '');
+    }
+  }, [visible, debt]);
+
+  const handleSave = async () => {
+    if (!entityName.trim()) {
+      Alert.alert('Hata', 'Kişi / Kurum adı boş olamaz.');
+      return;
+    }
+    try {
+      await updateDebt(debt._id, {
+        entityName,
+        dueDate: dueDate.toISOString(),
+        description
+      });
+      setIsEditing(false);
+    } catch (e: any) {
+      Alert.alert('Hata', e?.message || 'Borç güncellenemedi.');
+    }
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={[styles.overlay, { backgroundColor: theme.colors.overlay }]} onPress={onClose}>
         <Pressable style={[styles.content, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Borç / Alacak Detayı</Text>
-            <Pressable onPress={onClose} hitSlop={8}>
+            <Text style={[styles.title, { color: theme.colors.textPrimary }]}>{isEditing ? 'Borcu Düzenle' : 'Borç / Alacak Detayı'}</Text>
+            <Pressable onPress={() => isEditing ? setIsEditing(false) : onClose()} hitSlop={8}>
               <Icon name="x" size={24} color={theme.colors.textTertiary} />
             </Pressable>
           </View>
 
+          {isEditing ? (
+            <View>
+              <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Kişi / Kurum:</Text>
+              <TextInput style={[styles.input, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]} value={entityName} onChangeText={setEntityName} />
+
+              <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Vade Tarihi:</Text>
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <DatePicker date={dueDate} onDateChange={setDueDate} mode="date" locale="tr" theme={isDarkMode ? 'dark' : 'light'} />
+              </View>
+
+              <Text style={[styles.label, { color: theme.colors.textSecondary, marginBottom: 8 }]}>Açıklama:</Text>
+              <TextInput style={[styles.input, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]} value={description} onChangeText={setDescription} />
+
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                <Pressable style={[styles.closeBtn, { backgroundColor: theme.colors.card, flex: 1 }]} onPress={() => setIsEditing(false)}>
+                  <Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>İptal</Text>
+                </Pressable>
+                <Pressable style={[styles.closeBtn, { backgroundColor: theme.colors.accent, flex: 1 }]} onPress={handleSave}>
+                  {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '600' }}>Kaydet</Text>}
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <>
           <View style={styles.amountSection}>
             <View style={[styles.iconCircle, { backgroundColor: color + '15' }]}>
               <Icon name={isGiven ? 'arrow-up-right' : 'arrow-down-left'} size={32} color={color} />
@@ -61,6 +119,7 @@ const DebtDetailModal: React.FC<DebtDetailModalProps> = ({ visible, debt, onClos
             <InfoItem label="Oluşturma" value={formatDate(debt.createdAt)} theme={theme} />
             <InfoItem label="Vade Tarihi" value={debt.dueDate ? formatDate(debt.dueDate) : 'Belirtilmemiş'} theme={theme} />
             <InfoItem label="Durum" value={debt.status === 'PAID' ? 'Ödendi' : (debt.status === 'OVERDUE' ? 'Gecikmiş' : 'Bekliyor')} theme={theme} color={debt.status === 'PAID' ? theme.colors.success : (debt.status === 'OVERDUE' ? theme.colors.danger : theme.colors.warning)} />
+            {debt.description && <InfoItem label="Açıklama" value={debt.description} theme={theme} />}
           </View>
 
           <View style={styles.actions}>
@@ -72,10 +131,17 @@ const DebtDetailModal: React.FC<DebtDetailModalProps> = ({ visible, debt, onClos
                 <Text style={styles.payBtnText}>{isGiven ? 'Tahsilat Yap' : 'Ödeme Yap'}</Text>
               </Pressable>
             )}
-            <Pressable style={[styles.closeBtn, { backgroundColor: theme.colors.card }]} onPress={onClose}>
-              <Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>Kapat</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Pressable style={[styles.closeBtn, { backgroundColor: theme.colors.card, flex: 1 }]} onPress={onClose}>
+                <Text style={{ color: theme.colors.textPrimary, fontWeight: '600' }}>Kapat</Text>
+              </Pressable>
+              <Pressable style={[styles.closeBtn, { backgroundColor: theme.colors.accent, flex: 1 }]} onPress={() => setIsEditing(true)}>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Düzenle</Text>
+              </Pressable>
+            </View>
           </View>
+          </>
+          )}
         </Pressable>
       </Pressable>
     </Modal>
@@ -112,7 +178,8 @@ const styles = StyleSheet.create({
   actions: { marginTop: 32, gap: 12 },
   payBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   payBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  closeBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' }
+  closeBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  input: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 16, marginBottom: 16 }
 });
 
 export default DebtDetailModal;

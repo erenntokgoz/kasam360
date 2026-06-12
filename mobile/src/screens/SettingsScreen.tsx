@@ -10,6 +10,8 @@ import { changeLanguage } from '../i18n';
 import { useTranslation } from 'react-i18next';
 import { useLedgerStore } from '../store/useLedgerStore';
 import { useHaptics } from '../hooks/useHaptics';
+import { useSecurityStore } from '../store/useSecurityStore';
+import ReactNativeBiometrics, { BiometryTypes } from 'react-native-biometrics';
 
 const SettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -26,6 +28,36 @@ const SettingsScreen: React.FC = () => {
   const [showEdit, setShowEdit] = useState(false);
   const [editBusName, setEditBusName] = useState(user?.businessName || '');
   const [editPass, setEditPass] = useState('');
+
+  const { isPinEnabled, pinLength, isBiometricsEnabled, lockTimeout, setPinEnabled, setPinLength, setLockTimeout, setBiometrics, setPin, pin } = useSecurityStore();
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [tempPin, setTempPin] = useState('');
+  const [tempPinConfirm, setTempPinConfirm] = useState('');
+  const [pinStep, setPinStep] = useState<1 | 2>(1);
+  const [pendingPinLength, setPendingPinLength] = useState<4 | 6 | 8>(pinLength);
+  const [hasBiometrics, setHasBiometrics] = useState<boolean>(false);
+
+  const timeoutOptions = [
+    { label: 'Hemen', value: 0 },
+    { label: '30 saniye', value: 30000 },
+    { label: '1 dakika', value: 60000 },
+    { label: '2 dakika', value: 120000 },
+    { label: '5 dakika', value: 300000 },
+  ];
+  const currentTimeoutIndex = timeoutOptions.findIndex(t => t.value === lockTimeout);
+  const safeCurrentIndex = currentTimeoutIndex >= 0 ? currentTimeoutIndex : 0;
+  const nextTimeout = timeoutOptions[(safeCurrentIndex + 1) % timeoutOptions.length];
+
+  React.useEffect(() => {
+    const checkBiometrics = async () => {
+      try {
+        const rnBiometrics = new ReactNativeBiometrics();
+        const { available } = await rnBiometrics.isSensorAvailable();
+        setHasBiometrics(available);
+      } catch (e) {}
+    };
+    checkBiometrics();
+  }, []);
 
   const handleUpdateProfile = async () => {
     try {
@@ -128,20 +160,6 @@ const SettingsScreen: React.FC = () => {
           <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>UYGULAMA TERCİHLERİ</Text>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Icon name={isDarkMode ? 'moon' : 'sun'} size={18} color={theme.colors.accent} />
-              <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Karanlık Mod</Text>
-            </View>
-            <Switch
-              value={isDarkMode}
-              onValueChange={(value) => {
-                trigger('light');
-                toggleTheme();
-              }}
-              trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
-            />
-          </View>
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
               <Icon name="globe" size={18} color={theme.colors.accent} />
               <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Dil / Language</Text>
             </View>
@@ -160,22 +178,91 @@ const SettingsScreen: React.FC = () => {
         </View>
 
         <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>VERİ YÖNETİMİ</Text>
-          <Pressable style={styles.row} onPress={async () => {
-            try {
-              const { triggerDueNotifications } = require('../api/tenantService');
-              await triggerDueNotifications();
-              Alert.alert('Başarılı', 'Vadesi gelen borçlarınız için bildirim kontrolü tetiklendi.');
-            } catch (error) {
-              Alert.alert('Hata', 'Bildirim kontrolü tetiklenemedi.');
-            }
-          }}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>GÜVENLİK & KİLİT</Text>
+          <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Icon name="bell" size={18} color={theme.colors.accent} />
-              <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Bildirimleri Test Et (Anlık)</Text>
+              <Icon name="lock" size={18} color={theme.colors.accent} />
+              <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Uygulama Kilidi (PIN)</Text>
             </View>
-            <Icon name="chevron-right" size={16} color={theme.colors.textTertiary} />
-          </Pressable>
+            <Switch
+              value={isPinEnabled}
+              onValueChange={(val) => {
+                if (val) {
+                  setPendingPinLength(pinLength);
+                  setTempPin('');
+                  setTempPinConfirm('');
+                  setPinStep(1);
+                  setShowPinModal(true);
+                } else {
+                  setPinEnabled(false);
+                  setPin(null);
+                }
+              }}
+              trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
+            />
+          </View>
+          {isPinEnabled && (
+            <>
+              <View style={styles.row}>
+                <View style={styles.rowLeft}>
+                  <Icon name="hash" size={18} color={theme.colors.accent} />
+                  <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>PIN Uzunluğu</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {([4, 6, 8] as const).map((len) => (
+                    <Pressable
+                      key={len}
+                      onPress={() => {
+                        setPendingPinLength(len);
+                        setTempPin('');
+                        setTempPinConfirm('');
+                        setPinStep(1);
+                        setShowPinModal(true);
+                      }}
+                      style={[{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8, borderWidth: 1.5 }, (pendingPinLength === len && showPinModal) || (!showPinModal && pinLength === len) ? { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent } : { borderColor: theme.colors.border }]}
+                    >
+                      <Text style={{ color: ((pendingPinLength === len && showPinModal) || (!showPinModal && pinLength === len)) ? '#fff' : theme.colors.textSecondary, fontWeight: '700', fontSize: 13 }}>{len}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+              <Pressable style={styles.row} onPress={() => setLockTimeout(nextTimeout.value)}>
+                <View style={styles.rowLeft}>
+                  <Icon name="clock" size={18} color={theme.colors.accent} />
+                  <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Otomatik Kilit Süresi</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ color: theme.colors.textSecondary, fontWeight: '500' }}>{timeoutOptions[currentTimeoutIndex >= 0 ? currentTimeoutIndex : 0].label}</Text>
+                  <Icon name="refresh-cw" size={14} color={theme.colors.textTertiary} />
+                </View>
+              </Pressable>
+              <Pressable style={styles.row} onPress={() => { setTempPin(''); setTempPinConfirm(''); setPinStep(1); setShowPinModal(true); }}>
+                <View style={styles.rowLeft}>
+                  <Icon name="key" size={18} color={theme.colors.accent} />
+                  <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>PIN Değiştir</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color={theme.colors.textTertiary} />
+              </Pressable>
+              {hasBiometrics && (
+                <View style={styles.row}>
+                  <View style={styles.rowLeft}>
+                    <Icon name="target" size={18} color={theme.colors.accent} />
+                    <Text style={[styles.rowTitle, { color: theme.colors.textPrimary }]}>Biyometrik Giriş</Text>
+                  </View>
+                  <Switch
+                    value={isBiometricsEnabled}
+                    onValueChange={(val) => setBiometrics(val)}
+                    trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
+                  />
+                </View>
+              )}
+            </>
+          )}
+        </View>
+
+        <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>VERİ YÖNETİMİ</Text>
+
           <Pressable style={styles.row} onPress={handleExportCSV}>
             <View style={styles.rowLeft}>
               <Icon name="download" size={18} color={theme.colors.accent} />
@@ -219,6 +306,55 @@ const SettingsScreen: React.FC = () => {
                 {isAuthLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>Güncelle</Text>}
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* PIN Modal */}
+      <Modal visible={showPinModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.colors.surface, alignItems: 'center' }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>{pinStep === 1 ? 'Yeni PIN Girin' : 'PIN Tekrar'}</Text>
+            <Text style={{ marginBottom: 24, fontSize: 32, letterSpacing: 8, color: theme.colors.textPrimary }}>
+              {(pinStep === 1 ? tempPin : tempPinConfirm).padEnd(pendingPinLength, '○').replace(/./g, '●').slice(0, (pinStep === 1 ? tempPin : tempPinConfirm).length).padEnd(pendingPinLength, '○')}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: 280, justifyContent: 'center' }}>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, '<'].map((key, i) => (
+                <Pressable key={i} style={{ width: 70, height: 70, justifyContent: 'center', alignItems: 'center', margin: 8, borderRadius: 35, backgroundColor: key !== '' ? theme.colors.card : 'transparent' }} onPress={() => {
+                  if (key === '<') {
+                    if (pinStep === 1) setTempPin(prev => prev.slice(0, -1));
+                    else setTempPinConfirm(prev => prev.slice(0, -1));
+                  } else if (key !== '') {
+                    const current = (pinStep === 1 ? tempPin : tempPinConfirm) + key;
+                    if (pinStep === 1) {
+                      setTempPin(current);
+                      if (current.length === pendingPinLength) setPinStep(2);
+                    } else {
+                      setTempPinConfirm(current);
+                      if (current.length === pendingPinLength) {
+                        if (current === tempPin) {
+                          setPinLength(pendingPinLength);
+                          setPin(current);
+                          setPinEnabled(true);
+                          setShowPinModal(false);
+                          Alert.alert('Başarılı', 'PIN başarıyla ayarlandı.');
+                        } else {
+                          Alert.alert('Hata', 'PIN kodları eşleşmedi. Lütfen tekrar deneyin.');
+                          setTempPinConfirm('');
+                          setTempPin('');
+                          setPinStep(1);
+                        }
+                      }
+                    }
+                  }
+                }}>
+                  <Text style={{ fontSize: 24, color: theme.colors.textPrimary }}>{key}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable style={{ marginTop: 24, padding: 12 }} onPress={() => { setShowPinModal(false); setPendingPinLength(pinLength); if (!pin) setPinEnabled(false); }}>
+              <Text style={{ color: theme.colors.textTertiary, fontWeight: '600' }}>İptal</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>

@@ -60,8 +60,8 @@ const login = async (data) => {
   const phoneNormalized = normalizePhone(phone);
 
   const tenant = await Tenant.findOne({ phone: phoneNormalized }).select('+password');
-  if (!tenant) {
-    throw new HttpError('Hatalı telefon numarası veya şifre.', 401);
+  if (!tenant || tenant.isDeleted) {
+    throw new HttpError('Bu numaraya ait aktif bir hesap bulunamadı.', 404);
   }
 
   const isMatch = await bcrypt.compare(password, tenant.password);

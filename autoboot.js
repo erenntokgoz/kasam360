@@ -31,28 +31,42 @@ function getLocalIPv4() {
   throw new Error('Could not detect a local IPv4 address. Make sure Wi-Fi is active.');
 }
 
-// ─── 2. Patch BASE_URL in the React Native API client ────────────────────────
+// ─── 2. Patch API_URL in env.ts (single source of truth for the base URL) ────
 function patchApiClient(ipv4) {
+  // Primary target: env.ts (API_URL field)
+  const envPath    = path.join(MOBILE, 'src', 'config', 'env.ts');
+  // Fallback: client.ts (legacy — kept for safety)
   const clientPath = path.join(MOBILE, 'src', 'api', 'client.ts');
-  if (!fs.existsSync(clientPath)) {
-    console.error(`[autoboot] ERROR: API client not found at: ${clientPath}`);
-    process.exit(1);
-  }
 
-  let src    = fs.readFileSync(clientPath, 'utf8');
   const newUrl = `http://${ipv4}:5000`;
 
-  // Matches any http://...:5000 string literal (single/double/backtick quotes)
-  const re = /(['"`])http:\/\/[^'"`]+:5000\1/g;
-  if (!re.test(src)) {
-    console.warn('[autoboot] WARNING: No :5000 URL found in client.ts — skipping patch.');
-    return;
+  // ── Patch env.ts ────────────────────────────────────────────────────────────
+  if (fs.existsSync(envPath)) {
+    let src = fs.readFileSync(envPath, 'utf8');
+    // Match any quoted string assigned to API_URL: API_URL: 'https://...' or API_URL: "http://..."
+    const envRe = /(API_URL\s*:\s*)(['"`])[^'"`]+\2/;
+    if (envRe.test(src)) {
+      src = src.replace(envRe, `$1'${newUrl}'`);
+      fs.writeFileSync(envPath, src, 'utf8');
+      console.log(`[autoboot] ✔ Patched env.ts API_URL → ${newUrl}`);
+    } else {
+      console.warn('[autoboot] WARNING: API_URL field not found in env.ts — skipping env.ts patch.');
+    }
+  } else {
+    console.warn(`[autoboot] WARNING: env.ts not found at: ${envPath}`);
   }
-  re.lastIndex = 0;
 
-  src = src.replace(re, `'${newUrl}'`);
-  fs.writeFileSync(clientPath, src, 'utf8');
-  console.log(`[autoboot] ✔ Patched BASE_URL → ${newUrl}`);
+  // ── Patch client.ts (legacy fallback — no-op if URL already lives in env.ts) ─
+  if (fs.existsSync(clientPath)) {
+    let src = fs.readFileSync(clientPath, 'utf8');
+    const re = /(['\"`])http:\/\/[^'\"`]+:5000\1/g;
+    if (re.test(src)) {
+      re.lastIndex = 0;
+      src = src.replace(re, `'${newUrl}'`);
+      fs.writeFileSync(clientPath, src, 'utf8');
+      console.log(`[autoboot] ✔ Patched client.ts BASE_URL → ${newUrl} (legacy)`);
+    }
+  }
 }
 
 // ─── 3. Ensure mobile dependencies are installed ─────────────────────────────

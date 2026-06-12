@@ -29,8 +29,10 @@ interface LedgerState {
   isLoading: boolean;
   isCreating: boolean;
   pendingOperations: CreateTransactionPayload[];
+  currentFilters: TransactionFilters | undefined;
   error: string | null;
   fetchTransactions: (cursor?: string | null, limit?: number, filters?: TransactionFilters) => Promise<void>;
+  loadMoreTransactions: () => Promise<void>;
   addTransaction: (payload: CreateTransactionPayload) => Promise<Transaction>;
   updateTransaction: (id: string, payload: UpdateTransactionPayload) => Promise<Transaction>;
   deleteTransaction: (id: string) => Promise<void>;
@@ -54,6 +56,7 @@ const initialState = {
   isLoading: false,
   isCreating: false,
   pendingOperations: [] as CreateTransactionPayload[],
+  currentFilters: undefined as TransactionFilters | undefined,
   syncLocked: false,
   authError: false,
   error: null as string | null,
@@ -70,11 +73,7 @@ export const useLedgerStore = create<LedgerState>()(
         set({ isLoading: true, error: null, authError: false, syncLocked: false });
         try {
           const defaultFilters = { ...filters };
-          if (!defaultFilters.startDate) {
-            const now = new Date();
-            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-            defaultFilters.startDate = firstDay.toISOString();
-          }
+          set({ currentFilters: defaultFilters });
           const result = await getTransactions(cursor, limit, defaultFilters);
 
           set((state) => ({
@@ -95,6 +94,12 @@ export const useLedgerStore = create<LedgerState>()(
           set({ error: message, isLoading: false });
           throw err;
         }
+      },
+
+      loadMoreTransactions: async () => {
+        const { pagination, isLoading, fetchTransactions, currentFilters } = get();
+        if (isLoading || !pagination?.nextCursor) return;
+        await fetchTransactions(pagination.nextCursor, 20, currentFilters);
       },
 
       addTransaction: async (payload: CreateTransactionPayload) => {

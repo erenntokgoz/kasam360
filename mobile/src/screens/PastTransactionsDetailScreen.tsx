@@ -17,6 +17,8 @@ import { EmptyState } from '../components/EmptyState';
 import { formatCurrency, formatDate } from '../utils/format';
 import type { Transaction } from '../api/transactionService';
 import { getTransactions } from '../api/transactionService';
+import TransactionDetailModal from '../components/TransactionDetailModal';
+import AddTransactionModal from '../components/AddTransactionModal';
 
 export const PastTransactionsDetailScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -28,24 +30,28 @@ export const PastTransactionsDetailScreen: React.FC = () => {
 
   const [localTransactions, setLocalTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editTx, setEditTx] = useState<Transaction | undefined>(undefined);
+
+  const fetchTransactions = async () => {
+    setIsLoading(true);
+    try {
+      const [year, monthNum] = month.split('-').map(Number);
+      const startDate = new Date(year, monthNum - 1, 1).toISOString();
+      const endDate = new Date(year, monthNum, 0, 23, 59, 59).toISOString();
+      
+      const result = await getTransactions(null, 100, { startDate, endDate });
+      setLocalTransactions(result.transactions);
+    } catch (error) {
+      console.error('[PastTransactionsDetailScreen] fetch error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetch = async () => {
-      setIsLoading(true);
-      try {
-        const [year, monthNum] = month.split('-').map(Number);
-        const startDate = new Date(year, monthNum - 1, 1).toISOString();
-        const endDate = new Date(year, monthNum, 0, 23, 59, 59).toISOString();
-        
-        const result = await getTransactions(null, 100, { startDate, endDate });
-        setLocalTransactions(result.transactions);
-      } catch (error) {
-        console.error('[PastTransactionsDetailScreen] fetch error:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetch();
+    fetchTransactions();
   }, [month]);
 
   const filteredTransactions = useMemo(() => {
@@ -62,7 +68,10 @@ export const PastTransactionsDetailScreen: React.FC = () => {
     const displayAmount = isIncome ? item.amount : -item.amount;
 
     return (
-      <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+      <Pressable 
+        style={[styles.card, { backgroundColor: theme.colors.surface }]}
+        onPress={() => setSelectedTx(item)}
+      >
         <View style={styles.cardHeader}>
           <Text style={[styles.description, { color: theme.colors.textPrimary }]}>
             {item.description || item.category || (isIncome ? 'Gelir' : 'Gider')}
@@ -83,7 +92,7 @@ export const PastTransactionsDetailScreen: React.FC = () => {
             </View>
           )}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -111,6 +120,28 @@ export const PastTransactionsDetailScreen: React.FC = () => {
             icon={<Icon name="inbox" size={48} color={theme.colors.textTertiary} />}
           />
         }
+      />
+
+      {selectedTx && (
+        <TransactionDetailModal
+          visible={!!selectedTx}
+          transaction={selectedTx}
+          onClose={() => setSelectedTx(null)}
+          onEdit={() => {
+            setSelectedTx(null);
+            setTimeout(() => {
+              setEditTx(selectedTx);
+              setShowAddModal(true);
+            }, 300);
+          }}
+        />
+      )}
+      
+      <AddTransactionModal
+        visible={showAddModal}
+        onClose={() => { setShowAddModal(false); fetchTransactions(); }}
+        initialType="GİDER"
+        editTransaction={editTx}
       />
     </View>
   );

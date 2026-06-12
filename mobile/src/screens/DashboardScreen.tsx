@@ -1,92 +1,140 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, StatusBar, Dimensions } from 'react-native';
-import { useDashboardStore } from '../store/useDashboardStore';
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  Pressable,
+  StatusBar,
+} from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { getDashboardData, type DashboardData, type MonthlyTrendPoint } from '../api/dashboardService';
 import { useThemeStore } from '../store/useThemeStore';
 import { getTheme } from '../theme';
 import Icon from 'react-native-vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
-import { getTransactions } from '../api/transactionService';
+
+const MONTH_NAMES = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+
+/** "2025-11" → "Kas 25" */
+function formatMonthKey(key: string): string {
+  const [yearStr, monthStr] = key.split('-');
+  const month = parseInt(monthStr, 10) - 1;
+  const year = yearStr.slice(-2);
+  return `${MONTH_NAMES[month] ?? key} ${year}`;
+}
+
+function formatAmount(cents: number): string {
+  return (cents / 100).toLocaleString('tr-TR');
+}
+
+function PctBadge({ pct }: { pct: number }) {
+  const { isDarkMode } = useThemeStore();
+  const theme = getTheme(isDarkMode);
+  const isPositive = pct >= 0;
+  return (
+    <View
+      style={[
+        styles.badge,
+        { backgroundColor: isPositive ? theme.colors.successTransparent : theme.colors.dangerTransparent },
+      ]}
+    >
+      <Icon
+        name={isPositive ? 'trending-up' : 'trending-down'}
+        size={11}
+        color={isPositive ? theme.colors.success : theme.colors.danger}
+      />
+      <Text
+        style={[
+          styles.badgeText,
+          { color: isPositive ? theme.colors.success : theme.colors.danger },
+        ]}
+      >
+        {Math.abs(pct)}%
+      </Text>
+    </View>
+  );
+}
 
 export default function DashboardScreen() {
-  const { summary, loading, fetchDashboard } = useDashboardStore();
   const { isDarkMode } = useThemeStore();
   const theme = getTheme(isDarkMode);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
-  const [chartData, setChartData] = useState<{ month: string; income: number; expense: number }[]>([]);
-  const [isChartLoading, setIsChartLoading] = useState(false);
+  const { data, isLoading, isError, refetch } = useQuery<DashboardData>({
+    queryKey: ['dashboard'],
+    queryFn: getDashboardData,
+    staleTime: 2 * 60 * 1000, // 2 dakika — sık değişen veri
+  });
 
-  const monthNames = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  if (isLoading) {
+    return (
+      <View style={[styles.center, { backgroundColor: theme.colors.primary }]}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
+      </View>
+    );
+  }
 
-  useEffect(() => {
-    fetchDashboard();
-    
-    const fetchChartData = async () => {
-      setIsChartLoading(true);
-      try {
-        const result = await getTransactions({}); // Fetch all transactions
-        
-        const monthsMap: Record<string, { month: string; income: number; expense: number }> = {};
-        
-        result.transactions.forEach((t: any) => {
-          const d = new Date(t.transactionDate || t.createdAt);
-          const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          
-          if (!monthsMap[mStr]) {
-            monthsMap[mStr] = { month: `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(-2)}`, income: 0, expense: 0 };
-          }
-          
-          if (t.type === 'GELİR' || t.type === 'INCOME') {
-            monthsMap[mStr].income += (t.amount || 0) / 100;
-          } else if (t.type === 'GİDER' || t.type === 'EXPENSE') {
-            monthsMap[mStr].expense += (t.amount || 0) / 100;
-          }
-        });
+  if (isError || !data) {
+    return (
+      <View style={[styles.center, { backgroundColor: theme.colors.primary }]}>
+        <Icon name="wifi-off" size={40} color={theme.colors.textSecondary} />
+        <Text style={[styles.errorText, { color: theme.colors.textSecondary }]}>
+          Veri yüklenemedi
+        </Text>
+        <Pressable
+          onPress={() => refetch()}
+          style={[styles.retryBtn, { backgroundColor: theme.colors.accentTransparent }]}
+        >
+          <Text style={{ color: theme.colors.accent, fontWeight: '600' }}>Tekrar Dene</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
-        // Sort months ascending
-        const sortedKeys = Object.keys(monthsMap).sort();
-        const sortedData = sortedKeys.map(key => monthsMap[key]);
-        setChartData(sortedData);
-      } catch (error) {
-        console.error('[DashboardScreen] chart fetch error:', error);
-      } finally {
-        setIsChartLoading(false);
-      }
-    };
+  const { currentMonth, changeFromPrevMonth, overallSummary, monthlyTrend, categoryBreakdown } = data;
 
-    fetchChartData();
-  }, []);
-
-  const maxVal = Math.max(...chartData.flatMap(d => [d.income, d.expense]), 10000);
-
-  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={theme.colors.accent} /></View>;
+  const maxTrend = monthlyTrend?.length > 0 ? Math.max(
+    ...monthlyTrend.flatMap((d: MonthlyTrendPoint) => [d.income, d.expense]),
+    1,
+  ) : 1;
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.primary, paddingTop: insets.top }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
-      
-      {/* Header */}
-      <View style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base }]}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
+
+      {/* ── Header ── */}
+      <View
+        style={[styles.header, { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.base }]}
+      >
         <Pressable hitSlop={12} onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
           <Icon name="menu" size={24} color={theme.colors.textPrimary} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Dashboard</Text>
-        <View style={{ width: 24 }} />
+        <Pressable hitSlop={12} onPress={() => refetch()}>
+          <Icon name="refresh-cw" size={18} color={theme.colors.textSecondary} />
+        </Pressable>
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
-        {/* Monthly Summary Card */}
-        <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Aylık Özet</Text>
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+
+        {/* ── Genel Bakiye Kartı ── */}
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Genel Bakiye</Text>
           <View style={styles.divider} />
-          
+
           <View style={styles.summaryRow}>
             <View>
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>Kasa Bakiyesi</Text>
-              <Text style={[styles.amount, { color: theme.colors.accent }]}>
-                {summary?.balance ? (summary.balance / 100).toLocaleString('tr-TR') : '0'} ₺
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Toplam Bakiye</Text>
+              <Text style={[styles.bigAmount, { color: theme.colors.accent }]}>
+                {overallSummary ? formatAmount(overallSummary.balance) : '0'} ₺
               </Text>
             </View>
             <View style={[styles.iconCircle, { backgroundColor: theme.colors.accentTransparent }]}>
@@ -97,83 +145,204 @@ export default function DashboardScreen() {
           <View style={styles.grid}>
             <View style={styles.gridItem}>
               <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Toplam Gelir</Text>
-              <Text style={[styles.gridAmount, { color: '#4caf50' }]}>
-                {summary?.totalIncome ? (summary.totalIncome / 100).toLocaleString('tr-TR') : '0'} ₺
+              <Text style={[styles.gridAmount, { color: theme.colors.success }]}>
+                {overallSummary ? formatAmount(overallSummary.totalIncome) : '0'} ₺
               </Text>
             </View>
             <View style={styles.gridItem}>
               <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Toplam Gider</Text>
-              <Text style={[styles.gridAmount, { color: '#ff5252' }]}>
-                {summary?.totalExpense ? (summary.totalExpense / 100).toLocaleString('tr-TR') : '0'} ₺
+              <Text style={[styles.gridAmount, { color: theme.colors.danger }]}>
+                {overallSummary ? formatAmount(overallSummary.totalExpense) : '0'} ₺
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Column Chart */}
-        <View style={[styles.chartCard, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Gelir / Gider Karşılaştırması</Text>
+        {/* ── Bu Ay Özeti ── */}
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Bu Ay</Text>
           <View style={styles.divider} />
-          
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={[styles.chartContainer, { gap: 16, paddingHorizontal: 10 }]}>
-              {chartData.map((data, index) => {
-                const incomeHeight = (data.income / maxVal) * 120;
-                const expenseHeight = (data.expense / maxVal) * 120;
 
-                return (
-                  <View key={index} style={styles.chartColumn}>
-                    <View style={styles.barGroup}>
-                      <View style={[styles.bar, { height: incomeHeight, backgroundColor: '#4caf50' }]} />
-                      <View style={[styles.bar, { height: expenseHeight, backgroundColor: '#ff5252' }]} />
-                    </View>
-                    <Text style={[styles.monthText, { color: theme.colors.textSecondary }]}>{data.month}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
-          
-          {/* Legend */}
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColor, { backgroundColor: '#4caf50' }]} />
+          <View style={styles.grid}>
+            <View style={styles.gridItem}>
               <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Gelir</Text>
+              <Text style={[styles.gridAmount, { color: theme.colors.success }]}>
+                {formatAmount(currentMonth.income)} ₺
+              </Text>
+              <PctBadge pct={changeFromPrevMonth.incomeChangePct} />
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColor, { backgroundColor: '#ff5252' }]} />
+            <View style={styles.gridItem}>
               <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Gider</Text>
+              <Text style={[styles.gridAmount, { color: theme.colors.danger }]}>
+                {formatAmount(currentMonth.expense)} ₺
+              </Text>
+              <PctBadge pct={-changeFromPrevMonth.expenseChangePct} />
+            </View>
+            <View style={styles.gridItem}>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Net Kâr</Text>
+              <Text
+                style={[
+                  styles.gridAmount,
+                  { color: currentMonth.isProfit ? theme.colors.success : theme.colors.danger },
+                ]}
+              >
+                {formatAmount(currentMonth.netProfit)} ₺
+              </Text>
+              <PctBadge pct={changeFromPrevMonth.netProfitChangePct} />
             </View>
           </View>
         </View>
+
+        {/* ── 6 Aylık Trend ── */}
+        {monthlyTrend.length > 0 && (
+          <View style={[styles.card, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+              Gelir / Gider Trendi (6 Ay)
+            </Text>
+            <View style={styles.divider} />
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.chartContainer}>
+                {monthlyTrend.map((d: MonthlyTrendPoint, index: number) => {
+                  const incomeH = Math.max((d.income / maxTrend) * 120, d.income > 0 ? 4 : 0);
+                  const expenseH = Math.max((d.expense / maxTrend) * 120, d.expense > 0 ? 4 : 0);
+                  return (
+                    <View key={index} style={styles.chartColumn}>
+                      <View style={styles.barGroup}>
+                        <View style={[styles.bar, { height: incomeH, backgroundColor: theme.colors.success }]} />
+                        <View style={[styles.bar, { height: expenseH, backgroundColor: theme.colors.danger }]} />
+                      </View>
+                      <Text style={[styles.monthText, { color: theme.colors.textSecondary }]}>
+                        {formatMonthKey(d.month)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <View style={styles.legend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, { backgroundColor: theme.colors.success }]} />
+                <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Gelir</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, { backgroundColor: theme.colors.danger }]} />
+                <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Gider</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ── Kategori Dağılımı (Bu Ay Giderler) ── */}
+        {categoryBreakdown.length > 0 && (
+          <View style={[styles.card, { backgroundColor: theme.colors.surface, ...theme.shadows.card }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+              Bu Ay Gider Kategorileri
+            </Text>
+            <View style={styles.divider} />
+
+            {categoryBreakdown.map((cat, index) => (
+              <View key={index} style={styles.categoryRow}>
+                <View style={styles.categoryLabelRow}>
+                  <Text style={{ color: theme.colors.textPrimary, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                    {cat.category}
+                  </Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
+                    {formatAmount(cat.total)} ₺  ({cat.percentage}%)
+                  </Text>
+                </View>
+                <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${Math.min(cat.percentage, 100)}%`,
+                        backgroundColor: theme.colors.danger,
+                        opacity: 0.7 + (index === 0 ? 0.3 : 0),
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
+  errorText: { fontSize: 15, marginTop: 8 },
+  retryBtn: { marginTop: 8, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
   screen: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   headerTitle: { fontSize: 18, fontWeight: '700' },
-  container: { flex: 1, padding: 16 },
-  summaryCard: { padding: 20, borderRadius: 16, marginBottom: 16 },
-  chartCard: { padding: 20, borderRadius: 16, marginBottom: 16 },
+  container: { flex: 1, paddingHorizontal: 16 },
+  card: { padding: 20, borderRadius: 16, marginBottom: 16 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   divider: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginBottom: 16 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  amount: { fontSize: 24, fontWeight: 'bold', marginTop: 4 },
-  iconCircle: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  grid: { flexDirection: 'row', gap: 16 },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  bigAmount: { fontSize: 26, fontWeight: 'bold', marginTop: 4 },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grid: { flexDirection: 'row', gap: 12 },
   gridItem: { flex: 1 },
-  gridAmount: { fontSize: 16, fontWeight: '700', marginTop: 4 },
-  chartContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 160, paddingBottom: 20 },
+  gridAmount: { fontSize: 16, fontWeight: '700', marginTop: 4, marginBottom: 4 },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 2,
+  },
+  badgeText: { fontSize: 11, fontWeight: '600' },
+  chartContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 16,
+    paddingHorizontal: 10,
+    height: 160,
+    paddingBottom: 20,
+  },
   chartColumn: { alignItems: 'center' },
   barGroup: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 120 },
   bar: { width: 12, borderRadius: 4 },
-  monthText: { fontSize: 12, marginTop: 8 },
-  legend: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 10 },
+  monthText: { fontSize: 11, marginTop: 8 },
+  legend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 10,
+  },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendColor: { width: 12, height: 12, borderRadius: 3 },
+  categoryRow: { marginBottom: 12 },
+  categoryLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 3 },
 });
-

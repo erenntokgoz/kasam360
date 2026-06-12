@@ -89,6 +89,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       try {
         const user: Tenant = JSON.parse(userRaw);
         set({ token, refreshToken, user });
+        useSetupStore.getState().setSetupComplete(user.isSetupComplete);
       } catch {
         await clearAuth();
       }
@@ -104,6 +105,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       );
       await persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
+      useSetupStore.getState().setSetupComplete(data.tenant.isSetupComplete);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Kayıt işlemi başarısız oldu.';
       set({ error: message, isLoading: false });
@@ -129,6 +131,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       await persistAuth(data.token, data.refreshToken, data.tenant);
       set({ user: data.tenant, token: data.token, refreshToken: data.refreshToken, isLoading: false });
+      useSetupStore.getState().setSetupComplete(data.tenant.isSetupComplete);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Giriş işlemi başarısız oldu.';
       set({ error: message, isLoading: false });
