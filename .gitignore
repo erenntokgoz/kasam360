@@ -1,0 +1,47 @@
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/
+src-tauri/tauri.conf.json.lock
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+.claude/
+.cursor/
+
+# Database files
+*.db-shm
+*.db-wal
+kasam360.db
+
+# Typescript
+*.tsbuildinfo
+
+# Temp
+artifacts/
+files_to_translate.txt
+*.bak
+
+
+# QA / Local tooling
+.codedev-mcp/
+test-results/
+playwright-report/
+blob-report/
