@@ -2,16 +2,23 @@
 src-tauri/target/
 src-tauri/gen/
 src-tauri/tauri.conf.json.lock
+backend/target/
+backend/gen/
+backend/tauri.conf.json.lock
 
 # Node
 node_modules/
 dist/
 dist-ssr/
+desktop/dist/
 
 # Env
 .env
 .env.*
 !.env.example
+desktop/.env
+desktop/.env.*
+!desktop/.env.example
 
 # Logs
 *.log
@@ -30,6 +37,9 @@ Thumbs.db
 *.db-shm
 *.db-wal
 kasam360.db
+backend/kasam360.db
+backend/kasam360.db-shm
+backend/kasam360.db-wal
 
 # Typescript
 *.tsbuildinfo
@@ -38,7 +48,6 @@ kasam360.db
 artifacts/
 files_to_translate.txt
 *.bak
-
 
 # QA / Local tooling
 .codedev-mcp/
