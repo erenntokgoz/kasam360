@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+
 import { useAuthStore } from '../../src/presentation/store/useAuthStore';
 import { tauriInvoke, resetMockStaff } from '../../src/data/ipc/tauriInvoke';
 import { DEFAULT_AUTO_LOCK_TIMEOUT_MS } from '../../src/presentation/hooks/useAutoLock';

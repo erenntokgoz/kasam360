@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+
 import { useCartStore, calculateItemAmounts } from '../../src/presentation/store/useCartStore';
 import { POSProduct } from '../../src/presentation/types';
 import { IPOSRepository } from '../../src/domain/repositories/IPOSRepository';

@@ -2375,3 +2375,37 @@ pub async fn close_day(
         closed_at: now_str,
     })
 }
+
+#[tauri::command]
+pub async fn try_lock_table(
+    table_id: String,
+    waiter_id: String,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<bool, String> {
+    let mut locks = state.table_locks.lock().await;
+    let now = chrono::Utc::now().timestamp_millis();
+    
+    if let Some((locked_by, locked_at)) = locks.get(&table_id) {
+        if locked_by != &waiter_id && (now - locked_at) < 1800000 {
+            return Ok(false);
+        }
+    }
+    
+    locks.insert(table_id, (waiter_id, now));
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn unlock_table(
+    table_id: String,
+    waiter_id: String,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    let mut locks = state.table_locks.lock().await;
+    if let Some((locked_by, _)) = locks.get(&table_id) {
+        if locked_by == &waiter_id {
+            locks.remove(&table_id);
+        }
+    }
+    Ok(())
+}

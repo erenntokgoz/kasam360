@@ -25,6 +25,7 @@ pub use db::{init_db, DbPool};
 pub struct AppState {
     pub payment_mutex: tokio::sync::Mutex<()>,
     pub audit_mutex: tokio::sync::Mutex<()>,
+    pub table_locks: tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>,
 }
 
 pub fn run() {
@@ -42,6 +43,7 @@ pub fn run() {
         .manage(AppState {
             payment_mutex: tokio::sync::Mutex::new(()),
             audit_mutex: tokio::sync::Mutex::new(()),
+            table_locks: tokio::sync::Mutex::new(std::collections::HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
             commands::process_payment,
@@ -55,6 +57,8 @@ pub fn run() {
             commands::pos_get_products,
             commands::submit_order,
             commands::get_order_items,
+            commands::try_lock_table,
+            commands::unlock_table,
             management_commands::get_management_categories,
             management_commands::create_category,
             management_commands::update_category,

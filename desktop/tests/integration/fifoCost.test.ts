@@ -3,7 +3,7 @@
  * Path: tests/integration/fifoCost.test.ts
  */
 
-import { describe, expect, it } from 'vitest';
+
 import { FifoCostCalculator } from '../../src/domain/usecases/inventory/FifoCostCalculator';
 import { InventoryBatch } from '../../src/domain/usecases/inventory/types';
 import {

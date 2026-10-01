@@ -11,7 +11,7 @@
  * 6. 2 Net Görünüm Sekmesini ("Bugünkü Gün Sonu" ve "Geçmiş Z-Raporları Arşivi") doğrular.
  */
 
-import { describe, it, expect } from 'vitest';
+
 import React from 'react';
 import {
   EndOfDayContainer,

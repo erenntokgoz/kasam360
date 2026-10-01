@@ -7,7 +7,7 @@
  * 3. CatalogContainer Barkod Okuyucu Enter ile anında sepete ekleme ve arama temizleme
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+
 import { tauriInvoke } from '../../src/data/ipc/tauriInvoke';
 import { useCartStore } from '../../src/presentation/store/useCartStore';
 import { IPOSRepository } from '../../src/domain/repositories/IPOSRepository';

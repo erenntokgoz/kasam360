@@ -6,7 +6,7 @@
  * metrik kartlarına (Apple Borsa / Sağlık) ve iOS onay dialoglarına uygunluğunu doğrular.
  */
 
-import { describe, it, expect } from 'vitest';
+
 import React from 'react';
 import { OwnerDashboardContainer } from '../../src/presentation/components/owner/OwnerDashboardContainer';
 import { OwnerBranchesTab } from '../../src/presentation/components/owner/ui/OwnerBranchesTab';

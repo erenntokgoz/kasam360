@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+
 import { tauriInvoke } from '../../src/data/ipc/tauriInvoke';
 import { useAuthStore } from '../../src/presentation/store/useAuthStore';
 

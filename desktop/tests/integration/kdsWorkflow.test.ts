@@ -3,7 +3,7 @@
  * Path: tests/integration/kdsWorkflow.test.ts
  */
 
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+
 
 vi.mock('@tauri-apps/api/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tauri-apps/api/core')>();

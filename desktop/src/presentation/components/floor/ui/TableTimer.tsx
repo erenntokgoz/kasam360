@@ -23,10 +23,10 @@ export function TableTimer({ openedAt }: { openedAt?: number }) {
 
   // macOS Frosted Glass rozet stilleri — Geçersiz sınıflar ve katı #16171b rengi kaldırıldı
   let badgeStyle = 'dark:bg-white/[0.06] bg-black/[0.04] dark:text-white/70 text-zinc-600 dark:border-white/10 border-black/[0.08]';
-  if (durationInMinutes >= 45 && durationInMinutes < 90) {
-    badgeStyle = 'dark:bg-amber-500/15 bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30';
+  if (durationInMinutes >= 35 && durationInMinutes < 90) {
+    badgeStyle = 'bg-[#FF9500]/15 dark:bg-[#FF9F0A]/15 text-[#FF9500] dark:text-[#FF9F0A] border-[#FF9500]/30 dark:border-[#FF9F0A]/30 animate-pulse';
   } else if (durationInMinutes >= 90) {
-    badgeStyle = 'dark:bg-rose-500/15 bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30';
+    badgeStyle = 'bg-[#FF3B30]/15 dark:bg-[#FF453A]/15 text-[#FF3B30] dark:text-[#FF453A] border-[#FF3B30]/30 dark:border-[#FF453A]/30 animate-pulse';
   }
 
   const hours = Math.floor(durationInMinutes / 60);

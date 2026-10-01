@@ -13,6 +13,8 @@ import {
   ModifierOption,
 } from '../types';
 import { TauriPOSRepository } from '../../data/ipc/TauriPOSRepository';
+import { tauriInvoke } from '../../data/ipc/tauriInvoke';
+import { useAuthStore } from './useAuthStore';
 
 const getRepo = (stateRepo?: IPOSRepository | null): IPOSRepository => {
   return stateRepo || TauriPOSRepository.getInstance();
@@ -162,7 +164,15 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
 
   // Tembel (Lazy) singleton: TauriPOSRepository ile başlatıldı
   posRepository: TauriPOSRepository.getInstance(),
-  navigate: (view: 'FLOOR' | 'POS' | 'MANAGEMENT' | 'KDS' | 'RECEIPTS' | 'END_OF_DAY' | 'OWNER_DASHBOARD' | 'CASHIER' | 'PLATFORM') => set({ currentView: view }),
+  navigate: (view: 'FLOOR' | 'POS' | 'MANAGEMENT' | 'KDS' | 'RECEIPTS' | 'END_OF_DAY' | 'OWNER_DASHBOARD' | 'CASHIER' | 'PLATFORM') => {
+    const currentView = get().currentView;
+    const activeTableId = get().activeTableId;
+    if (currentView === 'POS' && view !== 'POS' && activeTableId) {
+      const waiterId = useAuthStore.getState().user?.userId || 'UNKNOWN';
+      tauriInvoke('unlock_table', { tableId: activeTableId, waiterId }).catch(console.warn);
+    }
+    set({ currentView: view });
+  },
   selectTable: async (tableId: string) => {
     const isCashier = get().currentView === 'CASHIER';
     set({

@@ -6,7 +6,7 @@
  * Order generation -> KDS Station Routing -> Inventory FIFO Deduction -> Immutable Ledger Hashing -> RBAC Protection
  */
 
-import { describe, expect, it } from 'vitest';
+
 import { StationRouter } from '../../src/domain/usecases/kds/StationRouter';
 import { Order, OrderItem } from '../../src/domain/usecases/kds/types';
 import { FifoCostCalculator } from '../../src/domain/usecases/inventory/FifoCostCalculator';

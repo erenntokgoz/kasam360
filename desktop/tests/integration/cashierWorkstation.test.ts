@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+
 import { tauriInvoke } from '../../src/data/ipc/tauriInvoke';
 
 describe('Cashier Workstation Integration Tests', () => {

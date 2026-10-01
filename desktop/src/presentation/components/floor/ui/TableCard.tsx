@@ -101,20 +101,26 @@ export function TableCard({ table, onClick }: TableCardProps) {
           </div>
 
           {/* Orta Satır: Masa Adı (Tek masa veya birleşen masalar örn: Masa 1 + Masa 2) */}
-          <div className="flex items-center justify-center w-full my-auto px-1 py-1">
+          <div className="flex flex-col items-center justify-center w-full my-auto px-1 py-1 gap-1">
             <span
               className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight dark:text-white text-zinc-900 text-center leading-snug line-clamp-2"
               title={displayName}
             >
               {displayName}
             </span>
+            {table.openedAt && (Date.now() - table.openedAt) >= 35 * 60000 && (
+               <span className="flex items-center gap-1 text-[10px] font-bold bg-[#FF9500]/20 text-[#FF9500] dark:text-[#FF9F0A] px-2 py-0.5 rounded-full border border-[#FF9500]/30 shadow-sm mt-1">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                 KİLİTLİ
+               </span>
+            )}
           </div>
 
           {/* Alt Kısım: Transfer Bilgisi ve Adisyon Tutarı */}
           <div className="w-full flex flex-col items-center pt-2 border-t dark:border-white/10 border-black/[0.08]">
             {table.transferInfo && (
               <div
-                className="w-full flex items-center justify-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-500/20 mb-1.5 truncate"
+                className="w-full flex items-center justify-center gap-1 text-[11px] font-semibold text-[#FF9500] dark:text-[#FF9F0A] bg-[#FF9500]/10 dark:bg-[#FF9F0A]/10 px-2 py-0.5 rounded-full border border-[#FF9500]/20 dark:border-[#FF9F0A]/20 mb-1.5 truncate"
                 title={table.transferInfo}
               >
                 <span className="truncate">{table.transferInfo}</span>

@@ -1,287 +1,365 @@
-# KASAM360 — REPOSITORY CONSTITUTION & AGENTS.md
+# KASAM360 — AGENTS.md (Proje Anayasası v2.0)
 
-> **ANAYASA TALİMATI:** Bu doküman KASAM360 repository'sinde çalışan tüm AI agent'lar (Claude, Gemini, Codex, Antigravity vb.) ve yazılım geliştiriciler için **en üst otorite proje anayasasıdır**. Kod yazmadan veya değiştirmeden önce bu doküman okunmalı, burada tanımlanan source of truth, business invariants, yetki sınırları ve IPC sözleşmelerine **kesinlikle uyulmalıdır.** Uydurma, varsayım yapma ve kanıtsız kural değiştirme **YASAKTIR.**
-
----
-
-## 1. GENEL MİMARİ VE SİSTEM AKIŞI
-
-KASAM360; hibrit multi-tenant mimarisine sahip, yerel SQLite veritabanı üzerinde çalışan, Tauri (Rust) backend tabanlı ve React + TypeScript (Vite + TailwindCSS + Zustand) frontend sunum katmanlı bir **POS, KDS & Restoran/Platform Yönetim Sistemidir.**
-
-Proje klasörü 3 ana bölüme ayrılmıştır:
-1. **`desktop/`**: Masaüstü istemci uygulaması (React + Vite + TailwindCSS + Zustand sunum katmanı, POS/KDS/Kasa/Patron/Platform ekranları).
-2. **`backend/`**: Tauri Rust çekirdeği, SQLite veritabanı, finansal ödeme motoru, FIFO envanter servisi ve IPC komut işleyicileri.
-3. **`mobile/`**: Gelecekteki mobil garson terminali, QR menü ve kurye uygulaması için ayrılmış boş dizin.
-
-### Sistem Katman Haritası (Architecture Flow)
-
-```text
-+-----------------------------------------------------------------------------------+
-|                        1. DESKTOP (REACT FRONTEND)                                |
-|   AppShell / Views (POS, KDS, Floor, Management, Cashier, Owner, Platform)       |
-|   Zustand Stores (useAuthStore, useCartStore, useFloorStore)                     |
-+----------------------------------------+------------------------------------------+
-                                         | (Tauri IPC Wrapper / tauriInvoke)
-                                         v
-+-----------------------------------------------------------------------------------+
-|                        2. BACKEND (TAURI RUST & SQLITE)                           |
-|   IPC Command Handlers (commands.rs, platform_commands, cashier_commands, etc.)   |
-|   Services (PaymentService, InventoryService, AuditService)                       |
-|   Repositories (PaymentRepository)                                                |
-|   State & Mutex Locks (AppState.payment_mutex)                                    |
-|   SQLite DB & Immutability Triggers (audit_ledger append-only SHA-256 validation) |
-+-----------------------------------------------------------------------------------+
-
-+-----------------------------------------------------------------------------------+
-|                        3. MOBILE (FUTURE PLACEHOLDER)                             |
-|   Garson Terminali, QR Menü & Kurye (Şu an boş tutulmaktadır)                     |
-+-----------------------------------------------------------------------------------+
-```
+> Bu doküman KASAM360 reposunda çalışan tüm AI agent'lar için en üst otoritedir. Uydurma, varsayım, kanıtsız kural değişikliği YASAK.
 
 ---
 
-## 2. SOURCE OF TRUTH (GERÇEK SİSTEM HAKİKATİ)
+## 1. PROJE KİMLİĞİ
 
-1. **Parasal Hesaplamalar ve Fiyat Otoritesi (Financial Truth):**
-   * Frontend görüntüleme katmanı yalnızca formatlayıcıdır.
-   * Sipariş toplamı, kalan bakiye, KDV ve indirim tutarları **backend Rust / SQLite üzerinde kuruş (cents / INTEGER)** cinsinden hesaplanır.
-   * `UI value ≠ authoritative business value` kuralı esastır.
-   * Evidence: [payment_service.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/services/payment_service.rs#L25-L34)
-
-2. **Kimlik ve Rol Otoritesi (Identity & Auth Truth):**
-   * Kullanıcı şifre/PIN bilgileri veritabanında Argon2 PHC hash biçiminde saklanır.
-   * Yetki kontrolleri hem frontend UI rotalarında (`App.tsx`) hem de Rust IPC handler'larında (`actor_role` / DB sorgusu) çift taraflı doğrulanır.
-   * Evidence: [auth.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/auth.rs#L8-L29), [App.tsx](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/desktop/src/App.tsx#L33-L77)
-
-3. **Stok ve FIFO Maliyet Otoritesi (Inventory Truth):**
-   * Ürün stok düşümleri ve FIFO COGS (Satılan Malın Maliyeti) hesaplaması ödeme anında `InventoryService` ve `stock_movements` üzerinden yürütülür.
-   * Evidence: [inventory_service.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/services/inventory_service.rs#L8-L46)
-
-4. **Değiştirilemez Denetim İzleri (Audit Truth):**
-   * `audit_ledger` tablosu SHA-256 hash zinciriyle korunur. UPDATE ve DELETE işlemleri SQLite trigger'ları ile kesin olarak engellenmiştir.
-   * Evidence: [schema.sql](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/migrations/schema.sql#L67-L80), [audit_service.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/services/audit_service.rs#L12-L29)
+- KASAM360: Restoran/Kafe/Bar için Local-First POS + ERP
+- Repo: github.com/erenntokgoz/kasam360
+- Yapı: desktop/ (React+Vite+TS) + backend/ (Tauri+Rust+SQLite) + mobile/ (boş)
+- Vizyon: "En salak kullanıcı 10 saniyede öğrenir; motor Toast/Micros'u ezer."
 
 ---
 
-## 3. BUSINESS DOMAIN HARİTASI
+## 2. SOURCE OF TRUTH (Değiştirilemez)
 
-### 3.1 Authentication & Authorization
-* **Amacı:** Kullanıcı girişi, rol ayrıştırma, PIN kilitleme ve oturum yönetimi.
-* **Ana Varlıklar:** `User`, `SecurityPrincipal`.
-* **Veritabanı Tablosu:** `users`.
-* **Kritik Invariant'lar:**
-  * PIN değerleri benzersizdir (`idx_users_pin`).
-  * Şifre/PIN ham metin olarak asla döndürülmez veya loglanmaz. Argon2 tek yönlü hash kullanılır.
-  * `MASTER` rolü restoran içi POS/Floor/KDS rotalarına erişemez, doğrudan `PLATFORM` ekranına yönlendirilir.
-* **Evidence:** [auth.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/auth.rs#L8-L29), [useAuthStore.ts](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/desktop/src/presentation/store/useAuthStore.ts#L68-L103)
-
-### 3.2 Tenancy (Multi-Tenant İzolasyon)
-* **Amacı:** İşletmelerin veri ve cihaz izolasyonunu sağlamak.
-* **Ana Varlıklar:** `Tenant`, `Plan`, `Subscription`, `License`, `Device`.
-* **Veritabanı Tabloları:** `tenants`, `plans`, `subscriptions`, `licenses`, `devices`.
-* **Kritik Invariant'lar:**
-  * `MASTER` dışındaki tüm roller sadece kendi `tenant_id` verilerine erişebilir.
-  * Cihaz kilidi açılırken farklı tenant'a ait PIN ile işlem yapılması engellenir.
-* **Evidence:** [platform_commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/platform_commands.rs#L37-L64), [useAuthStore.ts](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/desktop/src/presentation/store/useAuthStore.ts#L124-L128)
-
-### 3.3 Orders & Order Items
-* **Amacı:** Masa siparişlerinin oluşturulması, ürün notları, opsiyon/modifier yönetimi ve tutar hesaplaması.
-* **Ana Varlıklar:** `Order`, `OrderItem`, `Table`.
-* **Veritabanı Tabloları:** `orders`, `order_items`, `tables`.
-* **Kritik Invariant'lar:**
-  * `total_cents` alanları INTEGER tamsayıdır.
-  * Sipariş durumu: `OPEN` -> `IN_PROGRESS` -> `PAID` / `VOID` / `CANCELLED`.
-  * Masa doluysa (`OCCUPIED`) yeni sipariş açılırken açık sipariş `getOrderItems` ile sepet durumuna yuklenir (Hydration).
-* **Evidence:** [commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/commands.rs#L134-L146), [TauriPOSRepository.ts](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/desktop/src/data/ipc/TauriPOSRepository.ts#L188-L239)
-
-### 3.4 Payments & Settlements
-* **Amacı:** Tekli/Parçalı ödeme alma, fiş basımı, kasa kapanışları ve sipariş kapatma.
-* **Ana Varlıklar:** `PaymentPayload`, `PaymentResult`, `SplitPaymentDetail`.
-* **Veritabanı Tabloları:** `orders`, `events`, `outbox`, `audit_ledger`.
-* **Kritik Invariant'lar:**
-  * Sunucu tarafındaki hesaplanan toplam ile istemcinin bildirdiği toplam arasındaki fark 1 kuruştan fazla olamaz (`TOTAL_MISMATCH`).
-  * `transaction_id` ile eş etkililik (idempotency) kontrolü yapılır. İkinci defa aynı ödeme işlenemez.
-  * Ödeme anında `AppState.payment_mutex` tutularak eşzamanlı işlem çatışmaları ve audit_ledger phantom read'leri engellenir.
-* **Evidence:** [payment_service.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/services/payment_service.rs#L18-L34), [commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/commands.rs#L91-L132)
-
-### 3.5 Cashier Shifts & Cash Operations
-* **Amacı:** Kasiyer vardiya takibi, nakit giriş/çıkış (Cash In/Out) operasyonları ve vardiya sonu kasa sayım eşleştirmesi (Z-Summary).
-* **Ana Varlıklar:** `Shift`, `CashMovement`, `ShiftSummary`.
-* **Veritabanı Tabloları:** `shifts`, `cash_movements`.
-* **Kritik Invariant'lar:**
-  * Beklenen bakiye: `expected = opening_balance + total_sales + cash_in - cash_out`.
-  * Fark (`discrepancy`): `actual_closing_balance - expected_balance`.
-* **Evidence:** [cashier_commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/cashier_commands.rs#L116-L190)
-
-### 3.6 Kitchen Display System (KDS) & Stations
-* **Amacı:** Mutfak biletlerinin istasyonlara (Sıcak, Soğuk, İçecek, Izgara, Tatlı) göre yönlendirilmesi ve durum güncellemeleri.
-* **Ana Varlıklar:** `Station`, `OrderTicket`, `TicketStatusTransition`.
-* **Veritabanı Tabloları:** `stations`, `order_items`, `events`.
-* **Kritik Invariant'lar:**
-  * Siparişe ait tüm kalemler `Ready` / `Completed` / `Served` olduğunda otomatik olarak `TICKET_STATUS_UPDATED` olayı tetiklenir.
-* **Evidence:** [kitchen_commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/kitchen_commands.rs#L97-L171)
-
-### 3.7 Manager Approvals & Inventory Management
-* **Amacı:** İptal (Void) isteklerinin onaylanması, stok seviyeleri ve şube yönetimi.
-* **Ana Varlıklar:** `Approval`, `InventoryItem`, `StockMovement`, `Branch`.
-* **Veritabanı Tabloları:** `approvals`, `inventory_items`, `stock_movements`, `branches`.
-* **Kritik Invariant'lar:**
-  * Kasiyer veya garson tarafından başlatılan Sipariş İptali (Void), Müdürü/Patron PIN doğrulaması olmadan tamamlanamaz.
-  * Stok artırma/azaltma işlemleri `stock_movements` tablosuna audit kaydı oluşturur.
-* **Evidence:** [commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/commands.rs#L1318-L1350), [approval_commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/approval_commands.rs#L81-L128), [inventory_commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/inventory_commands.rs#L57-L98)
+- Para: Tüm tutarlar INTEGER kuruş (*_cents). Float YASAK.
+- Kimlik: Argon2id PHC hash. Düz metin YASAK.
+- FIFO: inventory_batches üzerinden gerçek parti/lot. Sahte %35 formülü YASAK.
+- Audit: audit_ledger SHA-256 zinciri. UPDATE/DELETE YASAK.
+- ID: Prefixed ULID (ord_, txn_, dir_, usr_). AUTOINCREMENT YASAK.
+- Multi-tenant: Her sorguda tenant_id ZORUNLU.
 
 ---
 
-## 4. ROLE MATRIX & YETKİ SINIRLARI
+## 3. KESİN YASAKLAR
 
-Repository'de 6 temel rol bulunmaktadır. Her rolün yetkileri strict olarak kısıtlanmıştır:
+### 3.1. Kod
+- Prodüksiyonda panic!, unwrap(), expect(), todo!() YASAK
+- TypeScript'te any YASAK
+- Filtresiz SQL YASAK
+- audit_ledger UPDATE/DELETE YASAK
+- main.rs'te mükerrer IPC YASAK (kasam360_core::run() delegasyonu)
+- Google Cloud / harici bulut YASAK
+- Donanım çağrıları blocking YASAK (async kuyruk + 2sn timeout)
 
-| Yetki / İşlem | MASTER (1111) | OWNER (2222) | MANAGER (3333) | CASHIER (4444) | WAITER (5555) | KITCHEN (6666) |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Platform / Tenant Yönetimi** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Menü Fiyatı Değiştirme** | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Ürün Aktif/Pasif Yapma** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **Sipariş Oluşturma / Masa Açma** | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **Ödeme Al / Fiş Bas** | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| **Vardiya Aç / Kapa (Cash Shift)** | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| **Void (İptal) Onaylama** | ❌ | ✅ | ✅ | ❌ (Req Only)| ❌ | ❌ |
-| **KDS Mutfak Ekranı Yönetimi** | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ |
+### 3.2. UI (AI Slop)
+- Emoji UI'da YASAK (✨🚀🔥⭐💡🎯👋💪🧠🪄)
+- Klişe copy YASAK ("Hoş geldin", "Muhteşem", "Oops", "Powered by AI")
+- Gradient YASAK (primary buton hariç: dikey 180°, marka rengi açık→koyu)
+- Undraw/Storyset/Popsy illüstrasyon YASAK
+- Fake sparkline / anlamsız SVG wave YASAK
+- Ham SHA-256 hash UI'da YASAK (log içinde, "🛡️ Mühürlü" rozeti)
+- Karışık ikon kütüphanesi YASAK (sadece Lucide + Phosphor)
+- Ham Tailwind ekranlarda YASAK (design system)
+- Beyaz zemin + siyah yazı YASAK (glass olacak)
+- Turuncu buton YASAK
+- İngilizce metin YASAK (kod değişkenleri hariç)
 
-*Evidence for Role Boundaries:* [App.tsx](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/desktop/src/App.tsx#L36-L66), [management_commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/management_commands.rs#L211-L213), [commands.rs](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/src/commands.rs#L1318-L1334)
-
----
-
-## 5. FEATURE MATRIX
-
-| Domain | Feature | Roles | Frontend Component | IPC Command | Backend Implementation | Related DB Tables | Test File |
-|---|---|---|---|---|---|---|---|
-| **Auth** | Credential / PIN Login | ALL | `LoginPage`, `PinScreen` | `auth_login`, `auth_login_credentials` | `commands.rs` | `users` | `authService.test.ts` |
-| **Platform** | Tenant & Plan Mgmt | MASTER | `PlatformContainer` | `get_tenants`, `create_tenant`, `get_plans` | `platform_commands.rs` | `tenants`, `plans`, `subscriptions` | `zeroGapFeatureMatrix.test.ts` |
-| **POS** | Catalog & Cart | WAITER, CASHIER, MANAGER, OWNER | `CatalogContainer`, `CartContainer` | `pos_get_products`, `get_product_modifiers` | `commands.rs`, `waiter_commands.rs` | `products`, `categories`, `modifier_groups` | `cartStore.test.ts` |
-| **Orders** | Submit & Hydrate Order | WAITER, CASHIER, MANAGER, OWNER | `FloorPlanContainer`, `CartContainer` | `submit_order`, `get_order_items` | `commands.rs` | `orders`, `order_items`, `tables` | `kdsWorkflow.test.ts` |
-| **Payment** | Payment Settlement | CASHIER, OWNER | `PaymentModalContainer` | `process_payment`, `process_split_payment` | `commands.rs` -> `PaymentService` | `orders`, `events`, `audit_ledger` | `paymentEngine.test.ts` |
-| **Cashier** | Shift & Cash Movements | CASHIER, OWNER | `CashierWorkstationContainer` | `open_shift`, `close_shift`, `cash_in`, `cash_out` | `cashier_commands.rs` | `shifts`, `cash_movements` | `cashierWorkstation.test.ts` |
-| **Kitchen** | KDS Ticket Progression | KITCHEN, MANAGER, OWNER | `KdsContainer` | `get_active_tickets`, `update_kds_item_status` | `kitchen_commands.rs` | `order_items`, `stations`, `events` | `kdsBackendContainer.test.ts` |
-| **Approval** | Manager PIN Void Approval | MANAGER, OWNER | `ApprovalsPanel`, `CartContainer` | `void_order`, `process_approval` | `commands.rs`, `approval_commands.rs` | `approvals`, `audit_ledger` | `criticalFixes.test.ts` |
-| **Inventory**| FIFO Cost & Stock Adjust | OWNER | `OwnerInventoryTab` | `get_inventory`, `adjust_stock` | `inventory_commands.rs` | `inventory_items`, `stock_movements` | `fifoCost.test.ts` |
+### 3.3. Mimari
+- tenant_id filtresiz sorgu YASAK
+- Cross-tenant veri sızıntısı YASAK
+- Feature flag kapalıyken route açık YASAK (404 dönmeli)
 
 ---
 
-## 6. VERİTABANI VE ŞEMA KURALLARI
+## 4. LIQUID GLASS / APPLE HIG ANAYASASI
 
-1. **Finansal Tamsayı Şartı (Money Representation Invariant):**
-   * Tüm para birimleri veritabanında `INTEGER` (kuruş/cents) olarak tutulur. `REAL` veya `FLOAT` parasal sütun kullanımı **YASAKTIR.**
-   * Evidence: [schema.sql](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/migrations/schema.sql#L111-L140)
+### 4.1. Felsefe
+- Referans: Apple iOS 27 + macOS 27 + visionOS
+- "Her şey havada yüzer" (sidebar, topbar, kart, modal — min 16px boşluk)
+- AI slop sıfır tolerans
 
-2. **Multi-Tenant Kolon Şartı:**
-   * Tüm operasyonel tablolarda `tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT'` kolonu bulunmak zorundadır.
-   * Evidence: [schema.sql](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/migrations/schema.sql#L3-L56)
+### 4.2. Renk Paleti (Apple System Colors — oturaklı, doygun değil)
 
-3. **Veri Değiştirilemezliği ve Audit Ledger:**
-   * `audit_ledger` tablosunda `trg_audit_ledger_prevent_update` ve `trg_audit_ledger_prevent_delete` trigger'ları aktiftir. Bu tabloya müdahale edilemez.
-   * Evidence: [schema.sql](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/backend/migrations/schema.sql#L67-L80)
+Dark Mode:
+bg-base:      #0B0C0E
+bg-surface:   #16171A
+bg-elevated:  #1F2024
+border:       #26272B
+border-strong:#34353A
+
+text-primary:   #F5F5F7
+text-secondary: rgba(245, 245, 247, 0.64)
+text-tertiary:  rgba(245, 245, 247, 0.40)
+text-quaternary:rgba(245, 245, 247, 0.24)
+
+brand:        #0A84FF
+brand-hover:  #409CFF
+
+success:      #30D158
+warning:      #FF9F0A
+danger:       #FF453A
+info:         #64D2FF
+purple:       #BF5AF2
+pink:         #FF375F
+yellow:       #FFD60A
+
+Light Mode:
+bg-base:      #FAFAFA
+bg-surface:   #FFFFFF
+bg-elevated:  #F5F5F7
+border:       #E5E5EA
+border-strong:#D1D1D6
+
+text-primary:   #0A0B0F
+text-secondary: rgba(10, 11, 15, 0.64)
+text-tertiary:  rgba(10, 11, 15, 0.40)
+text-quaternary:rgba(10, 11, 15, 0.24)
+
+brand:        #007AFF
+brand-hover:  #0066CC
+
+success:      #34C759
+warning:      #FF9500
+danger:       #FF3B30
+info:         #32ADE6
+purple:       #AF52DE
+pink:         #FF2D55
+yellow:       #FFCC00
+
+Kural: Bu değerlerin dışında renk YASAK. Yeni renk gerekirse önce AGENTS.md güncellenir.
+
+### 4.3. Glass Katmanları (5 seviye)
+
+Dark Mode:
+--glass-thin:    rgba(255, 255, 255, 0.03);
+--glass-regular: rgba(255, 255, 255, 0.05);
+--glass-thick:   rgba(255, 255, 255, 0.08);
+--glass-heavy:   rgba(22, 23, 26, 0.68);
+--glass-ultra:   rgba(31, 32, 36, 0.85);
+
+Light Mode:
+--glass-thin:    rgba(255, 255, 255, 0.40);
+--glass-regular: rgba(255, 255, 255, 0.60);
+--glass-thick:   rgba(255, 255, 255, 0.75);
+--glass-heavy:   rgba(255, 255, 255, 0.85);
+--glass-ultra:   rgba(255, 255, 255, 0.92);
+
+### 4.4. Cam Fiziği (ZORUNLU)
+
+backdrop-filter: blur(40px) saturate(180%);
+-webkit-backdrop-filter: blur(40px) saturate(180%);
+
+border: 1px solid var(--border);
+border-top-color: rgba(255, 255, 255, 0.14);
+
+box-shadow:
+  inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
+  inset 0 -1px 0 0 rgba(0, 0, 0, 0.20),
+  0 20px 60px -10px rgba(0, 0, 0, 0.45),
+  0 0 0 1px rgba(0, 0, 0, 0.35);
+
+### 4.5. Ambiyans (Arka Plan)
+
+Zemin düz olamaz. Her ekranın arkasında 2 radyal blob olmalı:
+
+Dark:
+body {
+  background: var(--bg-base);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 15% 0%,
+      rgba(10, 132, 255, 0.08), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 100%,
+      rgba(191, 90, 242, 0.06), transparent 60%);
+}
+
+Light:
+body {
+  background: var(--bg-base);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 15% 0%,
+      rgba(0, 122, 255, 0.05), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 100%,
+      rgba(175, 82, 222, 0.04), transparent 60%);
+}
+
+Kural: Ambiyans olmadan cam görünmez. Blob'lar zorunlu.
+
+### 4.6. Tokenlar
+
+- Radius: sadece 4, 8, 12, 16, 20, 24 (başka değer YASAK)
+- Gölge: 4 seviye (shadow-sm, shadow-md, shadow-lg, shadow-xl)
+- Font: SF Pro / Inter Tight, sadece 400, 500, 600 (700 YASAK)
+- Font boyutları:
+  text-title-1: 28px / 600 / -0.02em
+  text-title-2: 22px / 600 / -0.01em
+  text-headline: 17px / 600 / -0.02em
+  text-body: 17px / 400 / -0.01em
+  text-callout: 16px / 400 / 0
+  text-subheadline: 15px / 400 / 0
+  text-footnote: 13px / 400 / 0
+  text-caption-1: 12px / 400 / 0
+  text-caption-2: 11px / 500 / 0.01em
+- Animasyon: 100, 150, 250, 400ms — 2 easing:
+  cubic-bezier(0.32, 0.72, 0, 1) (default)
+  cubic-bezier(0.4, 0, 0.2, 1) (snappy)
+- İkon: Lucide + Phosphor, 1.5px stroke
+- Sayılar: font-variant-numeric: tabular-nums (fiyat, KDV, toplam)
+
+### 4.7. Dark + Light Mode
+
+Her ekran ikisini de destekler. "Dark yeter" YASAK. Tema toggle üst sağda. Sistem tercihi varsayılan.
+
+### 4.8. Sayfa Yapısı
+
+- Login + PIN: Tam ekran (sidebar yok)
+- Diğer tüm ekranlar: FloatingSidebar (72px, 16px havada) + FloatingTopBar (16px havada) + ContentArea
+- Modal: GlassModal (backdrop-blur 60px, ultra seviye)
 
 ---
 
-## 7. TAURI IPC CONTRACT & BOUNDARY
+## 5. KLASÖR YAPISI
 
-* İstemci katmanı doğrudan Tauri Rust API'sini çağırmak yerine `desktop/src/data/ipc/TauriPOSRepository.ts` ve `desktop/src/data/ipc/tauriInvoke.ts` soyutlamasını kullanmalıdır.
-* Browser / Mock ortamında `window.__TAURI_INTERNALS__` yoksa `tauriInvoke` otomatik olarak bellek içi mock yanıtlar döndürerek uygulamanın ve Vitest testlerinin çökmesini engeller.
-* Evidence: [tauriInvoke.ts](file:///c:/Users/Eren%20Tokg%C3%B6z/Desktop/Projects/kasam360/desktop/src/data/ipc/tauriInvoke.ts#L1-L40)
-
----
-
-## 8. KOD YORUMU VE YAZIM STANDARTLARI (TÜRKÇE YORUM KURALI)
-
-1. **Yorum Dili:**
-   * Kod tabanına yeni eklenecek veya güncellenecek **tüm kod yorumları kesinlikle Türkçe olacaktır.**
-   * Yorumlar kısa, teknik, **"neden"** yapıldığını açıklayan nitelikte olmalıdır. Bariz kod işlemlerini tekrar eden gereksiz yorumlar yazılmayacaktır.
-   * Örnek İYİ Yorum: `// Audit ledger sırasını korumak için ödeme işlemlerini serileştir.`
-   * Örnek KÖTÜ Yorum: `// Increment quantity by 1`
-
-2. **İsimlendirme (Identifiers):**
-   * Class, interface, function, variable, database column, Rust struct ve IPC command isimleri mevcut **İngilizce codebase convention'ına** uygun kalacaktır. Sırf Türkçeleştirmek için identifier adı değiştirilmeyecektir.
-
----
-
-## 9. TEST ANAYASASI & COMPLETION PROTOCOL
-
-Gelecekte KASAM360 üzerinde çalışan herhangi bir agent bir görevi tamamladığını beyan etmeden önce aşağıdaki doğrulama adımlarını eksiksiz çalıştırmalıdır:
-
-1. **TypeScript Typecheck:**
-   ```bash
-   # desktop dizininde
-   npx tsc --noEmit
-   ```
-   *Sonuç 0 Hata olmalıdır.*
-
-2. **Rust Compilation Check:**
-   ```bash
-   # backend dizininde
-   cargo check
-   ```
-   *(backend dizininde) Sonuç 0 Derleme Hatası olmalıdır.*
-
-3. **Vitest Unit & Integration Suite:**
-   ```bash
-   # desktop dizininde
-   npx vitest run --exclude "**/tests/e2e-playwright/**"
-   ```
-   *Tüm unit ve entegrasyon testleri (263 test) PASS olmalıdır.*
-
-*Not: `NO REGRESSION COVERAGE FOUND` durumu kabul edilemez. Değiştirilen her alan ilgili entegrasyon veya birim testi ile doğrulanmalıdır.*
+kasam360/
+├── AGENTS.md
+├── packages/contracts/              Rust→TS tip üretimi (ts-rs)
+├── desktop/
+│   ├── src/
+│   │   ├── design-system/
+│   │   │   ├── tokens/              colors, spacing, radius, shadows, motion, typography
+│   │   │   ├── primitives/          Box, Text, Icon, Stack, Inline
+│   │   │   ├── surfaces/            GlassSurface, FloatingSidebar, FloatingTopBar, GlassModal
+│   │   │   ├── buttons/             Primary, Secondary, Ghost, Danger
+│   │   │   ├── inputs/              GlassInput, GlassSelect, GlassTextarea
+│   │   │   ├── feedback/            DynamicIslandToast, GlassTooltip, LoadingDots
+│   │   │   └── layout/              AppShell, ContentArea, PageContainer
+│   │   ├── screens/                 auth, pos, floor, kds, cashier, ledger, staff, menu, reports, owner, platform, settings
+│   │   ├── stores/                  Zustand (auth, cart, floor, cashier)
+│   │   ├── services/                soundService, printService, hardwareService, featureFlagService
+│   │   └── tests/emulators/         Fiziki POS/ÖKC simülatörü (İZOLE — prod kodunu kirletmez)
+├── backend/src/                     commands, services, repositories, domain, id_generator.rs
+├── backend/migrations/schema.sql
+└── mobile/                          boş (.gitkeep)
 
 ---
 
-## 10. FORBIDDEN PATTERNS (YASAKLI PATTERN'LER)
+## 6. ROLLER VE YETKİ SINIRLARI
 
-1. ❌ **Client-Authoritative Financial Calculations:** İstemci tarafında fiyat/toplam hesaplayıp veritabanına doğrudan yazmak.
-2. ❌ **Swallowed Exceptions / Fake Fallbacks:** Hataları sessizce yutmak veya `catch { return true; }` gibi sahte basarı dönmek.
-3. ❌ **Plaintext Credential Storage:** PIN veya şifreleri veritabanında veya loglarda açık metin olarak saklamak.
-4. ❌ **MASTER Role POS Access:** MASTER rolünün restoran içi satış/masalar ekranına girmesine izin vermek.
-5. ❌ **Float Money Representation:** Parasal değerlerde float/double tipi kullanmak (Her zaman INTEGER kuruş kullanılacaktır).
-6. ❌ **Arbitrary Refactoring:** Görev kapsamı dışındaki ilgisiz dosyaları yeniden düzenlemek.
-7. ❌ **AI Slop & Generic Tropes:** Büyücü yıldızları (`✨`), anlamsız düzensiz SVG eğrileri/sparkline'ları, ham kripto hash metinleri veya yapay zeka klişesi görsel öğeler kullanmak KESİNLİKLE YASAKTIR.
-8. ❌ **Flat Mud-Gray Fake Glass:** Düz zifiri siyah zemin üzerine ışık refraksiyonu ve specular highlight olmadan çamur gibi mat koyu gri kutular (`bg-white/[0.04]`) çizmek YASAKTIR. Her cam panel gerçek Apple ışık kırılmasına (`inset 0 1px 1px 0 rgba(255,255,255,0.18)`) ve arkasındaki ambiyans ışımasına sahip olmalıdır.
+Rol        Kod    Yetki
+MASTER     1111   Platform, tenant, feature flags, şube
+OWNER      2222   İşletme sahibi, tüm işlemler
+MANAGER    3333   Vardiya, onay, kısmi rapor
+CASHIER    4444   Kasa, ödeme, vardiya
+WAITER     5555   Masa, sipariş
+KITCHEN    6666   KDS, mutfak
 
----
-
-## 11. KNOWN DEBT & VERIFICATION STATUS
-
-* **Device Guard Middleware (`NEEDS VERIFICATION`):** Cihaz lisanslama tablosu ve IPC komutları mevcuttur ancak geliştirme ortamını engellememek adına sıkı lisans kontrolü pasif bırakılmıştır.
-* **Playwright E2E Runner Setup (`LOW`):** Playwright E2E testleri `@playwright/test` runner'ı yerine yanlışlıkla Vitest runner'ına dahil edildiğinde `test.describe` hatası vermektedir. Playwright testleri `npx playwright test` komutuyla bağımsız çalıştırılmalıdır.
+- MASTER POS/Floor/KDS rotalarına giremez (PlatformScreen'e zorunlu yönlendirme)
+- Void/indirim/ikram → anlık PIN modalı (sekme değil)
+- Şube ekle/sil → sadece MASTER
+- Patron panelinde "Şubeler" sekmesi YOK (sadece geçiş dropdown)
+- Personel soft-delete (silme YASAK, pasife alınır)
 
 ---
 
-## 12. AGENT ÇALIŞMA PROTOKOLÜ (WORKFLOW)
+## 7. TEST PROTOKOLÜ (Her PR)
 
-1. **BEFORE CHANGE:**
-   * AGENTS.md anayasasını ve ilgili domain invariant'larını okuyun.
-   * `npx tsc --noEmit` çalıştırarak baseline'ı kontrol edin.
+cd backend && cargo check         # 0 hata, 0 uyarı
+cd backend && cargo test          # 100% pass
+cd desktop && npx tsc --noEmit    # 0 hata
+cd desktop && npx vitest run      # 100% pass
 
-2. **DURING CHANGE:**
-   * Yalnızca istenen değişikliği yapın.
-   * Kod yorumlarını Türkçe yazın.
-   * Sorumluluk sınırlarını ve yetki matrisini ihlal etmeyin.
+Ek taramalar:
+grep -rP "[\x{1F300}-\x{1F9FF}]" desktop/src/   # Emoji → 0
+grep -rE "bg-gradient" desktop/src/              # Gradient → 0
+grep -rn "unwrap()\|expect(" backend/src/        # Prodüksiyon → 0
+grep -rn "tenant_id" backend/src/ | wc -l        # Her sorguda olmalı
 
-3. **AFTER CHANGE:**
-   * Typecheck (`npx tsc --noEmit`), Rust check (`cargo check`) ve Vitest testlerini (`npx vitest run --exclude "**/tests/e2e-playwright/**"`) çalıştırın ve konsol çıktılarına göre `PASS` doğrulamasını yapın.
+Bir kapı geçilmeden sonraki faza GEÇİLMEZ.
 
 ---
 
-## 13. UI/UX VE GÖRSEL MİMARİ ANAYASASI (APPLE iOS / VISIONOS GERÇEK CAM VE SAF TASARIM)
+## 8. FEATURE FLAGS (11 Adet)
 
-1. **Saf Apple iOS / visionOS Felsefesi:**
-   * KASAM360 görsel dili; ucuz yapay zeka klişelerinden (büyücü yıldızları `✨`, anlamsız rastgele SVG dalgaları, anlamsız kripto hash kodları) tamamen arındırılmıştır.
-   * Tüm arayüz; Apple Human Interface Guidelines (macOS Sequoia & iOS 18) ve visionOS Glassmorphism standartlarına uygun olmalıdır.
-2. **Fiziksel Işık Kırılması (Specular Lighting) & Ambiyans Zorunluluğu:**
-   * Zifiri siyah `#060609` üzerine doğrudan mat saydamlık koymak YASAKTIR.
-   * Zemin katmanında daima derin ve zarif bir atmosferik ambiyans ışıması (subtle ambient glow) yer almalıdır.
-   * Tüm cam panellerin (`GlassCard`, `GlassModal`, `GlassButton`) üst kenarında fiziksel ışık kırılması pahı (`inset 0 1px 1px 0 rgba(255, 255, 255, 0.18)` ve `border: 1px solid rgba(255, 255, 255, 0.12)`) bulunmalıdır.
-3. **Ekran Bileşen Standartları:**
-   * **Lock Screen / PIN:** Birebir iPhone kilit ekranı cam numerik tuşları (yuvarlak, basınca ışığı parlatıp içeri çeken butonlar, cam altı harfler).
-   * **Üst Bar:** Bağımsız yüzen gerçek **macOS Sequoia Floating Glass Capsule**; sekmeler arasında akıcı kayan Apple Segmented Control.
-   * **Rakamlar & Tablolar:** Titremeyen `SF Pro / font-mono tabular-nums`, Apple Finance seviyesinde temiz hiyerarşi.
-4. **Donanım Emülatörleri İzolasyonu:**
-   * Banka POS / ÖKC emülatörleri ve sanal test makineleri kesinlikle canlı prodüksiyon kodunu kirletemez; `desktop/tests/emulators/` klasörüne izole edilmelidir.
+feat_kds              AÇIK
+feat_qr_menu          AÇIK
+feat_delivery         KAPALI
+feat_caller_id        KAPALI
+feat_table_order      AÇIK
+feat_seat_split       AÇIK
+feat_recipe_bom       AÇIK
+feat_dynamic_pricing  KAPALI
+feat_ledger_cari      AÇIK
+feat_multi_branch     KAPALI
+feat_loss_radar       AÇIK
 
+Override zinciri: tenant → branch (user override YOK). Kapalıysa route 404.
+
+---
+
+## 9. 13 P0 GÜVENLİK KİLİDİ
+
+1. Sahte FIFO kaldır → gerçek parti/lot
+2. Parçalı ödemede çift stok düşümü engeli
+3. close_day açık sıfırlama sabotajı kaldır
+4. Kasa kart/nakit ayrımı
+5. KDS O(N) event taraması fix
+6. audit_mutex + payment_mutex ayrımı
+7. Fiyat kayması dondurma
+8. Parçalı ödeme bakiye formülü düzelt
+9. Cross-tenant PIN fallthrough kapat
+10. caller_role oturum doğrulaması
+11. void_order PAID/CLOSED yasak
+12. Negatif modifier fiyat engeli
+13. 5 hatalı PIN + busy_timeout(5000)
+
+---
+
+## 10. KOD YAZIM KURALLARI
+
+- Yorumlar Türkçe (neden yapıldığı)
+- Identifiers İngilizce (mevcut convention)
+- Dosya boyutu: max 500 satır (aşarsa modüllere böl)
+- Bileşen boyutu: max 300 satır
+- Dosyalar UTF-8 (BOM'suz)
+- displayName + forwardRef her custom bileşende
+- Türkçe karakterler doğru kodlanacak (ı, ş, ğ, ü, ö, ç)
+- Yorum satırı "neden" der, "ne" demez.
+
+---
+
+## 11. AGENT ÇALIŞMA PROTOKOLÜ
+
+BEFORE CHANGE:
+- AGENTS.md ve ilgili domain kurallarını oku
+- Baseline: npx tsc --noEmit çalıştır
+
+DURING CHANGE:
+- Sadece istenen değişikliği yap
+- Kod yorumlarını Türkçe yaz
+- Yetki matrisini ihlal etme
+
+AFTER CHANGE:
+- Typecheck + cargo check + vitest çalıştır
+- Kanıt göster (konsol çıktısı)
+- AI slop taraması yap
+
+KANIT ZORUNLULUĞU:
+- Screenshot: Gerçek Chrome çıktısı (Gemini mockup YASAK)
+- Kod içeriği: Tam metin ("şu dizinde" YASAK)
+- Test çıktısı: PASS gösterilmesi
+- Her batch sonunda DUR, onay bekle
+- Batch onaylanmadan sonraki batch'e GEÇİLMEZ
+
+EKSİK İŞ YAPMA:
+- Agent verilen listedeki her maddeyi birebir uygular
+- "Yakın", "benzer", "yeterli" gibi ifadeler YASAK
+- Liste dışına çıkma, liste içinde kal
+- Emin değilsen DUR ve sor
+
+---
+
+## 12. ÖZET — "YAPMA" LİSTESİ
+
+- Emoji, gradient, jargon
+- panic!, unwrap(), any
+- Filtresiz SQL, cross-tenant
+- Sahte FIFO, hash UI'da
+- Ham Tailwind, karışık ikon
+- İngilizce metin
+- "Dark yeter" (light da olacak)
+- Gemini mockup (gerçek Chrome)
+- "Şu dizinde" (tam içerik)
+- Batch atlama (her batch onay sonrası)
+- Liste dışına çıkma, madde atlama
+- #3B82F6 gibi generic AI mavisi (Apple #0A84FF kullan)
+- Saf siyah #000 / saf beyaz #FFF (sıcak tonlar kullan)
+- Neon/doygun renkler (Apple system colors kullan)
+
+---
+
+Son güncelleme: 2026-10-01
+Versiyon: v2.0
+Değişiklik: Apple System Colors + Liquid Glass fizik + Patron paneli entegre

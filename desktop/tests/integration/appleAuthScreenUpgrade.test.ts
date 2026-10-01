@@ -8,7 +8,7 @@
  * 3. LoginPage bileşeninin PinScreen ile birebir aynı Apple spatial glass tasarımını ve PIN/Credentials toggle yapısını doğrular.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { AppleKeypad } from '../../src/presentation/components/common/AppleKeypad';

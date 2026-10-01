@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+
 import { MockCashDrawer } from '../../src/data/hardware/mock/MockCashDrawer';
 import { MockBarcodeScanner } from '../../src/data/hardware/mock/MockBarcodeScanner';
 import { MockOKC } from '../../src/data/hardware/mock/MockOKC';

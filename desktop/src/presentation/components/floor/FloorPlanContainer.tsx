@@ -94,6 +94,19 @@ export function FloorPlanContainer() {
     const table = mappedTables.find((t) => t.id === tableId);
     if (!table) return;
 
+    try {
+      const locked = await tauriInvoke<boolean>('try_lock_table', { 
+        tableId: table.id, 
+        waiterId: user?.userId || 'UNKNOWN' 
+      });
+      if (!locked) {
+        notifyError('Masa Kilitli', 'Bu masa şu anda başka bir personel tarafından işlem görüyor. Lütfen bekleyiniz.');
+        return;
+      }
+    } catch (e) {
+      console.warn("Kilit kontrolü başarısız, devam ediliyor:", e);
+    }
+
     if (table.status === 'empty') {
       // Boş masaya tıklandığında doğrudan adisyonu bağlayarak POS ekranına yönlendir
       await selectTable(table.id);

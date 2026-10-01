@@ -3,7 +3,7 @@
  * Path: tests/integration/offlineSync.test.ts
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+
 import {
   BackgroundSyncWorker,
   RealtimeNetworkListener,

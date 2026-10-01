@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import { MockPrinter } from '../../src/data/hardware/mock/MockPrinter';
 import { PersistentPrintQueue } from '../../src/data/hardware/queue/PersistentPrintQueue';
 import { PrintSpooler } from '../../src/data/hardware/queue/PrintSpooler';

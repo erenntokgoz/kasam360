@@ -11,7 +11,7 @@
  * 6. Açık hesaplar, adisyon özeti ve vardiya mutabakat modellerinin cents tamsayı kuralına uyumunu doğrular.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { CashierWorkstationContainer } from '../../src/presentation/components/cashier/CashierWorkstationContainer';

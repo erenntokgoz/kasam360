@@ -14,6 +14,7 @@ export default defineConfig({
     },
   },
   test: {
+    globals: true,
     include: ['tests/**/*.{test,spec}.{js,ts,jsx,tsx}'],
     exclude: ['**/tests/e2e-playwright/**', '**/e2e-playwright/**', '**/node_modules/**'],
   },

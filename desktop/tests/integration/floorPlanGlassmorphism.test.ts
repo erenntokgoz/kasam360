@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { TableCard } from '../../src/presentation/components/floor/ui/TableCard';

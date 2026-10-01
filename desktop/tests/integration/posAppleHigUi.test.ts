@@ -7,7 +7,7 @@
  * ve veri sözleşmelerine uygunluğunu doğrular.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+
 import React from 'react';
 import { POSLayout } from '../../src/presentation/components/pos/ui/POSLayout';
 import { ProductCard } from '../../src/presentation/components/pos/ui/ProductCard';
