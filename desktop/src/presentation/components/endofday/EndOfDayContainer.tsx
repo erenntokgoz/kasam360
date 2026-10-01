@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { tauriInvoke as invoke } from '../../../data/ipc/tauriInvoke';
 import { useAuthStore } from '../../store/useAuthStore';
+import { usePermission } from '../../hooks/usePermission';
 import { useFloorStore } from '../../store/useFloorStore';
 import { toast as useToast } from '@core/components/ui/toast';
 import { QuickTransactionModal, QuickTransactionType } from './ui/QuickTransactionModal';
@@ -120,6 +121,8 @@ export const EndOfDayContainer: React.FC<EndOfDayContainerProps> = ({
   const actorRole = user?.role ?? 'Cashier';
   const actorName = user?.name ?? 'Yetkili';
   const tenantId = user?.tenantId ?? 'DEFAULT_TENANT';
+  // P&L sekmesi ayrı bir yetki satırına bağlıdır; defterin kendisi kısmi erişime açık
+  const canSeeFinancialReports = usePermission().can('reportsAccess');
 
   // Açık masa denetimi için salon durumunu al
   const { tables, fetchFloorPlan } = useFloorStore();
@@ -789,6 +792,9 @@ export const EndOfDayContainer: React.FC<EndOfDayContainerProps> = ({
           <span>Gider Defteri</span>
         </button>
 
+        {/* P&L sekmesi "Raporlar" yetkisine bağlıdır: kasiyer Hesap Defteri'ne
+            kısmen erişir ancak gelir/gider bilançosunu göremez (SPEC §34). */}
+        {canSeeFinancialReports && (
         <button
           type="button"
           onClick={() => setActiveTab('FINANSAL_RAPORLAR')}
@@ -801,6 +807,7 @@ export const EndOfDayContainer: React.FC<EndOfDayContainerProps> = ({
           <BarChart3 size={14} />
           <span>Finansal Raporlar (P&L)</span>
         </button>
+        )}
 
         <button
           type="button"
@@ -1422,7 +1429,7 @@ export const EndOfDayContainer: React.FC<EndOfDayContainerProps> = ({
       )}
 
       {/* SEKME 6: FİNANSAL RAPORLAR (P&L) */}
-      {activeTab === 'FINANSAL_RAPORLAR' && (
+      {canSeeFinancialReports && activeTab === 'FINANSAL_RAPORLAR' && (
         <FinancialReportsTab />
       )}
 

@@ -14,6 +14,8 @@ pub mod kitchen_commands;
 pub mod analytics_commands;
 pub mod id_generator;
 pub mod ledger_commands;
+pub mod rbac;
+pub mod user_credentials;
 
 pub use db::{init_db, DbPool};
 

@@ -1,208 +1,205 @@
-
-
 /**
- * KASAM360 — Role Navigation & Button Permissions Validation Suite
+ * KASAM360 — SPEC §34 Rol Yetki Matrisi Doğrulama
  *
- * Doğrulanan Kural ve Invariant'lar:
- * 1. AGENTS.md Madde 4 Role Matrix uyarınca hiçbir rol yetkisiz ekran butonu göremez.
- * 2. GlobalNav üzerindeki her buton, App.tsx içerisindeki allowedViews ile %100 örtüşür.
- * 3. Hiçbir kullanıcı tıklandığında geri atılan (phantom/işlevsiz) buton görmez.
+ * Bu dosya artık kodu KOPYALAMAZ. Beklenen değerler doğrudan SPEC §34'ün tablosundan
+ * yazılmış sabitlerdir; implementasyondan yeniden hesaplanmaz. Böylece matris
+ * değişirse ya da bozulursa test kırılır, kopyayla birlikte sessizce bozulmaz.
  */
 
-interface RolePermissions {
-  allowedViews: string[];
-  defaultView: string;
-  canSeePos: boolean;
-  canSeeCashier: boolean;
-  canSeeFloor: boolean;
-  canSeeReceipts: boolean;
-  canSeeKds: boolean;
-  canSeeEndOfDay: boolean;
-  canSeeOwnerDashboard: boolean;
-  canSeeManagement: boolean;
-}
+import { ROLES, type Role } from '../../src/core/security/roles.types';
+import {
+  CAPABILITIES,
+  CAPABILITY_MATRIX,
+  accessibleViews,
+  canAccessView,
+  defaultViewFor,
+  grantTier,
+  hasCapability,
+  isKnownRole,
+  navigableViews,
+  type Capability,
+  type GrantTier,
+} from '../../src/core/security/navigationMatrix';
 
-function getRoleNavPermissions(role: string): RolePermissions {
-  let allowedViews: string[] = [];
-  let defaultView = 'FLOOR';
+/** SPEC §34'ün rol tablosu, test tarafına birebir kopyalanmış bağımsız kaynak. */
+const SPEC_TABLE: Record<Capability, Partial<Record<Role, GrantTier>>> = {
+  platformManage: { MASTER: 'FULL' },
+  tenantManage: { MASTER: 'FULL' },
+  featureFlags: { MASTER: 'FULL' },
+  branchManage: { MASTER: 'FULL' },
+  menuPricing: { OWNER: 'FULL' },
+  staffManage: { OWNER: 'FULL', MANAGER: 'PARTIAL' },
+  ledgerAccess: { OWNER: 'FULL', MANAGER: 'PARTIAL', CASHIER: 'PARTIAL' },
+  reportsAccess: { OWNER: 'FULL', MANAGER: 'PARTIAL' },
+  tableOpen: { OWNER: 'FULL', MANAGER: 'FULL', CASHIER: 'FULL', WAITER: 'FULL' },
+  paymentTake: { OWNER: 'FULL', CASHIER: 'FULL', WAITER: 'CONDITIONAL' },
+  shiftManage: { OWNER: 'FULL', MANAGER: 'FULL', CASHIER: 'FULL' },
+  voidApprove: { OWNER: 'FULL', MANAGER: 'FULL', CASHIER: 'PIN' },
+  discountApprove: { OWNER: 'FULL', MANAGER: 'FULL', CASHIER: 'PIN' },
+  kdsManage: { OWNER: 'FULL', MANAGER: 'FULL', KITCHEN: 'FULL' },
+  kitchenPrepare: { OWNER: 'FULL', MANAGER: 'FULL', KITCHEN: 'FULL' },
+  issueReport: {
+    MASTER: 'FULL',
+    OWNER: 'FULL',
+    MANAGER: 'FULL',
+    CASHIER: 'FULL',
+    WAITER: 'FULL',
+    KITCHEN: 'FULL',
+  },
+  whatsappBot: { OWNER: 'FULL' },
+  auditRaw: { MASTER: 'FULL' },
+};
 
-  switch (role) {
-    case 'MASTER':
-      allowedViews = ['PLATFORM'];
-      defaultView = 'PLATFORM';
-      break;
-    case 'OWNER':
-      // İşletme sahibi: Restoran düzeyindeki tüm operasyonel ve yönetsel ekranlara tam erişim hakkı
-      allowedViews = ['OWNER_DASHBOARD', 'MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'CASHIER', 'RECEIPTS', 'END_OF_DAY'];
-      defaultView = 'OWNER_DASHBOARD';
-      break;
-    case 'MANAGER':
-      allowedViews = ['MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'RECEIPTS', 'END_OF_DAY'];
-      defaultView = 'MANAGEMENT';
-      break;
-    case 'CASHIER':
-      allowedViews = ['CASHIER', 'POS', 'FLOOR', 'RECEIPTS'];
-      defaultView = 'CASHIER';
-      break;
-    case 'WAITER':
-      allowedViews = ['POS', 'FLOOR'];
-      defaultView = 'FLOOR';
-      break;
-    case 'KITCHEN':
-      allowedViews = ['KDS'];
-      defaultView = 'KDS';
-      break;
-    default:
-      allowedViews = [];
-      defaultView = 'FLOOR';
-  }
+const sorted = (values: readonly string[]): string[] => [...values].sort();
 
-  // GlobalNav mantığı
-  const canSeePos = ['WAITER', 'CASHIER', 'MANAGER', 'OWNER'].includes(role);
-  const canSeeCashier = ['CASHIER', 'OWNER'].includes(role);
-  const canSeeFloor = ['WAITER', 'CASHIER', 'MANAGER', 'OWNER'].includes(role);
-  const canSeeReceipts = ['CASHIER', 'MANAGER', 'OWNER'].includes(role);
-  const canSeeKds = ['KITCHEN', 'MANAGER', 'OWNER'].includes(role);
-  const canSeeEndOfDay = ['MANAGER', 'OWNER'].includes(role);
-  const canSeeOwnerDashboard = role === 'OWNER';
-  const canSeeManagement = ['MANAGER', 'OWNER'].includes(role);
+describe('SPEC §34 — kaynak gerçeklik', () => {
+  it('matristeki özellik sayısı SPEC ile aynı (18 satır)', () => {
+    expect(Object.keys(CAPABILITIES)).toHaveLength(18);
+  });
 
-  return {
-    allowedViews,
-    defaultView,
-    canSeePos,
-    canSeeCashier,
-    canSeeFloor,
-    canSeeReceipts,
-    canSeeKds,
-    canSeeEndOfDay,
-    canSeeOwnerDashboard,
-    canSeeManagement,
-  };
-}
+  it('her özellik satırı SPEC tablosuyla birebir aynı', () => {
+    expect(CAPABILITY_MATRIX).toEqual(SPEC_TABLE);
+  });
 
-describe('KASAM360 — Role Navigation & Button Permissions Matrix', () => {
-  const roles = ['MASTER', 'OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN'] as const;
-
-  roles.forEach((role) => {
-    describe(`Role: ${role}`, () => {
-      const perms = getRoleNavPermissions(role);
-
-      it('defaultView is included in allowedViews', () => {
-        expect(perms.allowedViews).toContain(perms.defaultView);
-      });
-
-      if (role !== 'MASTER') {
-        it('every visible GlobalNav button is authorized in allowedViews (no dead/bouncing buttons)', () => {
-          if (perms.canSeePos) {
-            expect(perms.allowedViews).toContain('POS');
-          }
-          if (perms.canSeeCashier) {
-            expect(perms.allowedViews).toContain('CASHIER');
-          }
-          if (perms.canSeeFloor) {
-            expect(perms.allowedViews).toContain('FLOOR');
-          }
-          if (perms.canSeeReceipts) {
-            expect(perms.allowedViews).toContain('RECEIPTS');
-          }
-          if (perms.canSeeKds) {
-            expect(perms.allowedViews).toContain('KDS');
-          }
-          if (perms.canSeeEndOfDay) {
-            expect(perms.allowedViews).toContain('END_OF_DAY');
-          }
-          if (perms.canSeeOwnerDashboard) {
-            expect(perms.allowedViews).toContain('OWNER_DASHBOARD');
-          }
-          if (perms.canSeeManagement) {
-            expect(perms.allowedViews).toContain('MANAGEMENT');
-          }
-        });
-      }
+  it('her rol için tanımlı olmayan yetki "yok" sayılır', () => {
+    const absent: Partial<Record<Capability, Role>> = {
+      menuPricing: 'CASHIER',
+      platformManage: 'OWNER',
+      auditRaw: 'MANAGER',
+      whatsappBot: 'MANAGER',
+      reportsAccess: 'CASHIER',
+    };
+    Object.entries(absent).forEach(([capability, role]) => {
+      expect(grantTier(role as Role, capability as Capability)).toBeUndefined();
+      expect(hasCapability(role as Role, capability as Capability)).toBe(false);
     });
   });
 
-  describe('Strict AGENTS.md Constitution Role Boundaries', () => {
-    it('OWNER has FULL access to all operational restaurant views (POS, Floor, Cashier, KDS, Management, Receipts, EndOfDay, Dashboard)', () => {
-      const owner = getRoleNavPermissions('OWNER');
-      expect(owner.canSeeCashier).toBe(true);
-      expect(owner.canSeeFloor).toBe(true);
-      expect(owner.canSeePos).toBe(true);
-      expect(owner.canSeeKds).toBe(true);
-      expect(owner.canSeeReceipts).toBe(true);
-      expect(owner.canSeeEndOfDay).toBe(true);
-      expect(owner.canSeeManagement).toBe(true);
-      expect(owner.canSeeOwnerDashboard).toBe(true);
-      expect(owner.allowedViews).toEqual(
-        expect.arrayContaining(['OWNER_DASHBOARD', 'MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'CASHIER', 'RECEIPTS', 'END_OF_DAY'])
-      );
+  it('MASTER tenant satırlarının hiçbirine sahip değildir', () => {
+    const tenantCapabilities: Capability[] = [
+      'menuPricing',
+      'staffManage',
+      'ledgerAccess',
+      'reportsAccess',
+      'tableOpen',
+      'paymentTake',
+      'shiftManage',
+      'voidApprove',
+      'discountApprove',
+      'kdsManage',
+      'kitchenPrepare',
+      'whatsappBot',
+    ];
+    tenantCapabilities.forEach((capability) => {
+      expect(grantTier('MASTER', capability)).toBeUndefined();
+    });
+    // MASTER'ın sahip olduğu satırlar yalnızca platform kapsamlıdır
+    expect(grantTier('MASTER', 'platformManage')).toBe('FULL');
+    expect(grantTier('MASTER', 'auditRaw')).toBe('FULL');
+  });
+
+  it('PIN ve CONDITIONAL seviyeler ekran kapısı açmaz', () => {
+    // Ödeme: WAITER koşullu, CASHIER tam yetkili
+    expect(grantTier('WAITER', 'paymentTake')).toBe('CONDITIONAL');
+    expect(canAccessView('WAITER', 'CASHIER')).toBe(false);
+    expect(canAccessView('CASHIER', 'CASHIER')).toBe(true);
+    // MUDUR vardiya açabiliyor ama tahsilat alamıyor
+    expect(grantTier('MANAGER', 'shiftManage')).toBe('FULL');
+    expect(grantTier('MANAGER', 'paymentTake')).toBeUndefined();
+    expect(canAccessView('MANAGER', 'CASHIER')).toBe(false);
+  });
+});
+
+describe('SPEC §34 — ekran erişimi', () => {
+  const expectations: Record<Role, { views: string[]; defaultView: string }> = {
+    MASTER: { views: ['PLATFORM'], defaultView: 'PLATFORM' },
+    OWNER: {
+      views: ['OWNER_DASHBOARD', 'MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'CASHIER', 'RECEIPTS', 'END_OF_DAY'],
+      defaultView: 'OWNER_DASHBOARD',
+    },
+    MANAGER: { views: ['MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'RECEIPTS', 'END_OF_DAY'], defaultView: 'MANAGEMENT' },
+    CASHIER: { views: ['CASHIER', 'POS', 'FLOOR', 'RECEIPTS', 'END_OF_DAY'], defaultView: 'CASHIER' },
+    WAITER: { views: ['FLOOR', 'POS'], defaultView: 'FLOOR' },
+    KITCHEN: { views: ['KDS'], defaultView: 'KDS' },
+  };
+
+  ROLES.forEach((role) => {
+    it(`${role} yalnızca SPEC'teki ekranlara erişir`, () => {
+      expect(sorted(accessibleViews(role))).toEqual(sorted(expectations[role].views));
     });
 
-    it('OWNER possesses superset of rights compared to MANAGER, CASHIER, and WAITER within the restaurant', () => {
-      const owner = getRoleNavPermissions('OWNER');
-      const manager = getRoleNavPermissions('MANAGER');
-      const cashier = getRoleNavPermissions('CASHIER');
-      const waiter = getRoleNavPermissions('WAITER');
+    it(`${role} oturum açtığında doğru ana ekrana düşer`, () => {
+      expect(defaultViewFor(role)).toBe(expectations[role].defaultView);
+    });
 
-      // Manager'ın tüm ekranları Owner'da mevcut olmalıdır
-      manager.allowedViews.forEach((view) => {
-        expect(owner.allowedViews).toContain(view);
+    it(`${role} için gezinme butonları erişilebilir ekranların alt kümesidir`, () => {
+      navigableViews(role).forEach((view) => {
+        expect(accessibleViews(role)).toContain(view);
       });
-      // Cashier'ın tüm ekranları Owner'da mevcut olmalıdır
-      cashier.allowedViews.forEach((view) => {
-        expect(owner.allowedViews).toContain(view);
+    });
+  });
+});
+
+describe('SPEC §34 — gezinme çubuğu görünürlüğü', () => {
+  const expectedNav: Record<Role, string[]> = {
+    MASTER: [],
+    OWNER: ['FLOOR', 'CASHIER', 'RECEIPTS', 'KDS', 'END_OF_DAY', 'OWNER_DASHBOARD'],
+    MANAGER: ['FLOOR', 'RECEIPTS', 'KDS', 'END_OF_DAY', 'MANAGEMENT'],
+    CASHIER: ['FLOOR', 'CASHIER', 'RECEIPTS', 'END_OF_DAY'],
+    WAITER: ['FLOOR'],
+    KITCHEN: ['KDS'],
+  };
+
+  ROLES.forEach((role) => {
+    it(`${role} tam olarak ${expectedNav[role].join(', ') || 'hiçbir'} butonu görür`, () => {
+      expect(sorted(navigableViews(role))).toEqual(sorted(expectedNav[role]));
+    });
+  });
+
+  it('POS bir gezinme butonu değildir, sipariş Masalar ekranından başlar', () => {
+    ROLES.forEach((role) => {
+      expect(navigableViews(role)).not.toContain('POS');
+    });
+  });
+
+  it('OWNER Yönetim butonu görmez: erişebildiği view İşletme panelini aynı bileşenle açar', () => {
+    expect(canAccessView('OWNER', 'MANAGEMENT')).toBe(true);
+    expect(navigableViews('OWNER')).not.toContain('MANAGEMENT');
+    expect(navigableViews('MANAGER')).toContain('MANAGEMENT');
+  });
+
+  it('MASTER hiçbir gezinme butonu görmez, platform ekranı AppShell dışında açılır', () => {
+    expect(navigableViews('MASTER')).toHaveLength(0);
+    expect(canAccessView('MASTER', 'PLATFORM')).toBe(true);
+  });
+});
+
+describe('Rol sınır güvenliği', () => {
+  it('OWNER, MANAGER, CASHIER ve WAITER yetkilerinin tamamına sahiptir', () => {
+    const owner = accessibleViews('OWNER');
+    (['MANAGER', 'CASHIER', 'WAITER'] as Role[]).forEach((role) => {
+      accessibleViews(role).forEach((view) => {
+        expect(owner).toContain(view);
       });
-      // Waiter'ın tüm ekranları Owner'da mevcut olmalıdır
-      waiter.allowedViews.forEach((view) => {
-        expect(owner.allowedViews).toContain(view);
-      });
     });
+  });
 
-    it('MANAGER has floor, POS, KDS and management access, but CANNOT see Cashier workstation', () => {
-      const manager = getRoleNavPermissions('MANAGER');
-      expect(manager.canSeeFloor).toBe(true);
-      expect(manager.canSeePos).toBe(true);
-      expect(manager.canSeeKds).toBe(true);
-      expect(manager.canSeeManagement).toBe(true);
-      expect(manager.canSeeReceipts).toBe(true);
-      expect(manager.canSeeEndOfDay).toBe(true);
-      // Manager cannot open cash shifts / cashier workstation
-      expect(manager.canSeeCashier).toBe(false);
-      expect(manager.canSeeOwnerDashboard).toBe(false);
-    });
+  it('Masa ve mutfak rolleri birbirinin işlerine karışamaz', () => {
+    expect(canAccessView('KITCHEN', 'FLOOR')).toBe(false);
+    expect(canAccessView('WAITER', 'KDS')).toBe(false);
+  });
 
-    it('CASHIER has cashier, POS, floor and receipts, but CANNOT see KDS or Owner dashboard', () => {
-      const cashier = getRoleNavPermissions('CASHIER');
-      expect(cashier.canSeeCashier).toBe(true);
-      expect(cashier.canSeePos).toBe(true);
-      expect(cashier.canSeeFloor).toBe(true);
-      expect(cashier.canSeeReceipts).toBe(true);
-      expect(cashier.canSeeKds).toBe(false);
-      expect(cashier.canSeeEndOfDay).toBe(false);
-      expect(cashier.canSeeManagement).toBe(false);
+  it('muhasebe ve rapor satırları mutfak ile garson rollerine kapalıdır', () => {
+    ['WAITER', 'KITCHEN'].forEach((role) => {
+      expect(canAccessView(role as Role, 'END_OF_DAY')).toBe(false);
     });
+    expect(hasCapability('CASHIER', 'reportsAccess')).toBe(false);
+  });
 
-    it('WAITER can ONLY see Floor and POS', () => {
-      const waiter = getRoleNavPermissions('WAITER');
-      expect(waiter.canSeeFloor).toBe(true);
-      expect(waiter.canSeePos).toBe(true);
-      expect(waiter.canSeeKds).toBe(false);
-      expect(waiter.canSeeCashier).toBe(false);
-      expect(waiter.canSeeReceipts).toBe(false);
-      expect(waiter.canSeeEndOfDay).toBe(false);
-      expect(waiter.canSeeManagement).toBe(false);
-    });
-
-    it('KITCHEN can ONLY see KDS', () => {
-      const kitchen = getRoleNavPermissions('KITCHEN');
-      expect(kitchen.canSeeKds).toBe(true);
-      expect(kitchen.canSeeFloor).toBe(false);
-      expect(kitchen.canSeePos).toBe(false);
-      expect(kitchen.canSeeCashier).toBe(false);
-      expect(kitchen.canSeeReceipts).toBe(false);
-      expect(kitchen.canSeeEndOfDay).toBe(false);
-      expect(kitchen.canSeeManagement).toBe(false);
-    });
+  it('bilinmeyen rol hiçbir ekrana erişemez', () => {
+    expect(isKnownRole('SuperAdmin')).toBe(false);
+    expect(isKnownRole('Owner')).toBe(false);
+    expect(isKnownRole('OWNER')).toBe(true);
+    ROLES.forEach((role) => expect(isKnownRole(role)).toBe(true));
   });
 });

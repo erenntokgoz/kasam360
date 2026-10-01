@@ -76,6 +76,13 @@ export function TableActionModal({
   const availableEmptyTables = allTables.filter((t) => t.id !== table.id && t.status === 'empty');
   const otherTablesForMerge = allTables.filter((t) => t.id !== table.id);
 
+  // 35 dakika hareketsiz kalan dolu masa kilitlenir; koşul dört yerde tekrar ettiği
+  // için tek türetilmiş bayrağa indirgeniyor (yanlışlıkla 35dk sayısını değiştirmemek için)
+  const isStaleLocked =
+    table.status === 'occupied' &&
+    table.openedAt !== undefined &&
+    Date.now() - table.openedAt >= 35 * 60000;
+
   return (
     <div
       onClick={handleBackdropClick}
@@ -205,19 +212,19 @@ export function TableActionModal({
               {/* 1. Sipariş Ekle - Akıcı POS Ekranına Geçiş */}
               <button
                 type="button"
-                disabled={table.status === 'occupied' && table.openedAt && (Date.now() - table.openedAt) >= 35 * 60000}
+                disabled={isStaleLocked}
                 onClick={async () => {
-                  if (table.status === 'occupied' && table.openedAt && (Date.now() - table.openedAt) >= 35 * 60000) return;
+                  if (isStaleLocked) return;
                   await onAction('Sipariş Ekle');
                   handleClose();
                 }}
                 className={`h-24 rounded-2xl text-base font-semibold flex flex-col items-center justify-center gap-2 transition-all active:scale-95 touch-manipulation cursor-pointer ${
-                  table.status === 'occupied' && table.openedAt && (Date.now() - table.openedAt) >= 35 * 60000
+                  isStaleLocked
                     ? 'bg-zinc-500/10 border border-zinc-500/20 text-zinc-400 cursor-not-allowed opacity-60'
                     : 'bg-[#007AFF] hover:bg-[#0071E3] text-white shadow-lg shadow-[#007AFF]/20'
                 }`}
               >
-                {table.status === 'occupied' && table.openedAt && (Date.now() - table.openedAt) >= 35 * 60000 ? (
+                {isStaleLocked ? (
                   <>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                     <span>Kilitli (35dk)</span>

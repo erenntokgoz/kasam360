@@ -707,7 +707,10 @@ export function CashierWorkstationContainer() {
     };
 
     try {
-      const res = await tauriInvoke<{ success: boolean; transactionId?: string }>('process_payment', { payload });
+      const res = await tauriInvoke<{ success: boolean; transactionId?: string }>('process_payment', {
+        payload,
+        actorRole: user?.role ?? 'WAITER',
+      });
 
       const paidItems = [...tableItems];
       const tableName = selectedTable?.name || selectedTableId;

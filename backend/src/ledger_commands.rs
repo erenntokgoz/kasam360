@@ -847,11 +847,17 @@ pub async fn create_expense(
 /// İşletmenin net kâr/zarar, gelir, gider ve borç/alacak bilançosunu hesaplar.
 #[tauri::command]
 pub async fn get_financial_report(
+    actor_role: String,
     tenant_id: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<FinancialReportDto, String> {
+    // SPEC §34 "Raporlar": işletme sahibi tam, müdür kısmi. Bu komut gelir, gider ve
+    // borç/alacak bilançosunu döndürdüğü için kasiyer, garson ve mutfak rolleri
+    // dışarıdadır. Kapı önceden hiç yoktu.
+    crate::rbac::require_reporting(&actor_role)?;
+
     let tid = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 

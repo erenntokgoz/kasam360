@@ -1,6 +1,6 @@
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
+use sqlx::{Acquire, Row};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -92,9 +92,16 @@ pub struct TicketStatusTransitionDto {
 #[tauri::command]
 pub async fn process_payment(
     payload: PaymentPayloadDto,
+    actor_role: String,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<PaymentResultDto, String> {
+    // SPEC §34 "Ödeme Alma": işletme sahibi ve kasiyer. Garsonun yetkisi koşulludur
+    // (⚠️ Yetki) ve kişi bazlı ödeme izni henüz uygulanmadığı için burada açılmaz.
+    // Bu komut önceden hiç rol parametresi almadığı için yetkisiz her çağıran ödeme
+    // kapatabiliyordu.
+    crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner, crate::rbac::Role::Cashier])?;
+
     let _lock = state.payment_mutex.lock().await;
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
@@ -136,9 +143,13 @@ pub async fn process_payment(
 #[tauri::command]
 pub async fn process_split_payment(
     payload: PaymentPayloadDto,
+    actor_role: String,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<PaymentResultDto, String> {
+    // Parçalı ödeme de tahsilattır: process_payment ile aynı SPEC satırı.
+    crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner, crate::rbac::Role::Cashier])?;
+
     let _lock = state.payment_mutex.lock().await;
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
@@ -882,9 +893,10 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
         return Err("Geçersiz kimlik bilgileri".to_string());
     }
 
-    // İlk olarak platform_admins tablosuna bak (MASTER yetkisi için)
+    // İlk olarak platform_admins tablosuna bak (MASTER yetkisi için).
+    // Sütun `pin_hash`: düz metin `pin` kaldırıldı, yalnızca Argon2id PHC kabul edilir.
     let admin_row = sqlx::query(
-        "SELECT id, name, pin as credential_hash FROM platform_admins WHERE email = ? COLLATE NOCASE",
+        "SELECT id, name, pin_hash FROM platform_admins WHERE email = ? COLLATE NOCASE",
     )
     .bind(identifier)
     .fetch_optional(pool)
@@ -892,11 +904,10 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
     .map_err(|e| e.to_string())?;
 
     if let Some(row) = admin_row {
-        let hash: Option<String> = row.try_get("credential_hash").ok();
-        let is_valid = if let Some(ref h) = hash {
-            crate::auth::verify_credential(secret, h) || h == secret
-        } else {
-            false
+        let hash: Option<String> = row.try_get("pin_hash").ok().flatten();
+        let is_valid = match hash.as_deref() {
+            Some(hash) => crate::user_credentials::verify_stored_credential(secret, hash),
+            None => false,
         };
 
         if is_valid {
@@ -916,7 +927,7 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
     }
 
     let row = sqlx::query(
-        "SELECT id, role, name, tenant_id, pin, credential_hash FROM users WHERE login_identifier = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?",
+        "SELECT id, role, name, tenant_id, credential_hash FROM users WHERE is_active = 1 AND (login_identifier = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?)",
     )
     .bind(identifier)
     .bind(identifier)
@@ -928,15 +939,14 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
     let Some(row) = row else {
         return Err("Geçersiz kimlik bilgileri".to_string());
     };
+    // Yalnızca Argon2 hash'i kabul edilir; düz metin PIN sütunu artık yoktur ve
+    // migration'da hash'e çevrilmiştir. Argon2 olmayan bir hash "eşleşme" sayılmaz.
     let hash: Option<String> = row.try_get("credential_hash").ok().flatten();
-    let db_pin: Option<String> = row.try_get("pin").ok();
-    
-    let is_valid = if let Some(ref h) = hash {
-        crate::auth::verify_credential(secret, h)
-    } else if let Some(ref p) = db_pin {
-        p == secret
-    } else {
-        false
+    let is_valid = match hash.as_deref() {
+        Some(hash) if crate::user_credentials::is_argon2_hash(hash) => {
+            crate::auth::verify_credential(secret, hash)
+        }
+        _ => false,
     };
 
     if !is_valid {
@@ -959,18 +969,18 @@ pub async fn authenticate_by_pin(pool: &DbPool, pin: &str, target_tenant_id: Opt
         return Err("Geçersiz PIN".to_string());
     }
 
-    // İlk olarak platform_admins kontrol et (MASTER her işletmede geçerlidir)
-    let admin_rows = sqlx::query("SELECT id, name, pin as credential_hash FROM platform_admins")
+    // İlk olarak platform_admins kontrol et (MASTER her işletmede geçerlidir).
+    // `pin_hash` sütunu Argon2id tutar; düz metin karşılaştırması yoktur.
+    let admin_rows = sqlx::query("SELECT id, name, pin_hash FROM platform_admins")
         .fetch_all(pool)
         .await
         .map_err(|e| e.to_string())?;
-        
+
     for row in admin_rows {
-        let hash: Option<String> = row.try_get("credential_hash").ok();
-        let is_valid = if let Some(ref h) = hash {
-            crate::auth::verify_credential(pin, h) || h == pin
-        } else {
-            false
+        let hash: Option<String> = row.try_get("pin_hash").ok().flatten();
+        let is_valid = match hash.as_deref() {
+            Some(hash) => crate::user_credentials::verify_stored_credential(pin, hash),
+            None => false,
         };
 
         if is_valid {
@@ -990,65 +1000,36 @@ pub async fn authenticate_by_pin(pool: &DbPool, pin: &str, target_tenant_id: Opt
         }
     }
 
-    // Kullanıcıları çek
-    let rows = sqlx::query("SELECT id, role, name, tenant_id, pin, credential_hash FROM users")
-        .fetch_all(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    // Multi-tenant PIN çakışmasını engelle (Cross-Tenant PIN Fallthrough Koruması):
+    // tenant belirtilmişse yalnızca o tenant taranır, bulunamazsa hiçbir başka
+    // kiracıya düşülmez. Tenant belirtilmemişse yalnızca DEFAULT_TENANT denenir —
+    // bu, tüm veritabanını taramakla aynı şey değildir.
+    let effective_tenant = match target_tenant_id {
+        Some(tenant) if !tenant.is_empty() => tenant,
+        _ => "DEFAULT_TENANT",
+    };
 
-    // Multi-tenant PIN çakışmasını engelle (Cross-Tenant PIN Fallthrough Koruması)
-    if let Some(t_id) = target_tenant_id {
-        if !t_id.is_empty() {
-            for row in rows.iter().filter(|r| {
-                let user_tid: String = r.try_get("tenant_id").unwrap_or_default();
-                user_tid == t_id
-            }) {
-                let hash: Option<String> = row.try_get("credential_hash").ok().flatten();
-                let db_pin: Option<String> = row.try_get("pin").ok();
+    // PIN düz metin olmadığı için `WHERE pin = ?` yerine aday satırlar Argon2 ile
+    // doğrulanır. Bu tarama `user_credentials` içinde tek yerde yaşar.
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let matched = crate::user_credentials::find_user_by_pin(&mut conn, pin, Some(effective_tenant)).await?;
+    drop(conn);
 
-                let is_valid = if let Some(ref h) = hash {
-                    crate::auth::verify_credential(pin, h)
-                } else if let Some(ref p) = db_pin {
-                    p == pin
-                } else {
-                    false
-                };
-
-                if is_valid {
-                    record_successful_pin();
-                    return Ok(user_dto_with_modules(pool, row).await);
-                }
-            }
-            // target_tenant_id belirtilmişse ve bulunamadıysa KESİNLİKLE başka kiracılara düşme!
-            record_failed_pin();
-            return Err("Geçersiz PIN".to_string());
-        }
-    }
-
-    // target_tenant_id belirtilmediyse DEFAULT_TENANT kullanıcılarını dene
-    for row in rows.iter().filter(|r| {
-        let user_tid: String = r.try_get("tenant_id").unwrap_or_default();
-        user_tid == "DEFAULT_TENANT"
-    }) {
-        let hash: Option<String> = row.try_get("credential_hash").ok().flatten();
-        let db_pin: Option<String> = row.try_get("pin").ok();
-
-        let is_valid = if let Some(ref h) = hash {
-            crate::auth::verify_credential(pin, h)
-        } else if let Some(ref p) = db_pin {
-            p == pin
-        } else {
-            false
-        };
-
-        if is_valid {
+    match matched {
+        Some(found) => {
             record_successful_pin();
-            return Ok(user_dto_with_modules(pool, row).await);
+            let row = sqlx::query("SELECT id, role, name, tenant_id FROM users WHERE id = ?")
+                .bind(&found.id)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(user_dto_with_modules(pool, &row).await)
+        }
+        None => {
+            record_failed_pin();
+            Err("Geçersiz PIN".to_string())
         }
     }
-
-    record_failed_pin();
-    Err("Geçersiz PIN".to_string())
 }
 
 #[tauri::command]
@@ -1082,42 +1063,36 @@ pub async fn change_self_pin(
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
-    // Kullanıcı kaydını doğrula
-    let row = sqlx::query("SELECT id, pin, credential_hash FROM users WHERE id = ?")
-        .bind(&user_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Kullanıcı bulunamadı.".to_string())?;
-
-    // Mevcut PIN gönderilmişse doğrula
+    // Mevcut PIN gönderilmişse Argon2 üzerinden doğrula.
     if let Some(ref cur_pin) = current_pin {
-        let hash: Option<String> = row.try_get("credential_hash").ok().flatten();
-        let db_pin: Option<String> = row.try_get("pin").ok();
-
-        let is_valid = if let Some(ref h) = hash {
-            crate::auth::verify_credential(cur_pin, h)
-        } else if let Some(ref p) = db_pin {
-            p == cur_pin
-        } else {
-            false
-        };
-
-        if !is_valid {
+        if !crate::user_credentials::verify_user_pin(&mut conn, &user_id, cur_pin).await? {
             return Err("Mevcut PIN hatalı.".to_string());
         }
     }
 
-    // Yeni PIN kodunu Argon2 ile hash'le ve güncelle
-    let hash = crate::auth::hash_credential(&new_pin)?;
+    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
 
-    sqlx::query("UPDATE users SET pin = ?, credential_hash = ? WHERE id = ?")
-        .bind(&new_pin)
-        .bind(&hash)
+    // Yeni PIN'i hash'le ve yalnızca hash'ini yaz: düz metin hiçbir yere gitmez.
+    let hash = crate::user_credentials::hash_pin(&new_pin)?;
+
+    // PIN benzersizliği kontrolü ve yazma aynı transaction içinde.
+    let tenant_id: String = sqlx::query_scalar("SELECT tenant_id FROM users WHERE id = ?")
         .bind(&user_id)
-        .execute(&mut *conn)
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+    crate::user_credentials::ensure_pin_available(&mut *tx, &tenant_id, &new_pin, Some(&user_id)).await?;
+
+    sqlx::query("UPDATE users SET pin_hash = ? WHERE id = ?")
+        .bind(&hash)
+        .bind(&user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    crate::user_credentials::ensure_pin_unique_after_write(&mut *tx, &tenant_id, &new_pin, &user_id).await?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(serde_json::json!({
         "success": true,
@@ -1219,10 +1194,7 @@ pub struct DailySummaryDto {
 
 #[tauri::command]
 pub async fn get_daily_summary(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<DailySummaryDto, String> {
-    let role_canonical = actor_role.to_uppercase();
-    if role_canonical != "MANAGER" && role_canonical != "OWNER" && role_canonical != "MASTER" && role_canonical != "MASTER ADMIN" && role_canonical != "CASHIER" {
-        return Err("UNAUTHORIZED: Insufficient permissions to view daily summary".into());
-    }
+    crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier])?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
@@ -1593,29 +1565,36 @@ pub async fn void_order(
 ) -> Result<bool, String> {
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    // Authorization
-    let role_upper = payload.actor_role.to_uppercase();
-    if role_upper == "CASHIER" || role_upper == "WAITER" {
-        let pin = payload.manager_pin.ok_or("Manager approval PIN is required for voids")?;
-        
-        // Verify manager pin
-        let manager_row = sqlx::query("SELECT role, id FROM users WHERE pin = ?")
-            .bind(&pin)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-            
-        if let Some(r) = manager_row {
-            let m_role: String = r.try_get("role").unwrap_or_default();
-            let m_id: String = r.try_get("id").unwrap_or_default();
-            if m_role != "Manager" && m_role != "Owner" && m_role != "Master Admin" && m_role.to_uppercase() != "MANAGER" && m_role.to_uppercase() != "OWNER" {
+    // Yetki (SPEC §34 "Void Onaylama"): kapı yasaklı rolleri sayan değil, yetkili
+    // rolleri kabul eden bir eşleşmedir. Önceki hâli "rol CASHIER/WAITER/KITCHEN
+    // değilse geç" mantığıydı; bu yüzden MASTER ve veritabanında karşılığı olmayan
+    // bir rol doğrudan void edebiliyordu (fail-open).
+    let actor_role = crate::rbac::canonical_role(&payload.actor_role)
+        .ok_or_else(|| "UNAUTHORIZED: Bilinmeyen rol".to_string())?;
+
+    match actor_role {
+        crate::rbac::Role::Owner | crate::rbac::Role::Manager => {}
+        crate::rbac::Role::Cashier | crate::rbac::Role::Waiter => {
+            let pin = payload.manager_pin.ok_or("Manager approval PIN is required for voids")?;
+
+            // Onaylayanın PIN'i düz metin olmadığı için `WHERE pin = ?` yerine
+            // tenant içindeki adaylar Argon2 ile doğrulanır.
+            let found = crate::user_credentials::find_user_by_pin(&mut tx, &pin, Some(&tenant_id)).await?;
+
+            let manager = found.ok_or("Invalid manager PIN")?;
+            let m_id = manager.id;
+
+            // SPEC'te Void Onaylama yalnızca sahip ve müdüre açıktır.
+            let approver = crate::rbac::canonical_role(&manager.role)
+                .ok_or_else(|| "Invalid manager PIN or insufficient permissions".to_string())?;
+            if !matches!(approver, crate::rbac::Role::Owner | crate::rbac::Role::Manager) {
                 return Err("Invalid manager PIN or insufficient permissions".into());
             }
-            
-            // Log the approval in the database
+
+            // Onayı denetim izine yaz
             let approval_id = Uuid::new_v4().to_string();
             sqlx::query(
-                "INSERT INTO approvals (id, tenant_id, request_type, resource_id, requester_id, status, approver_id, payload, resolved_at) 
+                "INSERT INTO approvals (id, tenant_id, request_type, resource_id, requester_id, status, approver_id, payload, resolved_at)
                  VALUES (?, ?, 'VOID_ORDER', ?, ?, 'APPROVED', ?, ?, datetime('now'))"
             )
             .bind(&approval_id)
@@ -1627,12 +1606,10 @@ pub async fn void_order(
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
-
-        } else {
-            return Err("Invalid manager PIN".into());
         }
-    } else if role_upper == "KITCHEN" {
-         return Err("Kitchen cannot void orders".into());
+        crate::rbac::Role::Master | crate::rbac::Role::Kitchen => {
+            return Err("UNAUTHORIZED: Bu rol sipariş iptali yapamaz".into());
+        }
     }
 
     // Ödenmiş veya kapatılmış siparişlerin iptal edilmesini kesinlikle engelle (P0 Güvenlik Kilidi)
@@ -1932,6 +1909,115 @@ pub async fn close_shift(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    /// MASTER platform hesabı artık yalnızca Argon2 hash'iyle tanınır.
+    /// Düz metin `pin` sütunu kaldırıldığı için eski `h == secret` fallback'i
+    /// hem gereksiz hem de tehlikelidir: bir hash yerine düz metin kalmış bir
+    /// veritabanında kimlik doğrulama bypass edilirdi.
+    #[tokio::test]
+    async fn platform_admin_kimlik_dogrulamasi_argon2_ile_calisir_duz_metni_kabul_etmez() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE platform_admins (
+                id TEXT PRIMARY KEY,
+                pin_hash TEXT,
+                name TEXT NOT NULL,
+                email TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+             );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Hash'li MASTER hesabı doğru kimlikle giriş yapabilir.
+        let hash = crate::auth::hash_credential("Master-3736!").unwrap();
+        sqlx::query("INSERT INTO platform_admins (id, pin_hash, name, email) VALUES ('adm_1', ?, 'Süper Admin', 'master@kasam360.com')")
+            .bind(&hash)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let matched = authenticate_by_identifier(&pool, "master@kasam360.com", "Master-3736!").await;
+        assert!(matched.is_ok(), "hash'li MASTER girişi başarısız: {:?}", matched.err());
+        assert_eq!(matched.unwrap().role, "MASTER");
+
+        // Yanlış kimlik reddedilir.
+        assert!(authenticate_by_identifier(&pool, "master@kasam360.com", "yanlis").await.is_err());
+
+        // Hash yerine düz metin kalmış bir satır kabul edilmez (fallback kaldırıldı).
+        sqlx::query("UPDATE platform_admins SET pin_hash = 'Master-3736!' WHERE id = 'adm_1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            authenticate_by_identifier(&pool, "master@kasam360.com", "Master-3736!")
+                .await
+                .is_err(),
+            "düz metn saklanan kimlik kabul edildi"
+        );
+    }
+
+    /// `authenticate_by_pin` MASTER dalı da aynı kurala uyar.
+    #[tokio::test]
+    async fn platform_admin_pin_dogrulamasi_argon2_ile_calisir() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE platform_admins (
+                id TEXT PRIMARY KEY,
+                pin_hash TEXT,
+                name TEXT NOT NULL,
+                email TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+             );
+             CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+                role TEXT NOT NULL,
+                name TEXT NOT NULL,
+                credential_hash TEXT,
+                pin_hash TEXT,
+                login_identifier TEXT,
+                email TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1
+             );
+             CREATE TABLE tenant_modules (tenant_id TEXT NOT NULL, module_id TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1);
+             INSERT INTO platform_admins (id, pin_hash, name, email) VALUES ('adm_1', ?, 'Süper Admin', 'master@kasam360.com');",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("UPDATE platform_admins SET pin_hash = ? WHERE id = 'adm_1'")
+            .bind(crate::auth::hash_credential("7373").unwrap())
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let matched = authenticate_by_pin(&pool, "7373", Some("DEFAULT_TENANT")).await;
+        assert!(matched.is_ok(), "hash'li MASTER PIN girişi başarısız: {:?}", matched.err());
+        assert_eq!(matched.unwrap().role, "MASTER");
+
+        assert!(authenticate_by_pin(&pool, "9999", Some("DEFAULT_TENANT")).await.is_err());
+
+        // Düz metne dönen satır artık kabul edilmez.
+        sqlx::query("UPDATE platform_admins SET pin_hash = '7373' WHERE id = 'adm_1'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            authenticate_by_pin(&pool, "7373", Some("DEFAULT_TENANT")).await.is_err(),
+            "düz metn saklanan MASTER PIN kabul edildi"
+        );
+    }
 
     #[test]
     fn test_void_order_payload_dto_deserialization() {
@@ -2204,10 +2290,7 @@ pub struct LiveOrderDto {
 
 #[tauri::command]
 pub async fn get_live_orders(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<LiveOrderDto>, String> {
-    let role_up = actor_role.to_uppercase();
-    if role_up != "MANAGER" && role_up != "OWNER" && role_up != "MASTER" {
-        return Err("UNAUTHORIZED".into());
-    }
+    crate::rbac::require_reporting(&actor_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("
         SELECT o.id, t.name as table_name, o.status, o.total_cents, o.created_at,
@@ -2231,10 +2314,7 @@ pub async fn get_live_orders(actor_role: String, pool: tauri::State<'_, DbPool>)
 
 #[tauri::command]
 pub async fn get_open_shifts(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<serde_json::Value>, String> {
-    let role_up = actor_role.to_uppercase();
-    if role_up != "MANAGER" && role_up != "OWNER" && role_up != "MASTER" && role_up != "MASTER ADMIN" && role_up != "CASHIER" {
-        return Err("UNAUTHORIZED".into());
-    }
+    crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier])?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("
         SELECT s.id, s.cashier_id, u.name as cashier_name, s.opened_at, s.expected_amount_cents

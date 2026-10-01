@@ -13,6 +13,7 @@ import {
 } from '../../presentation/types';
 import { KdsWorkflowManager } from '../../domain/usecases/kds/KdsWorkflowManager';
 import { Order } from '../../domain/usecases/kds/types';
+import { useAuthStore } from '../../presentation/store/useAuthStore';
 
 export class TauriPOSRepository implements IPOSRepository {
   private static instance: TauriPOSRepository | null = null;
@@ -105,7 +106,9 @@ export class TauriPOSRepository implements IPOSRepository {
   }
 
   public async processPayment(payload: PaymentPayload): Promise<PaymentResult> {
-    const result = await invoke<PaymentResult>('process_payment', { payload });
+    // Rol, backend'deki SPEC §34 "Ödeme Alma" kapısina girer; repo katmanı yetkiyi kendisi bilmez
+    const actorRole = useAuthStore.getState().user?.role ?? 'WAITER';
+    const result = await invoke<PaymentResult>('process_payment', { payload, actorRole });
 
     if (result.success) {
       const kdsOrder: Order = {
@@ -130,7 +133,8 @@ export class TauriPOSRepository implements IPOSRepository {
   }
 
   public async processSplitPayment(payload: PaymentPayload): Promise<PaymentResult> {
-    const result = await invoke<PaymentResult>('process_split_payment', { payload });
+    const actorRole = useAuthStore.getState().user?.role ?? 'WAITER';
+    const result = await invoke<PaymentResult>('process_split_payment', { payload, actorRole });
 
     if (result.success) {
       const kdsOrder: Order = {

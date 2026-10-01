@@ -149,17 +149,28 @@ CREATE INDEX IF NOT EXISTS idx_orders_table_id ON orders(table_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 
+-- `pin` sütunu kaldırılmıştır: PIN düz metin saklanmaz, yalnızca Argon2id PHC
+-- (`pin_hash`) tutulur. Bu nedenle (tenant_id, pin) tekil indeksi de kaldırılmıştır
+-- — tuzlu hash'ler karşılaştırılamaz, indeks çakışma yakalayamaz. Tenant içi PIN
+-- benzersizliği `user_credentials::ensure_pin_available` ile, yazma yarışına karşı
+-- `ensure_pin_unique_after_write` ile korunur.
+--
+-- `credential_hash` ve `pin_hash` ayrıdır: bir kullanıcı hem e-posta/şifreyle
+-- (kurulum ekranı) hem de POS PIN'iyle (çalışma istasyonu) girebilmelidir.
+-- Tek sütunda tutulsaydı biri yazıldığında diğeri ezilirdi.
+-- `is_active`: personel silinmez, pasife alınır (AGENTS.md §6).
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
-    pin TEXT NOT NULL,
     role TEXT NOT NULL,
     name TEXT NOT NULL,
     credential_hash TEXT,
+    pin_hash TEXT,
     login_identifier TEXT,
-    email TEXT
+    email TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tenant_pin ON users(tenant_id, pin);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_active ON users(tenant_id, is_active);
 
 CREATE TABLE IF NOT EXISTS shifts (
     id TEXT PRIMARY KEY,
@@ -199,12 +210,17 @@ CREATE TABLE IF NOT EXISTS tenant_modules (
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 );
 
+-- `pin` sütunu kaldırılmıştır: MASTER kimlik bilgisi düz metin saklanmaz, yalnızca
+-- Argon2id PHC (`pin_hash`) tutulur. `UNIQUE` kısıtı da düşmüştür: tuzlu hash'ler
+-- karşılaştırılamaz, aynı kimlikten iki farklı hash çıkacağı için indeks hiçbir
+-- çakışma yakalayamazdı. Bu tabloda tek bir MASTER hesabı beklenir ve yazma yolu
+-- bulunmadığından benzersizlik uygulama katmanında da dayatılmıyor.
 CREATE TABLE IF NOT EXISTS platform_admins (
     id TEXT PRIMARY KEY,
-    pin TEXT NOT NULL UNIQUE,
+    pin_hash TEXT,
     name TEXT NOT NULL,
     email TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS licenses (

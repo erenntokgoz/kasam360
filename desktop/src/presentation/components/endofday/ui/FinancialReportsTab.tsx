@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { tauriInvoke } from '../../../../data/ipc/tauriInvoke';
+import { usePermission } from '../../../hooks/usePermission';
 import { toast } from '@core/components/ui/toast';
 
 export interface CategorySummary {
@@ -52,6 +53,7 @@ const CAT_LABELS: Record<string, string> = {
 export const FinancialReportsTab: React.FC = () => {
   const [report, setReport] = useState<FinancialReportData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { role } = usePermission();
 
   // Bildirim yöneticisi
   const showToast = (title: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -65,14 +67,14 @@ export const FinancialReportsTab: React.FC = () => {
   const fetchReport = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await tauriInvoke<FinancialReportData>('get_financial_report', {});
+      const data = await tauriInvoke<FinancialReportData>('get_financial_report', { actorRole: role });
       setReport(data);
     } catch (err) {
-      showToast('Finansal raporlar yüklenemedi', 'error');
+      showToast('Finansal raporlar yÃ¼klenemedi', 'error');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     fetchReport();

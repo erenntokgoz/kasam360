@@ -1,6 +1,6 @@
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
+use sqlx::{Acquire, Row};
 use uuid::Uuid;
 use crate::services::audit_service::AuditService;
 
@@ -24,15 +24,21 @@ pub struct TenantDto {
 #[tauri::command]
 pub async fn get_tenants(caller_role: String, caller_tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<TenantDto>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    
-    let query = if caller_role == "MASTER" {
+
+    // MASTER tüm tenant'ları görür; SPEC kuralı 7 gereği başka hiçbir rol
+    // cross-tenant erişemez, bu yüzden diğerleri kendi tenant'ıyla sınırlıdır.
+    // Rol takma adları ("Master Admin", "SuperAdmin") da MASTER sayılmalıdır,
+    // aksi halde aynı kişi bu kapıdan düşer ve alt satırlara sızar.
+    let is_master = crate::rbac::canonical_role(&caller_role) == Some(crate::rbac::Role::Master);
+
+    let query = if is_master {
         "SELECT id, name, status, created_at, contact_person, email, phone, tax_id, tax_office, address FROM tenants ORDER BY created_at DESC"
     } else {
         "SELECT id, name, status, created_at, contact_person, email, phone, tax_id, tax_office, address FROM tenants WHERE id = ? ORDER BY created_at DESC"
     };
-    
+
     let mut q = sqlx::query(query);
-    if caller_role != "MASTER" {
+    if !is_master {
         q = q.bind(caller_tenant_id);
     }
     
@@ -88,10 +94,7 @@ pub async fn create_tenant(
     branch_name: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<TenantDto, String> {
-    let role = caller_role.ok_or_else(|| "UNAUTHORIZED: caller_role is required".to_string())?;
-    if role != "MASTER" && role != "SuperAdmin" {
-        return Err("UNAUTHORIZED: MASTER only".into());
-    }
+    crate::rbac::require_master_present(caller_role.as_deref())?;
     let tenant_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
@@ -137,24 +140,36 @@ pub async fn create_tenant(
         .or_else(|| email.clone())
         .unwrap_or_else(|| format!("owner@kasam360.com"));
     let raw_password = owner_password.unwrap_or_else(|| format!("Kasam-{}", &Uuid::new_v4().to_string()[..8]));
+    // Hash'leme hatası yutulmaz: önceden bilinen bir sabit ("argon2_hash_placeholder")
+    // yazılıyordu. PHC olarak parse edilemediği için fiilen girişi kapatıyordu, ancak
+    // kurulum başarıyla görünürken kimlik bilgisi kullanılamaz hale geliyordu.
     let password_hash = crate::auth::hash_credential(&raw_password)
-        .unwrap_or_else(|_| "argon2_hash_placeholder".to_string());
+        .map_err(|e| format!("Yönetici şifresi korunamadı: {}", e))?;
     let final_pin = owner_pin.unwrap_or_else(|| "2222".to_string());
+    // PIN düz metin saklanmaz: Argon2 hash'i `pin_hash` sütununa yazılır.
+    // `credential_hash` ise şifreye ayrıdır; ikisi aynı hesapta birlikte durabilir.
+    let pin_hash = crate::user_credentials::hash_pin(&final_pin)
+        .map_err(|e| format!("Yönetici PIN'i oluşturulamadı: {}", e))?;
 
     sqlx::query(
-        "INSERT INTO users (id, tenant_id, pin, role, name, credential_hash, login_identifier, email) 
-         VALUES (?, ?, ?, 'OWNER', ?, ?, ?, ?)"
+        "INSERT INTO users (id, tenant_id, role, name, credential_hash, pin_hash, login_identifier, email, is_active)
+         VALUES (?, ?, 'OWNER', ?, ?, ?, ?, ?, 1)"
     )
     .bind(&owner_user_id)
     .bind(&tenant_id)
-    .bind(&final_pin)
     .bind(&display_owner_name)
     .bind(&password_hash)
+    .bind(&pin_hash)
     .bind(&final_owner_email)
     .bind(&final_owner_email)
     .execute(&mut *tx)
     .await
     .map_err(|e| format!("Yönetici kullanıcısı oluşturulamadı: {}", e))?;
+
+    // Tenant içi PIN benzersizliği: aynı PIN başka bir personelde kullanılıyorsa
+    // işletme kurulumu reddedilir. Kontroller aynı transaction içindedir.
+    crate::user_credentials::ensure_pin_available(&mut tx, &tenant_id, &final_pin, None).await?;
+    crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &final_pin, &owner_user_id).await?;
 
     // 4. Lisans anahtarını kaydet
     let final_license_key = license_key.unwrap_or_else(|| {
@@ -216,10 +231,7 @@ pub async fn update_tenant(
     address: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<TenantDto, String> {
-    let role = caller_role.ok_or_else(|| "UNAUTHORIZED: caller_role is required".to_string())?;
-    if role != "MASTER" && role != "SuperAdmin" {
-        return Err("UNAUTHORIZED: MASTER only".into());
-    }
+    crate::rbac::require_master_present(caller_role.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     sqlx::query(
         "UPDATE tenants SET name = ?, contact_person = ?, email = ?, phone = ?, tax_id = ?, tax_office = ?, address = ? WHERE id = ?"
@@ -283,7 +295,7 @@ pub async fn update_tenant(
 
 #[tauri::command]
 pub async fn suspend_tenant(caller_role: String, tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     sqlx::query("UPDATE tenants SET status = 'SUSPENDED' WHERE id = ?")
         .bind(&tenant_id).execute(&*pool).await.map_err(|e| e.to_string())?;
     let _ = sqlx::query("UPDATE subscriptions SET status = 'SUSPENDED' WHERE tenant_id = ?")
@@ -293,7 +305,7 @@ pub async fn suspend_tenant(caller_role: String, tenant_id: String, pool: tauri:
 
 #[tauri::command]
 pub async fn activate_tenant(caller_role: String, tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     sqlx::query("UPDATE tenants SET status = 'ACTIVE' WHERE id = ?")
         .bind(&tenant_id).execute(&*pool).await.map_err(|e| e.to_string())?;
     let _ = sqlx::query("UPDATE subscriptions SET status = 'ACTIVE' WHERE tenant_id = ?")
@@ -308,7 +320,7 @@ pub async fn update_tenant_modules(
     modules: Vec<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<(), String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     sqlx::query("DELETE FROM tenant_modules WHERE tenant_id = ?")
@@ -341,7 +353,7 @@ pub struct DeviceDto {
 
 #[tauri::command]
 pub async fn get_devices(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<DeviceDto>, String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("SELECT id, tenant_id, name, device_type, status, last_heartbeat FROM devices")
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
@@ -365,7 +377,7 @@ pub async fn record_device_heartbeat(device_id: String, pool: tauri::State<'_, D
 
 #[tauri::command]
 pub async fn register_device(caller_role: String, tenant_id: String, name: String, device_type: String, pool: tauri::State<'_, DbPool>) -> Result<DeviceDto, String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO devices (id, tenant_id, name, device_type, status) VALUES (?, ?, ?, ?, 'ACTIVE')")
         .bind(&id).bind(&tenant_id).bind(&name).bind(&device_type)
@@ -377,7 +389,7 @@ pub async fn register_device(caller_role: String, tenant_id: String, name: Strin
 /// change (rather than the browser demo's in-memory switch).
 #[tauri::command]
 pub async fn toggle_device_status(caller_role: String, device_id: String, pool: tauri::State<'_, DbPool>) -> Result<DeviceDto, String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let row = sqlx::query("UPDATE devices SET status = CASE WHEN status = 'ACTIVE' THEN 'INACTIVE' ELSE 'ACTIVE' END WHERE id = ? RETURNING id, tenant_id, name, device_type, status, last_heartbeat")
         .bind(&device_id).fetch_optional(&mut *conn).await.map_err(|e| e.to_string())?
@@ -391,7 +403,7 @@ pub async fn toggle_device_status(caller_role: String, device_id: String, pool: 
 
 #[tauri::command]
 pub async fn delete_device(caller_role: String, device_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     let result = sqlx::query("DELETE FROM devices WHERE id = ?").bind(&device_id).execute(&*pool).await.map_err(|e| e.to_string())?;
     if result.rows_affected() != 1 { return Err("DEVICE_NOT_FOUND".into()); }
     Ok(())
@@ -407,7 +419,7 @@ pub struct GlobalUserDto {
 
 #[tauri::command]
 pub async fn get_global_users(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<GlobalUserDto>, String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("SELECT id, name, role, tenant_id FROM users")
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
@@ -422,7 +434,7 @@ pub async fn get_global_users(caller_role: String, pool: tauri::State<'_, DbPool
 
 #[tauri::command]
 pub async fn get_platform_audit_logs(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<serde_json::Value>, String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("SELECT id, sequence, timestamp, actor_id, actor_role, action, resource_id, current_hash FROM audit_ledger ORDER BY sequence DESC LIMIT 200")
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
@@ -443,7 +455,7 @@ pub async fn get_platform_audit_logs(caller_role: String, pool: tauri::State<'_,
 /// row is reported to the caller; verification never mutates the ledger.
 #[tauri::command]
 pub async fn verify_audit_ledger_integrity(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<serde_json::Value, String> {
-    if caller_role != "MASTER" { return Err("UNAUTHORIZED: MASTER only".into()); }
+    crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("SELECT sequence, timestamp, actor_id, actor_role, action, resource_id, payload, previous_hash, current_hash FROM audit_ledger ORDER BY sequence ASC")
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
@@ -476,11 +488,7 @@ pub async fn create_remote_session(
     mode: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<serde_json::Value, String> {
-    if let Some(ref r) = caller_role {
-        if r != "MASTER" && r != "SuperAdmin" {
-            return Err("UNAUTHORIZED: MASTER only".into());
-        }
-    }
+    crate::rbac::require_master_present(caller_role.as_deref())?;
     let session_id = format!("sess_{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let ticket = format!("TICKET_{}", &uuid::Uuid::new_v4().to_string()[..12].to_uppercase());
 
@@ -519,11 +527,7 @@ pub async fn execute_it_action(
     tenant_id: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<serde_json::Value, String> {
-    if let Some(ref r) = caller_role {
-        if r != "MASTER" && r != "SuperAdmin" {
-            return Err("UNAUTHORIZED: MASTER only".into());
-        }
-    }
+    crate::rbac::require_master_present(caller_role.as_deref())?;
     let (message, ping_ms) = match action_type.as_str() {
         "DIAGNOSTIC_PING" => {
             let check: String = sqlx::query_scalar("PRAGMA integrity_check")
@@ -586,25 +590,23 @@ pub async fn get_user_credentials(
     auth_key: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<VaultCredentialsDto, String> {
-    if let Some(ref r) = caller_role {
-        if r != "MASTER" && r != "SuperAdmin" {
-            return Err("UNAUTHORIZED: MASTER only".into());
-        }
-    }
+    crate::rbac::require_master_present(caller_role.as_deref())?;
     if auth_key.trim().is_empty() {
         return Err("Güvenlik parolası gereklidir.".into());
     }
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let row = sqlx::query("SELECT id, name, role, tenant_id, pin FROM users WHERE id = ?")
+    let row = sqlx::query("SELECT name, tenant_id FROM users WHERE id = ?")
         .bind(&user_id)
         .fetch_optional(&mut *conn)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Kullanıcı bulunamadı.".to_string())?;
+    let name: String = row.try_get("name").unwrap_or_default();
+    let tenant_id: String = row.try_get("tenant_id").unwrap_or_default();
 
     let lic_row = sqlx::query("SELECT license_key FROM licenses WHERE tenant_id = ? LIMIT 1")
-        .bind(row.try_get::<String, _>("tenant_id").unwrap_or_default())
+        .bind(tenant_id)
         .fetch_optional(&mut *conn)
         .await
         .ok()
@@ -613,8 +615,10 @@ pub async fn get_user_credentials(
     let license_key = lic_row.and_then(|r| r.try_get::<String, _>("license_key").ok());
 
     Ok(VaultCredentialsDto {
-        pin: row.try_get("pin").ok(),
-        email: Some(format!("{}@kasam360.com", row.try_get::<String, _>("name").unwrap_or_default().to_lowercase().replace(' ', ""))),
+        // Düz metin PIN artık hiçbir yerde saklanmaz, dolayısıyla geri döndürülemez.
+        // Kasa yalnızca yeni PIN tanımlayabilir; modal bunu yerelde gösterir.
+        pin: None,
+        email: Some(format!("{}@kasam360.com", name.to_lowercase().replace(' ', ""))),
         password: Some("••••••••".to_string()),
         license_key: license_key.or_else(|| Some("LIC-360-DEFAULT-KEY".to_string())),
         last_login: Some(chrono::Utc::now().to_rfc3339()),
@@ -627,11 +631,7 @@ pub async fn reset_user_password(
     user_id: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<serde_json::Value, String> {
-    if let Some(ref r) = caller_role {
-        if r != "MASTER" && r != "SuperAdmin" {
-            return Err("UNAUTHORIZED: MASTER only".into());
-        }
-    }
+    crate::rbac::require_master_present(caller_role.as_deref())?;
     let new_password = format!("Kasam-{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let hash = crate::auth::hash_credential(&new_password)?;
 
@@ -656,25 +656,34 @@ pub async fn change_user_pin(
     new_pin: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<serde_json::Value, String> {
-    if let Some(ref r) = caller_role {
-        if r != "MASTER" && r != "SuperAdmin" {
-            return Err("UNAUTHORIZED: MASTER only".into());
-        }
-    }
+    crate::rbac::require_master_present(caller_role.as_deref())?;
     // PIN format denetimi: 4 ila 8 haneli sayısal olmalıdır
     if !new_pin.chars().all(|c| c.is_ascii_digit()) || !(4..=8).contains(&new_pin.len()) {
         return Err("PIN 4-8 haneli sayısal olmalıdır.".into());
     }
-    let hash = crate::auth::hash_credential(&new_pin)?;
+    let hash = crate::user_credentials::hash_pin(&new_pin)?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    sqlx::query("UPDATE users SET pin = ?, credential_hash = ? WHERE id = ?")
-        .bind(&new_pin)
-        .bind(&hash)
+    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+
+    // Tenant içi PIN benzersizliği: kontrol ve yazma aynı transaction içinde,
+    // ardından yarış denetimi ile güçlendirilir.
+    let tenant_id: String = sqlx::query_scalar("SELECT tenant_id FROM users WHERE id = ?")
         .bind(&user_id)
-        .execute(&mut *conn)
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+    crate::user_credentials::ensure_pin_available(&mut tx, &tenant_id, &new_pin, Some(&user_id)).await?;
+
+    sqlx::query("UPDATE users SET pin_hash = ? WHERE id = ?")
+        .bind(&hash)
+        .bind(&user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &new_pin, &user_id).await?;
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(serde_json::json!({
         "success": true,
@@ -688,11 +697,7 @@ pub async fn regenerate_license_key(
     user_id: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<serde_json::Value, String> {
-    if let Some(ref r) = caller_role {
-        if r != "MASTER" && r != "SuperAdmin" {
-            return Err("UNAUTHORIZED: MASTER only".into());
-        }
-    }
+    crate::rbac::require_master_present(caller_role.as_deref())?;
     let new_key = format!("LIC-{}", uuid::Uuid::new_v4().to_string().to_uppercase());
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;

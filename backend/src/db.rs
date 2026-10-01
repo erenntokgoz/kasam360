@@ -61,8 +61,13 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
 
     // Users tablosuna kimlik doğrulama sütunlarını güvenle ekle (idempotent)
     let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN credential_hash TEXT;").execute(&pool).await;
+    let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN pin_hash TEXT;").execute(&pool).await;
     let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN login_identifier TEXT;").execute(&pool).await;
     let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN email TEXT;").execute(&pool).await;
+
+    // MASTER platform hesabı da düz metin `pin` taşıyordu; Argon2 sütunu önce
+    // eklenir, yoksa migration'ın `SELECT ... pin_hash` ifadesi patlar.
+    let _ = sqlx::raw_sql("ALTER TABLE platform_admins ADD COLUMN pin_hash TEXT;").execute(&pool).await;
 
     // Tenants tablosuna şirket/vergi/iletişim sütunlarını güvenle ekle (idempotent)
     let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN contact_person TEXT;").execute(&pool).await;
@@ -72,9 +77,14 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN tax_office TEXT;").execute(&pool).await;
     let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN address TEXT;").execute(&pool).await;
 
-    // PIN benzersizliğini global seviyeden tenant bazına indir (idempotent)
+    // PIN düz metin depolanmaz: eski `users.pin` sütunu Argon2'e taşınır ve
+    // kaldırılır. Aynı işlemde tenant içi PIN benzersizliğini taşıyan tekil indeks
+    // de düşer (hash'ler karşılaştırılamaz, indeks işe yaramazdı).
+    migrate_user_pins_to_argon2(&pool).await?;
+    migrate_platform_admin_pins_to_argon2(&pool).await?;
     let _ = sqlx::raw_sql("DROP INDEX IF EXISTS idx_users_pin;").execute(&pool).await;
-    let _ = sqlx::raw_sql("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tenant_pin ON users(tenant_id, pin);").execute(&pool).await;
+    let _ = sqlx::raw_sql("DROP INDEX IF EXISTS idx_users_tenant_pin;").execute(&pool).await;
+    let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_users_tenant_active ON users(tenant_id, is_active);").execute(&pool).await;
 
     // The table rebuild is deliberately after the base DDL. `CREATE TABLE IF NOT
     // EXISTS` cannot upgrade an old tables definition, so this is the authoritative
@@ -93,23 +103,6 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
         sqlx::raw_sql(seed).execute(&pool).await?;
     } else {
         // -------------------------------------------------------------------------
-        // Tohum koruması (Seed guard) 2: Kullanıcılar — INSERT OR IGNORE aracılığıyla her başlatmada etki eşitsiz.
-        // Bu, eksikse 6 sabit rolün var olmasını sağlar.
-        // -------------------------------------------------------------------------
-        sqlx::raw_sql(
-            "INSERT OR IGNORE INTO users (id, pin, role, name) VALUES
-                ('usr_master',  '1111', 'MASTER',  'Master Admin'),
-                ('usr_owner',   '2222', 'OWNER',   'Owner (Patron)'),
-                ('usr_manager', '3333', 'MANAGER', 'Manager (Müdür)'),
-                ('usr_cashier', '4444', 'CASHIER', 'Cashier (Kasiyer)'),
-                ('usr_waiter',  '5555', 'WAITER',  'Waiter (Garson)'),
-                ('usr_cook',    '6666', 'KITCHEN', 'Kitchen (Aşçı)');",
-        )
-        .execute(&pool)
-        .await?;
-        tracing_fallback_log("db::seed", "Kullanıcılar mevcut veritabanına tohumlandı/doğrulandı");
-
-        // -------------------------------------------------------------------------
         // Tohum koruması (Seed guard) 3: Cari rehber kayıtları (Directories) — eksikse ekle
         // -------------------------------------------------------------------------
         sqlx::raw_sql(
@@ -124,6 +117,10 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
         .await?;
         tracing_fallback_log("db::seed", "Cari rehber kayıtları tohumlandı/doğrulandı");
     }
+
+    // Tohum koruması (Seed guard) 2: Kullanıcılar — her başlatmada, iki dalın da
+    // dışında çalışır. Argon2 SQL içinde üretilemediği için seed.sql'den çıkarıldı.
+    seed_default_users(&pool).await?;
 
     Ok(pool)
 }
@@ -274,6 +271,278 @@ async fn migrate_tables_current_total_to_integer(pool: &DbPool) -> Result<(), sq
     Ok(())
 }
 
+/// Altı sabit rolü Argon2id hash'li PIN'lerle tohumlar.
+///
+/// Etkileşimli: önce `SELECT` ile varlık denetir, yalnızca eksik olan hash'lenir.
+/// Böylece her açılışta altı Argon2 işlemi harcanmaz.
+/// `ON CONFLICT DO NOTHING` tek başına yeterli değildir: hash parametre olarak
+/// önceden hesaplanmak zorunda kalırdı.
+async fn seed_default_users(pool: &DbPool) -> Result<(), sqlx::Error> {
+    const DEFAULT_USERS: [(&str, &str, &str, &str); 6] = [
+        ("usr_master", "1111", "MASTER", "Master Admin"),
+        ("usr_owner", "2222", "OWNER", "Owner (Patron)"),
+        ("usr_manager", "3333", "MANAGER", "Manager (Müdür)"),
+        ("usr_cashier", "4444", "CASHIER", "Cashier (Kasiyer)"),
+        ("usr_waiter", "5555", "WAITER", "Waiter (Garson)"),
+        ("usr_cook", "6666", "KITCHEN", "Kitchen (Aşçı)"),
+    ];
+
+    let mut inserted = 0usize;
+    for (id, pin, role, name) in DEFAULT_USERS {
+        let existing: Option<i64> = sqlx::query_scalar("SELECT 1 FROM users WHERE id = ?")
+            .bind(id)
+            .fetch_optional(pool)
+            .await?;
+        if existing.is_some() {
+            continue;
+        }
+
+        let hash = crate::user_credentials::hash_pin(pin)
+            .map_err(sqlx::Error::Protocol)?;
+        sqlx::query(
+            "INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active)
+             VALUES (?, 'DEFAULT_TENANT', ?, ?, ?, 1)",
+        )
+        .bind(id)
+        .bind(role)
+        .bind(name)
+        .bind(&hash)
+        .execute(pool)
+        .await?;
+        inserted += 1;
+    }
+
+    if inserted > 0 {
+        tracing_fallback_log(
+            "db::seed",
+            &format!("Kullanıcılar Argon2 ile tohumlandı: {} kayıt", inserted),
+        );
+    }
+    Ok(())
+}
+
+/// `users.pin` düz metin sütununu Argon2id hash'ine taşır ve sütunu kaldırır.
+///
+/// Sıra önemlidir ve veri kaybına yol açmaz:
+///   1. `is_active` eklenir (soft delete'in dayanağı; idempotent).
+///   2. Her satırın düz metin PIN'i `pin_hash` içine Argon2'ye çevrilir.
+///      Bu adım transaction dışında yapılır: Argon2 kasıtlı olarak yavaştır ve
+///      yazma kilidini saniyelerce tutmak diğer komutları kilitlerdi.
+///   3. Tablo, tüm satırlar kopyalanarak `pin` olmadan yeniden inşa edilir.
+///   4. Serbest bırakılan sayfalardaki eski düz metin gerçekten silinsin diye WAL
+///      kırpılır ve VACUUM çalıştırılır; aksi halde düz metin dosya içinde kalırdı.
+///
+/// Idempotenttir: `pin` sütunu yoksa tüm gövde atlanır.
+async fn migrate_user_pins_to_argon2(pool: &DbPool) -> Result<(), sqlx::Error> {
+    // Soft delete için gereken sütun her şemada güvenle bulunmalı.
+    let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;")
+        .execute(pool)
+        .await;
+
+    let columns = sqlx::query("SELECT name FROM pragma_table_info('users')")
+        .fetch_all(pool)
+        .await?;
+    if columns.is_empty() {
+        return Ok(());
+    }
+
+    let has_pin = columns.iter().any(|column| {
+        column
+            .try_get::<String, _>("name")
+            .map(|name| name == "pin")
+            .unwrap_or(false)
+    });
+    if !has_pin {
+        return Ok(());
+    }
+
+    // Adım 2: düz metni hash'e çevir. Zaten Argon2 hash'lenmiş satırlar atlanır,
+    // böylece ikinci çalıştırmada hiçbir veri yeniden yazılmaz.
+    let rows = sqlx::query("SELECT id, pin, pin_hash FROM users")
+        .fetch_all(pool)
+        .await?;
+    let mut converted = 0usize;
+    for row in rows {
+        let id: String = row.try_get("id").unwrap_or_default();
+        let hash: Option<String> = row.try_get("pin_hash").ok().flatten();
+        if hash
+            .as_deref()
+            .map(crate::user_credentials::is_argon2_hash)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        let pin: String = row
+            .try_get::<Option<String>, _>("pin")
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        if pin.is_empty() {
+            continue;
+        }
+
+        let new_hash = crate::auth::hash_credential(&pin).map_err(sqlx::Error::Protocol)?;
+        sqlx::query("UPDATE users SET pin_hash = ? WHERE id = ?")
+            .bind(&new_hash)
+            .bind(&id)
+            .execute(pool)
+            .await?;
+        converted += 1;
+    }
+
+    // Adım 3: `pin` sütununu kaldırmak için tabloyu yeniden inşa et.
+    // `users` tablosuna hiçbir yabancı anahtar referansı yoktur (şema incelendi),
+    // bu yüzden DROP TABLE güvenlidir; yine de transaction kullanılır.
+    let mut conn = pool.acquire().await?;
+    let mut tx = conn.begin().await?;
+    sqlx::raw_sql("DROP INDEX IF EXISTS idx_users_tenant_pin;")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::raw_sql(
+        "CREATE TABLE users_migrated (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+            role TEXT NOT NULL,
+            name TEXT NOT NULL,
+            credential_hash TEXT,
+            pin_hash TEXT,
+            login_identifier TEXT,
+            email TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1
+        );",
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::raw_sql(
+        "INSERT INTO users_migrated (id, tenant_id, role, name, credential_hash, pin_hash, login_identifier, email, is_active)
+         SELECT id, tenant_id, role, name, credential_hash, pin_hash, login_identifier, email, is_active FROM users;",
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::raw_sql("DROP TABLE users;")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::raw_sql("ALTER TABLE users_migrated RENAME TO users;")
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    // VACUUM ve WAL kırpma aynı bağlantıyı ister; havuz tek bağlantılıysa
+    // `conn` tutulduğu sürece bu çağrılar bağlantı zaman aşımına takılır.
+    drop(conn);
+
+    // Adım 4: eski düz metnin dosyada kalmasını engelle.
+    let _ = sqlx::raw_sql("PRAGMA wal_checkpoint(TRUNCATE);").execute(pool).await;
+    let _ = sqlx::raw_sql("VACUUM;").execute(pool).await;
+
+    tracing_fallback_log(
+        "db::migration",
+        &format!("users.pin -> Argon2: {} satır dönüştürüldü", converted),
+    );
+    Ok(())
+}
+
+/// `platform_admins.pin` düz metnini Argon2'ye taşır ve sütunu kaldırır.
+///
+/// `users` migration'ıyla aynı desen: hash'leme transaction dışında (Argon2 yavaştır,
+/// yazma kilidini uzun tutmasın), ardından tablo satırları korunarak yeniden inşa
+/// edilir. MASTER kimlik bilgisi PIN formatında olmak zorunda değildir
+/// (`authenticate_by_identifier` buradaki değeri parola olarak doğrular), bu yüzden
+/// `hash_pin`'in rakam/uzunluk kısıtı **kullanılmaz** — aksi halde harf içeren mevcut
+/// bir MASTER parolası hash'lenemez ve hesap kilitlenirdi.
+///
+/// Idempotenttir: `pin` sütunu yoksa gövde atlanır.
+async fn migrate_platform_admin_pins_to_argon2(pool: &DbPool) -> Result<(), sqlx::Error> {
+    let columns = sqlx::query("SELECT name FROM pragma_table_info('platform_admins')")
+        .fetch_all(pool)
+        .await?;
+    if columns.is_empty() {
+        return Ok(());
+    }
+
+    let has_pin = columns.iter().any(|column| {
+        column
+            .try_get::<String, _>("name")
+            .map(|name| name == "pin")
+            .unwrap_or(false)
+    });
+    if !has_pin {
+        return Ok(());
+    }
+
+    // Argon2 formatında olmayan değerleri hash'le; zaten hash'lenmiş olanlara dokunma.
+    let rows = sqlx::query("SELECT id, pin, pin_hash FROM platform_admins")
+        .fetch_all(pool)
+        .await?;
+    let mut converted = 0usize;
+    for row in rows {
+        let id: String = row.try_get("id").unwrap_or_default();
+        let existing: Option<String> = row.try_get("pin_hash").ok().flatten();
+        if existing
+            .as_deref()
+            .map(crate::user_credentials::is_argon2_hash)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        let pin: String = row
+            .try_get::<Option<String>, _>("pin")
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        if pin.is_empty() {
+            continue;
+        }
+
+        let new_hash = crate::auth::hash_credential(&pin).map_err(sqlx::Error::Protocol)?;
+        sqlx::query("UPDATE platform_admins SET pin_hash = ? WHERE id = ?")
+            .bind(&new_hash)
+            .bind(&id)
+            .execute(pool)
+            .await?;
+        converted += 1;
+    }
+
+    let mut conn = pool.acquire().await?;
+    let mut tx = conn.begin().await?;
+    sqlx::raw_sql(
+        "CREATE TABLE platform_admins_migrated (
+            id TEXT PRIMARY KEY,
+            pin_hash TEXT,
+            name TEXT NOT NULL,
+            email TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );",
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::raw_sql(
+        "INSERT INTO platform_admins_migrated (id, pin_hash, name, email, created_at)
+         SELECT id, pin_hash, name, email, created_at FROM platform_admins;",
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::raw_sql("DROP TABLE platform_admins;")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::raw_sql("ALTER TABLE platform_admins_migrated RENAME TO platform_admins;")
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    drop(conn);
+
+    // Serbest bırakılan sayfalardaki düz metni gerçekten sil.
+    let _ = sqlx::raw_sql("PRAGMA wal_checkpoint(TRUNCATE);").execute(pool).await;
+    let _ = sqlx::raw_sql("VACUUM;").execute(pool).await;
+
+    tracing_fallback_log(
+        "db::migration",
+        &format!("platform_admins.pin -> Argon2: {} satır dönüştürüldü", converted),
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,6 +615,300 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(column_type, "INTEGER");
+    }
+
+    /// Eski şemadaki düz metn PIN'ler Argon2'ye taşınır, `users.pin` kaldırılır ve
+    /// hiçbir veri kaybolmaz. İkinci çalıştırma etkisizdir.
+    #[tokio::test]
+    async fn user_pin_migration_hashes_plaintext_and_drops_the_column() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+                pin TEXT NOT NULL,
+                role TEXT NOT NULL,
+                name TEXT NOT NULL,
+                credential_hash TEXT,
+                pin_hash TEXT,
+                login_identifier TEXT,
+                email TEXT
+             );
+             CREATE UNIQUE INDEX idx_users_tenant_pin ON users(tenant_id, pin);
+             INSERT INTO users (id, tenant_id, pin, role, name, login_identifier, email) VALUES
+                ('usr_owner',   'tenant-a', '2222', 'OWNER',   'Patron',   'owner@test',  'owner@test'),
+                ('usr_cashier', 'tenant-a', '4444', 'CASHIER', 'Kasiyer',  'kasiyer@test','kasiyer@test'),
+                ('usr_other',   'tenant-b', '4444', 'CASHIER', 'Başka Kasa','diger@test',  'diger@test');",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        migrate_user_pins_to_argon2(&pool).await.unwrap();
+        // İkinci başlatma etkisiz olmalı: sütun yok, gövde atlanır.
+        migrate_user_pins_to_argon2(&pool).await.unwrap();
+
+        // 1. Düz metin sütunu gitti.
+        let pin_columns: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pragma_table_info('users') WHERE name = 'pin'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(pin_columns, 0);
+        let index_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_users_tenant_pin'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(index_count, 0);
+
+        // 2. Veri korundu ve eski PIN'ler Argon2 ile doğrulanabiliyor.
+        let rows: Vec<(String, String, Option<String>, String, i64)> = sqlx::query_as(
+            "SELECT id, name, pin_hash, login_identifier, is_active FROM users ORDER BY id",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].0, "usr_cashier");
+        assert_eq!(rows[1].0, "usr_other");
+        assert_eq!(rows[2].0, "usr_owner");
+        assert_eq!(rows[2].1, "Patron");
+        assert_eq!(rows[2].3, "owner@test");
+        // Yeni sütun makul varsayılanla geldi.
+        for row in &rows {
+            assert_eq!(row.4, 1, "{}", row.0);
+        }
+
+        let hashes: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT id, pin_hash FROM users ORDER BY id",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        for (id, hash) in &hashes {
+            let hash = hash.as_deref().unwrap_or_else(|| panic!("{} hash yok", id));
+            assert!(crate::user_credentials::is_argon2_hash(hash), "{}: {}", id, hash);
+        }        // Kullanıcının bildiği eski PIN hâlâ giriş yaptırıyor.
+        let owner_hash = hashes.iter().find(|(id, _)| id == "usr_owner").unwrap().1.as_deref().unwrap();
+        assert!(crate::auth::verify_credential("2222", owner_hash));
+        assert!(!crate::auth::verify_credential("9999", owner_hash));
+        let cashier_hash = hashes.iter().find(|(id, _)| id == "usr_cashier").unwrap().1.as_deref().unwrap();
+        assert!(crate::auth::verify_credential("4444", cashier_hash));
+
+        // 3. Hiçbir yerde düz metin kalmadı: tüm metin sütunlarında arama.
+        for (column, value) in [
+            ("name", "Patron"),
+            ("login_identifier", "owner@test"),
+        ] {
+            let hits: i64 = sqlx::query_scalar(&format!(
+                "SELECT COUNT(*) FROM users WHERE {} LIKE '%2222%' OR {} LIKE '%4444%'",
+                column, column
+            ))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(hits, 0, "{} sütununda düz metin PIN kaldı: {}", column, value);
+        }
+    }
+
+    /// Argon2 PIN hash'i zaten olan satır migration'da yeniden yazılmaz; hash yeniden
+    /// üretilseydi beklenen PIN değişmezdi ama gereksiz iş yapılırdı.
+    #[tokio::test]
+    async fn user_pin_migration_keeps_existing_argon2_hashes() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+                pin TEXT NOT NULL,
+                role TEXT NOT NULL,
+                name TEXT NOT NULL,
+                credential_hash TEXT,
+                pin_hash TEXT,
+                login_identifier TEXT,
+                email TEXT
+             );
+             CREATE UNIQUE INDEX idx_users_tenant_pin ON users(tenant_id, pin);",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let hash = crate::user_credentials::hash_pin("2222").unwrap();
+        sqlx::query("INSERT INTO users (id, tenant_id, pin, role, name, pin_hash) VALUES ('usr_owner', 'DEFAULT_TENANT', '2222', 'OWNER', 'Patron', ?)")
+            .bind(&hash)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        migrate_user_pins_to_argon2(&pool).await.unwrap();
+
+        let stored: String =
+            sqlx::query_scalar("SELECT pin_hash FROM users WHERE id = 'usr_owner'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(stored, hash);
+    }
+
+    /// En eski şemada ne `credential_hash` ne `pin_hash` ne `is_active` vardır.
+    /// `init_db` bu sütunları `ALTER TABLE` ile ekledikten sonra migration
+    /// çalışır; aksi halde `SELECT ... pin_hash` "no such column" ile patlar.
+    #[tokio::test]
+    async fn user_pin_migration_calisir_eksik_yeni_sutunlarla_birlikte() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+                pin TEXT NOT NULL,
+                role TEXT NOT NULL,
+                name TEXT NOT NULL
+             );
+             INSERT INTO users (id, tenant_id, pin, role, name) VALUES
+                ('usr_owner', 'DEFAULT_TENANT', '2222', 'OWNER', 'Patron');",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // init_db'nin yaptığı hazırlığı taklit et.
+        let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN credential_hash TEXT;")
+            .execute(&pool)
+            .await;
+        let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN pin_hash TEXT;")
+            .execute(&pool)
+            .await;
+        let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN login_identifier TEXT;")
+            .execute(&pool)
+            .await;
+        let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN email TEXT;")
+            .execute(&pool)
+            .await;
+
+        migrate_user_pins_to_argon2(&pool).await.unwrap();
+
+        let (pin_hash, is_active): (Option<String>, i64) =
+            sqlx::query_as("SELECT pin_hash, is_active FROM users WHERE id = 'usr_owner'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(is_active, 1);
+        let pin_hash = pin_hash.expect("pin_hash doldurulmalı");
+        assert!(crate::user_credentials::is_argon2_hash(&pin_hash));
+        assert!(crate::auth::verify_credential("2222", &pin_hash));
+    }
+
+    /// MASTER platform hesabının düz metin `pin`i Argon2'ye taşınır, sütun kaldırılır.
+    /// MASTER kimlik bilgisi PIN formatında olmak zorunda değildir (`authenticate_by_identifier`
+    /// bunu parola olarak doğrular), bu yüzden harf içeren bir değer de korunmalıdır.
+    #[tokio::test]
+    async fn platform_admin_pin_migration_hashes_plaintext_and_drops_the_column() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE platform_admins (
+                id TEXT PRIMARY KEY,
+                pin TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                email TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+             );
+             INSERT INTO platform_admins (id, pin, name, email) VALUES
+                ('adm_1', 'Master-3736!', 'Süper Admin', 'master@kasam360.com');",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // init_db'nin hazırlığı: yeni sütun eklenir, sonra migration çalışır.
+        let _ = sqlx::raw_sql("ALTER TABLE platform_admins ADD COLUMN pin_hash TEXT;")
+            .execute(&pool)
+            .await;
+
+        migrate_platform_admin_pins_to_argon2(&pool).await.unwrap();
+        // İkinci çalıştırma etkisiz.
+        migrate_platform_admin_pins_to_argon2(&pool).await.unwrap();
+
+        let pin_columns: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pragma_table_info('platform_admins') WHERE name = 'pin'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(pin_columns, 0);
+
+        let (name, email, hash): (String, Option<String>, Option<String>) =
+            sqlx::query_as("SELECT name, email, pin_hash FROM platform_admins WHERE id = 'adm_1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(name, "Süper Admin");
+        assert_eq!(email.as_deref(), Some("master@kasam360.com"));
+
+        let hash = hash.expect("pin_hash doldurulmalı");
+        assert!(crate::user_credentials::is_argon2_hash(&hash));
+        // Harf ve noktalama içeren MASTER parolası da hash'lenmiş olmalı.
+        assert!(crate::auth::verify_credential("Master-3736!", &hash));
+        assert!(!crate::auth::verify_credential("3736", &hash));
+        assert!(!hash.contains("3736"));
+    }
+
+    /// Hash'leme hatası sessizce yutulmaz: kurulum gerçek bir hata mesajıyla durur.
+    #[tokio::test]
+    async fn platform_admin_migration_bos_tabloda_veri_kaybi_yapmaz() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE platform_admins (
+                id TEXT PRIMARY KEY,
+                pin TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                email TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+             );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let _ = sqlx::raw_sql("ALTER TABLE platform_admins ADD COLUMN pin_hash TEXT;")
+            .execute(&pool)
+            .await;
+
+        migrate_platform_admin_pins_to_argon2(&pool).await.unwrap();
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM platform_admins")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        // Tablo yine de okunabilir (yoksa auth sorguları hata verirdi).
+        let rows: Vec<String> = sqlx::query_scalar("SELECT id FROM platform_admins")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        assert!(rows.is_empty());
     }
 }
 

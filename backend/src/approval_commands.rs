@@ -84,18 +84,21 @@ pub async fn process_approval(
     manager_pin: String,
     action: String, // "APPROVE" or "REJECT"
 ) -> Result<(), String> {
-    // Validate Manager PIN
-    let user_row = sqlx::query("SELECT id, role FROM users WHERE pin = ?")
-        .bind(&manager_pin)
-        .fetch_optional(&*pool)
+    // Validate Manager PIN — düz metin PIN sütunu kaldırıldığı için `WHERE pin = ?`
+    // yerine tenant kapsamındaki adaylar Argon2 ile doğrulanır.
+    let mut conn = pool.acquire().await.map_err(|e| format!("Database error while checking PIN: {}", e))?;
+    let found = crate::user_credentials::find_user_by_pin(&mut conn, &manager_pin, None)
         .await
         .map_err(|e| format!("Database error while checking PIN: {}", e))?;
+    drop(conn);
 
-    let user_row = user_row.ok_or_else(|| "Invalid PIN".to_string())?;
-    let role: String = user_row.get("role");
-    let approver_id: String = user_row.get("id");
+    let found = found.ok_or_else(|| "Invalid PIN".to_string())?;
+    let role: String = found.role.clone();
+    let approver_id: String = found.id.clone();
 
-    if role != "MANAGER" && role != "OWNER" && role != "MASTER" {
+    let role = crate::rbac::canonical_role(&role)
+        .ok_or_else(|| "Insufficient permissions. Manager PIN required.".to_string())?;
+    if !matches!(role, crate::rbac::Role::Manager | crate::rbac::Role::Owner | crate::rbac::Role::Master) {
         return Err("Insufficient permissions. Manager PIN required.".to_string());
     }
 

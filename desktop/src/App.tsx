@@ -18,6 +18,7 @@ import { OwnerDashboardContainer } from './presentation/components/owner/OwnerDa
 import { CashierWorkstationContainer } from './presentation/components/cashier/CashierWorkstationContainer';
 import { PlatformContainer } from './presentation/components/platform/PlatformContainer';
 import { ImpersonationBanner } from './presentation/components/platform/ImpersonationBanner';
+import { accessibleViews, defaultViewFor } from './core/security/navigationMatrix';
 import { useAutoLock } from './presentation/hooks/useAutoLock';
 
 export default function App(): JSX.Element {
@@ -34,44 +35,9 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     if (isAuthenticated && user && !isLocked) {
-      const role = user.role;
-      let allowedViews: string[] = [];
-      let defaultView: 'FLOOR' | 'POS' | 'MANAGEMENT' | 'KDS' | 'RECEIPTS' | 'END_OF_DAY' | 'OWNER_DASHBOARD' | 'CASHIER' | 'PLATFORM' = 'FLOOR';
-
-      switch (role) {
-        case 'MASTER':
-          allowedViews = ['PLATFORM'];
-          defaultView = 'PLATFORM';
-          break;
-        case 'OWNER':
-          // İşletme sahibi: Restoran düzeyindeki tüm operasyonel ve yönetsel ekranlara tam erişim hakkı
-          allowedViews = ['OWNER_DASHBOARD', 'MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'CASHIER', 'RECEIPTS', 'END_OF_DAY'];
-          defaultView = 'OWNER_DASHBOARD';
-          break;
-        case 'MANAGER':
-          // Müdür: Masalar, POS, KDS, Yönetim, Fişler ve Gün Sonu (Tahsilat hariç operasyonel tam yetki)
-          allowedViews = ['MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'RECEIPTS', 'END_OF_DAY'];
-          defaultView = 'MANAGEMENT';
-          break;
-        case 'CASHIER':
-          // Kasiyer: Kasa iş istasyonu, POS, Masalar ve Fişler
-          allowedViews = ['CASHIER', 'POS', 'FLOOR', 'RECEIPTS'];
-          defaultView = 'CASHIER';
-          break;
-        case 'WAITER':
-          // Garson: Masalar ve POS (Sipariş oluşturma Masalar üzerinden başlar)
-          allowedViews = ['FLOOR', 'POS'];
-          defaultView = 'FLOOR';
-          break;
-        case 'KITCHEN':
-          // Mutfak: KDS istasyon ekranı
-          allowedViews = ['KDS'];
-          defaultView = 'KDS';
-          break;
-        default:
-          allowedViews = [];
-          defaultView = 'FLOOR';
-      }
+      // Ekran erişimi ve ana ekran seçimi tek kaynaktan gelir: SPEC §34 matrisi
+      const allowedViews = accessibleViews(user.role);
+      const defaultView = defaultViewFor(user.role) ?? 'FLOOR';
 
       // Yeni kullanıcı oturum açtığında rolüne atanmış ana çalışma ekranına yönlendir
       if (lastUserIdRef.current !== user.userId) {

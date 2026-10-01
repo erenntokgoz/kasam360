@@ -1,7 +1,8 @@
 use crate::db::DbPool;
+use crate::rbac::{self, Role};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use sqlx::Row;
+use sqlx::{Acquire, Row};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CategoryDto {
@@ -22,10 +23,7 @@ pub struct ProductDto {
 
 #[tauri::command]
 pub async fn get_management_categories(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<CategoryDto>, String> {
-    let role_upper = actor_role.to_uppercase();
-    if role_upper != "MANAGER" && role_upper != "OWNER" && role_upper != "MASTER ADMIN" && role_upper != "MASTER" {
-        return Err("UNAUTHORIZED: Insufficient permissions to view categories".into());
-    }
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("SELECT id, name, display_order FROM categories ORDER BY display_order ASC")
@@ -52,9 +50,7 @@ pub async fn create_category(
     pool: tauri::State<'_, DbPool>,
     app_state: tauri::State<'_, crate::AppState>,
 ) -> Result<CategoryDto, String> {
-    if actor_role != "Owner" && actor_role != "OWNER" && actor_role != "Master Admin" && actor_role != "MASTER" {
-        return Err("UNAUTHORIZED: Only Owner can create categories".into());
-    }
+    rbac::require_any(&actor_role, &[Role::Owner])?;
     
     let _lock = app_state.audit_mutex.lock().await;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -94,9 +90,7 @@ pub async fn update_category(
     pool: tauri::State<'_, DbPool>,
     app_state: tauri::State<'_, crate::AppState>,
 ) -> Result<CategoryDto, String> {
-    if actor_role != "Owner" && actor_role != "OWNER" && actor_role != "Master Admin" && actor_role != "MASTER" {
-        return Err("UNAUTHORIZED: Only Owner can update categories".into());
-    }
+    rbac::require_any(&actor_role, &[Role::Owner])?;
     
     let _lock = app_state.audit_mutex.lock().await;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -133,9 +127,7 @@ pub async fn delete_category(
     pool: tauri::State<'_, DbPool>,
     app_state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    if actor_role != "Owner" && actor_role != "OWNER" && actor_role != "Master Admin" && actor_role != "MASTER" {
-        return Err("UNAUTHORIZED: Only Owner can delete categories".into());
-    }
+    rbac::require_any(&actor_role, &[Role::Owner])?;
     
     let _lock = app_state.audit_mutex.lock().await;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -171,10 +163,7 @@ pub async fn delete_category(
 
 #[tauri::command]
 pub async fn get_management_products(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<ProductDto>, String> {
-    let role_upper = actor_role.to_uppercase();
-    if role_upper != "MANAGER" && role_upper != "OWNER" && role_upper != "MASTER ADMIN" && role_upper != "MASTER" {
-        return Err("UNAUTHORIZED: Insufficient permissions to view products".into());
-    }
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("SELECT id, category_id, name, price_cents, image_url, is_active FROM products")
@@ -300,10 +289,7 @@ pub async fn update_product_status(
     pool: tauri::State<'_, DbPool>,
     app_state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    let role_upper = actor_role.to_uppercase();
-    if role_upper != "MANAGER" && role_upper != "OWNER" && role_upper != "MASTER ADMIN" && role_upper != "MASTER" {
-        return Err("UNAUTHORIZED: Insufficient permissions to update product status".into());
-    }
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
     
     let _lock = app_state.audit_mutex.lock().await;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -325,9 +311,7 @@ pub async fn delete_product(
     pool: tauri::State<'_, DbPool>,
     app_state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    if actor_role != "Owner" && actor_role != "OWNER" && actor_role != "Master Admin" && actor_role != "MASTER" {
-        return Err("UNAUTHORIZED: Only Owner can delete products".into());
-    }
+    rbac::require_any(&actor_role, &[Role::Owner])?;
     
     let _lock = app_state.audit_mutex.lock().await;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -367,12 +351,11 @@ pub struct StaffMemberDto {
 
 #[tauri::command]
 pub async fn get_staff(actor_role: String, tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<StaffMemberDto>, String> {
-    let role_up = actor_role.to_uppercase();
-    if role_up != "OWNER" && role_up != "MASTER" && role_up != "MANAGER" {
-        return Err("UNAUTHORIZED: Only Owner or Manager can manage staff".into());
-    }
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT id, name, role, tenant_id FROM users WHERE tenant_id = ? ORDER BY name ASC")
+    // Pasife alınmış personel listelenmez: kayıt silinmez ama işletme panosunda
+    // görünmez. Yeniden canlandırma bu fazın kapsamı dışında.
+    let rows = sqlx::query("SELECT id, name, role, tenant_id FROM users WHERE tenant_id = ? AND is_active = 1 ORDER BY name ASC")
         .bind(&tenant_id).fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
     let staff = rows.into_iter().map(|r| StaffMemberDto {
         id: r.try_get("id").unwrap_or_default(),
@@ -389,44 +372,52 @@ pub async fn create_staff_member(
     role: String, pin: String,
     pool: tauri::State<'_, DbPool>
 ) -> Result<StaffMemberDto, String> {
-    let role_up = actor_role.to_uppercase();
-    if role_up != "OWNER" && role_up != "MASTER" && role_up != "MANAGER" {
-        return Err("UNAUTHORIZED: Only Owner or Manager can create staff".into());
-    }
-    let allowed_roles: Vec<&str> = if role_up == "MASTER" {
-        vec!["OWNER", "MANAGER", "CASHIER", "WAITER", "KITCHEN", "MASTER"]
-    } else {
-        vec!["MANAGER", "CASHIER", "WAITER", "KITCHEN"]
-    };
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
+    // SPEC: MASTER personel yönetimine sahip değildir; bu yüzden platform rolleri
+    // (MASTER dahil) bu komuttan atanamaz. Rolü atanacak kişi de tenant'ın
+    // operasyonel rollerinden biri olmak zorundadır.
+    let allowed_roles: Vec<&str> = vec!["MANAGER", "CASHIER", "WAITER", "KITCHEN"];
     if !allowed_roles.contains(&role.as_str()) {
         return Err(format!("Invalid role: {}. Allowed: {}", role, allowed_roles.join(", ")));
     }
-    // PIN format denetimi: 4 ila 8 haneli sayısal olmalıdır
-    if !pin.chars().all(|c| c.is_ascii_digit()) || !(4..=8).contains(&pin.len()) {
-        return Err("PIN 4-8 haneli sayısal olmalıdır.".into());
-    }
-    let hash = crate::auth::hash_credential(&pin).ok();
+    // PIN düz metin saklanmaz; hash_pin format denetimini de yapar.
+    let hash = crate::user_credentials::hash_pin(&pin)?;
+
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+
+    // Ön kontrol ve yazma aynı transaction içindedir: PIN benzersizliği veritabanı
+    // indeksine değil uygulama katmanına yaslanıyor (hash'ler karşılaştırılamaz).
+    crate::user_credentials::ensure_pin_available(&mut tx, &tenant_id, &pin, None).await?;
+
     let id = uuid::Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO users (id, tenant_id, pin, role, name, credential_hash) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(&id).bind(&tenant_id).bind(&pin).bind(&role).bind(&name).bind(&hash)
-        .execute(&mut *conn).await.map_err(|e| e.to_string())?;
+    sqlx::query("INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active) VALUES (?, ?, ?, ?, ?, 1)")
+        .bind(&id).bind(&tenant_id).bind(&role).bind(&name).bind(&hash)
+        .execute(&mut *tx).await.map_err(|e| e.to_string())?;
+
+    // Yarış denetimi: ön kontrol ile yazma arasına başka bir istek girmiş olabilir.
+    // Çakışma varsa transaction geri alınır, kayıt oluşmaz.
+    crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &pin, &id).await?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
     Ok(StaffMemberDto { id, name, role, tenant_id })
 }
 
 #[tauri::command]
 pub async fn delete_staff_member(actor_role: String, staff_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
-    let role_up = actor_role.to_uppercase();
-    if role_up != "OWNER" && role_up != "MASTER" && role_up != "MANAGER" {
-        return Err("UNAUTHORIZED: Only Owner or Manager can delete staff".into());
-    }
-    // Master admin kullanıcısının silinmesini engelle
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
+    // Master admin kullanıcısının pasife alınmasını engelle
     if staff_id == "usr_master" {
         return Err("UNAUTHORIZED: Master Admin hesabı silinemez.".into());
     }
+    // Personel silinmez, pasife alınır (AGENTS.md §6). Kayıt, geçmiş sipariş ve
+    // vardiya satırlarının referansı olduğu için fiziksel olarak korunur.
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM users WHERE id = ?")
+    let result = sqlx::query("UPDATE users SET is_active = 0 WHERE id = ?")
         .bind(&staff_id).execute(&mut *conn).await.map_err(|e| e.to_string())?;
+    if result.rows_affected() == 0 {
+        return Err("Kullanıcı bulunamadı.".into());
+    }
     Ok(())
 }
 
@@ -434,10 +425,7 @@ pub async fn delete_staff_member(actor_role: String, staff_id: String, pool: tau
 
 #[tauri::command]
 pub async fn get_modifier_groups(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<serde_json::Value>, String> {
-    let role_up = actor_role.to_uppercase();
-    if role_up != "OWNER" && role_up != "MASTER" {
-        return Err("UNAUTHORIZED: Only Owner can manage modifiers".into());
-    }
+    rbac::require_any(&actor_role, &[Role::Owner])?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let groups = sqlx::query("SELECT id, name, is_required, min_selections, max_selections FROM modifier_groups ORDER BY name ASC")
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
@@ -469,8 +457,7 @@ pub async fn create_modifier_group(
     min_selections: i64, max_selections: Option<i64>, tenant_id: String,
     pool: tauri::State<'_, DbPool>
 ) -> Result<String, String> {
-    let role_up = actor_role.to_uppercase();
-    if role_up != "OWNER" { return Err("UNAUTHORIZED: Only Owner can create modifier groups".into()); }
+    rbac::require_any(&actor_role, &[Role::Owner])?;
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO modifier_groups (id, tenant_id, name, is_required, min_selections, max_selections) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(&id).bind(&tenant_id).bind(&name).bind(is_required).bind(min_selections).bind(max_selections)
@@ -483,8 +470,7 @@ pub async fn add_modifier_option(
     actor_role: String, group_id: String, name: String, price_cents: i64,
     pool: tauri::State<'_, DbPool>
 ) -> Result<String, String> {
-    let role_up = actor_role.to_uppercase();
-    if role_up != "OWNER" { return Err("UNAUTHORIZED: Only Owner can add modifier options".into()); }
+    rbac::require_any(&actor_role, &[Role::Owner])?;
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO modifier_options (id, group_id, name, price_cents) VALUES (?, ?, ?, ?)")
         .bind(&id).bind(&group_id).bind(&name).bind(price_cents)
@@ -494,8 +480,7 @@ pub async fn add_modifier_option(
 
 #[tauri::command]
 pub async fn delete_modifier_group(actor_role: String, group_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
-    let role_up = actor_role.to_uppercase();
-    if role_up != "OWNER" { return Err("UNAUTHORIZED: Only Owner can delete modifier groups".into()); }
+    rbac::require_any(&actor_role, &[Role::Owner])?;
     sqlx::query("DELETE FROM modifier_groups WHERE id = ?")
         .bind(&group_id).execute(&*pool).await.map_err(|e| e.to_string())?;
     Ok(())

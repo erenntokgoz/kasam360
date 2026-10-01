@@ -508,20 +508,20 @@ const DEFAULT_DIRECTORIES: MockDirectory[] = [
   { id: 'dir_004', tenantId: 'DEFAULT_TENANT', name: 'Dükkan Sahibi (Mülk Sahibi)', type: 'FIXED_EXPENSE', phone: '0533 777 8899', creditLimitCents: 0, createdAt: new Date().toISOString(), balanceCents: 0 },
   { id: 'dir_005', tenantId: 'DEFAULT_TENANT', name: 'Eren Bey (Patron Şahsi)', type: 'OWNER_PERSONAL', phone: '0530 000 0001', creditLimitCents: 0, createdAt: new Date().toISOString(), balanceCents: 0 },
 ];
-let mockDirectories: MockDirectory[] = lsLoad<MockDirectory[]>('directories', DEFAULT_DIRECTORIES);
+const mockDirectories: MockDirectory[] = lsLoad<MockDirectory[]>('directories', DEFAULT_DIRECTORIES);
 
 const DEFAULT_DEBTS: MockDebt[] = [
   { id: 'dbt_001', tenantId: 'DEFAULT_TENANT', directoryId: 'dir_001', directoryName: 'Öz Gıda Toptan A.Ş.', type: 'TAKEN', totalAmountCents: 1250000, remainingAmountCents: 1250000, status: 'PENDING', isCash: false, description: 'Et ve Süt Ürünleri Alış Faturası', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
   { id: 'dbt_002', tenantId: 'DEFAULT_TENANT', directoryId: 'dir_002', directoryName: 'Ahmet Yılmaz (Masa 4 Veresiye)', type: 'GIVEN', totalAmountCents: 35000, remainingAmountCents: 35000, status: 'PENDING', isCash: false, description: 'Öğle Yemeği Veresiye Adisyonu', createdAt: new Date(Date.now() - 3600000 * 4).toISOString() },
 ];
-let mockDebts: MockDebt[] = lsLoad<MockDebt[]>('debts', DEFAULT_DEBTS);
+const mockDebts: MockDebt[] = lsLoad<MockDebt[]>('debts', DEFAULT_DEBTS);
 
 const DEFAULT_EXPENSES: MockExpense[] = [
   { id: 'exp_001', tenantId: 'DEFAULT_TENANT', category: 'RENT', amountCents: 3500000, paymentMethod: 'BANK_TRANSFER', directoryId: 'dir_004', directoryName: 'Dükkan Sahibi (Mülk Sahibi)', actorId: 'Patron', description: 'Nisan 2026 Dükkan Kirası', expenseDate: new Date().toISOString(), createdAt: new Date().toISOString() },
   { id: 'exp_002', tenantId: 'DEFAULT_TENANT', category: 'UTILITIES', amountCents: 245000, paymentMethod: 'CREDIT_CARD', actorId: 'Müdür', description: 'Elektrik Faturası (BEDAŞ)', expenseDate: new Date().toISOString(), createdAt: new Date().toISOString() },
   { id: 'exp_003', tenantId: 'DEFAULT_TENANT', category: 'STAFF_ADVANCE', amountCents: 150000, paymentMethod: 'CASH', directoryId: 'dir_003', directoryName: 'Mehmet Usta (Aşçıbaşı)', actorId: 'Kasiyer', description: 'Haftalık Personel Avansı', expenseDate: new Date().toISOString(), createdAt: new Date().toISOString() },
 ];
-let mockExpenses: MockExpense[] = lsLoad<MockExpense[]>('expenses', DEFAULT_EXPENSES);
+const mockExpenses: MockExpense[] = lsLoad<MockExpense[]>('expenses', DEFAULT_EXPENSES);
 
 function isBrowser(): boolean {
   if (typeof window === 'undefined') {

@@ -12,10 +12,8 @@ pub struct AnalyticsDashboardDataDto {
 
 #[tauri::command]
 pub async fn get_analytics_dashboard_data(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<AnalyticsDashboardDataDto, String> {
-    let role_upper = actor_role.to_uppercase();
-    if role_upper != "MANAGER" && role_upper != "OWNER" && role_upper != "MASTER ADMIN" && role_upper != "MASTER" {
-        return Err("UNAUTHORIZED: Insufficient permissions to view daily summary".into());
-    }
+    // SPEC §34 "Raporlar": işletme sahibi tam, müdür kısmi. MASTER'ın rapor satırı yoktur.
+    crate::rbac::require_reporting(&actor_role)?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 

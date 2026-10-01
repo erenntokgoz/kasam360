@@ -2,6 +2,7 @@ import { Armchair, Receipt, ChefHat, Clock, Settings, BarChart3, Banknote } from
 import { useCartStore } from '../../store/useCartStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
+import { usePermission } from '../../hooks/usePermission';
 
 /**
  * macOS Dock tarzında dikeyde ortalanmış, buzlu cam (frosted glass) sol gezinme çubuğu.
@@ -13,19 +14,22 @@ export function GlobalNav() {
   const user = useAuthStore((state) => state.user);
   const { isKdsEnabled, isTableOrderEnabled, isLedgerCariEnabled } = useFeatureFlags();
 
+  // Gezinme görünürlüğü route erişimiyle aynı kaynaktan türer: SPEC §34 matrisi.
+  // Kanca koşullu dönüşten önce çağrılmalıdır; kanca sırası her render'da aynı kalmalıdır.
+  const { navViews } = usePermission();
+
   const role = user?.role || 'WAITER';
 
   // MASTER rolü AppShell dışında PlatformContainer'da render edilir
   if (role === 'MASTER') return null;
 
-  // Rol ve Modül Yetki Kontrolleri (Feature Flags ile korumalı)
-  const canSeeCashier = ['CASHIER', 'OWNER'].includes(role);
-  const canSeeFloor = ['WAITER', 'CASHIER', 'MANAGER', 'OWNER'].includes(role) && isTableOrderEnabled;
-  const canSeeReceipts = ['CASHIER', 'MANAGER', 'OWNER'].includes(role);
-  const canSeeKds = ['KITCHEN', 'MANAGER', 'OWNER'].includes(role) && isKdsEnabled;
-  const canSeeEndOfDay = ['MANAGER', 'OWNER'].includes(role) && isLedgerCariEnabled;
-  const canSeeOwnerDashboard = role === 'OWNER';
-  const canSeeManagement = role === 'MANAGER';
+  const canSeeFloor = navViews.includes('FLOOR') && isTableOrderEnabled;
+  const canSeeCashier = navViews.includes('CASHIER');
+  const canSeeReceipts = navViews.includes('RECEIPTS');
+  const canSeeKds = navViews.includes('KDS') && isKdsEnabled;
+  const canSeeEndOfDay = navViews.includes('END_OF_DAY') && isLedgerCariEnabled;
+  const canSeeOwnerDashboard = navViews.includes('OWNER_DASHBOARD');
+  const canSeeManagement = navViews.includes('MANAGEMENT');
 
   return (
     // macOS tarzı dikeyde ortalanmış, önde süzülen bağımsız şeffaf cam (frosted glass) kapsül

@@ -52,15 +52,10 @@ INSERT OR IGNORE INTO tables (id, name, status, opened_at, waiter_id, current_to
 
 -- -------------------------
 -- 4. Users (6 rol)
--- INSERT OR IGNORE: mevcut kayıtları silmez, güvenle tekrar çalıştırılabilir.
+-- Burada kullanıcı eklenmez: PIN'ler düz metin saklanamaz ve Argon2id hash'i
+-- SQL içinde üretilemez. Altı rolün tohumlanması `db.rs` içindeki
+-- `seed_default_users` fonksiyonunda Argon2 ile yapılır (bkz. init_db).
 -- -------------------------
-INSERT OR IGNORE INTO users (id, pin, role, name) VALUES
-    ('usr_master',  '1111', 'MASTER',  'Master Admin'),
-    ('usr_owner',   '2222', 'OWNER',   'Owner (Patron)'),
-    ('usr_manager', '3333', 'MANAGER', 'Manager (Müdür)'),
-    ('usr_cashier', '4444', 'CASHIER', 'Cashier (Kasiyer)'),
-    ('usr_waiter',  '5555', 'WAITER',  'Waiter (Garson)'),
-    ('usr_cook',    '6666', 'KITCHEN', 'Kitchen (Aşçı)');
 
 -- -------------------------
 -- 5. Plans (3 Paket)
