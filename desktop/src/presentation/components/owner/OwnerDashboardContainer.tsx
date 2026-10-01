@@ -15,7 +15,6 @@ import {
   Layers, 
   Utensils, 
   Wrench,
-  ShieldCheck,
   FileText,
   LayoutGrid,
   FileBarChart
@@ -28,7 +27,6 @@ import { OwnerStaffTab } from './ui/OwnerStaffTab';
 import { OwnerModifiersTab } from './ui/OwnerModifiersTab';
 import { OwnerSalesTab } from './ui/OwnerSalesTab';
 import { OwnerAuditLogsTab } from './ui/OwnerAuditLogsTab';
-import { ApprovalsPanel } from '../management/ui/ApprovalsPanel';
 import { TablesOrdersPanel } from '../management/ui/TablesOrdersPanel';
 import { ReportsPanel } from '../management/ui/ReportsPanel';
 
@@ -42,7 +40,6 @@ export type OwnerTabId =
   | 'reports'
   | 'menu'
   | 'inventory'
-  | 'approvals'
   | 'staff'
   | 'logs'
   | 'modifiers'
@@ -70,7 +67,6 @@ export function buildOwnerNavItems(can: (capability: Capability) => boolean): Ow
     { id: 'reports', label: 'Operasyonel Raporlar', icon: <FileBarChart size={15} /> },
     { id: 'menu', label: 'Menü', icon: <Utensils size={15} /> },
     { id: 'inventory', label: 'Stok & Reçete', icon: <Package size={15} /> },
-    { id: 'approvals', label: 'Onaylar', icon: <ShieldCheck size={15} /> },
     { id: 'staff', label: 'Personel', icon: <Users size={15} /> },
     ...(can('auditRead')
       ? [{ id: 'logs' as OwnerTabId, label: 'Sistem Logları', icon: <FileText size={15} /> }]
@@ -275,8 +271,6 @@ export function OwnerDashboardContainer() {
           <OwnerMenuTab />
         ) : activeTab === 'inventory' ? (
           <OwnerInventoryTab />
-        ) : activeTab === 'approvals' ? (
-          <ApprovalsPanel />
         ) : activeTab === 'staff' ? (
           <OwnerStaffTab />
         ) : activeTab === 'logs' ? (

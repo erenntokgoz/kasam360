@@ -141,6 +141,38 @@ pub fn require_any_present(caller_role: Option<&str>, allowed: &[Role]) -> Resul
     require_any(raw, allowed)
 }
 
+/// Anlık PIN onayını verebilecek roller: MASTER, işletme sahibi ve müdür.
+///
+/// SPEC §34'te kasa/garson/mutfak onaylama yetkisine sahip değildir; onaylayan
+/// her zaman bu üç rolden biri olmak zorundadır.
+pub const APPROVER_ROLES: [Role; 3] = [Role::Master, Role::Owner, Role::Manager];
+
+/// Yalnız işletme sahibi ve müdür onaylayabilir (MASTER hariç).
+///
+/// Büyük indirimlerde (%20 veya 500 TL üzeri) onaylayan kasa olamaz; bu yüzden
+/// MASTER bu kapıdan da dışlanır — platform hesabı bir işletmenin indirimine
+/// onay vermez.
+pub fn require_approver(raw_role: &str) -> Result<Role, String> {
+    require_any(raw_role, &[Role::Owner, Role::Manager])
+}
+
+/// Onaylayan kişi işlemi yapan kişi olamaz (ayrım gözetimi, görevler ayrılığı).
+///
+/// Neden kimlik karşılaştırması burada: kural tek yerden zorlanmalıdır. Aksi
+/// hâlde her komut kendi karşılaştırmasını unutabilir ve "kendi işlemini kendi
+/// onayladı" deliği yeniden açılırdı.
+pub fn require_distinct_approver(approver_id: &str, actor_id: &str) -> Result<(), String> {
+    if approver_id.trim().is_empty() {
+        return Err("UNAUTHORIZED: Onaylayan kimliği boş olamaz.".to_string());
+    }
+    if approver_id.trim().eq_ignore_ascii_case(actor_id.trim()) {
+        return Err(
+            "SELF_APPROVAL_FORBIDDEN: Onaylayan kişi işlemi yapan kişi olamaz.".to_string(),
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,5 +242,52 @@ mod tests {
         // Bilinmeyen yazım fail-closed: kapıdan düşer.
         assert!(require_audit_read("SuperUser").is_err());
         assert!(require_audit_read("").is_err());
+    }
+
+    /// Onay verebilen roller: MASTER, işletme sahibi, müdür. Kasa, garson ve
+    /// mutfak onaylayamaz — SPEC §34'te onay yetkileri yoktur.
+    #[test]
+    fn onay_verebilen_roller_yalnizca_usta_uc_roldur() {
+        for role in ["MASTER", "Owner", "MANAGER", " master_admin ", "Manager"] {
+            assert!(
+                require_any(role, &APPROVER_ROLES).is_ok(),
+                "{} onay verebilmeli",
+                role
+            );
+        }
+        for role in ["CASHIER", "WAITER", "KITCHEN", "", "SuperUser"] {
+            assert!(
+                require_any(role, &APPROVER_ROLES).is_err(),
+                "{} onay verebilmemeli",
+                role
+            );
+        }
+    }
+
+    /// Büyük indirim onayı: MASTER dahil yalnız işletme sahibi ve müdür. Platform
+    /// hesabı bir işletmenin indirimine onay vermez.
+    #[test]
+    fn buyuk_indirim_onayi_platform_hesabini_dislar() {
+        assert!(require_approver("OWNER").is_ok());
+        assert!(require_approver("Manager").is_ok());
+        assert!(require_approver("MASTER").is_err());
+        assert!(require_approver("CASHIER").is_err());
+        assert!(require_approver("WAITER").is_err());
+        assert!(require_approver("").is_err());
+    }
+
+    /// Ayrım gözetimi: onaylayan kişi işlemi yapan kişi olamaz. Kural tek
+    /// fonksiyonda olduğu için hiçbir komut kendi kontrolünü unutamaz.
+    #[test]
+    fn onaylayan_kendi_islemini_onaylayamaz() {
+        assert!(require_distinct_approver("usr_manager", "usr_cashier").is_ok());
+
+        let err = require_distinct_approver("usr_manager", "usr_manager").unwrap_err();
+        assert!(err.starts_with("SELF_APPROVAL_FORBIDDEN"), "{}", err);
+
+        // Büyük/küçük harf ve boşluk farkı da aynı kişidir.
+        assert!(require_distinct_approver("USR_MANAGER", " usr_manager ").is_err());
+        // Onaylayan kimliği boş olamaz (fail-closed).
+        assert!(require_distinct_approver("  ", "usr_cashier").is_err());
     }
 }

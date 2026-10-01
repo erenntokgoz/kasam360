@@ -370,9 +370,11 @@ let mockDevices: MockDevice[] = lsLoad<MockDevice[]>('devices', []);
 // 10b. Vardiyalar (Shifts)
 let mockShifts: MockShift[] = lsLoad<MockShift[]>('shifts', []);
 
-// 11. Canlı Operasyonlar, Onaylar ve Denetim Kayıtları
+// 11. Canlı Operasyonlar ve Denetim Kayıtları
+// Faz 3 (K4): onay kuyruğu (`mockPendingApprovals`) kaldırıldı. Onay artık
+// anlık PIN ile alınır ve tek kullanımlık jetonla doğrulanır; kuyruk verisi
+// hiçbir yerde tutulmaz.
 const mockLiveOrders: Record<string, unknown>[] = lsLoad<Record<string, unknown>[]>('live_orders', []);
-let mockPendingApprovals: Record<string, unknown>[] = lsLoad<Record<string, unknown>[]>('pending_approvals', []);
 
 /**
  * Denetim kayıtları ham SHA-256 **taşımaz**: yalnızca `sealed` mührü ve
@@ -638,6 +640,117 @@ function isBrowser(): boolean {
     return true;
   }
   return !('__TAURI_INTERNALS__' in window) && !('__TAURI__' in window);
+}
+
+// ---------------------------------------------------------------------------
+// Anlık PIN onayı — tarayıcı modu kuralları (backend ile aynı)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mock onay PIN'leri. Backend'de Argon2 ile doğrulanır; burada düz eşleşme
+ * vardır ama **roller ve eşikler** backend ile aynıdır. Rol→PIN eşlemesi
+ * kullanıcı rolleriyle (AGENTS.md §6) uyumludur.
+ */
+const MOCK_APPROVER_PINS: Record<string, string> = {
+  '1111': 'MASTER',
+  '2222': 'OWNER',
+  '3333': 'MANAGER',
+};
+
+/** Her rolün kendi PIN'i: self-approval denetimi için. */
+const MOCK_SELF_PIN: Record<string, string> = {
+  MASTER: '1111',
+  OWNER: '2222',
+  MANAGER: '3333',
+  CASHIER: '4444',
+  WAITER: '5555',
+  KITCHEN: '6666',
+};
+
+function mockResolveApproverRole(pin: string): string | null {
+  return MOCK_APPROVER_PINS[pin] ?? null;
+}
+
+// Onay defteri ve deneme sayacı modül düzeyinde tutulur. `localStorage` yalnız
+// ek dayanıklılıktır: test ortamında (jsdom'suz node) `localStorage` yoktur ve
+// yalnız ona yazmak mock kurallarını sessizce devre dışı bırakırdı.
+interface MockApprovalRecord {
+  id: string;
+  operation: string;
+  resourceId: unknown;
+  actorId: unknown;
+  amountCents: unknown;
+  approverRole: string;
+  token: string;
+  consumedAt: string | null;
+  expiresAt: number;
+}
+
+let mockApprovalLedger: MockApprovalRecord[] = [];
+let mockApprovalAttempts: Record<string, number> = {};
+
+function bumpApprovalAttempts(scopeKey: string, current: number): void {
+  mockApprovalAttempts[scopeKey] = current + 1;
+  lsSave('approval_attempts', mockApprovalAttempts);
+}
+
+/** Ödeme payload'ında sunucu tarafında indirim üretecek bir alan var mı? */
+function hasMockDiscount(payload: Record<string, unknown>): boolean {
+  const globalDiscount = payload.globalDiscount as Record<string, unknown> | undefined;
+  if (globalDiscount && Number(globalDiscount.value ?? 0) > 0) return true;
+  const items = (payload.items as Record<string, unknown>[]) || [];
+  return items.some((item) => {
+    const discount = item.discount as Record<string, unknown> | undefined;
+    return Boolean(discount && Number(discount.value ?? 0) > 0);
+  });
+}
+
+/** Mock yüzeyi backend ile aynı: %100 indirim ikramdır, iptal kendi yüzeyidir. */
+function operationForMockApproval(
+  cmd: string,
+  payload: Record<string, unknown>,
+): string {
+  if (cmd === 'void_order') return 'VOID_ORDER';
+  const items = (payload.items as Record<string, unknown>[]) || [];
+  const globalDiscount = payload.globalDiscount as Record<string, unknown> | undefined;
+  const discountValues = items
+    .map((item) => Number(((item.discount as Record<string, unknown>) || {}).value ?? 0))
+    .concat(globalDiscount ? [Number(globalDiscount.value ?? 0)] : []);
+  const total = Number(payload.totalAmount ?? 0);
+  const hasDiscount = discountValues.some((value) => value > 0);
+  if (!hasDiscount) return '';
+  return total <= 0 ? 'COMPLIMENTARY' : 'DISCOUNT';
+}
+
+/**
+ * Onay jetonunu tek kullanımlık olarak tüketir. Kapsam denetimi backend ile
+ * aynı alanları karşılaştırır: yüzey, kaynak ve süre.
+ *
+ * Backend'in hata ayrımı korunur: "jeton yok" ile "jeton geçersiz/kullanılmış"
+ * farklı kodlarla döner. Arayüz bu ayrımı kullanıcıya farklı metin gösterir.
+ */
+function consumeMockApproval(
+  token: string,
+  payload: Record<string, unknown>,
+  expectedOperation: string,
+): { ok: true } | { ok: false; code: string } {
+  if (!expectedOperation) return { ok: true };
+  if (!token) return { ok: false, code: 'APPROVAL_REQUIRED' };
+
+  const record = mockApprovalLedger.find((item) => item.token === token);
+  if (!record) return { ok: false, code: 'APPROVAL_TOKEN_INVALID' };
+  if (record.consumedAt) return { ok: false, code: 'APPROVAL_TOKEN_USED' };
+  if (record.expiresAt < Date.now()) return { ok: false, code: 'APPROVAL_TOKEN_EXPIRED' };
+  if (record.operation !== expectedOperation) {
+    return { ok: false, code: 'APPROVAL_TOKEN_SCOPE_MISMATCH' };
+  }
+  if (record.resourceId !== payload.orderId && record.resourceId !== payload.transactionId) {
+    return { ok: false, code: 'APPROVAL_TOKEN_SCOPE_MISMATCH' };
+  }
+
+  record.consumedAt = new Date().toISOString();
+  lsSave('approvals', mockApprovalLedger);
+  return { ok: true };
 }
 
 function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
@@ -972,12 +1085,95 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
 
     return true as unknown as T;
   }
+  // ----- Anlık PIN onayı: tarayıcı modunda gerçek kurallar uygulanır -----
+  //
+  // Neden mock rastgele başarılı dönmez: mock, backend'in reddettiği bir durumu
+  // kabul ederse tarayıcı modunda denen bir akış üretimde kırılır. Buradaki
+  // üç kural backend ile aynıdır: kasa onaylayamaz, kendi işlemini onaylayan
+  // onaylayamaz, hatalı PIN sayacı tükenince terminal kilitlenir.
+  if (cmd === 'verify_manager_pin') {
+    const payload = (args.payload as Record<string, unknown>) || {};
+    const actorId = String(payload.actorId || '');
+    const actorRole = String(payload.actorRole || '').toUpperCase();
+    const operation = String(payload.operation || '');
+    const pin = String(payload.pin || '');
+    const scopeKey = `approval_attempts:${String(payload.tenantId || callerTenantId)}:${String(payload.terminalId || 'terminal_unknown')}:${operation}`;
+
+    const attempts = mockApprovalAttempts[scopeKey] ?? 0;
+
+    if (attempts >= 5) {
+      throw `APPROVAL_LOCKED: Çok sayıda hatalı deneme. Terminal 300 saniye kilitli.`;
+    }
+    if (!/^\d{4,8}$/.test(pin)) {
+      bumpApprovalAttempts(scopeKey, attempts);
+      throw 'INVALID_APPROVAL_PIN: Onay PIN\'i hatalı.';
+    }
+
+    // Onaylayan rolleri backend ile aynı: MASTER, OWNER, MANAGER.
+    // Büyük indirim ve ikram yüzeylerinde MASTER da dışlanır.
+    const approverRole = mockResolveApproverRole(pin);
+    if (!approverRole) {
+      bumpApprovalAttempts(scopeKey, attempts);
+      throw 'INVALID_APPROVAL_PIN: Onay PIN\'i hatalı.';
+    }
+    const privileged =
+      operation === 'COMPLIMENTARY' ||
+      operation === 'DISCOUNT' &&
+        (Number(payload.discountPercent ?? 0) >= 20 ||
+          Number(payload.amountCents ?? 0) >= 50000);
+    if (privileged && approverRole !== 'OWNER' && approverRole !== 'MANAGER') {
+      bumpApprovalAttempts(scopeKey, attempts);
+      throw 'UNAUTHORIZED: Bu rol onay veremez (izin: MASTER, OWNER, MANAGER).';
+    }
+    if (approverRole === actorRole || pin === MOCK_SELF_PIN[actorRole]) {
+      throw 'SELF_APPROVAL_FORBIDDEN: Onaylayan kişi işlemi yapan kişi olamaz.';
+    }
+
+    const token = `mock_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    mockApprovalLedger.push({
+      id: `apr_${Date.now()}`,
+      operation,
+      resourceId: payload.resourceId,
+      actorId,
+      amountCents: payload.amountCents,
+      approverRole,
+      token,
+      consumedAt: null,
+      expiresAt: Date.now() + 30000,
+    });
+    lsSave('approvals', mockApprovalLedger);
+
+    return {
+      approved: true,
+      approvalToken: token,
+      approverId: `mock_${approverRole}`,
+      approverName: approverRole,
+      approverRole,
+      resourceId: payload.resourceId,
+      operation,
+      remainingAttempts: 5,
+    } as unknown as T;
+  }
+
   if (
     cmd === 'process_payment' ||
     cmd === 'process_split_payment' ||
     cmd === 'void_order'
   ) {
     const payload = (args.payload as Record<string, unknown>) || {};
+    // Onay zorunluluğu mock'ta da uygulanır: indirimli ödeme ve iptal
+    // geçerli, tüketilmemiş bir onay jetonu olmadan ilerlemez.
+    if (cmd === 'void_order' || hasMockDiscount(payload)) {
+      const token = String(payload.approvalToken || '');
+      const outcome = consumeMockApproval(
+        token,
+        payload,
+        operationForMockApproval(cmd, payload),
+      );
+      if (!outcome.ok) {
+        throw `${outcome.code}: Bu işlem için onay PIN'i gerekli.`;
+      }
+    }
     const tableId = (args.tableId || payload.customerRef || payload.tableId) as string;
     const totalAmount = Number(payload.totalAmount) || 0;
     const paymentTenantId = (args.tenantId || args.tenant_id || payload.tenantId || payload.tenant_id || callerTenantId || '') as string;
@@ -1424,42 +1620,6 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   // ----- OPERASYONLAR & ONAYLAR (Operations & Approvals) -----
   if (cmd === 'get_live_orders') {
     return mockLiveOrders.filter((o) => matchesTenant(o.tenant_id as string | undefined)) as unknown as T;
-  }
-  if (cmd === 'get_pending_approvals') {
-    return mockPendingApprovals.filter((a) => matchesTenant(a.tenant_id as string | undefined)) as unknown as T;
-  }
-  if (cmd === 'request_approval') {
-    const newAppr = {
-      id: `appr_${Date.now().toString().slice(-4)}`,
-      tenant_id: (args.tenantId || args.tenant_id || callerTenantId || '') as string,
-      action_type: (args.actionType || args.action_type || 'VOID_ORDER') as string,
-      request_type: (args.actionType || args.action_type || 'VOID_ORDER') as string,
-      resource_id: (args.resourceId || args.resource_id || 'res_001') as string,
-      requester_id: (args.requesterId || args.requester_id || 'Kasiyer') as string,
-      requested_by: (args.requesterId || args.requester_id || 'Kasiyer') as string,
-      status: 'PENDING',
-      approver_id: null,
-      payload: (args.reason || args.payload || 'Onay Talebi') as string,
-      created_at: new Date().toISOString(),
-      resolved_at: null,
-    };
-    mockPendingApprovals = [...mockPendingApprovals, newAppr];
-    lsSave('pending_approvals', mockPendingApprovals);
-    return { success: true, id: newAppr.id } as unknown as T;
-  }
-  if (cmd === 'process_approval') {
-    const approvalId = (args.approvalId || args.id) as string;
-    const action = (args.action as string) || 'APPROVE';
-    const managerPin = args.managerPin as string | undefined;
-    if (managerPin && managerPin.length > 0) {
-      const validPins = ['1111', '2222', '3333', ...mockStaff.map(s => s.pin).filter(Boolean)];
-      if (!validPins.includes(managerPin)) {
-        throw new Error('Geçersiz müdür PIN kodu.');
-      }
-    }
-    mockPendingApprovals = mockPendingApprovals.filter((a) => a.id !== approvalId);
-    lsSave('pending_approvals', mockPendingApprovals);
-    return { success: true, message: `İşlem ${action === 'APPROVE' ? 'onaylandı' : 'reddedildi'}.` } as unknown as T;
   }
   if (cmd === 'get_audit_logs') {
     // Backend ile aynı kapı: yalnızca işletme sahibi ve müdür. Rol alanı

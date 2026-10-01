@@ -354,6 +354,10 @@ CREATE INDEX IF NOT EXISTS idx_inv_batches_prod ON inventory_batches(product_id,
 CREATE INDEX IF NOT EXISTS idx_inv_batches_item ON inventory_batches(inventory_item_id, received_at ASC);
 
 -- APPROVAL ENGINE
+-- Anlık PIN onayı (Faz 3): satır artık "kim onayladı" kaydıdır ve tek
+-- kullanımlık jetonu taşır. Durum kümesi değişmez; onay `APPROVED` + çözülmüş
+-- zaman damgasıyla yazılır. CHECK kısıtı eski veritabanlarında da geçerli
+-- kalsın diye genişletilmemiştir.
 CREATE TABLE IF NOT EXISTS approvals (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,
@@ -362,9 +366,33 @@ CREATE TABLE IF NOT EXISTS approvals (
     requester_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'APPROVED', 'REJECTED')),
     approver_id TEXT,
+    -- Onaylayanın rolü: "İptal/İade/Zayi — kim onayladı" raporunun kaynağı.
+    approved_by_role TEXT,
+    -- İşlemin tutarı (kuruş): jeton kapsamına girer, kapsam sapması reddedilir.
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    -- Jetonun kendisi değil, kanonik formunun SHA-256 özeti saklanır.
+    token_hash TEXT,
+    expires_at DATETIME,
+    consumed_at DATETIME,
     payload TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     resolved_at DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_approvals_tenant_status ON approvals(tenant_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_approvals_resource ON approvals(tenant_id, resource_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_token ON approvals(token_hash) WHERE token_hash IS NOT NULL;
+
+-- Onay PIN'i deneme sayacı. Süreç belleği değil: uygulama yeniden başlasa da
+-- kilit korunur (AGENTS.md §9/13). Kapsam terminal + tenant + işlem yüzeyi;
+-- böylece bir cihazdaki hatalı deneme başka cihazın sayacını tüketmez.
+CREATE TABLE IF NOT EXISTS approval_attempts (
+    scope TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    terminal_id TEXT NOT NULL,
+    surface TEXT NOT NULL,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    locked_until DATETIME,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 -- CASH MOVEMENTS

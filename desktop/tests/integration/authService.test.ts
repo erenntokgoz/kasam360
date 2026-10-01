@@ -1,20 +1,17 @@
 
 import { AuthService, AuthRateLimitError, InvalidCredentialsError } from '../../src/domain/usecases/auth/AuthService';
 import { AuthorizationGuard, SecurityAccessDeniedError } from '../../src/domain/usecases/auth/AuthorizationGuard';
-import { ApprovalWorkflowEngine } from '../../src/domain/usecases/auth/ApprovalWorkflowEngine';
 import { BranchIsolationGuard, IsolationViolationException } from '../../src/domain/usecases/branch/BranchIsolationGuard';
 import { SecurityPrincipal } from '../../src/core/security/roles.types';
 
 describe('Auth & Permission Tests', () => {
   let authService: AuthService;
   let guard: AuthorizationGuard;
-  let approvalEngine: ApprovalWorkflowEngine;
 
   beforeEach(() => {
     (AuthService as any).instance = undefined; // Reset singleton
     authService = AuthService.getInstance();
     guard = authService.getGuard();
-    approvalEngine = new ApprovalWorkflowEngine(guard);
     BranchIsolationGuard.clearActiveContext();
     vi.useRealTimers();
   });
@@ -88,52 +85,56 @@ describe('Auth & Permission Tests', () => {
     expect(() => guard.assertPermission('WAITER', 'financial:cost_settings:view')).toThrow();
   });
 
-  it('required manager approval missing -> DENIED', () => {
-    const waiter: SecurityPrincipal = { userId: 'u1', role: 'WAITER' };
-    const resultWaiter = approvalEngine.evaluateAndProcess({
-      operationType: 'refund',
-      amount: 100,
-      actor: waiter,
-      targetResourceId: 'ord_1',
-      reason: 'wrong item'
-    });
-    expect(resultWaiter.status).toBe('HALTED_REQUIRES_APPROVAL');
-    
-    // Wait, let's test a cashier exceeding threshold
+  // Faz 3 (K4/C-3): onay kuyruğu kaldırıldı. Aynı iş kuralı — büyük tutarlı
+  // iade için üst yönetim onayı zorunlu — artık anlık PIN onayıyla karşılanır.
+  // Kuyruk motorunun testleri yerine onay yüzeyinin kuralları
+  // `instantPinApproval.test.ts` içinde sınanır; burada rol kapıları korunur.
+  it('required manager approval gate -> DENIED without approval', async () => {
+    const { tauriInvoke } = await import('../../src/data/ipc/tauriInvoke');
     const cashier: SecurityPrincipal = { userId: 'c1', role: 'CASHIER' };
-    const result = approvalEngine.evaluateAndProcess({
-      operationType: 'refund',
-      amount: 999999, // Exceeds 4500
-      actor: cashier,
-      targetResourceId: 'ord_1',
-      reason: 'big refund'
-    });
-    
-    expect(result.status).toBe('HALTED_REQUIRES_APPROVAL');
+
+    // Kasa, eşiği aşan bir indirim için tek başına onay üretemez.
+    const code = await tauriInvoke('verify_manager_pin', {
+      payload: {
+        operation: 'DISCOUNT',
+        resourceId: 'ord_1',
+        actorId: cashier.userId,
+        actorRole: cashier.role,
+        amountCents: 999999,
+        discountPercent: 60,
+        pin: '4444',
+        terminalId: 'POS_MAIN_01',
+      },
+      tenantId: 'DEFAULT_TENANT',
+    }).then(
+      () => null,
+      (err: unknown) => String(err),
+    );
+    expect(code).toContain('INVALID_APPROVAL_PIN');
   });
 
-  it('valid manager approval -> PASS', () => {
-    const cashier: SecurityPrincipal = { userId: 'c1', role: 'CASHIER' };
+  it('valid manager approval -> PASS', async () => {
+    const { tauriInvoke } = await import('../../src/data/ipc/tauriInvoke');
     const manager: SecurityPrincipal = { userId: 'm1', role: 'MANAGER' };
-    
-    const evalResult = approvalEngine.evaluateAndProcess({
-      operationType: 'refund',
-      amount: 999999,
-      actor: cashier,
-      targetResourceId: 'ord_1',
-      reason: 'big refund'
-    });
-    
-    if (evalResult.status !== 'HALTED_REQUIRES_APPROVAL') {
-      throw new Error('Expected HALTED_REQUIRES_APPROVAL');
-    }
 
-    const resolution = approvalEngine.resolveApprovalRequest({
-      requestId: evalResult.approvalRequest.id,
-      reviewer: manager,
-      decision: 'APPROVE'
-    });
+    const approval = await tauriInvoke<{ approved: boolean; approverRole: string }>(
+      'verify_manager_pin',
+      {
+        payload: {
+          operation: 'DISCOUNT',
+          resourceId: 'ord_1',
+          actorId: 'c1',
+          actorRole: 'CASHIER',
+          amountCents: 999999,
+          discountPercent: 60,
+          pin: '3333',
+          terminalId: 'POS_MAIN_01',
+        },
+        tenantId: 'DEFAULT_TENANT',
+      },
+    );
 
-    expect(resolution.request.status).toBe('APPROVED');
+    expect(approval.approved).toBe(true);
+    expect(approval.approverRole).toBe(manager.role);
   });
 });

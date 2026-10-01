@@ -15,7 +15,13 @@ impl PaymentService {
         actor_role: &str,
     ) -> Result<(i64, String), String> {
         let now_iso = Utc::now().to_rfc3339();
-        let actor_id = payload.cashier_id.as_deref().unwrap_or("SYSTEM_POS");
+        // Kimlik önceliği `actorId` → `cashierId`: onay jetonunun sahibi (self-approval
+        // denetiminde karşılaştırılan kimlik) ile denetim kaydının aktörü aynı olmalı.
+        let actor_id = payload
+            .actor_id
+            .as_deref()
+            .or(payload.cashier_id.as_deref())
+            .unwrap_or("SYSTEM_POS");
 
         // 4. Etki eşitsizliği (Idempotency) kontrolü.
         if PaymentRepository::check_idempotency(conn, &payload.transaction_id, tenant_id).await? {
@@ -41,6 +47,22 @@ impl PaymentService {
                 server_total_cents, client_total_cents, total_delta
             ));
         }
+
+        // 5.5 K2: sunucu hesabında indirim varsa anlık PIN onayı zorunludur.
+        // Onay tüketimi, ödeme satırı yazılmadan **önce** olur: onaysız ödeme
+        // denemesi kalıcı bir iz bırakmaz.
+        let consumed_approval =
+            crate::services::payment_approval::consume_discount_approval(
+                conn,
+                audit_lock,
+                tenant_id,
+                actor_id,
+                actor_role,
+                &payload.transaction_id,
+                &server_truth,
+                payload.approval_token.as_deref(),
+            )
+            .await?;
 
         // 6. Değiştirilemez (immutable) Satış Olayı (Sale Event) + Outbox kaydı ekle.
         PaymentRepository::insert_sale_event(conn, payload, tenant_id).await?;
@@ -74,6 +96,18 @@ impl PaymentService {
             "subtotalCents": server_truth.subtotal_cents,
             "taxCents": server_truth.tax_cents,
             "discountCents": server_truth.discount_cents,
+            // Onay varsa kim verdi yazılır; yoksa alan `null` kalır. Ödeme
+            // kaydı ile güvenlik kaydı birlikte okunduğunda "bu indirim kim
+            // tarafından onaylandı" sorusu tek satırda cevaplanır.
+            "discountApproval": match consumed_approval.as_ref() {
+                Some(approval) => serde_json::json!({
+                    "operation": approval.operation,
+                    "approverId": approval.approver_id,
+                    "approverRole": approval.approver_role,
+                    "amountCents": approval.amount_cents,
+                }),
+                None => serde_json::Value::Null,
+            },
         });
 
         let ctx = AuditContext::new(

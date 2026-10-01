@@ -1,132 +1,153 @@
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
-use uuid::Uuid;
 
 use crate::db::DbPool;
+use crate::services::audit_service::{self, AuditContext, AuditLock, AuditService};
 
+/// Anlık PIN onayı isteği (Faz 3).
+///
+/// `pin` alanı yalnız bu çağrıda bulunur ve ne loglanır ne saklanır; doğrulama
+/// sonucu tek kullanımlık `approvalToken` ile döner.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ApprovalDto {
-    pub id: String,
-    pub request_type: String,
+#[serde(rename_all = "camelCase")]
+pub struct VerifyManagerPinPayload {
+    /// `VOID_ORDER` | `DISCOUNT` | `COMPLIMENTARY`
+    pub operation: String,
+    /// İşlemin bağlandığı kaynak (adisyon, sepet, fiş).
     pub resource_id: String,
-    pub requester_id: String,
-    pub status: String,
-    pub approver_id: Option<String>,
-    pub payload: String,
-    pub created_at: String,
-    pub resolved_at: Option<String>,
+    /// İşlemi yapan kişi. Self-approval kontrolü bu kimliğe karşı yapılır.
+    pub actor_id: String,
+    /// İşlemi yapan kişinin rolü; boş veya bilinmeyense fail-closed reddedilir.
+    pub actor_role: String,
+    /// İşlemin tutarı (kuruş).
+    pub amount_cents: i64,
+    /// İndirim yüzdesi (yalnız DISCOUNT için anlamlı).
+    #[serde(default)]
+    pub discount_percent: i64,
+    /// Onay PIN'ini deneyen terminal; deneme sayacı bu kimlikle ayrılır.
+    #[serde(default)]
+    pub terminal_id: Option<String>,
+    pub pin: String,
+    /// Oturum tenant'ı. Oturum token'ı olmadığı için bu fazda çağıran
+    /// tarafından gelir; onaylayan PIN yine de yalnız bu tenant içinde aranır.
+    #[serde(default)]
+    pub tenant_id: Option<String>,
 }
 
+/// Başarılı onay yanıtı. PIN veya hash **dönmez**; yalnız jeton ve onaylayan
+/// kimliği (rapor için) döner.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalTokenDto {
+    pub approved: bool,
+    pub approval_token: String,
+    pub approver_id: String,
+    pub approver_name: String,
+    pub approver_role: String,
+    pub resource_id: String,
+    pub operation: String,
+    pub remaining_attempts: i64,
+}
+
+/// Anlık PIN onayını doğrular ve tek kullanımlık jeton üretir.
+///
+/// Salt okunur bir kimlik doğrulama komutudur: işlemin kendisini **yürütmez**,
+/// hiçbir tabloyu değiştirmez. İşlemi yürüten komutlar jetonu kendileri tüketir.
 #[tauri::command]
-pub async fn request_approval(
+pub async fn verify_manager_pin(
+    payload: VerifyManagerPinPayload,
     pool: tauri::State<'_, DbPool>,
-    request_type: String,
-    resource_id: String,
-    requester_id: String,
-    payload: String,
-) -> Result<String, String> {
-    let id = Uuid::new_v4().to_string();
-
-    sqlx::query(
-        r#"
-        INSERT INTO approvals (id, tenant_id, request_type, resource_id, requester_id, status, payload)
-        VALUES (?, 'DEFAULT_TENANT', ?, ?, ?, 'PENDING', ?)
-        "#,
-    )
-    .bind(&id)
-    .bind(&request_type)
-    .bind(&resource_id)
-    .bind(&requester_id)
-    .bind(&payload)
-    .execute(&*pool)
-    .await
-    .map_err(|e| format!("Failed to create approval request: {}", e))?;
-
-    Ok(id)
-}
-
-#[tauri::command]
-pub async fn get_pending_approvals(pool: tauri::State<'_, DbPool>) -> Result<Vec<ApprovalDto>, String> {
-    let rows = sqlx::query(
-        r#"
-        SELECT id, request_type, resource_id, requester_id, status, approver_id, payload, created_at, resolved_at
-        FROM approvals
-        WHERE status = 'PENDING'
-        ORDER BY created_at DESC
-        "#,
-    )
-    .fetch_all(&*pool)
-    .await
-    .map_err(|e| format!("Failed to fetch pending approvals: {}", e))?;
-
-    let mut approvals = Vec::new();
-    for row in rows {
-        approvals.push(ApprovalDto {
-            id: row.get("id"),
-            request_type: row.get("request_type"),
-            resource_id: row.get("resource_id"),
-            requester_id: row.get("requester_id"),
-            status: row.get("status"),
-            approver_id: row.get("approver_id"),
-            payload: row.get("payload"),
-            created_at: row.get::<String, _>("created_at"),
-            resolved_at: row.get("resolved_at"),
-        });
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<ApprovalTokenDto, String> {
+    // İşlem yüzeyi kapalı listeden olmalı: kapsam kayması jetonla da yakalanır.
+    let operation = payload.operation.trim().to_string();
+    if !matches!(
+        operation.as_str(),
+        crate::approval_service::operation::VOID
+            | crate::approval_service::operation::DISCOUNT
+            | crate::approval_service::operation::COMPLIMENTARY
+    ) {
+        return Err("INVALID_OPERATION: Bilinmeyen onay işlemi.".to_string());
     }
 
-    Ok(approvals)
-}
+    // İşlemi yapan kişinin rolü zorunludur; rol yoksa kapı fail-closed kalır.
+    crate::rbac::canonical_role(&payload.actor_role)
+        .ok_or_else(|| "UNAUTHORIZED: Bilinmeyen rol.".to_string())?;
 
-#[tauri::command]
-pub async fn process_approval(
-    pool: tauri::State<'_, DbPool>,
-    approval_id: String,
-    manager_pin: String,
-    action: String, // "APPROVE" or "REJECT"
-) -> Result<(), String> {
-    // Validate Manager PIN — düz metin PIN sütunu kaldırıldığı için `WHERE pin = ?`
-    // yerine tenant kapsamındaki adaylar Argon2 ile doğrulanır.
-    let mut conn = pool.acquire().await.map_err(|e| format!("Database error while checking PIN: {}", e))?;
-    let found = crate::user_credentials::find_user_by_pin(&mut conn, &manager_pin, None)
-        .await
-        .map_err(|e| format!("Database error while checking PIN: {}", e))?;
-    drop(conn);
+    let tenant_id = payload
+        .tenant_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("DEFAULT_TENANT")
+        .to_string();
 
-    let found = found.ok_or_else(|| "Invalid PIN".to_string())?;
-    let role: String = found.role.clone();
-    let approver_id: String = found.id.clone();
-
-    let role = crate::rbac::canonical_role(&role)
-        .ok_or_else(|| "Insufficient permissions. Manager PIN required.".to_string())?;
-    if !matches!(role, crate::rbac::Role::Manager | crate::rbac::Role::Owner | crate::rbac::Role::Master) {
-        return Err("Insufficient permissions. Manager PIN required.".to_string());
-    }
-
-    let status = if action == "APPROVE" {
-        "APPROVED"
-    } else if action == "REJECT" {
-        "REJECTED"
-    } else {
-        return Err("Invalid action".to_string());
+    let request = crate::approval_service::ApprovalRequest {
+        tenant_id: tenant_id.clone(),
+        operation,
+        resource_id: payload.resource_id.trim().to_string(),
+        actor_id: payload.actor_id.trim().to_string(),
+        actor_role: payload.actor_role.trim().to_string(),
+        amount_cents: payload.amount_cents,
+        approved_percent_hint: payload.discount_percent,
+        terminal_id: payload
+            .terminal_id
+            .unwrap_or_else(|| "terminal_unknown".to_string()),
     };
 
-    let updated = sqlx::query(
-        r#"
-        UPDATE approvals
-        SET status = ?, approver_id = ?, resolved_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND status = 'PENDING'
-        "#,
-    )
-    .bind(status)
-    .bind(approver_id)
-    .bind(&approval_id)
-    .execute(&*pool)
-    .await
-    .map_err(|e| format!("Failed to update approval status: {}", e))?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
 
-    if updated.rows_affected() == 0 {
-        return Err("Approval not found or already processed".to_string());
-    }
+    let outcome = crate::approval_service::verify_and_issue(&mut conn, &request, &payload.pin).await;
+    let remaining = crate::approval_service::remaining_attempts(&mut conn, &request)
+        .await
+        .unwrap_or(0);
 
-    Ok(())
+    let verified = match outcome {
+        Ok(verified) => verified,
+        Err(err) => {
+            // Kilit oluştuysa deftere yazılır: bu bir güvenlik olayıdır, gürültü
+            // değildir. Tekil hatalı PIN denemeleri yazılmaz (defter şişer).
+            if err.starts_with(crate::approval_service::error::LOCKED) {
+                let ctx = AuditContext::new(
+                    tenant_id.clone(),
+                    request.terminal_id.clone(),
+                    request.actor_role.clone(),
+                    audit_service::category::GUVENLIK,
+                    "approval:lockout",
+                    request.resource_id.clone(),
+                    serde_json::json!({ "operation": request.operation }),
+                    chrono::Utc::now().to_rfc3339(),
+                )?;
+                AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+            }
+            return Err(err);
+        }
+    };
+
+    let ctx = AuditContext::new(
+        tenant_id,
+        verified.approver_id.clone(),
+        verified.approver_role.as_str().to_string(),
+        audit_service::category::GUVENLIK,
+        "approval:verified",
+        request.resource_id.clone(),
+        serde_json::json!({
+            "operation": request.operation,
+            "amountCents": request.amount_cents,
+            "approverName": verified.approver_name,
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+
+    Ok(ApprovalTokenDto {
+        approved: true,
+        approval_token: verified.token,
+        approver_id: verified.approver_id,
+        approver_name: verified.approver_name,
+        approver_role: verified.approver_role.as_str().to_string(),
+        resource_id: request.resource_id,
+        operation: request.operation,
+        remaining_attempts: remaining,
+    })
 }

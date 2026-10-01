@@ -1,4 +1,5 @@
 
+/// <reference types="vite/client" />
 import { tauriInvoke } from '../../src/data/ipc/tauriInvoke';
 
 describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
@@ -275,26 +276,57 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
       await tauriInvoke('delete_staff_member', { actorRole: 'MANAGER', staffId });
     });
 
-    it('M5: Approval engine requests and decision resolution', async () => {
-      const approvalRes = await tauriInvoke<any>('request_approval', {
-        tenantId,
-        requestType: 'VOID_ORDER',
+    // Faz 3 (K4): onay kuyruğu kaldırıldı. Onay artık kuyrukta bekletilmez;
+    // anlık PIN üretilen tek kullanımlık jetonla doğrulanır.
+    it('M5: Approval engine requires instant PIN and consumes the token once', async () => {
+      const request = {
+        operation: 'VOID_ORDER',
         resourceId: 'ORD_SAMPLE_VOID',
-        requesterId: 'usr_cashier',
-        payload: { reason: 'Müşteri siparişi iptal etti' },
-      });
-      expect(approvalRes).toBeDefined();
+        actorId: 'usr_cashier',
+        actorRole: 'CASHIER',
+        amountCents: 12000,
+        pin: '3333',
+        terminalId: 'POS_MAIN_01',
+      };
 
-      const pending = await tauriInvoke<any[]>('get_pending_approvals', { tenantId });
-      expect(Array.isArray(pending)).toBe(true);
+      // 1) Jeton olmadan iptal reddedilir.
+      const rejected = await tauriInvoke('void_order', {
+        tenantId,
+        payload: { orderId: 'ORD_SAMPLE_VOID', totalAmount: 12000 },
+      }).then(
+        () => null,
+        (err: unknown) => String(err),
+      );
+      expect(rejected).toContain('APPROVAL_REQUIRED');
 
-      if (approvalRes.id) {
-        const processRes = await tauriInvoke<any>('process_approval', {
-          approvalId: approvalRes.id,
-          approverId: 'usr_manager',
-          decision: 'APPROVED',
-        });
-        expect(processRes).toBeDefined();
+      // 2) Müdür PIN'i anlık onay verir ve jeton döner.
+      const approval = await tauriInvoke<any>('verify_manager_pin', { tenantId, payload: request });
+      expect(approval.approved).toBe(true);
+      expect(approval.approverRole).toBe('MANAGER');
+      expect(String(approval.approvalToken)).toBeTruthy();
+
+      // 3) Jeton bir kez tüketilir.
+      await expect(
+        tauriInvoke('void_order', {
+          tenantId,
+          payload: { orderId: 'ORD_SAMPLE_VOID', totalAmount: 12000, approvalToken: approval.approvalToken },
+        }),
+      ).resolves.toBeDefined();
+
+      const replay = await tauriInvoke('void_order', {
+        tenantId,
+        payload: { orderId: 'ORD_SAMPLE_VOID', totalAmount: 12000, approvalToken: approval.approvalToken },
+      }).then(
+        () => null,
+        (err: unknown) => String(err),
+      );
+      expect(replay).toContain('APPROVAL_TOKEN_USED');
+
+      // 4) Kuyruk komutları artık hiçbir katmanda bulunmaz (mock kaynağında
+      // özel handler yok; tüm komutlar jenerik fallback'e düşer).
+      const mockSource = (await import('../../src/data/ipc/tauriInvoke.ts?raw')).default;
+      for (const removed of ['request_approval', 'get_pending_approvals', 'process_approval']) {
+        expect(mockSource, `${removed} mocktan kaldırılmalı`).not.toContain(`'${removed}'`);
       }
     });
   });

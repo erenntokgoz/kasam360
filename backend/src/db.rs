@@ -75,6 +75,19 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     let _ = sqlx::raw_sql("ALTER TABLE audit_ledger ADD COLUMN category TEXT NOT NULL DEFAULT 'SISTEM';").execute(&pool).await;
     let _ = sqlx::raw_sql("ALTER TABLE audit_ledger ADD COLUMN hash_version INTEGER NOT NULL DEFAULT 1;").execute(&pool).await;
 
+    // Faz 3 — anlık PIN onayı: `approvals` tablosu "kim onayladı" kaydı ve tek
+    // kullanımlık jeton deposu haline geldi. CREATE TABLE IF NOT EXISTS eski
+    // tanımı yükseltemediği için sütunlar burada idempotent eklenir.
+    let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN approved_by_role TEXT;").execute(&pool).await;
+    let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN amount_cents INTEGER NOT NULL DEFAULT 0;").execute(&pool).await;
+    let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN token_hash TEXT;").execute(&pool).await;
+    let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN expires_at DATETIME;").execute(&pool).await;
+    let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN consumed_at DATETIME;").execute(&pool).await;
+    // Jeton tekliği ve tenant başına rapor sorguları için indeksler.
+    let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_approvals_tenant_status ON approvals(tenant_id, status, created_at DESC);").execute(&pool).await;
+    let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_approvals_resource ON approvals(tenant_id, resource_id);").execute(&pool).await;
+    let _ = sqlx::raw_sql("CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_token ON approvals(token_hash) WHERE token_hash IS NOT NULL;").execute(&pool).await;
+
     // Tenants tablosuna şirket/vergi/iletişim sütunlarını güvenle ekle (idempotent)
     let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN contact_person TEXT;").execute(&pool).await;
     let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN email TEXT;").execute(&pool).await;

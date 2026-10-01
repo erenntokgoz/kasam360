@@ -194,6 +194,13 @@ export interface PaymentPayload {
   notes?: string;
   /** İsteğe bağlı müşteri adı veya masa referansı. */
   customerRef?: string;
+  /**
+   * Anlık PIN onayından gelen tek kullanımlık jeton. Sepette indirim veya
+   * ikram varsa **zorunludur**; backend jetonsuz indirimli ödemeyi reddeder.
+   */
+  approvalToken?: string;
+  /** İndirim/ikram işleminde onay jetonunun sahibi (self-approval denetimi). */
+  actorId?: string;
   /** Denetim ve vardiya mutabakatı için kasiyer tanımlayıcısı. */
   cashierId?: string;
   /** Terminal / POS cihazı tanımlayıcısı. */
@@ -226,7 +233,11 @@ export interface VoidOrderPayload {
   reason: string;
   actorId: string;
   actorRole?: string;
-  managerPin?: string;
+  /**
+   * Anlık PIN onayından gelen tek kullanımlık jeton. `managerPin` kaldırıldı:
+   * düz PIN hiçbir komuta taşınmaz. Backend jetonsuz iptali reddeder.
+   */
+  approvalToken?: string;
 }
 
 /**

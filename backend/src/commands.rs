@@ -58,6 +58,13 @@ pub struct PaymentPayloadDto {
     pub idempotency_key: Option<String>,
     #[serde(rename = "globalDiscount", default)]
     pub global_discount: Option<serde_json::Value>,
+    /// Anlık PIN onayından gelen tek kullanımlık jeton. Sunucu hesabında
+    /// indirim varsa **zorunludur**; indirim yoksa yok sayılır.
+    #[serde(rename = "approvalToken", default)]
+    pub approval_token: Option<String>,
+    /// İndirim/ikram işleminde onaylayan kişinin kimliği (rapor için).
+    #[serde(rename = "actorId", default)]
+    pub actor_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -231,7 +238,15 @@ pub async fn process_split_payment(
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let now_iso = chrono::Utc::now().to_rfc3339();
-    let actor_id = payload.cashier_id.as_deref().unwrap_or("SYSTEM_POS");
+    // Kimlik önceliği `actorId` → `cashierId`: onay jetonunun sahibi ile denetim
+    // kaydının aktörü aynı kişi olmalı.
+    let actor_id = payload
+        .actor_id
+        .as_deref()
+        .or(payload.cashier_id.as_deref())
+        .unwrap_or("SYSTEM_POS")
+        .to_string();
+    let actor_id = actor_id.as_str();
     let tenant_id = resolve_payment_tenant(&mut tx, &payload).await;
 
     // 1. Etki eşitsizliği (Idempotency) kontrolü
@@ -242,7 +257,28 @@ pub async fn process_split_payment(
         ));
     }
 
-    // 2. Parçalı ödeme satış olayını ekle
+    // 2. K2: parçalı ödeme de aynı indirim yüzeyidir; onaysız indirim geçmez.
+    // Sunucu hesabı tek doğruluk kaynağıdır, istemcinin bildirdiği indirim değil.
+    let server_truth = crate::repositories::payment_repository::PaymentRepository::calculate_server_truth(
+        &mut tx,
+        &payload.items,
+        payload.global_discount.as_ref(),
+    )
+    .await?;
+
+    let consumed_approval = crate::services::payment_approval::consume_discount_approval(
+        &mut tx,
+        &audit_lock,
+        &tenant_id,
+        actor_id,
+        &actor_role,
+        &payload.transaction_id,
+        &server_truth,
+        payload.approval_token.as_deref(),
+    )
+    .await?;
+
+    // 3. Parçalı ödeme satış olayını ekle
     crate::repositories::payment_repository::PaymentRepository::insert_sale_event(&mut tx, &payload, &tenant_id).await?;
 
     // 3. Siparişin veritabanındaki gerçek toplamını ve şimdiye kadarki tahsilatları hesapla
@@ -332,6 +368,18 @@ pub async fn process_split_payment(
         "totalAmount": payload.amount_tendered,
         "cogsTotalCents": total_cogs_cents,
         "itemsCount": payload.items.len(),
+        "discountCents": server_truth.discount_cents,
+        // Onay kimliği ödeme kaydıyla birlikte okunabilsin diye taşınır;
+        // "onay verildi" ve "onay kullanıldı" ayrı kayıtlar hâlâ audit'te durur.
+        "discountApproval": match consumed_approval.as_ref() {
+            Some(approval) => serde_json::json!({
+                "operation": approval.operation,
+                "approverId": approval.approver_id,
+                "approverRole": approval.approver_role,
+                "amountCents": approval.amount_cents,
+            }),
+            None => serde_json::Value::Null,
+        },
     });
     let audit_ctx = crate::services::audit_service::AuditContext::new(
         tenant_id,
@@ -1810,8 +1858,50 @@ pub struct VoidOrderPayloadDto {
     pub actor_id: String,
     #[serde(rename = "actorRole")]
     pub actor_role: String,
-    #[serde(rename = "managerPin")]
-    pub manager_pin: Option<String>,
+    /// Anlık PIN onayından gelen tek kullanımlık jeton. `managerPin` kaldırıldı:
+    /// düz PIN artık hiçbir komuta taşınmaz, yalnız `verify_manager_pin` içinde
+    /// Argon2 ile doğrulanır.
+    #[serde(rename = "approvalToken")]
+    pub approval_token: Option<String>,
+}
+
+/// İptalin onay yüzeyi. Kapsam `order_id` + sipariş tutarıdır: jeton başka bir
+/// adisyona veya başka bir tutara taşınamaz.
+fn void_approval_request(
+    tenant_id: &str,
+    order_id: &str,
+    amount_cents: i64,
+    actor_id: &str,
+    actor_role: &str,
+) -> crate::approval_service::ApprovalRequest {
+    crate::approval_service::ApprovalRequest {
+        tenant_id: tenant_id.to_string(),
+        operation: crate::approval_service::operation::VOID.to_string(),
+        resource_id: order_id.to_string(),
+        actor_id: actor_id.trim().to_string(),
+        actor_role: actor_role.trim().to_string(),
+        amount_cents,
+        approved_percent_hint: 0,
+        terminal_id: "terminal_void".to_string(),
+    }
+}
+
+/// İptal için onay jetonunu zorunlu kılar ve tüketir.
+///
+/// Ayrı bir fonksiyon olarak yazıldı çünkü "jeton zorunlu" kuralı komutun
+/// içine gömülünce test edilemez; bu yüzden kural burada tek yerde durur ve
+/// hem `void_order` hem testler aynı kapıdan geçer.
+async fn require_void_approval(
+    conn: &mut sqlx::SqliteConnection,
+    request: &crate::approval_service::ApprovalRequest,
+    token: Option<&str>,
+) -> Result<crate::approval_service::VerifiedApproval, String> {
+    let token = token
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| crate::approval_service::error::TOKEN_REQUIRED.to_string())?;
+
+    crate::approval_service::consume_token(conn, token, request).await
 }
 
 #[tauri::command]
@@ -1826,67 +1916,56 @@ pub async fn void_order(
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     // Yetki (SPEC §34 "Void Onaylama"): kapı yasaklı rolleri sayan değil, yetkili
-    // rolleri kabul eden bir eşleşmedir. Önceki hâli "rol CASHIER/WAITER/KITCHEN
-    // değilse geç" mantığıydı; bu yüzden MASTER ve veritabanında karşılığı olmayan
-    // bir rol doğrudan void edebiliyordu (fail-open).
+    // rolleri kabul eden bir eşleşmedir. MASTER ve mutfak sipariş iptali
+    // yapamaz; geri kalan roller **onay jetonu olmadan** iptal edemez.
     let actor_role = crate::rbac::canonical_role(&payload.actor_role)
         .ok_or_else(|| "UNAUTHORIZED: Bilinmeyen rol".to_string())?;
 
     match actor_role {
-        crate::rbac::Role::Owner | crate::rbac::Role::Manager => {}
-        crate::rbac::Role::Cashier | crate::rbac::Role::Waiter => {
-            let pin = payload.manager_pin.ok_or("Manager approval PIN is required for voids")?;
-
-            // Onaylayanın PIN'i düz metin olmadığı için `WHERE pin = ?` yerine
-            // tenant içindeki adaylar Argon2 ile doğrulanır.
-            let found = crate::user_credentials::find_user_by_pin(&mut tx, &pin, Some(&tenant_id)).await?;
-
-            let manager = found.ok_or("Invalid manager PIN")?;
-            let m_id = manager.id;
-
-            // SPEC'te Void Onaylama yalnızca sahip ve müdüre açıktır.
-            let approver = crate::rbac::canonical_role(&manager.role)
-                .ok_or_else(|| "Invalid manager PIN or insufficient permissions".to_string())?;
-            if !matches!(approver, crate::rbac::Role::Owner | crate::rbac::Role::Manager) {
-                return Err("Invalid manager PIN or insufficient permissions".into());
-            }
-
-            // Onayı denetim izine yaz
-            let approval_id = Uuid::new_v4().to_string();
-            sqlx::query(
-                "INSERT INTO approvals (id, tenant_id, request_type, resource_id, requester_id, status, approver_id, payload, resolved_at)
-                 VALUES (?, ?, 'VOID_ORDER', ?, ?, 'APPROVED', ?, ?, datetime('now'))"
-            )
-            .bind(&approval_id)
-            .bind(&tenant_id)
-            .bind(&payload.order_id)
-            .bind(&payload.actor_id)
-            .bind(&m_id)
-            .bind(&payload.reason)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-        }
+        crate::rbac::Role::Owner
+        | crate::rbac::Role::Manager
+        | crate::rbac::Role::Cashier
+        | crate::rbac::Role::Waiter => {}
         crate::rbac::Role::Master | crate::rbac::Role::Kitchen => {
             return Err("UNAUTHORIZED: Bu rol sipariş iptali yapamaz".into());
         }
     }
 
     // Ödenmiş veya kapatılmış siparişlerin iptal edilmesini kesinlikle engelle (P0 Güvenlik Kilidi)
-    let current_order = sqlx::query("SELECT status FROM orders WHERE id = ? AND (tenant_id = ? OR tenant_id = 'DEFAULT_TENANT')")
+    let current_order = sqlx::query("SELECT status, total_cents FROM orders WHERE id = ? AND (tenant_id = ? OR tenant_id = 'DEFAULT_TENANT')")
         .bind(&payload.order_id)
         .bind(&tenant_id)
         .fetch_optional(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
 
-    if let Some(r) = current_order {
+    if let Some(r) = &current_order {
         let st: String = r.try_get("status").unwrap_or_default();
         let upper_st = st.to_uppercase();
         if upper_st == "PAID" || upper_st == "CLOSED" {
             return Err("CANNOT_VOID_PAID_ORDER: Ödenmiş veya kapatılmış siparişler iptal edilemez.".to_string());
         }
     }
+
+    // Jeton kapsamındaki tutar, istemciden değil veritabanındaki sipariş
+    // satırından okunur: istemci kendi gönderdiği tutarla onay almış olamaz.
+    let order_total_cents: i64 = current_order
+        .as_ref()
+        .and_then(|r| r.try_get::<i64, _>("total_cents").ok())
+        .unwrap_or(0);
+
+    let approval_request = void_approval_request(
+        &tenant_id,
+        &payload.order_id,
+        order_total_cents,
+        &payload.actor_id,
+        actor_role.as_str(),
+    );
+
+    // K1: iptal onay jetonu olmadan çalışmaz. MASTER/OWNER/MANAGER dahil her rol
+    // için geçerlidir; self-approval ve eşik kuralları `consume_token`
+    // içinde yeniden denetlenir.
+    let approver = require_void_approval(&mut tx, &approval_request, payload.approval_token.as_deref()).await?;
 
     sqlx::query(
         "UPDATE orders SET status = 'VOID', notes = COALESCE(notes || ' | Void reason: ' || ?, 'Void reason: ' || ?), updated_at = datetime('now') WHERE ((id = ? AND status NOT IN ('PAID', 'CLOSED', 'VOID')) OR (table_id = ? AND status IN ('OPEN', 'IN_PROGRESS'))) AND (tenant_id = ? OR tenant_id = 'DEFAULT_TENANT')"
@@ -1925,6 +2004,9 @@ pub async fn void_order(
         "orderId": payload.order_id,
         "tableId": payload.table_id,
         "reason": payload.reason,
+        "orderTotalCents": order_total_cents,
+        "approverId": approver.approver_id,
+        "approverRole": approver.approver_role.as_str(),
     });
 
     // İptal denetimde "Güvenlik" kategorisindedir: para hareketini tersine çevirir
@@ -1938,9 +2020,28 @@ pub async fn void_order(
         "order:voided",
         payload.order_id.clone(),
         payload_val,
-        now_iso,
+        now_iso.clone(),
     )?;
     crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+
+    // Jetonun tüketildiğinin izi ayrı bir güvenlik kaydı olarak yazılır: denetim
+    // defterinde "onay verildi" ve "onay kullanıldı" ayrı ayrı görünür.
+    let consumed_ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id,
+        approver.approver_id.clone(),
+        approver.approver_role.as_str().to_string(),
+        crate::services::audit_service::category::GUVENLIK,
+        "approval:consumed",
+        payload.order_id.clone(),
+        serde_json::json!({
+            "operation": crate::approval_service::operation::VOID,
+            "amountCents": order_total_cents,
+            "actorId": payload.actor_id,
+            "approverId": approver.approver_id,
+        }),
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &consumed_ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -2318,6 +2419,10 @@ pub async fn close_shift(
 }
 
 #[cfg(test)]
+#[path = "commands_approval_tests.rs"]
+mod approval_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
@@ -2430,6 +2535,10 @@ mod tests {
         );
     }
 
+    /// `managerPin` kaldırıldı: düz PIN artık hiçbir komuta taşınmaz.
+    /// Sözleşmede yalnız tek kullanımlık `approvalToken` vardır ve alan
+    /// opsiyoneldir — eksik jetonu sunucu reddeder, istemci bir "boş PIN"
+    /// taklidi gönderemez.
     #[test]
     fn test_void_order_payload_dto_deserialization() {
         let json_data = r#"{
@@ -2438,7 +2547,7 @@ mod tests {
             "reason": "Customer cancellation",
             "actorId": "CASHIER_01",
             "actorRole": "Cashier",
-            "managerPin": "1234"
+            "approvalToken": "9f2c_token"
         }"#;
 
         let dto: VoidOrderPayloadDto = serde_json::from_str(json_data).expect("Failed to deserialize");
@@ -2447,7 +2556,23 @@ mod tests {
         assert_eq!(dto.reason, "Customer cancellation");
         assert_eq!(dto.actor_id, "CASHIER_01");
         assert_eq!(dto.actor_role, "Cashier");
-        assert_eq!(dto.manager_pin.unwrap(), "1234");
+        assert_eq!(dto.approval_token.unwrap(), "9f2c_token");
+
+        // Eski alan gönderilse de DTO'ya girmez: düz PIN yüzeyi tamamen kapalı.
+        let legacy = r#"{
+            "orderId": "ORD-101",
+            "tableId": "TABLE-5",
+            "reason": "x",
+            "actorId": "CASHIER_01",
+            "actorRole": "Cashier",
+            "managerPin": "1234"
+        }"#;
+        let legacy_dto: VoidOrderPayloadDto =
+            serde_json::from_str(legacy).expect("Eski alan yüzeyi kırılmamalı");
+        assert!(
+            legacy_dto.approval_token.is_none(),
+            "managerPin alanı onay yerine geçmemeli"
+        );
     }
 
     /// Denetim kaydı istemciye giderken mühürlü bilgisi taşır; ham hash

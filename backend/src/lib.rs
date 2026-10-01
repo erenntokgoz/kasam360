@@ -8,6 +8,7 @@ pub mod platform_commands;
 pub mod inventory_commands;
 pub mod branch_commands;
 pub mod approval_commands;
+pub mod approval_service;
 pub mod cashier_commands;
 pub mod waiter_commands;
 pub mod kitchen_commands;
@@ -87,9 +88,10 @@ pub fn run() {
             inventory_commands::create_inventory_item,
             branch_commands::get_branches,
             branch_commands::create_branch,
-            approval_commands::request_approval,
-            approval_commands::get_pending_approvals,
-            approval_commands::process_approval,
+            // Faz 3: anlık PIN onayı. Kuyruk komutları (`request_approval`,
+            // `get_pending_approvals`, `process_approval`) kaldırıldı: onay
+            // anında PIN ile alınır, kuyrukta bekletilmez.
+            approval_commands::verify_manager_pin,
             cashier_commands::cash_in,
             cashier_commands::cash_out,
             cashier_commands::get_shift_summary,

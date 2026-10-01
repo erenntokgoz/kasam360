@@ -126,14 +126,19 @@ export interface CartStoreState {
   processPayment: (
     method: PaymentMethod,
     amountTendered: number,
-    splits?: SplitPaymentDetail[]
+    splits?: SplitPaymentDetail[],
+    /**
+     * Anlık PIN onayından gelen tek kullanımlık jeton. Sepette indirim veya
+     * ikram varsa **zorunludur**; backend jetonsuz indirimli ödemeyi reddeder.
+     */
+    approvalToken?: string
   ) => Promise<PaymentResult>;
 
   // Temiz Mimari ve Birim Testi için Bağımlılık Enjeksiyonu
   setPOSRepository: (repo: IPOSRepository) => void;
 
   submitOrder: () => Promise<void>;
-  voidOrder: (tableId: string, orderId: string, reason: string, actorRole: string, managerPin?: string) => Promise<void>;
+  voidOrder: (tableId: string, orderId: string, reason: string, actorRole: string, approvalToken?: string) => Promise<void>;
 }
 
 
@@ -467,7 +472,8 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
   processPayment: async (
     method: PaymentMethod,
     amountTendered: number,
-    splits?: SplitPaymentDetail[]
+    splits?: SplitPaymentDetail[],
+    approvalToken?: string
   ): Promise<PaymentResult> => {
     // Aşama 2: Çifte gönderim koruması — herhangi bir await'ten önce senkron kontrol
     if (get().isSubmitting) {
@@ -513,6 +519,8 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
       terminalId: 'POS_MAIN_01',
       idempotencyKey,
       globalDiscount: globalDiscount || undefined,
+      approvalToken,
+      actorId: user?.userId || 'CASHIER_01',
     };
 
     try {
@@ -581,7 +589,7 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
     }
   },
 
-  voidOrder: async (tableId: string, orderId: string, reason: string, actorRole: string, managerPin?: string) => {
+  voidOrder: async (tableId: string, orderId: string, reason: string, actorRole: string, approvalToken?: string) => {
     if (get().isSubmitting) return;
     set({ isSubmitting: true });
 
@@ -594,7 +602,7 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
         reason,
         actorId: user?.userId || 'CASHIER_01',
         actorRole: actorRole || user?.role || 'CASHIER',
-        managerPin,
+        approvalToken,
       });
       if (success) {
         get().clearCart();

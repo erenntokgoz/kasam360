@@ -14,7 +14,6 @@ import { OwnerInventoryTab } from '../../src/presentation/components/owner/ui/Ow
 import { OwnerMenuTab } from '../../src/presentation/components/owner/ui/OwnerMenuTab';
 import { OwnerSalesTab } from '../../src/presentation/components/owner/ui/OwnerSalesTab';
 import { ManagementContainer } from '../../src/presentation/components/management/ManagementContainer';
-import { ApprovalsPanel } from '../../src/presentation/components/management/ui/ApprovalsPanel';
 import { OperationsDashboard } from '../../src/presentation/components/management/ui/OperationsDashboard';
 import { ConfirmationModal } from '../../src/presentation/components/management/ui/ConfirmationModal';
 import { TablesOrdersPanel } from '../../src/presentation/components/management/ui/TablesOrdersPanel';
@@ -57,10 +56,26 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
     expect(ManagementContainer).toBeInstanceOf(Function);
   });
 
-  it('7. ApprovalsPanel zarif iOS onay dialogları ve müdür PIN doğrulaması ile render edilir', () => {
-    const element = React.createElement(ApprovalsPanel);
+  it('7. Anlık PIN onay penceresi zarif iOS dialog standartlarıyla sunulur', async () => {
+    // Faz 3 (C-3): onay kuyruğu paneli kaldırıldı; onay artık işlem ekranında
+    // açılan tek penceredir.
+    const { default: InstantPinApprovalModal } = await import(
+      '../../src/presentation/components/cashier/InstantPinApprovalModal'
+    );
+    expect(InstantPinApprovalModal).toBeInstanceOf(Function);
+    const element = React.createElement(InstantPinApprovalModal, {
+      open: false,
+      request: {
+        operation: 'VOID_ORDER',
+        resourceId: 'ord_01',
+        actorId: 'usr_cashier',
+        actorRole: 'CASHIER',
+        amountCents: 12500,
+      },
+      onApproved: () => {},
+      onCancel: () => {},
+    });
     expect(element).toBeDefined();
-    expect(ApprovalsPanel).toBeInstanceOf(Function);
   });
 
   it('8. OperationsDashboard Apple 4 lü metrik kartları ve ferah canlı sipariş tablosu içerir', () => {
@@ -85,7 +100,7 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
     expect(element.type).toBe(ConfirmationModal);
   });
 
-  it('10. Patron Portalı tüm kritik sekmeleri (Onaylar, Personel, Sistem Logları, Stok & Reçete) destekler', async () => {
+  it('10. Patron Portalı tüm kritik sekmeleri (Personel, Sistem Logları, Stok & Reçete) destekler ve Onaylar sekmesi kaldırılmıştır', async () => {
     const { renderToString } = await import('react-dom/server');
     const { buildOwnerNavItems } = await import(
       '../../src/presentation/components/owner/OwnerDashboardContainer'
@@ -94,9 +109,8 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
 
     // Sunucu render'ı zustand'ın başlangıç durumunu gördüğü için sekme listesi
     // yetki fonksiyonu üzerinden doğrudan doğrulanır.
-    const labels = buildOwnerNavItems((capability) => hasCapability('OWNER', capability)).map(
-      (item) => item.label,
-    );
+    const items = buildOwnerNavItems((capability) => hasCapability('OWNER', capability));
+    const labels = items.map((item) => item.label);
 
     expect(labels).toEqual(
       expect.arrayContaining([
@@ -106,11 +120,18 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
         'Stok & Reçete',
         'Masa Yönetimi',
         'Operasyonel Raporlar',
-        'Onaylar',
         'Personel',
         'Sistem Logları',
       ]),
     );
+
+    // Faz 3 / C-3: onay kuyruğu yerine anlık PIN penceresi vardır. Sekme ve
+    // onay kuyruğu komutları kaldırıldığı için burada **bulunmamalıdır**.
+    expect(labels).not.toContain('Onaylar');
+    // Sekme kimliği artık `OwnerTabId` birliğinde değildir; bu yüzden genişletilmiş
+    // tip üzerinden "kalmadığı" denetlenir.
+    const ids = items.map((item) => item.id as string);
+    expect(ids).not.toContain('approvals');
 
     // Bileşen yine de render edilebilir olmalı.
     const html = renderToString(React.createElement(OwnerDashboardContainer));

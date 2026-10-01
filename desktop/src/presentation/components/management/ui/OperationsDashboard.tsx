@@ -24,8 +24,6 @@ type OpenShift = {
   openingBalance: number;
 };
 
-type PendingApproval = { id: string; action_type: string; requested_by: string; };
-
 // Apple Borsa / Sağlık tarzı mini trend çizgi grafiği
 function MetricMiniLine({ color }: { color: string }) {
   return (
@@ -58,7 +56,6 @@ export function OperationsDashboard() {
 
   const [liveOrders, setLiveOrders] = useState<LiveOrderDto[]>([]);
   const [openShifts, setOpenShifts] = useState<OpenShift[]>([]);
-  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [mergeSource, setMergeSource] = useState('');
   const [mergeTarget, setMergeTarget] = useState('');
@@ -70,14 +67,14 @@ export function OperationsDashboard() {
   const fetchAll = useCallback(async () => {
     if (!user) return;
     try {
-      const [orders, shifts, approvals] = await Promise.all([
+      // Bekleyen onay kuyruğu kaldırıldı (Faz 3, C-3): onay anlıktır ve
+      // işlem ekranında anlık PIN penceresiyle verilir. Kuyruk yoktur.
+      const [orders, shifts] = await Promise.all([
         invoke<LiveOrderDto[]>('get_live_orders', { actorRole: user.role }).catch(() => []),
         invoke<OpenShift[]>('get_open_shifts', { actorRole: user.role }).catch(() => []),
-        invoke<PendingApproval[]>('get_pending_approvals').catch(() => []),
       ]);
       setLiveOrders(orders);
       setOpenShifts(shifts);
-      setPendingApprovals(approvals);
       await fetchFloorPlan();
     } catch (e) {
       console.error('Operasyon verileri yükleme hatası:', e);
@@ -167,24 +164,6 @@ export function OperationsDashboard() {
           <p className="text-3xl font-bold tracking-tight dark:text-white text-zinc-900 mt-3 font-mono">{openShifts.length}</p>
         </div>
 
-        {/* Bekleyen Onay */}
-        <div className={`border rounded-2xl p-5 transition-all backdrop-blur-2xl shadow-sm ${
-          pendingApprovals.length > 0 
-            ? 'bg-amber-500/10 border-amber-500/30' 
-            : 'dark:bg-white/[0.04] bg-white/75 hover:dark:bg-white/[0.07] hover:bg-white dark:border-white/10 border-black/10'
-        }`}>
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider dark:text-zinc-400 text-zinc-500">
-              Bekleyen Onay
-            </span>
-            <MetricMiniLine color={pendingApprovals.length > 0 ? '#f59e0b' : '#71717a'} />
-          </div>
-          <p className={`text-3xl font-bold tracking-tight mt-3 font-mono ${
-            pendingApprovals.length > 0 ? 'text-amber-500' : 'dark:text-white text-zinc-900'
-          }`}>
-            {pendingApprovals.length}
-          </p>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

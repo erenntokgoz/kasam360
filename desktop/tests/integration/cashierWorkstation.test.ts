@@ -181,21 +181,59 @@ describe('Cashier Workstation Integration Tests', () => {
     expect(res.success).toBe(true);
   });
 
-  it('void_order cancels active table order with reason and authorization', async () => {
-    const payload = {
+  // Faz 3: iptal artık `managerPin` ile değil, anlık PIN onayından gelen tek
+  // kullanımlık jetonla yapılır. Jeton onsuz iptal backend'de reddedilir.
+  it('void_order requires an approval token before cancelling', async () => {
+    const basePayload = {
       orderId: 'tbl-002',
       tableId: 'tbl-002',
       reason: 'Müşteri siparişi iptal etti',
       actorId: cashierId,
       actorRole: 'MANAGER',
-      managerPin: '3333',
     };
 
-    const res = await tauriInvoke<any>('void_order', {
-      payload,
-      tenantId: 'DEFAULT_TENANT',
-      tenant_id: 'DEFAULT_TENANT',
+    const voidOrder = (payload: Record<string, unknown>) =>
+      tauriInvoke<any>('void_order', {
+        payload,
+        tenantId: 'DEFAULT_TENANT',
+        tenant_id: 'DEFAULT_TENANT',
+      });
+
+    // 1. Jeton yoksa iptal reddedilir.
+    const withoutToken = await voidOrder(basePayload).then(
+      () => null,
+      (err: unknown) => String(err),
+    );
+    expect(withoutToken).toContain('APPROVAL_REQUIRED');
+
+    // 2. Onay PIN'i üretilir.
+    const approval = await tauriInvoke<any>('verify_manager_pin', {
+      payload: {
+        operation: 'VOID_ORDER',
+        resourceId: 'tbl-002',
+        actorId: cashierId,
+        actorRole: 'MANAGER',
+        amountCents: 0,
+        pin: '2222',
+        tenantId: 'DEFAULT_TENANT',
+        terminalId: 'POS_MAIN_01',
+      },
     });
+    expect(approval.approved).toBe(true);
+    expect(typeof approval.approvalToken).toBe('string');
+
+    // 3. Jetonla iptal geçer.
+    const res = await voidOrder({ ...basePayload, approvalToken: approval.approvalToken });
     expect(res.success ?? res).toBeTruthy();
+
+    // 4. Jeton tek kullanımlıktır: aynı jeton ikinci kez kullanılamaz.
+    const replay = await voidOrder({
+      ...basePayload,
+      approvalToken: approval.approvalToken,
+    }).then(
+      () => null,
+      (err: unknown) => String(err),
+    );
+    expect(replay).toContain('APPROVAL_TOKEN');
   });
 });

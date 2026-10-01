@@ -12,6 +12,8 @@ import { MoneyDisplay } from '../common/MoneyDisplay';
 import { AppleButton } from '../common/AppleButton';
 import { AppBadge } from '../common/AppBadge';
 import { tauriInvoke } from '../../../data/ipc/tauriInvoke';
+import { APPROVAL_OPERATIONS } from '../../../core/services/approvalService';
+import InstantPinApprovalModal from './InstantPinApprovalModal';
 
 // Hızlı nakit girişi için hazır banknot tutarları
 const PRESET_AMOUNTS = [50, 100, 200, 500];
@@ -139,7 +141,7 @@ export function CashierWorkstationContainer() {
   // İptal (Void) modalı
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [voidReason, setVoidReason] = useState('');
-  const [managerPin, setManagerPin] = useState('');
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
 
   // Vardiya geçmiş kayıtları
   const [shiftHistory, setShiftHistory] = useState<ShiftDto[]>([]);
@@ -553,17 +555,23 @@ export function CashierWorkstationContainer() {
     }
   };
 
-  // Hesap iptali (Void) işlemini yönetici onayıyla tamamlar
+  // Hesap iptali (Void) işlemini yönetici onayıyla tamamlar.
+  //
+  // Akış iki adımlıdır: önce gerekçe toplanır, sonra `InstantPinApprovalModal`
+  // açılır ve tek kullanımlık jeton üretilir. PIN bu bileşende hiçbir zaman
+  // tutulmaz; jeton doğrudan `void_order` çağrısına verilir.
   const handleVoidSubmit = async () => {
     if (!selectedTableId) return;
     if (!voidReason.trim()) {
       showToast('error', 'Lütfen iptal gerekçesini belirtin.');
       return;
     }
-    if ((cashierRole === 'CASHIER' || cashierRole === 'WAITER') && !managerPin.trim()) {
-      showToast('error', 'Yönetici onay PIN kodu zorunludur.');
-      return;
-    }
+    setShowApprovalModal(true);
+  };
+
+  // Onay penceresinden dönen tek kullanımlık jetonla iptali yürüt.
+  const handleVoidApproved = async (approvalToken: string) => {
+    if (!selectedTableId) return;
     try {
       const payload = {
         orderId: selectedTableId,
@@ -571,7 +579,7 @@ export function CashierWorkstationContainer() {
         reason: voidReason.trim(),
         actorId: cashierId,
         actorRole: cashierRole,
-        managerPin: managerPin.trim() ? managerPin.trim() : undefined,
+        approvalToken,
       };
 
       await tauriInvoke('void_order', {
@@ -593,15 +601,19 @@ export function CashierWorkstationContainer() {
         },
       }).catch(console.error);
 
+      setShowApprovalModal(false);
       setShowVoidModal(false);
       setVoidReason('');
-      setManagerPin('');
       setSelectedTableId(null);
       setTableItems([]);
       useCartStore.getState().clearCart();
       await fetchFloorPlan();
       showToast('success', 'Hesap başarıyla iptal edildi.');
     } catch (err: unknown) {
+      // Jeton tek kullanımlıktır: iptal geçerse onay yeniden istenir.
+      setShowApprovalModal(false);
+      setShowVoidModal(false);
+      setVoidReason('');
       showToast('error', `İptal hatası: ${String(err)}`);
     }
   };
@@ -1273,18 +1285,6 @@ export function CashierWorkstationContainer() {
                         placeholder="Örn: Yanlış masa siparişi..."
                       />
                     </div>
-                    {(cashierRole === 'CASHIER' || cashierRole === 'WAITER') && (
-                      <div>
-                        <label className="block text-xs uppercase tracking-wider dark:text-white/50 text-zinc-500 font-medium mb-2">Manager PIN</label>
-                        <input
-                          type="password"
-                          value={managerPin}
-                          onChange={(e) => setManagerPin(e.target.value)}
-                          className="w-full p-3.5 dark:bg-white/[0.04] bg-white border dark:border-white/10 border-black/[0.08] rounded-2xl dark:text-white text-zinc-900 outline-none focus:dark:border-white/30 focus:border-black/20 font-mono tracking-widest text-center text-xl transition-all shadow-inner"
-                          placeholder="••••"
-                        />
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex gap-3">
@@ -1293,7 +1293,6 @@ export function CashierWorkstationContainer() {
                       onClick={() => {
                         setShowVoidModal(false);
                         setVoidReason('');
-                        setManagerPin('');
                       }}
                       className="flex-1 rounded-2xl h-12"
                     >
@@ -1302,15 +1301,33 @@ export function CashierWorkstationContainer() {
                     <AppleButton
                       variant="danger"
                       onClick={handleVoidSubmit}
-                      disabled={!voidReason.trim() || ((cashierRole === 'CASHIER' || cashierRole === 'WAITER') && !managerPin.trim())}
+                      disabled={!voidReason.trim()}
                       className="flex-1 rounded-2xl h-12"
                     >
-                      İptali Onayla
+                      Onaya Gönder
                     </AppleButton>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* Anlık PIN onay penceresi: iptal ve indirim tek ortak yüzey. */}
+            <InstantPinApprovalModal
+              open={showApprovalModal}
+              request={{
+                operation: APPROVAL_OPERATIONS.VOID,
+                resourceId: selectedTableId ?? '',
+                actorId: cashierId,
+                actorRole: cashierRole,
+                amountCents: grandTotalCents,
+                tenantId: user?.tenantId,
+              }}
+              formatCents={(cents) =>
+                `${(cents / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`
+              }
+              onApproved={handleVoidApproved}
+              onCancel={() => setShowApprovalModal(false)}
+            />
 
             {/* ========================================================= */}
             {/* SOL KOLON: AÇIK HESAPLAR LİSTESİ (BAĞIMSIZ YÜZEN CAM ADA) */}
