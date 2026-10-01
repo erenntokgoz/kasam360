@@ -1,4 +1,5 @@
 use crate::db::DbPool;
+use crate::AppState;
 use serde::{Deserialize, Serialize};
 use sqlx::{Acquire, Row};
 use uuid::Uuid;
@@ -89,6 +90,66 @@ pub struct TicketStatusTransitionDto {
     pub actor_role: String,
 }
 
+/// Ödemenin ait olduğu tenant'ı veritabanından çözer.
+///
+/// Ödeme payload'ı tenant taşımaz; sahiplik siparişin ya da masanın satırında
+/// durur. Denetim kaydı bu değerle yazılır; ayrıca `check_idempotency` ve
+/// satış olayı da aynı tenant'ı kullanır.
+async fn resolve_payment_tenant(
+    conn: &mut sqlx::SqliteConnection,
+    payload: &PaymentPayloadDto,
+) -> String {
+    if let Some(order_id) = payload.order_id.as_deref() {
+        if let Ok(Some(tenant)) = sqlx::query_scalar::<_, String>(
+            "SELECT tenant_id FROM orders WHERE id = ?",
+        )
+        .bind(order_id)
+        .fetch_optional(&mut *conn)
+        .await
+        {
+            return tenant;
+        }
+    }
+    if let Some(table_id) = payload.customer_ref.as_deref() {
+        if let Ok(Some(tenant)) = sqlx::query_scalar::<_, String>(
+            "SELECT tenant_id FROM tables WHERE id = ?",
+        )
+        .bind(table_id)
+        .fetch_optional(&mut *conn)
+        .await
+        {
+            return tenant;
+        }
+    }
+    "DEFAULT_TENANT".to_string()
+}
+
+/// Komutun çağıranı oturum bilgisi taşımıyorsa aktör "SYSTEM" olarak yazılır.
+///
+/// Eskiden bu yollar "System" yazıyordu; fark, artık bunu bir **sabit** olarak
+/// değil, çağıranın gerçekten bildirmediği bir gerçek olarak ifade ediyoruz.
+fn audit_actor(actor_id: Option<String>, actor_role: Option<String>) -> (String, String) {
+    (
+        actor_id.unwrap_or_else(|| "SYSTEM".to_string()),
+        actor_role.unwrap_or_else(|| "System".to_string()),
+    )
+}
+
+/// Denetim kaydının tenant'ını masa satırından okur; satır yoksa tek varsayılan
+/// tenant'a düşer.
+async fn table_tenant(
+    conn: &mut sqlx::SqliteConnection,
+    table_id: &str,
+) -> String {
+    sqlx::query_scalar::<_, String>("SELECT tenant_id FROM tables WHERE id = ?")
+        .bind(table_id)
+        .fetch_optional(&mut *conn)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "DEFAULT_TENANT".to_string())
+}
+
 #[tauri::command]
 pub async fn process_payment(
     payload: PaymentPayloadDto,
@@ -102,10 +163,24 @@ pub async fn process_payment(
     // kapatabiliyordu.
     crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner, crate::rbac::Role::Cashier])?;
 
+    // Kilit sırası her yerde aynıdır: önce payment_mutex, sonra audit_mutex.
+    // Ters sırada bir komut iki kilidi birden tutarken başka bir komut ters sırayı
+    // beklerse kilitlenme (deadlock) oluşur.
     let _lock = state.payment_mutex.lock().await;
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    let (total_cogs_cents, now_iso) = crate::services::payment_service::PaymentService::process_transaction(&payload, &mut tx).await?;
+    let tenant_id = resolve_payment_tenant(&mut tx, &payload).await;
+
+    let (total_cogs_cents, now_iso) = crate::services::payment_service::PaymentService::process_transaction(
+        &payload,
+        &mut tx,
+        &audit_lock,
+        &tenant_id,
+        &actor_role,
+    )
+    .await?;
 
     // Aktif siparişi temizle ve masayı AVAILABLE olarak ayarla
     if let Some(table_id) = &payload.customer_ref {
@@ -151,13 +226,16 @@ pub async fn process_split_payment(
     crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner, crate::rbac::Role::Cashier])?;
 
     let _lock = state.payment_mutex.lock().await;
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let now_iso = chrono::Utc::now().to_rfc3339();
     let actor_id = payload.cashier_id.as_deref().unwrap_or("SYSTEM_POS");
+    let tenant_id = resolve_payment_tenant(&mut tx, &payload).await;
 
     // 1. Etki eşitsizliği (Idempotency) kontrolü
-    if crate::repositories::payment_repository::PaymentRepository::check_idempotency(&mut tx, &payload.transaction_id).await? {
+    if crate::repositories::payment_repository::PaymentRepository::check_idempotency(&mut tx, &payload.transaction_id, &tenant_id).await? {
         return Err(format!(
             "IDEMPOTENCY_CONFLICT: Transaction '{}' has already been processed.",
             payload.transaction_id
@@ -165,7 +243,7 @@ pub async fn process_split_payment(
     }
 
     // 2. Parçalı ödeme satış olayını ekle
-    crate::repositories::payment_repository::PaymentRepository::insert_sale_event(&mut tx, &payload).await?;
+    crate::repositories::payment_repository::PaymentRepository::insert_sale_event(&mut tx, &payload, &tenant_id).await?;
 
     // 3. Siparişin veritabanındaki gerçek toplamını ve şimdiye kadarki tahsilatları hesapla
     let mut order_total_cents = payload.total_amount;
@@ -244,18 +322,28 @@ pub async fn process_split_payment(
             .map_err(|e| e.to_string())?;
     }
 
-    // Denetim defteri kaydını ekle
-    crate::services::audit_service::AuditService::append_audit_entry(
-        &mut tx,
-        &payload.transaction_id,
-        &payload.method,
-        payload.amount_tendered,
-        total_cogs_cents,
-        payload.items.len(),
-        actor_id,
-        &now_iso,
-    )
-    .await?;
+    // Denetim defteri kaydını ekle.
+    //
+    // Payload alan adları `get_daily_summary` ve `get_shift_summary` tarafından
+    // JSON olarak okunuyor; yeniden adlandırılmaz.
+    let ledger_payload = serde_json::json!({
+        "transactionId": payload.transaction_id,
+        "method": payload.method,
+        "totalAmount": payload.amount_tendered,
+        "cogsTotalCents": total_cogs_cents,
+        "itemsCount": payload.items.len(),
+    });
+    let audit_ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id,
+        actor_id.to_string(),
+        actor_role.clone(),
+        crate::services::audit_service::category::ODEME,
+        "payment:settled_fifo",
+        payload.transaction_id.clone(),
+        ledger_payload,
+        now_iso.clone(),
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &audit_ctx).await?;
 
     // WAL işlemini onayla
     tx.commit().await.map_err(|e| e.to_string())?;
@@ -279,7 +367,10 @@ pub async fn process_split_payment(
 pub async fn kds_update_ticket_status(
     payload: TicketStatusTransitionDto,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, AppState>,
 ) -> Result<bool, String> {
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let event_id = format!("evt_kds_{}", Uuid::new_v4());
@@ -344,6 +435,25 @@ pub async fn kds_update_ticket_status(
             .await
             .map_err(|e| e.to_string())?;
     }
+
+    // KDS durum geçişi de bir operasyonel değişikliktir: mutfak ekranındaki her
+    // ilerleme "Sipariş & Masa" kategorisine yazılır. İstemci tarafında ikinci bir
+    // ledger bulunmadığından bu kayıt tek gerçek kaynaktır.
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id.clone(),
+        payload.actor_id.clone(),
+        payload.actor_role.clone(),
+        crate::services::audit_service::category::SIPARIS_MASA,
+        "kds:ticket_status_advanced",
+        payload.order_id.clone(),
+        serde_json::json!({
+            "fromStatus": payload.from_status,
+            "toStatus": payload.to_status,
+            "eventId": event_id,
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -553,10 +663,14 @@ pub async fn get_floor_plan(tenant_id: String, pool: tauri::State<'_, DbPool>) -
 pub async fn move_table(
     from_id: String,
     to_id: String,
+    actor_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let _lock = state.payment_mutex.lock().await;
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     sqlx::query("UPDATE tables SET status='AVAILABLE' WHERE id=?")
@@ -579,19 +693,22 @@ pub async fn move_table(
         .map_err(|e| e.to_string())?;
 
     let now_iso = chrono::Utc::now().to_rfc3339();
+    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
     let payload = serde_json::json!({
         "fromId": from_id,
         "toId": to_id
     });
-    crate::services::audit_service::AuditService::append_generic_audit_entry(
-        &mut tx,
+    let ctx = crate::services::audit_service::AuditContext::new(
+        table_tenant(&mut tx, &to_id).await,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
         "table:move",
-        &to_id,
+        to_id,
         payload,
-        "System",
-        "System",
-        &now_iso,
-    ).await?;
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -599,7 +716,16 @@ pub async fn move_table(
 }
 
 #[tauri::command]
-pub async fn reserve_table(table_id: String, tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
+pub async fn reserve_table(
+    table_id: String,
+    tenant_id: String,
+    actor_id: Option<String>,
+    actor_role: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     sqlx::query("UPDATE tables SET status='RESERVED' WHERE id=? AND tenant_id=?")
@@ -608,6 +734,20 @@ pub async fn reserve_table(table_id: String, tenant_id: String, pool: tauri::Sta
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
+        "table:reserved",
+        table_id.clone(),
+        serde_json::json!({ "tableId": table_id }),
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -685,8 +825,13 @@ pub struct SubmitOrderPayloadDto {
 pub async fn submit_order(
     payload: SubmitOrderPayloadDto,
     tenant_id: String,
+    actor_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     // 1. Calculate authoritative totals and prepared items
@@ -814,6 +959,28 @@ pub async fn submit_order(
         .bind(&event_id)
         .execute(&mut *tx)
         .await;
+
+    // Sipariş açılışı denetim defterine yazılır: kayıt defterinde yoksa
+    // iptal/ödeme kayıtlarının hangi siparişe ait olduğu izlenemez.
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
+    let audit_payload = serde_json::json!({
+        "orderId": payload.order_id,
+        "tableId": payload.table_id,
+        "totalCents": total_cents,
+        "itemCount": payload.items.len(),
+    });
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id.clone(),
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
+        "order:submitted",
+        payload.order_id.clone(),
+        audit_payload,
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -1055,12 +1222,15 @@ pub async fn change_self_pin(
     current_pin: Option<String>,
     new_pin: String,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<serde_json::Value, String> {
     // PIN 4 ila 8 haneli sayısal olmalıdır
     if !new_pin.chars().all(|c| c.is_ascii_digit()) || !(4..=8).contains(&new_pin.len()) {
         return Err("Yeni PIN 4-8 haneli sayısal olmalıdır.".into());
     }
 
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     // Mevcut PIN gönderilmişse Argon2 üzerinden doğrula.
@@ -1092,6 +1262,27 @@ pub async fn change_self_pin(
 
     crate::user_credentials::ensure_pin_unique_after_write(&mut *tx, &tenant_id, &new_pin, &user_id).await?;
 
+    // Kimlik bilgisi değişikliği "Güvenlik" kategorisine yazılır. Deftere PIN'in
+    // kendisi ya da hash'i girmez; yalnızca değişikliğin gerçekleştiği yazılır.
+    let user_role: String =
+        sqlx::query_scalar("SELECT role FROM users WHERE id = ?")
+            .bind(&user_id)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap_or_else(|_| "System".to_string());
+
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id,
+        user_id.clone(),
+        user_role,
+        crate::services::audit_service::category::GUVENLIK,
+        "security:pin_changed",
+        user_id.clone(),
+        serde_json::json!({ "userId": user_id, "method": "self_service" }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+
     tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(serde_json::json!({
@@ -1105,32 +1296,41 @@ pub async fn change_self_pin(
 pub async fn add_table(
     id: String,
     name: String,
+    tenant_id: String,
+    actor_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
-    _state: tauri::State<'_, crate::AppState>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    sqlx::query("INSERT INTO tables (id, name, status, current_total) VALUES (?, ?, 'AVAILABLE', 0)")
+    sqlx::query("INSERT INTO tables (id, tenant_id, name, status, current_total) VALUES (?, ?, ?, 'AVAILABLE', 0)")
         .bind(&id)
+        .bind(&tenant_id)
         .bind(&name)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
 
     let now_iso = chrono::Utc::now().to_rfc3339();
+    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
     let payload = serde_json::json!({
         "id": id,
         "name": name
     });
-    crate::services::audit_service::AuditService::append_generic_audit_entry(
-        &mut tx,
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
         "table:add",
-        &id,
+        id,
         payload,
-        "System",
-        "System",
-        &now_iso,
-    ).await?;
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
@@ -1139,11 +1339,17 @@ pub async fn add_table(
 #[tauri::command]
 pub async fn remove_table(
     id: String,
+    actor_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let _lock = state.payment_mutex.lock().await;
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    let tenant_id = table_tenant(&mut tx, &id).await;
 
     sqlx::query("DELETE FROM tables WHERE id = ?")
         .bind(&id)
@@ -1152,26 +1358,49 @@ pub async fn remove_table(
         .map_err(|e| e.to_string())?;
 
     let now_iso = chrono::Utc::now().to_rfc3339();
+    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
     let payload = serde_json::json!({
         "id": id
     });
-    crate::services::audit_service::AuditService::append_generic_audit_entry(
-        &mut tx,
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
         "table:remove",
-        &id,
+        id,
         payload,
-        "System",
-        "System",
-        &now_iso,
-    ).await?;
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
 }
 
+/// Masa adı değişikliği "Eski Değer → Yeni Değer" sütununu besleyen ilk
+/// kayıttır: değişiklik `changes` nesnesiyle payload'a yazılır.
 #[tauri::command]
-pub async fn update_table_name(id: String, name: String, tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
+pub async fn update_table_name(
+    id: String,
+    name: String,
+    tenant_id: String,
+    actor_id: Option<String>,
+    actor_role: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    let previous_name: Option<String> =
+        sqlx::query_scalar("SELECT name FROM tables WHERE id = ? AND tenant_id = ?")
+            .bind(&id)
+            .bind(&tenant_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
 
     sqlx::query("UPDATE tables SET name = ? WHERE id = ? AND tenant_id = ?")
         .bind(&name)
@@ -1180,6 +1409,26 @@ pub async fn update_table_name(id: String, name: String, tenant_id: String, pool
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
+    let payload = serde_json::json!({
+        "tableId": id,
+        "changes": {
+            "name": { "old": previous_name, "new": name }
+        }
+    });
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
+        "table:renamed",
+        id,
+        payload,
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
@@ -1193,12 +1442,19 @@ pub struct DailySummaryDto {
 }
 
 #[tauri::command]
-pub async fn get_daily_summary(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<DailySummaryDto, String> {
+pub async fn get_daily_summary(
+    actor_role: String,
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<DailySummaryDto, String> {
     crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier])?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
-    let row = sqlx::query("SELECT COALESCE(sum(total_cents), 0) as total, COUNT(*) as count FROM orders WHERE status IN ('PAID', 'CLOSED') AND created_at >= date('now', 'start of day')")
+    // Ciro ve ödeme yöntemi dağılımı tenant'a göre daraltılır: defter tek bir
+    // zincirde tutulduğu için filtresiz sorgu tüm işletmelerin cirosunu toplardı.
+    let row = sqlx::query("SELECT COALESCE(sum(total_cents), 0) as total, COUNT(*) as count FROM orders WHERE tenant_id = ? AND status IN ('PAID', 'CLOSED') AND created_at >= date('now', 'start of day')")
+        .bind(&tenant_id)
         .fetch_one(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
@@ -1209,9 +1465,10 @@ pub async fn get_daily_summary(actor_role: String, pool: tauri::State<'_, DbPool
     let methods_rows = sqlx::query(
         "SELECT json_extract(payload, '$.method') as method, COALESCE(sum(json_extract(payload, '$.totalAmount')), 0) as amount 
          FROM audit_ledger 
-         WHERE action='payment:settled_fifo' AND created_at >= date('now', 'start of day')
+         WHERE tenant_id = ? AND action='payment:settled_fifo' AND created_at >= date('now', 'start of day')
          GROUP BY json_extract(payload, '$.method')"
     )
+    .bind(&tenant_id)
     .fetch_all(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
@@ -1562,7 +1819,10 @@ pub async fn void_order(
     payload: VoidOrderPayloadDto,
     tenant_id: String,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     // Yetki (SPEC §34 "Void Onaylama"): kapı yasaklı rolleri sayan değil, yetkili
@@ -1667,53 +1927,147 @@ pub async fn void_order(
         "reason": payload.reason,
     });
 
-    crate::services::audit_service::AuditService::append_generic_audit_entry(
-        &mut tx,
+    // İptal denetimde "Güvenlik" kategorisindedir: para hareketini tersine çevirir
+    // ve yetkisi rol tarafından doğrulanmıştır. Rol burada sabit "Cashier"
+    // yazılmaz; gerçek, kanonik rol kaydedilir.
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id.clone(),
+        payload.actor_id.clone(),
+        actor_role.as_str().to_string(),
+        crate::services::audit_service::category::GUVENLIK,
         "order:voided",
-        &payload.order_id,
+        payload.order_id.clone(),
         payload_val,
-        &payload.actor_id,
-        "Cashier",
-        &now_iso,
-    ).await?;
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(true)
 }
 
+/// Denetim kaydının istemciye giden hali.
+///
+/// `current_hash` **bilerek yoktur**: ham SHA-256 değeri ne API'den ne arayüzden
+/// çıkar (AGENTS.md §3.2). Arayüzün göstereceği tek şey `sealed` mührüdür.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AuditLogDto {
     pub id: String,
     pub sequence: i64,
     pub timestamp: String,
     pub actor_id: String,
+    pub actor_role: String,
+    pub category: String,
     pub action: String,
     pub resource_id: String,
-    pub current_hash: String,
+    pub payload: serde_json::Value,
+    pub sealed: bool,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct AuditLogFilterDto {
+    #[serde(rename = "actorId", default)]
+    pub actor_id: Option<String>,
+    pub category: Option<String>,
+    #[serde(rename = "startDate", default)]
+    pub start_date: Option<String>,
+    #[serde(rename = "endDate", default)]
+    pub end_date: Option<String>,
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 #[tauri::command]
-pub async fn get_audit_logs(pool: tauri::State<'_, DbPool>) -> Result<Vec<AuditLogDto>, String> {
+pub async fn get_audit_logs(
+    caller_role: String,
+    tenant_id: String,
+    filter: Option<AuditLogFilterDto>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<AuditLogDto>, String> {
+    // Bu komut önceden hiç rol kapısı taşımıyordu; garson ve mutfak da tüm
+    // tenant'ların denetim kayıtlarını okuyabiliyordu.
+    crate::rbac::require_audit_read(&caller_role)?;
+
+    let filter = filter.unwrap_or_default();
+
+    if let Some(category) = filter.category.as_deref() {
+        if !crate::services::audit_service::category::is_valid(category) {
+            return Err(format!("UNKNOWN_AUDIT_CATEGORY: '{}'", category));
+        }
+    }
+
+    // LIMIT her zaman bağlı değişkenle gelir; istekten gelen sayı makul bir
+    // tavanla sınırlanır.
+    const MAX_LIMIT: i64 = 500;
+    let limit = filter.limit.unwrap_or(100).clamp(1, MAX_LIMIT);
+    let offset = filter.offset.unwrap_or(0).max(0);
+
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
-    let rows = sqlx::query(
-        "SELECT id, sequence, timestamp, actor_id, action, resource_id, current_hash FROM audit_ledger ORDER BY sequence DESC LIMIT 100"
-    )
-    .fetch_all(&mut *conn)
-    .await
-    .map_err(|e| e.to_string())?;
+    // Sorgu `QueryBuilder` ile kurulur: değerler her zaman bağlı değişkenle gider,
+    // hiçbir filtre değeri SQL metnine gömülmez.
+    let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+        "SELECT id, sequence, timestamp, actor_id, actor_role, category, action, resource_id, payload \
+         FROM audit_ledger WHERE tenant_id = ",
+    );
+    builder.push_bind(tenant_id);
 
-    let mut logs = Vec::new();
+    if let Some(actor_id) = filter.actor_id.as_deref() {
+        builder.push(" AND actor_id = ");
+        builder.push_bind(actor_id.to_string());
+    }
+    if let Some(category) = filter.category.as_deref() {
+        builder.push(" AND category = ");
+        builder.push_bind(category.to_string());
+    }
+    if let Some(start_date) = filter.start_date.as_deref() {
+        builder.push(" AND timestamp >= ");
+        builder.push_bind(start_date.to_string());
+    }
+    if let Some(end_date) = filter.end_date.as_deref() {
+        builder.push(" AND timestamp <= ");
+        builder.push_bind(end_date.to_string());
+    }
+    if let Some(search) = filter.search.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        builder.push(" AND (action LIKE ");
+        builder.push_bind(format!("%{}%", search));
+        builder.push(" OR resource_id LIKE ");
+        builder.push_bind(format!("%{}%", search));
+        builder.push(" OR actor_id LIKE ");
+        builder.push_bind(format!("%{}%", search));
+        builder.push(")");
+    }
+
+    builder.push(" ORDER BY sequence DESC LIMIT ");
+    builder.push_bind(limit);
+    builder.push(" OFFSET ");
+    builder.push_bind(offset);
+
+    let rows = builder
+        .build()
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut logs = Vec::with_capacity(rows.len());
     for r in rows {
         logs.push(AuditLogDto {
             id: r.try_get("id").unwrap_or_default(),
             sequence: r.try_get("sequence").unwrap_or(0),
             timestamp: r.try_get("timestamp").unwrap_or_default(),
             actor_id: r.try_get("actor_id").unwrap_or_default(),
+            actor_role: r.try_get("actor_role").unwrap_or_default(),
+            category: r.try_get("category").unwrap_or_default(),
             action: r.try_get("action").unwrap_or_default(),
             resource_id: r.try_get("resource_id").unwrap_or_default(),
-            current_hash: r.try_get("current_hash").unwrap_or_default(),
+            payload: r
+                .try_get::<String, _>("payload")
+                .ok()
+                .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+                .unwrap_or(serde_json::Value::Null),
+            sealed: true,
         });
     }
 
@@ -1823,13 +2177,20 @@ pub struct ShiftDto {
 pub async fn open_shift(
     cashier_id: String,
     expected_amount_cents: i32,
+    tenant_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<ShiftDto, String> {
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
     
     // Check if open shift exists
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM shifts WHERE cashier_id = ? AND status = 'OPEN'")
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
         .bind(&cashier_id)
+        .bind(&tenant_id)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -1839,19 +2200,37 @@ pub async fn open_shift(
     }
     
     let id = Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO shifts (id, tenant_id, cashier_id, status, opened_at, expected_amount_cents) VALUES (?, 'DEFAULT_TENANT', ?, 'OPEN', datetime('now'), ?)")
+    sqlx::query("INSERT INTO shifts (id, tenant_id, cashier_id, status, opened_at, expected_amount_cents) VALUES (?, ?, ?, 'OPEN', datetime('now'), ?)")
         .bind(&id)
+        .bind(&tenant_id)
         .bind(&cashier_id)
         .bind(expected_amount_cents)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    let (_, actor_role) = audit_actor(None, actor_role);
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id.clone(),
+        cashier_id.clone(),
+        actor_role,
+        crate::services::audit_service::category::FINANS,
+        "shift:opened",
+        id.clone(),
+        serde_json::json!({
+            "shiftId": id,
+            "expectedAmountCents": expected_amount_cents,
+        }),
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
         
     tx.commit().await.map_err(|e| e.to_string())?;
     
     Ok(ShiftDto {
         id,
-        tenant_id: "DEFAULT_TENANT".into(),
+        tenant_id,
         cashier_id,
         status: "OPEN".into(),
         opened_at: chrono::Utc::now().to_rfc3339(),
@@ -1866,13 +2245,20 @@ pub async fn open_shift(
 pub async fn close_shift(
     cashier_id: String,
     actual_amount_cents: i32,
+    tenant_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<ShiftDto, String> {
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
     
     // Find open shift
-    let row = sqlx::query("SELECT id, expected_amount_cents FROM shifts WHERE cashier_id = ? AND status = 'OPEN'")
+    let row = sqlx::query("SELECT id, expected_amount_cents, tenant_id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
         .bind(&cashier_id)
+        .bind(&tenant_id)
         .fetch_optional(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -1880,6 +2266,9 @@ pub async fn close_shift(
     let r = row.ok_or("Aktif açık vardiya bulunamadı (No active open shift found)")?;
     let id: String = r.try_get("id").unwrap_or_default();
     let expected: i32 = r.try_get("expected_amount_cents").unwrap_or(0);
+    let shift_tenant: String = r
+        .try_get("tenant_id")
+        .unwrap_or_else(|_| tenant_id.clone());
     
     let difference = actual_amount_cents - expected;
     
@@ -1890,12 +2279,34 @@ pub async fn close_shift(
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+
+    // Kasa kapanışı "Eski Değer → Yeni Değer" sütununun en kritik kaydıdır:
+    // beklenen ile sayılan tutar ve fark burada görünür olur.
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    let (_, actor_role) = audit_actor(None, actor_role);
+    let ctx = crate::services::audit_service::AuditContext::new(
+        shift_tenant,
+        cashier_id.clone(),
+        actor_role,
+        crate::services::audit_service::category::FINANS,
+        "shift:closed",
+        id.clone(),
+        serde_json::json!({
+            "shiftId": id,
+            "changes": {
+                "expectedAmountCents": { "old": expected, "new": actual_amount_cents },
+            },
+            "differenceCents": difference,
+        }),
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
         
     tx.commit().await.map_err(|e| e.to_string())?;
     
     Ok(ShiftDto {
         id,
-        tenant_id: "DEFAULT_TENANT".into(),
+        tenant_id,
         cashier_id,
         status: "CLOSED".into(),
         opened_at: "".into(),
@@ -2039,6 +2450,8 @@ mod tests {
         assert_eq!(dto.manager_pin.unwrap(), "1234");
     }
 
+    /// Denetim kaydı istemciye giderken mühürlü bilgisi taşır; ham hash
+    /// alanı DTO'da **yoktur** ve JSON'a sızmamalıdır.
     #[test]
     fn test_audit_log_dto_serialization() {
         let dto = AuditLogDto {
@@ -2046,15 +2459,22 @@ mod tests {
             sequence: 42,
             timestamp: "2026-09-13T12:00:00Z".to_string(),
             actor_id: "SYS_ADMIN".to_string(),
+            actor_role: "Owner".to_string(),
+            category: crate::services::audit_service::category::SIPARIS_MASA.to_string(),
             action: "order:voided".to_string(),
             resource_id: "ORD-101".to_string(),
-            current_hash: "a1b2c3d4e5f6".to_string(),
+            payload: serde_json::json!({ "reason": "müşteri iptali" }),
+            sealed: true,
         };
 
         let json_str = serde_json::to_string(&dto).expect("Failed to serialize");
         assert!(json_str.contains("\"actor_id\":\"SYS_ADMIN\""));
         assert!(json_str.contains("\"sequence\":42"));
         assert!(json_str.contains("\"action\":\"order:voided\""));
+        assert!(json_str.contains("\"sealed\":true"));
+        assert!(!json_str.contains("current_hash"));
+        assert!(!json_str.contains("previous_hash"));
+        assert!(!json_str.contains("hash\""));
     }
 
     #[test]
@@ -2246,10 +2666,13 @@ pub async fn merge_tables(
     source_id: String,
     target_id: String,
     actor_id: String,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let _lock = state.payment_mutex.lock().await;
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     
     // Move all open orders from source to target
@@ -2266,13 +2689,22 @@ pub async fn merge_tables(
     // Recalculate target table total
     sqlx::query("UPDATE tables SET current_total = (SELECT COALESCE(SUM(total_cents),0) FROM orders WHERE table_id = ? AND status IN ('OPEN','IN_PROGRESS')) WHERE id = ?")
         .bind(&target_id).bind(&target_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
-    
-    // Audit
+
     let now_iso = chrono::Utc::now().to_rfc3339();
-    let payload = serde_json::json!({"sourceId": source_id, "targetId": target_id, "actorId": actor_id});
-    crate::services::audit_service::AuditService::append_generic_audit_entry(
-        &mut tx, "table:merged", &target_id, payload, &actor_id, "Manager", &now_iso,
-    ).await?;
+    let tenant_id = table_tenant(&mut tx, &target_id).await;
+    let (_, actor_role) = audit_actor(None, actor_role);
+    let payload = serde_json::json!({"sourceId": source_id, "targetId": target_id});
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
+        "table:merged",
+        target_id,
+        payload,
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
     
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
@@ -2386,8 +2818,11 @@ pub async fn close_day(
     #[allow(non_snake_case)]
     tenantId: Option<String>,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<CloseDayResultDto, String> {
     let effective_tenant = tenant_id.or(tenantId).unwrap_or_else(|| "DEFAULT_TENANT".to_string());
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let now_str = chrono::Utc::now().to_rfc3339();
@@ -2430,19 +2865,28 @@ pub async fn close_day(
     let total_revenue_cents: i64 = row.try_get("total").unwrap_or(0);
     let total_orders: i64 = row.try_get("count").unwrap_or(0);
 
-    // 3. Denetim defteri kaydını ekle
-    let user_id = actor_id.unwrap_or_else(|| "SYSTEM".into());
-    let role = actor_role.unwrap_or_else(|| "Manager".into());
+    // 3. Denetim defteri kaydını ekle.
+    //
+    // Bu kayıt artık `?` ile zorunlu: gün sonu kapanışı deftere girmeden
+    // commit edilmez. Önceden hata sessizce yutuluyordu.
+    let (user_id, role) = audit_actor(actor_id, actor_role);
     let payload = serde_json::json!({
-        "tenant_id": &effective_tenant,
-        "closed_shifts_count": closed_shifts_count,
-        "total_revenue_cents": total_revenue_cents,
-        "total_orders": total_orders,
-        "timestamp": &now_str,
+        "tenantId": &effective_tenant,
+        "closedShiftsCount": closed_shifts_count,
+        "totalRevenueCents": total_revenue_cents,
+        "totalOrders": total_orders,
     });
-    let _ = crate::services::audit_service::AuditService::append_generic_audit_entry(
-        &mut tx, "day:closed", "DAILY_CLOSING", payload, &user_id, &role, &now_str,
-    ).await;
+    let ctx = crate::services::audit_service::AuditContext::new(
+        effective_tenant,
+        user_id,
+        role,
+        crate::services::audit_service::category::FINANS,
+        "day:closed",
+        "DAILY_CLOSING".to_string(),
+        payload,
+        now_str.clone(),
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 

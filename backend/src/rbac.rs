@@ -123,6 +123,24 @@ pub fn require_reporting(raw_role: &str) -> Result<Role, String> {
     require_any(raw_role, &[Role::Owner, Role::Manager])
 }
 
+/// Denetim logu okuma kapısı: işletme sahibi ve müdür.
+///
+/// Kasiyer, garson ve mutfak denetim defterini göremez. Garson/mutfak zaten
+/// `ImmutableLedgerRepository` rol izolasyonuyla da dışlanıyordu; kapiyer de
+/// burada dışlanır. MASTER ayrı komutta (`get_platform_audit_logs`) kalır.
+pub fn require_audit_read(raw_role: &str) -> Result<Role, String> {
+    require_any(raw_role, &[Role::Owner, Role::Manager])
+}
+
+/// [`Option`] taşıyan komutlar için fail-closed yetki kapısı.
+///
+/// Rol alanını hiç göndermeyen çağıran `None` düşer ve reddedilir; bkz.
+/// [`require_master_present`].
+pub fn require_any_present(caller_role: Option<&str>, allowed: &[Role]) -> Result<Role, String> {
+    let raw = caller_role.ok_or_else(|| "UNAUTHORIZED: caller_role is required".to_string())?;
+    require_any(raw, allowed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,5 +192,23 @@ mod tests {
         let err = require_any("WAITER", &[Role::Owner, Role::Manager]).unwrap_err();
         assert!(err.starts_with("UNAUTHORIZED"), "{}", err);
         assert!(err.contains("OWNER") && err.contains("MANAGER"), "{}", err);
+    }
+
+    /// Denetim defteri okuma kapısı yalnız sahip ve müdüre açıktır. Kasiyer,
+    /// garson ve mutfak reddedilir; MASTER işletme denetimine erişmez, kendi
+    /// platform komutundan okur.
+    #[test]
+    fn denetim_okuma_kapisi_sahip_ve_mudure_acik_gerileri_kapatir() {
+        assert!(require_audit_read("Owner").is_ok());
+        assert!(require_audit_read("MANAGER").is_ok());
+
+        for role in ["CASHIER", "WAITER", "KITCHEN", "Cashier", "Waiter", "Kitchen"] {
+            assert!(require_audit_read(role).is_err(), "{} denetim defterini görebiliyor", role);
+        }
+        // MASTER işletme denetim defterine bu kapıdan giremez.
+        assert!(require_audit_read("Master Admin").is_err());
+        // Bilinmeyen yazım fail-closed: kapıdan düşer.
+        assert!(require_audit_read("SuperUser").is_err());
+        assert!(require_audit_read("").is_err());
     }
 }

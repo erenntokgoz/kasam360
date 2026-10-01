@@ -373,15 +373,24 @@ let mockShifts: MockShift[] = lsLoad<MockShift[]>('shifts', []);
 // 11. Canlı Operasyonlar, Onaylar ve Denetim Kayıtları
 const mockLiveOrders: Record<string, unknown>[] = lsLoad<Record<string, unknown>[]>('live_orders', []);
 let mockPendingApprovals: Record<string, unknown>[] = lsLoad<Record<string, unknown>[]>('pending_approvals', []);
+
+/**
+ * Denetim kayıtları ham SHA-256 **taşımaz**: yalnızca `sealed` mührü ve
+ * kategori bulunur. Hash'i backend'de kalıp burada gizlemek, iki gerçek
+ * (ikinci hash zinciri) üretmemek içindir.
+ */
 const DEFAULT_AUDIT_LOGS: Record<string, unknown>[] = [
   {
     id: 'aud-001',
     sequence: 1,
     timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
     actor_id: 'Fatma Kasiyer',
-    action: 'CASH_SHIFT_OPENED',
+    actor_role: 'CASHIER',
+    category: 'FINANS',
+    action: 'shift:opened',
     resource_id: 'Kasa-01 (Sabah Vardiyası)',
-    current_hash: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+    payload: { shiftId: 'shf_001' },
+    sealed: true,
     tenant_id: 'DEFAULT_TENANT',
   },
   {
@@ -389,9 +398,12 @@ const DEFAULT_AUDIT_LOGS: Record<string, unknown>[] = [
     sequence: 2,
     timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
     actor_id: 'Ahmet Garson',
-    action: 'ORDER_OPENED',
-    resource_id: 'Masa 3 (Sipariş Açılışı #102)',
-    current_hash: '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8',
+    actor_role: 'WAITER',
+    category: 'SIPARIS_MASA',
+    action: 'order:submitted',
+    resource_id: 'Masa 3 (Sipariş #102)',
+    payload: { orderId: 'ord_102' },
+    sealed: true,
     tenant_id: 'DEFAULT_TENANT',
   },
   {
@@ -399,9 +411,12 @@ const DEFAULT_AUDIT_LOGS: Record<string, unknown>[] = [
     sequence: 3,
     timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
     actor_id: 'Patron',
-    action: 'STOCK_PURCHASE_RECEIPT',
+    actor_role: 'OWNER',
+    category: 'MENU',
+    action: 'stock:movement_in',
     resource_id: 'Dana Kıyma (Et) (+10 Kg İkmal)',
-    current_hash: '4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a',
+    payload: { quantity: 10, movementType: 'IN' },
+    sealed: true,
     tenant_id: 'DEFAULT_TENANT',
   },
   {
@@ -409,9 +424,12 @@ const DEFAULT_AUDIT_LOGS: Record<string, unknown>[] = [
     sequence: 4,
     timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
     actor_id: 'Patron',
-    action: 'STOCK_WASTE_APPROVED',
-    resource_id: 'Tam Yağlı Süt (-2 Lt Bozulma / Fire)',
-    current_hash: 'ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d',
+    actor_role: 'OWNER',
+    category: 'MENU',
+    action: 'stock:movement_out',
+    resource_id: 'Tam Yağlı Süt (-2 Lt Fire)',
+    payload: { quantity: -2, movementType: 'OUT', reason: 'Bozulma' },
+    sealed: true,
     tenant_id: 'DEFAULT_TENANT',
   },
   {
@@ -419,9 +437,12 @@ const DEFAULT_AUDIT_LOGS: Record<string, unknown>[] = [
     sequence: 5,
     timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
     actor_id: 'Mehmet Müdür',
-    action: 'ORDER_VOIDED',
+    actor_role: 'MANAGER',
+    category: 'SIPARIS_MASA',
+    action: 'order:voided',
     resource_id: 'Masa 1 Adisyon İptali (ord_099)',
-    current_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    payload: { orderId: 'ord_099', reason: 'Müşteri iptali' },
+    sealed: true,
     tenant_id: 'DEFAULT_TENANT',
   },
   {
@@ -429,9 +450,51 @@ const DEFAULT_AUDIT_LOGS: Record<string, unknown>[] = [
     sequence: 6,
     timestamp: new Date(Date.now() - 1800000).toISOString(),
     actor_id: 'Fatma Kasiyer',
-    action: 'CASH_IN',
-    resource_id: 'Bozuk Para Ekleme (+500 TL)',
-    current_hash: 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb',
+    actor_role: 'CASHIER',
+    category: 'FINANS',
+    action: 'cash:movement_in',
+    resource_id: 'Kasa-01 (Bozuk Para Girişi)',
+    payload: { amountCents: 50000, movementType: 'IN' },
+    sealed: true,
+    tenant_id: 'DEFAULT_TENANT',
+  },
+  {
+    id: 'aud-007',
+    sequence: 7,
+    timestamp: new Date(Date.now() - 900000).toISOString(),
+    actor_id: 'Fatma Kasiyer',
+    actor_role: 'CASHIER',
+    category: 'ODEME',
+    action: 'payment:settled_fifo',
+    resource_id: 'txn_7781',
+    payload: { transactionId: 'txn_7781', totalAmount: 4600, discountCents: 0 },
+    sealed: true,
+    tenant_id: 'DEFAULT_TENANT',
+  },
+  {
+    id: 'aud-008',
+    sequence: 8,
+    timestamp: new Date(Date.now() - 600000).toISOString(),
+    actor_id: 'Mehmet Müdür',
+    actor_role: 'MANAGER',
+    category: 'ODEME',
+    action: 'payment:settled_fifo',
+    resource_id: 'txn_7782',
+    payload: { transactionId: 'txn_7782', totalAmount: 1800, discountCents: 1200 },
+    sealed: true,
+    tenant_id: 'DEFAULT_TENANT',
+  },
+  {
+    id: 'aud-009',
+    sequence: 9,
+    timestamp: new Date(Date.now() - 300000).toISOString(),
+    actor_id: 'Mehmet Müdür',
+    actor_role: 'MANAGER',
+    category: 'SIPARIS_MASA',
+    action: 'table:move',
+    resource_id: 'Masa 3 → Masa 7',
+    payload: { from: 'tbl_003', to: 'tbl_007' },
+    sealed: true,
     tenant_id: 'DEFAULT_TENANT',
   },
 ];
@@ -441,6 +504,53 @@ if (mockAuditLogs.length === 0) {
   lsSave('audit_logs', mockAuditLogs);
 }
 let mockPlatformAuditLogs: Record<string, unknown>[] = [];
+
+/** Stok yazan komutlar yalnızca işletme sahibi ve müdüre açıktır (backend ile aynı). */
+function assertStockWriteRole(args: Record<string, unknown>): void {
+  const role = (args.callerRole || args.caller_role) as string | undefined;
+  if (!role) {
+    throw new Error('UNAUTHORIZED: caller_role is required');
+  }
+  const normalized = role.trim().toUpperCase();
+  if (normalized !== 'OWNER' && normalized !== 'MANAGER') {
+    throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER).');
+  }
+}
+
+interface MockAuditLogInput {
+  tenantId: string;
+  actorId: string;
+  actorRole: string;
+  category: string;
+  action: string;
+  resourceId: string;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Mock denetim kaydı ekler. Hash **üretilmez**: gerçek zinciri yalnızca backend
+ * kurar, mock yalnızca kaydın istemciye giden şeklini taklit eder.
+ */
+function pushMockAuditLog(input: MockAuditLogInput): void {
+  const nextSequence = mockAuditLogs.reduce(
+    (max, row) => Math.max(max, Number(row.sequence) || 0),
+    0,
+  ) + 1;
+  mockAuditLogs.unshift({
+    id: `aud-${nextSequence}`,
+    sequence: nextSequence,
+    timestamp: new Date().toISOString(),
+    actor_id: input.actorId,
+    actor_role: input.actorRole,
+    category: input.category,
+    action: input.action,
+    resource_id: input.resourceId,
+    payload: input.payload,
+    sealed: true,
+    tenant_id: input.tenantId,
+  });
+  lsSave('audit_logs', mockAuditLogs);
+}
 
 // 12. KDS İstasyonları & Siparişleri
 const mockKdsStations = [
@@ -1150,6 +1260,7 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     ) as unknown as T;
   }
   if (cmd === 'create_inventory_item') {
+    assertStockWriteRole(args);
     const invTenantId = (args.tenantId || args.tenant_id || callerTenantId || '') as string;
     const newItem: MockInventoryItem = {
       id: `inv_${Date.now().toString().slice(-4)}`,
@@ -1162,9 +1273,19 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     };
     mockInventory = [...mockInventory, newItem];
     lsSave('inventory', mockInventory);
+    pushMockAuditLog({
+      tenantId: invTenantId,
+      actorId: (args.actorId || args.actor_id || 'Sistem') as string,
+      actorRole: (args.callerRole || args.caller_role || 'OWNER') as string,
+      category: 'MENU',
+      action: 'stock:created',
+      resourceId: newItem.id,
+      payload: { name: newItem.name, sku: newItem.sku, unit: newItem.unit },
+    });
     return newItem as unknown as T;
   }
   if (cmd === 'adjust_stock') {
+    assertStockWriteRole(args);
     // Hem camelCase hem snake_case parametreleri destekle
     const id = (args.inventoryItemId || args.itemId || args.item_id || args.id) as string;
     const delta = Number(args.quantityDelta || args.quantityChange || args.quantity_change || args.delta || 0);
@@ -1176,21 +1297,21 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     );
     lsSave('inventory', mockInventory);
 
-    // Denetim kaydı (audit log) oluştur
+    // Denetim kaydı (audit log): hash'siz, yalnızca mühürlü.
     if (targetItem) {
-      const isWaste = (args.movementType || args.movement_type) === 'OUT' || delta < 0;
-      const newAuditLog = {
-        id: `aud-${Date.now()}`,
-        sequence: mockAuditLogs.length + 1,
-        timestamp: new Date().toISOString(),
-        actor_id: (args.actorId || args.actor_id || 'Patron') as string,
-        action: isWaste ? 'STOCK_WASTE_APPROVED' : 'STOCK_PURCHASE_RECEIPT',
-        resource_id: `${targetItem.name} (${delta > 0 ? '+' : ''}${delta} ${targetItem.unit})`,
-        current_hash: Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2),
-        tenant_id: targetItem.tenant_id,
-      };
-      mockAuditLogs.unshift(newAuditLog);
-      lsSave('audit_logs', mockAuditLogs);
+      pushMockAuditLog({
+        tenantId: targetItem.tenant_id as string,
+        actorId: (args.actorId || args.actor_id || 'Patron') as string,
+        actorRole: (args.callerRole || args.caller_role || 'OWNER') as string,
+        category: 'MENU',
+        action: delta < 0 ? 'stock:movement_out' : 'stock:movement_in',
+        resourceId: targetItem.id,
+        payload: {
+          quantity: delta,
+          movementType: (args.movementType || args.movement_type || 'IN') as string,
+          reason: (args.reason || null) as string | null,
+        },
+      });
     }
     return { success: true } as unknown as T;
   }
@@ -1341,7 +1462,42 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return { success: true, message: `İşlem ${action === 'APPROVE' ? 'onaylandı' : 'reddedildi'}.` } as unknown as T;
   }
   if (cmd === 'get_audit_logs') {
-    return mockAuditLogs.filter((l) => matchesTenant(l.tenant_id as string | undefined)) as unknown as T;
+    // Backend ile aynı kapı: yalnızca işletme sahibi ve müdür. Rol alanı
+    // gelmezse istek reddedilir (fail-closed).
+    const role = (args.callerRole || args.caller_role) as string | undefined;
+    if (!role) {
+      throw new Error('UNAUTHORIZED: caller_role is required');
+    }
+    const normalized = role.trim().toUpperCase();
+    if (normalized !== 'OWNER' && normalized !== 'MANAGER') {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER).');
+    }
+
+    const filter = (args.filter || {}) as {
+      actorId?: string;
+      category?: string;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    };
+    const term = (filter.search || '').trim().toLowerCase();
+    const rows = mockAuditLogs
+      .filter((l) => matchesTenant(l.tenant_id as string | undefined))
+      .filter((l) => (filter.actorId ? l.actor_id === filter.actorId : true))
+      .filter((l) => (filter.category ? l.category === filter.category : true))
+      .filter((l) =>
+        term === ''
+          ? true
+          : [l.action, l.resource_id, l.actor_id]
+              .filter((value): value is string => typeof value === 'string')
+              .some((value) => value.toLowerCase().includes(term)),
+      )
+      .sort((a, b) => Number(b.sequence) - Number(a.sequence));
+
+    const offset = Math.max(0, filter.offset ?? 0);
+    const limit = Math.min(Math.max(1, filter.limit ?? 100), 500);
+    // Backend DTO'su tenant_id döndürmez; mock de döndürmemeli.
+    return rows.slice(offset, offset + limit).map(({ tenant_id: _ignored, ...rest }) => rest) as unknown as T;
   }
 
   // ----- FİŞLER & RAPORLAR (Receipts & Analytics) -----
@@ -1628,15 +1784,15 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return [...mockPlatformAuditLogs] as unknown as T;
   }
   if (cmd === 'verify_audit_ledger_integrity') {
-    // Kriptografik SHA-256 zincir doğrulama simülasyonu
+    // Kriptografik zincir doğrulama simülasyonu: sonuç yalnızca geçerlilik ve
+    // sayı döndürür, ham hash veya kök hash istemciye sızmaz (backend ile aynı sözleşme).
     const total = mockPlatformAuditLogs.length;
     return {
       isValid: true,
       verifiedCount: total,
+      hasEntries: total > 0,
       timestamp: new Date().toISOString(),
-      algorithm: 'SHA-256 (HMAC-Secured Append-Only Ledger)',
-      rootHash: total > 0 ? mockPlatformAuditLogs[0].hash : 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      status: 'VERIFIED_GENUINE',
+      algorithm: 'SHA-256',
     } as unknown as T;
   }
   if (cmd === 'create_remote_session') {
@@ -1653,7 +1809,7 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
       actorRole: 'MASTER',
       action: `REMOTE_SESSION_ATTACH (${targetView}/${targetRole})`,
       resourceId: `tenant:${tenantId}`,
-      hash: Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2),
+      sealed: true,
       tenantId,
       tenantName: mockTenants.find(t => t.id === tenantId)?.name || 'İşletme',
       severity: mode === 'INTERACTIVE' ? 'HIGH' : 'LOW',
@@ -1711,7 +1867,7 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
       actorRole: 'MASTER',
       action: `IT_OPERATIONAL_COMMAND: ${actionType}`,
       resourceId: `tenant:${tenantId}`,
-      hash: Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2) + Date.now().toString(16),
+      sealed: true,
       tenantId,
       tenantName,
       severity,
@@ -2013,6 +2169,11 @@ export async function tauriInvoke<T>(cmd: string, args?: InvokeArgs): Promise<T>
     if (finalArgs.tenantId === undefined) finalArgs.tenantId = user.tenantId;
     if (finalArgs.actorRole === undefined) finalArgs.actorRole = user.role;
     if (finalArgs.actorId === undefined) finalArgs.actorId = user.userId;
+    // Rol kapıları `caller_role` bekler ve rol alanı gelmezse reddeder. Değer
+    // oturumdan gelir: çağıran bileşenin rolü kendi kafasında taşımaması,
+    // yetkinin tek yerden (oturum) yönetilmesini sağlar.
+    if (finalArgs.caller_role === undefined) finalArgs.caller_role = user.role;
+    if (finalArgs.callerRole === undefined) finalArgs.callerRole = user.role;
     if (finalArgs.branchId === undefined && user.branchId) finalArgs.branchId = user.branchId;
     if (finalArgs.branch_id === undefined && user.branchId) finalArgs.branch_id = user.branchId;
   } else {

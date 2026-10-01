@@ -2,7 +2,11 @@ use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::{Acquire, Row};
 use uuid::Uuid;
-use crate::services::audit_service::AuditService;
+use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
+
+/// Platform seviyesindeki (çapraz tenant) denetim kayıtlarının taşındığı tenant
+/// kimliği. MASTER'ın kendi işletmesi yoktur; şema varsayılanı kullanılır.
+const PLATFORM_AUDIT_TENANT: &str = "DEFAULT_TENANT";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TenantDto {
@@ -93,8 +97,10 @@ pub async fn create_tenant(
     license_key: Option<String>,
     branch_name: Option<String>,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<TenantDto, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let tenant_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
@@ -202,6 +208,26 @@ pub async fn create_tenant(
 
     tx.commit().await.map_err(|e| format!("İşlem onaylanamadı: {}", e))?;
 
+    // İşletme kurulumu sistem ve yetki tarafını da değiştirir (modüller, lisans,
+    // yönetici PIN'i). Tek denetim kaydı yeterlidir; hassas veriler kayda girmez.
+    let mut audit_conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let audit_ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(),
+        "usr_master".to_string(),
+        "MASTER".to_string(),
+        crate::services::audit_service::category::SISTEM,
+        "system:tenant_created",
+        tenant_id.clone(),
+        serde_json::json!({
+            "tenantId": tenant_id,
+            "modules": active_modules,
+            "branchId": branch_id,
+            "ownerUserId": owner_user_id,
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *audit_conn, &audit_lock, &audit_ctx).await?;
+
     Ok(TenantDto {
         id: tenant_id,
         name,
@@ -230,8 +256,10 @@ pub async fn update_tenant(
     tax_office: Option<String>,
     address: Option<String>,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<TenantDto, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     sqlx::query(
         "UPDATE tenants SET name = ?, contact_person = ?, email = ?, phone = ?, tax_id = ?, tax_office = ?, address = ? WHERE id = ?"
@@ -278,6 +306,21 @@ pub async fn update_tenant(
         .unwrap_or_default();
     let current_modules: Vec<String> = module_rows.into_iter().map(|r| r.try_get("module_id").unwrap_or_default()).collect();
 
+    let audit_ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(),
+        "usr_master".to_string(),
+        "MASTER".to_string(),
+        crate::services::audit_service::category::SISTEM,
+        "system:tenant_updated",
+        id.clone(),
+        serde_json::json!({
+            "tenantId": id,
+            "modules": current_modules,
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &audit_ctx).await?;
+
     Ok(TenantDto {
         id: row.try_get("id").unwrap_or_default(),
         name: row.try_get("name").unwrap_or_default(),
@@ -294,22 +337,44 @@ pub async fn update_tenant(
 }
 
 #[tauri::command]
-pub async fn suspend_tenant(caller_role: String, tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
+pub async fn suspend_tenant(caller_role: String, tenant_id: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     sqlx::query("UPDATE tenants SET status = 'SUSPENDED' WHERE id = ?")
         .bind(&tenant_id).execute(&*pool).await.map_err(|e| e.to_string())?;
     let _ = sqlx::query("UPDATE subscriptions SET status = 'SUSPENDED' WHERE tenant_id = ?")
         .bind(&tenant_id).execute(&*pool).await;
+
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
+        crate::services::audit_service::category::SISTEM,
+        "system:tenant_suspended", tenant_id.clone(),
+        serde_json::json!({ "changes": { "status": { "old": "ACTIVE", "new": "SUSPENDED" } } }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn activate_tenant(caller_role: String, tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
+pub async fn activate_tenant(caller_role: String, tenant_id: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     sqlx::query("UPDATE tenants SET status = 'ACTIVE' WHERE id = ?")
         .bind(&tenant_id).execute(&*pool).await.map_err(|e| e.to_string())?;
     let _ = sqlx::query("UPDATE subscriptions SET status = 'ACTIVE' WHERE tenant_id = ?")
         .bind(&tenant_id).execute(&*pool).await;
+
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
+        crate::services::audit_service::category::SISTEM,
+        "system:tenant_activated", tenant_id.clone(),
+        serde_json::json!({ "changes": { "status": { "old": "SUSPENDED", "new": "ACTIVE" } } }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
     Ok(())
 }
 
@@ -319,9 +384,19 @@ pub async fn update_tenant_modules(
     tenant_id: String,
     modules: Vec<String>,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+
+    let previous: Vec<String> = sqlx::query_scalar(
+        "SELECT module_id FROM tenant_modules WHERE tenant_id = ? AND is_active = 1 ORDER BY module_id ASC",
+    )
+    .bind(&tenant_id)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
 
     sqlx::query("DELETE FROM tenant_modules WHERE tenant_id = ?")
         .bind(&tenant_id)
@@ -337,6 +412,19 @@ pub async fn update_tenant_modules(
             .await
             .map_err(|e| e.to_string())?;
     }
+
+    // Modül değişikliği işletmenin yetki sınırlarını belirler: "Yetki"
+    // kategorisine yazılır ve eski liste kayıtta korunur.
+    let ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
+        crate::services::audit_service::category::YETKI,
+        "platform:tenant_modules_updated", tenant_id.clone(),
+        serde_json::json!({
+            "changes": { "modules": { "old": previous, "new": modules } }
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
 
     Ok(())
 }
@@ -376,36 +464,77 @@ pub async fn record_device_heartbeat(device_id: String, pool: tauri::State<'_, D
 }
 
 #[tauri::command]
-pub async fn register_device(caller_role: String, tenant_id: String, name: String, device_type: String, pool: tauri::State<'_, DbPool>) -> Result<DeviceDto, String> {
+pub async fn register_device(caller_role: String, tenant_id: String, name: String, device_type: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<DeviceDto, String> {
     crate::rbac::require_master(&caller_role)?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO devices (id, tenant_id, name, device_type, status) VALUES (?, ?, ?, ?, 'ACTIVE')")
         .bind(&id).bind(&tenant_id).bind(&name).bind(&device_type)
         .execute(&*pool).await.map_err(|e| e.to_string())?;
+
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
+        crate::services::audit_service::category::SISTEM,
+        "system:device_registered", id.clone(),
+        serde_json::json!({ "tenantId": tenant_id, "name": name, "deviceType": device_type }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+
     Ok(DeviceDto { id, tenant_id, name, device_type, status: "ACTIVE".to_string(), last_heartbeat: None })
 }
 
 /// Toggle a device administratively.  This is deliberately a persisted state
 /// change (rather than the browser demo's in-memory switch).
 #[tauri::command]
-pub async fn toggle_device_status(caller_role: String, device_id: String, pool: tauri::State<'_, DbPool>) -> Result<DeviceDto, String> {
+pub async fn toggle_device_status(caller_role: String, device_id: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<DeviceDto, String> {
     crate::rbac::require_master(&caller_role)?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let previous_status: Option<String> = sqlx::query_scalar("SELECT status FROM devices WHERE id = ?")
+        .bind(&device_id).fetch_optional(&mut *conn).await.ok().flatten();
     let row = sqlx::query("UPDATE devices SET status = CASE WHEN status = 'ACTIVE' THEN 'INACTIVE' ELSE 'ACTIVE' END WHERE id = ? RETURNING id, tenant_id, name, device_type, status, last_heartbeat")
         .bind(&device_id).fetch_optional(&mut *conn).await.map_err(|e| e.to_string())?
         .ok_or_else(|| "DEVICE_NOT_FOUND".to_string())?;
-    Ok(DeviceDto {
+    let dto = DeviceDto {
         id: row.try_get("id").map_err(|e| e.to_string())?, tenant_id: row.try_get("tenant_id").map_err(|e| e.to_string())?,
         name: row.try_get("name").map_err(|e| e.to_string())?, device_type: row.try_get("device_type").map_err(|e| e.to_string())?,
         status: row.try_get("status").map_err(|e| e.to_string())?, last_heartbeat: row.try_get("last_heartbeat").ok(),
-    })
+    };
+
+    let ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
+        crate::services::audit_service::category::SISTEM,
+        "system:device_status_changed", dto.id.clone(),
+        serde_json::json!({
+            "changes": { "status": { "old": previous_status, "new": dto.status } }
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+
+    Ok(dto)
 }
 
 #[tauri::command]
-pub async fn delete_device(caller_role: String, device_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
+pub async fn delete_device(caller_role: String, device_id: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
-    let result = sqlx::query("DELETE FROM devices WHERE id = ?").bind(&device_id).execute(&*pool).await.map_err(|e| e.to_string())?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let previous_name: Option<String> = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?")
+        .bind(&device_id).fetch_optional(&mut *conn).await.ok().flatten();
+    let result = sqlx::query("DELETE FROM devices WHERE id = ?").bind(&device_id).execute(&mut *conn).await.map_err(|e| e.to_string())?;
     if result.rows_affected() != 1 { return Err("DEVICE_NOT_FOUND".into()); }
+
+    let ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
+        crate::services::audit_service::category::SISTEM,
+        "system:device_deleted", device_id.clone(),
+        serde_json::json!({ "name": previous_name }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
     Ok(())
 }
 
@@ -432,11 +561,14 @@ pub async fn get_global_users(caller_role: String, pool: tauri::State<'_, DbPool
     Ok(users)
 }
 
+/// Platform denetim kayıtları. MASTER'e açıktır ama **hash dönmez**:
+/// zincirin bütünlüğü `verify_audit_ledger_integrity` ile ayrı komuttan sorulur,
+/// ham hash hiçbir arayüzden görünmez (AGENTS.md §3.2).
 #[tauri::command]
 pub async fn get_platform_audit_logs(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<serde_json::Value>, String> {
     crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT id, sequence, timestamp, actor_id, actor_role, action, resource_id, current_hash FROM audit_ledger ORDER BY sequence DESC LIMIT 200")
+    let rows = sqlx::query("SELECT id, sequence, timestamp, actor_id, actor_role, category, action, resource_id FROM audit_ledger ORDER BY sequence DESC LIMIT 200")
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
     let logs: Vec<serde_json::Value> = rows.into_iter().map(|r| serde_json::json!({
         "id": r.try_get::<String,_>("id").unwrap_or_default(),
@@ -444,39 +576,42 @@ pub async fn get_platform_audit_logs(caller_role: String, pool: tauri::State<'_,
         "timestamp": r.try_get::<String,_>("timestamp").unwrap_or_default(),
         "actorId": r.try_get::<String,_>("actor_id").unwrap_or_default(),
         "actorRole": r.try_get::<String,_>("actor_role").unwrap_or_default(),
+        "category": r.try_get::<String,_>("category").unwrap_or_default(),
         "action": r.try_get::<String,_>("action").unwrap_or_default(),
         "resourceId": r.try_get::<String,_>("resource_id").unwrap_or_default(),
-        "hash": r.try_get::<String,_>("current_hash").unwrap_or_default(),
+        "sealed": true,
     })).collect();
     Ok(logs)
 }
 
 /// Verify the exact canonical SHA-256 chain written by AuditService.  A bad
-/// row is reported to the caller; verification never mutates the ledger.
+/// row is reported to the caller; verification never mutates the ledger and
+/// never returns a hash value.
 #[tauri::command]
 pub async fn verify_audit_ledger_integrity(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<serde_json::Value, String> {
     crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT sequence, timestamp, actor_id, actor_role, action, resource_id, payload, previous_hash, current_hash FROM audit_ledger ORDER BY sequence ASC")
-        .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
-    let mut previous = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
-    for row in &rows {
-        let sequence: i64 = row.try_get("sequence").map_err(|e| e.to_string())?;
-        let timestamp: String = row.try_get("timestamp").map_err(|e| e.to_string())?;
-        let actor_id: String = row.try_get("actor_id").map_err(|e| e.to_string())?;
-        let actor_role: String = row.try_get("actor_role").map_err(|e| e.to_string())?;
-        let action: String = row.try_get("action").map_err(|e| e.to_string())?;
-        let resource_id: String = row.try_get("resource_id").map_err(|e| e.to_string())?;
-        let payload: String = row.try_get("payload").map_err(|e| e.to_string())?;
-        let stored_previous: String = row.try_get("previous_hash").map_err(|e| e.to_string())?;
-        let stored_hash: String = row.try_get("current_hash").map_err(|e| e.to_string())?;
-        let expected = AuditService::compute_audit_hash(sequence, &timestamp, &actor_id, &actor_role, &action, &resource_id, &payload, &previous);
-        if stored_previous != previous || stored_hash != expected {
-            return Ok(serde_json::json!({ "isValid": false, "verifiedCount": sequence - 1, "failedSequence": sequence, "timestamp": chrono::Utc::now().to_rfc3339(), "algorithm": "SHA-256" }));
-        }
-        previous = stored_hash;
+
+    let result = AuditService::verify_chain(&mut conn).await?;
+
+    if result.is_valid {
+        return Ok(serde_json::json!({
+            "isValid": true,
+            "verifiedCount": result.verified_count,
+            "hasEntries": result.tip_present,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "algorithm": "SHA-256",
+        }));
     }
-    Ok(serde_json::json!({ "isValid": true, "verifiedCount": rows.len(), "timestamp": chrono::Utc::now().to_rfc3339(), "algorithm": "SHA-256", "rootHash": previous }))
+
+    Ok(serde_json::json!({
+        "isValid": false,
+        "verifiedCount": result.verified_count,
+        "failedSequence": result.failed_sequence,
+        "reason": result.failure_reason,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "algorithm": "SHA-256",
+    }))
 }
 
 #[tauri::command]
@@ -487,8 +622,10 @@ pub async fn create_remote_session(
     target_role: String,
     mode: String,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<serde_json::Value, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let session_id = format!("sess_{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let ticket = format!("TICKET_{}", &uuid::Uuid::new_v4().to_string()[..12].to_uppercase());
 
@@ -500,17 +637,18 @@ pub async fn create_remote_session(
         "targetView": target_view,
         "targetRole": target_role,
         "mode": mode,
-        "ticket": ticket,
     });
-    let _ = AuditService::append_generic_audit_entry(
-        &mut *conn,
-        &format!("REMOTE_SESSION_ATTACH ({}/{})", target_view, target_role),
-        &format!("tenant:{}", tenant_id),
+    let ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(),
+        "usr_master".to_string(),
+        "MASTER".to_string(),
+        crate::services::audit_service::category::SISTEM,
+        format!("system:remote_session_attached ({}/{})", target_view, target_role),
+        format!("tenant:{}", tenant_id),
         payload,
-        "usr_master",
-        "MASTER",
-        &now_iso,
-    ).await;
+        now_iso,
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
 
     Ok(serde_json::json!({
         "success": true,
@@ -526,14 +664,16 @@ pub async fn execute_it_action(
     action_type: String,
     tenant_id: String,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<serde_json::Value, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let (message, ping_ms) = match action_type.as_str() {
         "DIAGNOSTIC_PING" => {
             let check: String = sqlx::query_scalar("PRAGMA integrity_check")
-                .fetch_one(&*pool)
-                .await
-                .unwrap_or_else(|_| "ok".to_string());
+            .fetch_one(&*pool)
+            .await
+            .unwrap_or_else(|_| "ok".to_string());
             (format!("Veritabanı bütünlüğü doğrulandı: {}. IPC bağlantısı stabil.", check), Some(4))
         }
         "FORCE_RESYNC" => {
@@ -555,15 +695,17 @@ pub async fn execute_it_action(
         "tenantId": tenant_id,
         "result": "SUCCESS",
     });
-    let _ = AuditService::append_generic_audit_entry(
-        &mut *conn,
-        &format!("IT_OPERATIONAL_COMMAND: {}", action_type),
-        &format!("tenant:{}", tenant_id),
+    let ctx = AuditContext::new(
+        PLATFORM_AUDIT_TENANT.to_string(),
+        "usr_master".to_string(),
+        "MASTER".to_string(),
+        crate::services::audit_service::category::SISTEM,
+        format!("system:it_operational_command:{}", action_type),
+        format!("tenant:{}", tenant_id),
         payload,
-        "usr_master",
-        "MASTER",
-        &now_iso,
-    ).await;
+        now_iso,
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
 
     Ok(serde_json::json!({
         "success": true,
@@ -572,6 +714,7 @@ pub async fn execute_it_action(
         "pingMs": ping_ms,
     }))
 }
+
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -630,18 +773,37 @@ pub async fn reset_user_password(
     caller_role: Option<String>,
     user_id: String,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<serde_json::Value, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let new_password = format!("Kasam-{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let hash = crate::auth::hash_credential(&new_password)?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let tenant_id: String = sqlx::query_scalar("SELECT tenant_id FROM users WHERE id = ?")
+        .bind(&user_id)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?
+        .unwrap_or_else(|| PLATFORM_AUDIT_TENANT.to_string());
+
     sqlx::query("UPDATE users SET credential_hash = ? WHERE id = ?")
         .bind(&hash)
         .bind(&user_id)
         .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
+
+    // Defterde parolanın kendisi ya da hash'i yazılmaz; yalnızca olay.
+    let ctx = AuditContext::new(
+        tenant_id, "usr_master".to_string(), "MASTER".to_string(),
+        crate::services::audit_service::category::GUVENLIK,
+        "security:password_reset_by_master", user_id.clone(),
+        serde_json::json!({ "targetUserId": user_id }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
 
     Ok(serde_json::json!({
         "user_id": user_id,
@@ -655,6 +817,7 @@ pub async fn change_user_pin(
     user_id: String,
     new_pin: String,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<serde_json::Value, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
     // PIN format denetimi: 4 ila 8 haneli sayısal olmalıdır
@@ -662,6 +825,7 @@ pub async fn change_user_pin(
         return Err("PIN 4-8 haneli sayısal olmalıdır.".into());
     }
     let hash = crate::user_credentials::hash_pin(&new_pin)?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
@@ -685,6 +849,17 @@ pub async fn change_user_pin(
     crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &new_pin, &user_id).await?;
     tx.commit().await.map_err(|e| e.to_string())?;
 
+    // Denetim kaydı transaction dışında yazılır: `append` bağlantı düzeyinde
+    // çalışır ve kendi satırını tek başına yazar. PIN'in kendisi kaydedilmez.
+    let ctx = AuditContext::new(
+        tenant_id, "usr_master".to_string(), "MASTER".to_string(),
+        crate::services::audit_service::category::GUVENLIK,
+        "security:pin_changed_by_master", user_id.clone(),
+        serde_json::json!({ "targetUserId": user_id, "method": "master_override" }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+
     Ok(serde_json::json!({
         "success": true,
         "new_pin": new_pin,
@@ -696,8 +871,10 @@ pub async fn regenerate_license_key(
     caller_role: Option<String>,
     user_id: String,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<serde_json::Value, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let new_key = format!("LIC-{}", uuid::Uuid::new_v4().to_string().to_uppercase());
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -718,6 +895,17 @@ pub async fn regenerate_license_key(
     .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
+
+    // Lisans anahtarı işletmenin yetkisini belirler: "Yetki" kategorisine yazılır.
+    // Anahtarın kendisi defterde tutulmaz.
+    let ctx = AuditContext::new(
+        tenant_id, "usr_master".to_string(), "MASTER".to_string(),
+        crate::services::audit_service::category::YETKI,
+        "platform:license_key_regenerated", user_id.clone(),
+        serde_json::json!({ "targetUserId": user_id }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
 
     Ok(serde_json::json!({
         "user_id": user_id,

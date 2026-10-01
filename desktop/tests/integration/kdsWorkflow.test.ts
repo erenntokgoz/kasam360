@@ -24,27 +24,15 @@ vi.mock('@tauri-apps/api/core', async (importOriginal) => {
 });
 import { KdsWorkflowManager } from '../../src/domain/usecases/kds/KdsWorkflowManager';
 import { Order } from '../../src/domain/usecases/kds/types';
-import {
-  ImmutableLedgerRepository,
-  InMemoryLedgerStorageDriver,
-} from '../../src/data/local/ledger/ImmutableLedgerRepository';
-import { LedgerPrincipal } from '../../src/domain/entities/ledger/types';
 import { TauriPOSRepository } from '../../src/data/ipc/TauriPOSRepository';
 import { PaymentPayload, StationQueueItem } from '../../src/presentation/types';
 
 describe('KDS Real-Time Display & Workflow Engine Integration Suite', () => {
   let manager: KdsWorkflowManager;
-  let ledgerDriver: InMemoryLedgerStorageDriver;
-  let ledgerRepo: ImmutableLedgerRepository;
-  const ownerPrincipal: LedgerPrincipal = { userId: 'owner_test', role: 'OWNER' };
-
 
   beforeEach(() => {
     KdsWorkflowManager.resetInstance();
-    ledgerDriver = new InMemoryLedgerStorageDriver();
-    ledgerRepo = new ImmutableLedgerRepository(ledgerDriver);
     manager = new KdsWorkflowManager({
-      ledgerRepository: ledgerRepo,
       initialOrders: [],
     });
   });
@@ -127,12 +115,14 @@ describe('KDS Real-Time Display & Workflow Engine Integration Suite', () => {
     expect(grillOrders[0].items).toHaveLength(1);
     expect(grillOrders[0].items[0].station).toBe('Grill');
 
-    // Verify ledger logged the enqueued event
-    await manager.waitForLedgerSync();
-    const ledgerEntries = await ledgerRepo.getEntries(undefined, ownerPrincipal);
-    expect(ledgerEntries.length).toBeGreaterThanOrEqual(1);
-    expect(ledgerEntries[0].action).toBe('kds:order_enqueued');
-    expect(ledgerEntries[0].resource_id).toBe('ord_test_kds_01');
+    // Denetim kaydı istemcide üretilmez; tek kaynak backend'dir. Bu yüzden
+    // KDS yöneticisinin ikinci bir ledger'a erişimi olmadığını doğrularız.
+    expect(
+      (manager as unknown as Record<string, unknown>).ledgerRepository,
+    ).toBeUndefined();
+    expect(
+      typeof (manager as unknown as Record<string, unknown>).waitForLedgerSync,
+    ).toBe('undefined');
   });
 
 
@@ -176,17 +166,9 @@ describe('KDS Real-Time Display & Workflow Engine Integration Suite', () => {
     const activeOrders = manager.getOrders();
     expect(activeOrders).toHaveLength(0);
 
-    // Ledger should record all 3 state transition events with cryptographic hash chain intact
-    await manager.waitForLedgerSync();
-    const ledgerEntries = await ledgerRepo.getEntries(undefined, ownerPrincipal);
-    expect(ledgerEntries.length).toBe(4); // 1 enqueued + 3 advances
-
-    expect(ledgerEntries[1].action).toBe('kds:ticket_status_advanced');
-    expect(ledgerEntries[2].action).toBe('kds:ticket_status_advanced');
-    expect(ledgerEntries[3].action).toBe('kds:ticket_status_advanced');
-
-    const integrity = await ledgerRepo.validateLedgerIntegrity(ownerPrincipal);
-    expect(integrity.isValid).toBe(true);
+    // Durum geçişleri istemcide hiçbir denetim yüzeyi bırakmaz: kayıt tek
+    // kaynaktan (backend) yazılır.
+    expect(Object.keys(manager)).not.toContain('ledgerQueue');
   });
 
   it('updates individual item preparation statuses and derives order status appropriately', async () => {

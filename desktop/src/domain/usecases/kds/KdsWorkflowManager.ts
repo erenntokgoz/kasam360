@@ -16,8 +16,6 @@ import {
   KdsStatusFilter,
   TicketStatusTransitionEvent,
 } from '../../../presentation/types';
-import { ImmutableLedgerRepository } from '../../../data/local/ledger/ImmutableLedgerRepository';
-import { LedgerPrincipal } from '../../entities/ledger/types';
 
 
 /**
@@ -132,8 +130,11 @@ const SEED_KDS_ORDERS: KdsOrder[] = [
 
 /**
  * Domain Kullanım Senaryosu: Gerçek Zamanlı Mutfak Ekranı Sistemi (KDS) ve Operasyonel İş Akışı Orkestratörü
- * Sipariş istasyonu yönlendirmesini, Kanban yaşam döngüsü durumlarını (Pending -> Preparing -> Ready),
- * yük dengelemeyi ve değiştirilemez denetim defteri / IPC olay senkronizasyonunu koordine eder.
+ * Sipariş istasyonu yönlendirmesini, Kanban yaşam döngüsü durumlarını (Pending -> Preparing -> Ready)
+ * ve yük dengelemeyi koordine eder.
+ *
+ * Denetim kaydı burada üretilmez: fiş ilerletmesi `kds_update_ticket_status`
+ * komutuyla backend'e gider ve tek gerçek defter oraya yazılır.
  */
 export class KdsWorkflowManager {
   private static instance: KdsWorkflowManager | null = null;
@@ -142,20 +143,16 @@ export class KdsWorkflowManager {
   private readonly router: StationRouter;
   private readonly loadBalancer: LoadBalancer;
   private subscribers: Set<() => void> = new Set();
-  private ledgerRepository: ImmutableLedgerRepository | null = null;
-  private readonly systemPrincipal: LedgerPrincipal = {
+  private readonly systemPrincipal = {
     userId: 'kds_workflow_manager',
     role: 'System',
   };
-  private ledgerQueue: Promise<void> = Promise.resolve();
 
   public constructor(options?: {
-    ledgerRepository?: ImmutableLedgerRepository;
     initialOrders?: KdsOrder[];
   }) {
     this.router = new StationRouter();
     this.loadBalancer = new LoadBalancer();
-    this.ledgerRepository = options?.ledgerRepository ?? null;
 
     const initial = options?.initialOrders ?? SEED_KDS_ORDERS;
     for (const ord of initial) {
@@ -172,10 +169,6 @@ export class KdsWorkflowManager {
 
   public static resetInstance(): void {
     KdsWorkflowManager.instance = null;
-  }
-
-  public setLedgerRepository(repo: ImmutableLedgerRepository): void {
-    this.ledgerRepository = repo;
   }
 
   /**
@@ -218,15 +211,6 @@ export class KdsWorkflowManager {
 
     this.orders.set(kdsOrder.id, kdsOrder);
     this.notifySubscribers();
-
-    // Asenkron defter ve IPC senkronizasyonunu tetikle
-    void this.syncOrderEvent('kds:order_enqueued', kdsOrder.id, {
-      orderNumber: kdsOrder.orderNumber,
-      tableNumber: kdsOrder.tableNumber,
-      itemCount: kdsOrder.items.length,
-      priority: kdsOrder.priority,
-      status: kdsOrder.status,
-    });
 
     return kdsOrder;
   }
@@ -305,13 +289,7 @@ export class KdsWorkflowManager {
       actorRole: this.systemPrincipal.role,
     };
 
-    await this.syncOrderEvent('kds:ticket_status_advanced', orderId, {
-      orderNumber: updatedOrder.orderNumber,
-      fromStatus: currentStatus,
-      toStatus: nextStatus,
-      timestamp: now,
-    });
-
+    // Defter kaydı tek yerden, IPC komutu üzerinden backend'de yazılır.
     if (isTauri()) {
       try {
         await invoke('kds_update_ticket_status', { payload: transitionEvent });
@@ -382,12 +360,6 @@ export class KdsWorkflowManager {
 
     this.orders.set(orderId, updatedOrder);
     this.notifySubscribers();
-
-    await this.syncOrderEvent('kds:item_status_updated', orderId, {
-      itemId,
-      itemStatus: nextStatus,
-      orderStatus: derivedStatus,
-    });
 
     return updatedOrder;
   }
@@ -474,37 +446,6 @@ export class KdsWorkflowManager {
         console.error('KdsWorkflowManager subscriber notification error:', err);
       }
     }
-  }
-
-  public async waitForLedgerSync(): Promise<void> {
-    await this.ledgerQueue;
-  }
-
-  private syncOrderEvent(
-    action: string,
-    resourceId: string,
-    payload: Record<string, unknown>
-  ): Promise<void> {
-    this.ledgerQueue = this.ledgerQueue.then(async () => {
-      if (this.ledgerRepository) {
-        try {
-          await this.ledgerRepository.append(
-            {
-              actor_id: this.systemPrincipal.userId,
-              actor_role: this.systemPrincipal.role,
-              action,
-              resource_id: resourceId,
-              payload,
-            },
-            this.systemPrincipal
-          );
-        } catch (err) {
-          console.warn(`Ledger append failed for ${action}:`, err);
-        }
-      }
-    });
-
-    return this.ledgerQueue;
   }
 }
 

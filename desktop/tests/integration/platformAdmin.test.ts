@@ -165,7 +165,7 @@ describe('Platform / Master Admin IPC & Module Integration Tests', () => {
 
   it('10. IT Diagnostic & Remote Session: Kriptografik bütünlük, uzaktan oturum ve IT müdahale araçlarını doğrular', async () => {
     // A. SHA-256 Kriptografik Bütünlük Doğrulama
-    const integrityRes = await tauriInvoke<{ isValid: boolean; verifiedCount: number; algorithm: string }>('verify_audit_ledger_integrity', {});
+    const integrityRes = await tauriInvoke<{ isValid: boolean; verifiedCount: number; algorithm: string; rootHash?: string }>('verify_audit_ledger_integrity', {});
     expect(integrityRes.isValid).toBe(true);
     expect(integrityRes.verifiedCount).toBeGreaterThanOrEqual(0);
     expect(integrityRes.algorithm).toContain('SHA-256');
@@ -204,6 +204,10 @@ describe('Platform / Master Admin IPC & Module Integration Tests', () => {
     expect(remoteLog).toBeDefined();
     expect(remoteLog.tenantId).toBe('tenant_sample_01');
     expect(itActionLog).toBeDefined();
-    expect(itActionLog.hash).toBeDefined();
+    // Kayıt mühürlüdür; ham hash istemciye hiç taşınmaz.
+    expect(itActionLog.sealed).toBe(true);
+    expect(itActionLog.hash).toBeUndefined();
+    expect(itActionLog.current_hash).toBeUndefined();
+    expect(integrityRes.rootHash).toBeUndefined();
   });
 });

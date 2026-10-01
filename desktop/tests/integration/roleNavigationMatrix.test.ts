@@ -21,7 +21,13 @@ import {
   type GrantTier,
 } from '../../src/core/security/navigationMatrix';
 
-/** SPEC §34'ün rol tablosu, test tarafına birebir kopyalanmış bağımsız kaynak. */
+/**
+ * SPEC §34'ün rol tablosu, test tarafına birebir kopyalanmış bağımsız kaynak.
+ *
+ * Tek istisna `auditRead`: işletme içi denetim defterini okuma satırıdır ve
+ * backend'deki `require_audit_read` kapısıyla (OWNER + MANAGER) birebir aynı
+ * kuralı taşır. MASTER'ın `auditRaw` satırı ayrıdır ve platform ekranına aittir.
+ */
 const SPEC_TABLE: Record<Capability, Partial<Record<Role, GrantTier>>> = {
   platformManage: { MASTER: 'FULL' },
   tenantManage: { MASTER: 'FULL' },
@@ -47,14 +53,15 @@ const SPEC_TABLE: Record<Capability, Partial<Record<Role, GrantTier>>> = {
     KITCHEN: 'FULL',
   },
   whatsappBot: { OWNER: 'FULL' },
+  auditRead: { OWNER: 'FULL', MANAGER: 'PARTIAL' },
   auditRaw: { MASTER: 'FULL' },
 };
 
 const sorted = (values: readonly string[]): string[] => [...values].sort();
 
 describe('SPEC §34 — kaynak gerçeklik', () => {
-  it('matristeki özellik sayısı SPEC ile aynı (18 satır)', () => {
-    expect(Object.keys(CAPABILITIES)).toHaveLength(18);
+  it('matristeki özellik sayısı 18 SPEC satırı + denetim okuma satırı', () => {
+    expect(Object.keys(CAPABILITIES)).toHaveLength(19);
   });
 
   it('her özellik satırı SPEC tablosuyla birebir aynı', () => {

@@ -59,6 +59,7 @@ export const CAPABILITIES = {
   kitchenPrepare: 'Mutfak Hazırlık',
   issueReport: 'Sorun Bildir',
   whatsappBot: 'WhatsApp Bot',
+  auditRead: 'Denetim Kayıtları',
   auditRaw: 'Audit Log (ham)',
 } as const;
 
@@ -110,6 +111,11 @@ export const CAPABILITY_MATRIX: Readonly<Record<Capability, Partial<Record<Role,
   },
 
   whatsappBot: { OWNER: 'FULL' },
+
+  // Denetim defteri okuma: işletme sahibi tam, müdür kısmi. Backend'deki
+  // `require_audit_read` kapısıyla birebir aynı satırdır; iki taraf ayrışırsa
+  // ekran bir kapı gösterirken komut reddediyor olur.
+  auditRead: { OWNER: 'FULL', MANAGER: 'PARTIAL' },
 
   auditRaw: { MASTER: 'FULL' },
 };

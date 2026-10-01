@@ -38,6 +38,18 @@ CREATE TABLE IF NOT EXISTS snapshots (
 -- ============================================================================
 
 -- Audit Ledger Table Definition
+--
+-- `timestamp` hashed kanonik girdinin parçasıdır ve RFC3339 kalır; biçimi
+-- değiştirmek mevcut tüm satırların doğrulamasını kırardı (hash_version = 1
+-- kanonik formu dondurulmuştur).
+--
+-- `created_at` raporların ve vardiya karşılaştırmalarının okuduğu sütundur.
+-- `shifts.opened_at` ve `cash_movements.created_at` ile aynı biçimde
+-- SQLite'in yerel UTC gösterimini kullanır; iki biçimin bir arada yaşaması
+-- metin karşılaştırmalarını sessizce bozuyordu.
+--
+-- `category` spec'te tanımlanan 8 ana kategoriden biridir ve veritabanı
+-- seviyesinde doğrulanır. `hash_version` mevcut kanonik formu (1) dondurur.
 CREATE TABLE IF NOT EXISTS audit_ledger (
     id TEXT PRIMARY KEY NOT NULL,
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
@@ -45,13 +57,15 @@ CREATE TABLE IF NOT EXISTS audit_ledger (
     timestamp TEXT NOT NULL,
     actor_id TEXT NOT NULL,
     actor_role TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'SISTEM',
     action TEXT NOT NULL,
     resource_id TEXT NOT NULL,
     payload TEXT NOT NULL,
     previous_hash TEXT NOT NULL,
     current_hash TEXT NOT NULL UNIQUE,
+    hash_version INTEGER NOT NULL DEFAULT 1,
     metadata TEXT,
-    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Performance & Integrity Indexes
@@ -62,6 +76,11 @@ CREATE INDEX IF NOT EXISTS idx_audit_ledger_timestamp ON audit_ledger(timestamp)
 CREATE INDEX IF NOT EXISTS idx_audit_ledger_actor_id ON audit_ledger(actor_id);
 CREATE INDEX IF NOT EXISTS idx_audit_ledger_action ON audit_ledger(action);
 CREATE INDEX IF NOT EXISTS idx_audit_ledger_resource_id ON audit_ledger(resource_id);
+-- Çok tenantlı okuma yolları her sorguyu tenant'a göre daraltır.
+CREATE INDEX IF NOT EXISTS idx_audit_ledger_tenant_sequence ON audit_ledger(tenant_id, sequence ASC);
+CREATE INDEX IF NOT EXISTS idx_audit_ledger_tenant_action ON audit_ledger(tenant_id, action);
+CREATE INDEX IF NOT EXISTS idx_audit_ledger_tenant_category ON audit_ledger(tenant_id, category);
+CREATE INDEX IF NOT EXISTS idx_audit_ledger_tenant_created ON audit_ledger(tenant_id, created_at);
 
 -- Tamper-Proof Triggers (Append-Only Enforcement)
 CREATE TRIGGER IF NOT EXISTS trg_audit_ledger_prevent_update
@@ -79,7 +98,12 @@ BEGIN
 END;
 
 -- Integrity & Sequence Validation Trigger
-CREATE TRIGGER IF NOT EXISTS trg_audit_ledger_validate_insert
+--
+-- `CREATE TRIGGER IF NOT EXISTS` eski tanımı yükseltmediği için önce düşürülür:
+-- aksi halde zincir doğrulaması hiçbir zaman yüklenmezdi.
+DROP TRIGGER IF EXISTS trg_audit_ledger_validate_insert;
+
+CREATE TRIGGER trg_audit_ledger_validate_insert
 BEFORE INSERT ON audit_ledger
 FOR EACH ROW
 BEGIN
@@ -91,6 +115,20 @@ BEGIN
                 RAISE(ABORT, 'INTEGRITY VIOLATION: current_hash must be a 64-character SHA-256 hex string.')
             WHEN length(NEW.previous_hash) != 64 THEN
                 RAISE(ABORT, 'INTEGRITY VIOLATION: previous_hash must be a 64-character SHA-256 hex string.')
+            WHEN NEW.hash_version < 1 THEN
+                RAISE(ABORT, 'INTEGRITY VIOLATION: hash_version must be a positive integer.')
+            WHEN NEW.category NOT IN ('SIPARIS_MASA', 'ODEME', 'FINANS', 'PERSONEL', 'MENU', 'YETKI', 'SISTEM', 'GUVENLIK') THEN
+                RAISE(ABORT, 'INTEGRITY VIOLATION: Unknown audit category.')
+            -- İlk kayıt sıfır hash'le, sonraki kayıtlar doğrudan bir öncekinin
+            -- hash'iyle zincirlenmek zorunda. İki eşzamanlı yazıcı bu kontrol
+            -- sayesinde zinciri forksuz tutar.
+            WHEN NOT EXISTS (SELECT 1 FROM audit_ledger) AND NEW.previous_hash != '0000000000000000000000000000000000000000000000000000000000000000' THEN
+                RAISE(ABORT, 'INTEGRITY VIOLATION: The first entry must link to the zero hash.')
+            WHEN EXISTS (SELECT 1 FROM audit_ledger)
+                 AND NEW.previous_hash != (SELECT current_hash FROM audit_ledger ORDER BY sequence DESC LIMIT 1) THEN
+                RAISE(ABORT, 'INTEGRITY VIOLATION: previous_hash does not match the current ledger tip.')
+            WHEN NEW.sequence != (SELECT COALESCE(MAX(sequence), 0) + 1 FROM audit_ledger) THEN
+                RAISE(ABORT, 'INTEGRITY VIOLATION: sequence must continue from the current tip.')
         END;
 END;
 

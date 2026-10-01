@@ -87,18 +87,54 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
 
   it('10. Patron Portalı tüm kritik sekmeleri (Onaylar, Personel, Sistem Logları, Stok & Reçete) destekler', async () => {
     const { renderToString } = await import('react-dom/server');
+    const { buildOwnerNavItems } = await import(
+      '../../src/presentation/components/owner/OwnerDashboardContainer'
+    );
+    const { hasCapability } = await import('../../src/core/security/navigationMatrix');
+
+    // Sunucu render'ı zustand'ın başlangıç durumunu gördüğü için sekme listesi
+    // yetki fonksiyonu üzerinden doğrudan doğrulanır.
+    const labels = buildOwnerNavItems((capability) => hasCapability('OWNER', capability)).map(
+      (item) => item.label,
+    );
+
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        'Genel Bakış',
+        'Satışlar',
+        'Menü',
+        'Stok & Reçete',
+        'Masa Yönetimi',
+        'Operasyonel Raporlar',
+        'Onaylar',
+        'Personel',
+        'Sistem Logları',
+      ]),
+    );
+
+    // Bileşen yine de render edilebilir olmalı.
     const html = renderToString(React.createElement(OwnerDashboardContainer));
     expect(html).toBeDefined();
-    // Segmented bar sekme etiketleri
-    expect(html).toContain('Genel Bakış');
-    expect(html).toContain('Satışlar');
-    expect(html).toContain('Menü');
-    expect(html).toContain('Stok &amp; Reçete');
-    expect(html).toContain('Masa Yönetimi');
-    expect(html).toContain('Operasyonel Raporlar');
-    expect(html).toContain('Onaylar');
-    expect(html).toContain('Personel');
-    expect(html).toContain('Sistem Logları');
+  });
+
+  it('10b. Denetim kayıtları sekmesi yalnızca sahip ve müdüre listelenir', async () => {
+    const { buildOwnerNavItems } = await import(
+      '../../src/presentation/components/owner/OwnerDashboardContainer'
+    );
+    const { hasCapability } = await import('../../src/core/security/navigationMatrix');
+
+    const hasLogsTab = (role: 'OWNER' | 'MANAGER' | 'CASHIER' | 'WAITER' | 'KITCHEN' | 'MASTER') =>
+      buildOwnerNavItems((capability) => hasCapability(role, capability)).some(
+        (item) => item.id === 'logs',
+      );
+
+    expect(hasLogsTab('OWNER')).toBe(true);
+    expect(hasLogsTab('MANAGER')).toBe(true);
+    // Kasiyer, garson, mutfak ve MASTER'ın işletme defterinde sekmesi yoktur.
+    expect(hasLogsTab('CASHIER')).toBe(false);
+    expect(hasLogsTab('WAITER')).toBe(false);
+    expect(hasLogsTab('KITCHEN')).toBe(false);
+    expect(hasLogsTab('MASTER')).toBe(false);
   });
 
   it('11. Stok eksiltme (fire) işlemi Patron PIN doğrulaması gerektirir', async () => {
@@ -133,6 +169,7 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
 
     // Doğrudan stok ekleme
     await tauriInvoke('adjust_stock', {
+      caller_role: 'OWNER',
       tenant_id: 'DEFAULT_TENANT',
       item_id: firstItem.id,
       quantity_change: 5,
@@ -144,6 +181,33 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
     const updatedInventory = await tauriInvoke<any[]>('get_inventory', { tenant_id: 'DEFAULT_TENANT' });
     const updatedItem = updatedInventory.find(i => i.id === firstItem.id);
     expect(updatedItem?.current_stock).toBe(initialStock + 5);
+  });
+
+  it('12b. Stok düzenleme yetkisiz rolde ve rolsuz çağrıda reddedilir', async () => {
+    const { tauriInvoke } = await import('../../src/data/ipc/tauriInvoke');
+    const inventory = await tauriInvoke<any[]>('get_inventory', { tenant_id: 'DEFAULT_TENANT' });
+    const firstItem = inventory[0];
+
+    // Rol alanı hiç gönderilmezse kapı fail-closed reddetmeli.
+    await expect(
+      tauriInvoke('adjust_stock', {
+        tenant_id: 'DEFAULT_TENANT',
+        item_id: firstItem.id,
+        quantity_change: 1,
+        movement_type: 'IN',
+      }),
+    ).rejects.toThrow(/UNAUTHORIZED/);
+
+    // Kasiyer stok düzenleyemez.
+    await expect(
+      tauriInvoke('adjust_stock', {
+        caller_role: 'CASHIER',
+        tenant_id: 'DEFAULT_TENANT',
+        item_id: firstItem.id,
+        quantity_change: 1,
+        movement_type: 'IN',
+      }),
+    ).rejects.toThrow(/UNAUTHORIZED/);
   });
 
   it('13. Menü ürünlerinde tek tıkla ON/OFF satış durumu geçişi çalışır', async () => {

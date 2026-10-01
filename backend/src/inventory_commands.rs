@@ -1,6 +1,6 @@
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
+use sqlx::{Acquire, Row};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -55,15 +55,38 @@ pub async fn get_inventory(tenant_id: String, pool: tauri::State<'_, DbPool>) ->
 
 #[tauri::command]
 pub async fn adjust_stock(
+    caller_role: Option<String>,
     tenant_id: String, 
     item_id: String, 
     quantity_change: f64, 
     movement_type: String,
     actor_id: String,
     reason: Option<String>,
-    pool: tauri::State<'_, DbPool>
+    pool: tauri::State<'_, DbPool>,
+    app_state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    // Stok giriş/çıkış parasal değer taşır ve fire kayıtları denetim defterinde
+    // tutulur. Önceden hiç rol kapısı yoktu: kasiyer de fire silebiliyordu.
+    crate::rbac::require_any_present(caller_role.as_deref(), &[
+        crate::rbac::Role::Owner,
+        crate::rbac::Role::Manager,
+    ])?;
+
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(app_state.audit_mutex.lock().await);
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+
+    let previous_stock: f64 = sqlx::query_scalar(
+        "SELECT current_stock FROM inventory_items WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(&item_id)
+    .bind(&tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?
+    .unwrap_or(0.0);
+
+    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
 
     let movement_id = Uuid::new_v4().to_string();
 
@@ -92,9 +115,104 @@ pub async fn adjust_stock(
     .await
     .map_err(|e| e.to_string())?;
 
+    // Stok hareketi menü/stok tarafındaki kayıttır: kategori listesinde ayrı bir
+    // "STOK" kategorisi yoktur, "Menü & Stok" kullanılır.
+    let action = if quantity_change < 0.0 {
+        "stock:movement_out"
+    } else {
+        "stock:movement_in"
+    };
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id.clone(),
+        actor_id.clone(),
+        caller_role.clone().unwrap_or_default(),
+        crate::services::audit_service::category::MENU,
+        action,
+        item_id.clone(),
+        serde_json::json!({
+            "movementId": movement_id,
+            "movementType": movement_type,
+            "quantity": quantity_change,
+            "previousStock": previous_stock,
+            "newStock": previous_stock + quantity_change,
+            "reason": reason,
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+
     tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn create_inventory_item(
+    caller_role: Option<String>,
+    tenant_id: String, 
+    name: String, 
+    sku: Option<String>, 
+    initial_stock: f64, 
+    unit: String, 
+    min_stock_alert: Option<f64>, 
+    pool: tauri::State<'_, DbPool>,
+    app_state: tauri::State<'_, crate::AppState>,
+) -> Result<InventoryItemDto, String> {
+    crate::rbac::require_any_present(caller_role.as_deref(), &[
+        crate::rbac::Role::Owner,
+        crate::rbac::Role::Manager,
+    ])?;
+
+    let audit_lock =
+        crate::services::audit_service::AuditLock::new(app_state.audit_mutex.lock().await);
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let item_id = Uuid::new_v4().to_string();
+    let actor_id = caller_role.clone().unwrap_or_default();
+
+    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+
+    sqlx::query(
+        "INSERT INTO inventory_items (id, tenant_id, name, sku, current_stock, unit, min_stock_alert)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(&item_id)
+    .bind(&tenant_id)
+    .bind(&name)
+    .bind(&sku)
+    .bind(initial_stock)
+    .bind(&unit)
+    .bind(&min_stock_alert)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id.clone(),
+        actor_id,
+        caller_role.clone().unwrap_or_default(),
+        crate::services::audit_service::category::MENU,
+        "stock:created",
+        item_id.clone(),
+        serde_json::json!({
+            "name": name,
+            "sku": sku,
+            "initialStock": initial_stock,
+            "unit": unit,
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    Ok(InventoryItemDto {
+        id: item_id,
+        name,
+        sku,
+        current_stock: initial_stock,
+        unit,
+        min_stock_alert,
+    })
 }
 
 #[tauri::command]
@@ -126,40 +244,3 @@ pub async fn get_low_stock_alerts(tenant_id: String, pool: tauri::State<'_, DbPo
     Ok(items)
 }
 
-#[tauri::command]
-pub async fn create_inventory_item(
-    tenant_id: String,
-    name: String,
-    sku: Option<String>,
-    initial_stock: f64,
-    unit: String,
-    min_stock_alert: Option<f64>,
-    pool: tauri::State<'_, DbPool>
-) -> Result<InventoryItemDto, String> {
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let item_id = Uuid::new_v4().to_string();
-
-    sqlx::query(
-        "INSERT INTO inventory_items (id, tenant_id, name, sku, current_stock, unit, min_stock_alert)
-         VALUES (?, ?, ?, ?, ?, ?, ?)"
-    )
-    .bind(&item_id)
-    .bind(&tenant_id)
-    .bind(&name)
-    .bind(&sku)
-    .bind(initial_stock)
-    .bind(&unit)
-    .bind(min_stock_alert)
-    .execute(&mut *conn)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    Ok(InventoryItemDto {
-        id: item_id,
-        name,
-        sku,
-        current_stock: initial_stock,
-        unit,
-        min_stock_alert,
-    })
-}

@@ -8,7 +8,7 @@ import {
   SecurityPrincipal,
 } from '../../../core/security/roles.types';
 import { AuthorizationGuard, SecurityAccessDeniedError } from './AuthorizationGuard';
-import { calculateSha256, canonicalJsonStringify } from '../../entities/ledger/HashChainBuilder';
+import { calculateSha256, canonicalJsonStringify } from '../../../core/security/digest';
 
 export { calculateSha256 };
 

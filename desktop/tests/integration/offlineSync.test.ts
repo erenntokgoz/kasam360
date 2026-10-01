@@ -36,7 +36,7 @@ import {
 import {
   calculateSha256,
   canonicalJsonStringify,
-} from '../../src/domain/entities/ledger/HashChainBuilder';
+} from '../../src/core/security/digest';
 import {
   EDocumentPayload,
   EDocumentSendResult,

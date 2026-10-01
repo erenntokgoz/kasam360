@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { tauriInvoke as invoke } from '../../../data/ipc/tauriInvoke';
 import { useAuthStore } from '../../store/useAuthStore';
+import { usePermission } from '../../hooks/usePermission';
+import type { Capability } from '../../../core/security/navigationMatrix';
 import { MoneyDisplay } from '../common/MoneyDisplay';
 import { 
   BarChart3, 
@@ -31,16 +33,62 @@ import { TablesOrdersPanel } from '../management/ui/TablesOrdersPanel';
 import { ReportsPanel } from '../management/ui/ReportsPanel';
 
 // İşletme Sahibi (Patron) Portalı: Onaylar, Personel, Sistem Logları, Stok & Reçete ve Operasyonel Masa/Rapor Panelleri
+
+/** Patron portalının sekme kimlikleri. */
+export type OwnerTabId =
+  | 'dashboard'
+  | 'sales'
+  | 'tables'
+  | 'reports'
+  | 'menu'
+  | 'inventory'
+  | 'approvals'
+  | 'staff'
+  | 'logs'
+  | 'modifiers'
+  | 'settings';
+
+export interface OwnerNavItem {
+  id: OwnerTabId;
+  label: string;
+  icon: React.ReactNode;
+}
+
+/**
+ * Patron portalı sekmeleri, yetki satırına göre.
+ *
+ * Denetim kayıtları `auditRead` yetkisi olmadan listeye hiç girmez. Fonksiyon
+ * bilerek saf ve dışa açıktır: kapıyı render'a bağımlı olmadan, oturum durumu
+ * verilerek test edebilmek için (sunucu render'ı zustand'ın başlangıç durumunu
+ * görür) liste kuralı doğrudan doğrulanabilir.
+ */
+export function buildOwnerNavItems(can: (capability: Capability) => boolean): OwnerNavItem[] {
+  return [
+    { id: 'dashboard', label: 'Genel Bakış', icon: <BarChart3 size={15} /> },
+    { id: 'sales', label: 'Satışlar', icon: <TrendingUp size={15} /> },
+    { id: 'tables', label: 'Masa Yönetimi', icon: <LayoutGrid size={15} /> },
+    { id: 'reports', label: 'Operasyonel Raporlar', icon: <FileBarChart size={15} /> },
+    { id: 'menu', label: 'Menü', icon: <Utensils size={15} /> },
+    { id: 'inventory', label: 'Stok & Reçete', icon: <Package size={15} /> },
+    { id: 'approvals', label: 'Onaylar', icon: <ShieldCheck size={15} /> },
+    { id: 'staff', label: 'Personel', icon: <Users size={15} /> },
+    ...(can('auditRead')
+      ? [{ id: 'logs' as OwnerTabId, label: 'Sistem Logları', icon: <FileText size={15} /> }]
+      : []),
+    { id: 'modifiers', label: 'Modifier', icon: <Wrench size={15} /> },
+    { id: 'settings', label: 'Şubeler', icon: <Settings size={15} /> },
+  ];
+}
+
 export function OwnerDashboardContainer() {
   const user = useAuthStore(state => state.user);
+  const { can } = usePermission();
   const [summary, setSummary] = useState<AnalyticsDashboardDataDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   // Patron Portalı Sekmeleri: İşletme analitiği ve yönetimsel operasyonel sekmeler
-  const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'sales' | 'tables' | 'reports' | 'menu' | 'inventory' | 'approvals' | 'staff' | 'logs' | 'modifiers' | 'settings'
-  >('dashboard');
+  const [activeTab, setActiveTab] = useState<OwnerTabId>('dashboard');
 
   // Dashboard özet istatistiklerini yükle
   const fetchSummary = useCallback(async () => {
@@ -70,19 +118,7 @@ export function OwnerDashboardContainer() {
   }, [fetchSummary]);
 
   // Patrona özel menü navigasyon kalemleri (İşletme ve operasyonel yönetim yetenekleri dahil)
-  const navItems = [
-    { id: 'dashboard', label: 'Genel Bakış', icon: <BarChart3 size={15} /> },
-    { id: 'sales', label: 'Satışlar', icon: <TrendingUp size={15} /> },
-    { id: 'tables', label: 'Masa Yönetimi', icon: <LayoutGrid size={15} /> },
-    { id: 'reports', label: 'Operasyonel Raporlar', icon: <FileBarChart size={15} /> },
-    { id: 'menu', label: 'Menü', icon: <Utensils size={15} /> },
-    { id: 'inventory', label: 'Stok & Reçete', icon: <Package size={15} /> },
-    { id: 'approvals', label: 'Onaylar', icon: <ShieldCheck size={15} /> },
-    { id: 'staff', label: 'Personel', icon: <Users size={15} /> },
-    { id: 'logs', label: 'Sistem Logları', icon: <FileText size={15} /> },
-    { id: 'modifiers', label: 'Modifier', icon: <Wrench size={15} /> },
-    { id: 'settings', label: 'Şubeler', icon: <Settings size={15} /> },
-  ];
+  const navItems = buildOwnerNavItems(can);
 
   return (
     // Renksiz şeffaf cam ve Apple HIG renk skalası
@@ -102,7 +138,7 @@ export function OwnerDashboardContainer() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold shrink-0 transition-all duration-200 cursor-pointer ${
                     isActive
                       ? 'dark:bg-white/15 bg-white dark:text-white text-[#007AFF] shadow-sm'

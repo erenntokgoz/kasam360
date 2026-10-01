@@ -69,6 +69,12 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // eklenir, yoksa migration'ın `SELECT ... pin_hash` ifadesi patlar.
     let _ = sqlx::raw_sql("ALTER TABLE platform_admins ADD COLUMN pin_hash TEXT;").execute(&pool).await;
 
+    // Denetim defteri kategori ve hash sürümü sütunları. Sütunlar hash kanonik
+    // formunun parçası değildir (hash_version = 1 dondurulmuştur), bu yüzden mevcut
+    // satırların doğrulaması bozulmaz; eski satırlar SISTEM kategorisiyle işaretlenir.
+    let _ = sqlx::raw_sql("ALTER TABLE audit_ledger ADD COLUMN category TEXT NOT NULL DEFAULT 'SISTEM';").execute(&pool).await;
+    let _ = sqlx::raw_sql("ALTER TABLE audit_ledger ADD COLUMN hash_version INTEGER NOT NULL DEFAULT 1;").execute(&pool).await;
+
     // Tenants tablosuna şirket/vergi/iletişim sütunlarını güvenle ekle (idempotent)
     let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN contact_person TEXT;").execute(&pool).await;
     let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN email TEXT;").execute(&pool).await;

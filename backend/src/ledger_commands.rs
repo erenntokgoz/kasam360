@@ -813,8 +813,9 @@ pub async fn create_expense(
 
     // Cari adını sorgula
     let dir_name = if let Some(ref did) = payload.directory_id {
-        sqlx::query_scalar("SELECT name FROM directories WHERE id = ?")
+        sqlx::query_scalar("SELECT name FROM directories WHERE id = ? AND tenant_id = ?")
             .bind(did)
+            .bind(&tid)
             .fetch_optional(&mut *tx)
             .await
             .unwrap_or(None)

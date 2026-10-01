@@ -25,7 +25,8 @@ export interface AuditLogDto {
   actorRole: string;
   action: string;
   resourceId: string;
-  hash: string;
+  // Ham hash istemciye hiç taşınmaz; yalnızca mühür durumu görünür (AGENTS.md §3.2).
+  sealed: boolean;
   tenantId?: string;
   tenantName?: string;
   severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
@@ -523,9 +524,17 @@ export function LogDetailModal({ log, isOpen, onClose }: LogDetailModalProps) {
                 </div>
               </div>
 
-              <div className="dark:bg-white/[0.04] bg-black/[0.02] p-3.5 rounded-2xl border dark:border-white/10 border-black/[0.08]">
-                <span className="dark:text-zinc-400 text-zinc-500 block mb-1">Kriptografik SHA-256 Hash</span>
-                <span className="font-mono text-[11px] text-emerald-500 dark:text-emerald-400 break-all select-all">{log.hash}</span>
+              <div className="dark:bg-white/[0.04] bg-black/[0.02] p-3.5 rounded-2xl border dark:border-white/10 border-black/[0.08] flex items-center justify-between">
+                <span className="dark:text-zinc-400 text-zinc-500">Zincir Bütünlüğü</span>
+                {log.sealed ? (
+                  <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    Mühürlü
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    Doğrulanmadı
+                  </span>
+                )}
               </div>
 
               {log.userAgent && (

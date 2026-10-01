@@ -65,7 +65,8 @@ interface AuditLog {
   actorRole: string;
   action: string;
   resourceId: string;
-  hash: string;
+  // Ham hash istemciye taşınmaz; bütünlük yalnızca `sealed` mührüyle temsil edilir.
+  sealed: boolean;
 }
 
 /**

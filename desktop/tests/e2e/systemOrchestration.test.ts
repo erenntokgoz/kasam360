@@ -11,14 +11,10 @@ import { StationRouter } from '../../src/domain/usecases/kds/StationRouter';
 import { Order, OrderItem } from '../../src/domain/usecases/kds/types';
 import { FifoCostCalculator } from '../../src/domain/usecases/inventory/FifoCostCalculator';
 import { InventoryBatch } from '../../src/domain/usecases/inventory/types';
-import {
-  ImmutableLedgerRepository,
-  InMemoryLedgerStorageDriver,
-  LedgerImmutabilityViolationError,
-  LedgerRoleAccessDeniedError,
-} from '../../src/data/local/ledger/ImmutableLedgerRepository';
-import { HashChainBuilder } from '../../src/domain/entities/ledger/HashChainBuilder';
-import { LedgerPrincipal } from '../../src/domain/entities/ledger/types';
+import { KdsWorkflowManager as ManagerSurface } from '../../src/domain/usecases/kds/KdsWorkflowManager';
+import { buildAuditCsv } from '../../src/core/audit/auditCatalog';
+import { hasCapability } from '../../src/core/security/navigationMatrix';
+import { tauriInvoke } from '../../src/data/ipc/tauriInvoke';
 import {
   AuthorizationGuard,
   DataBoundaryViolationError,
@@ -212,101 +208,42 @@ describe('Full-Stack System Orchestration E2E Test Suite', () => {
     ).toBe(initialValuation.totalValuation);
 
     // -----------------------------------------------------------------------
-    // STEP 4: IMMUTABLE LEDGER AUDIT LOGGING & SHA-256 HASH CHAINING
+    // STEP 4: TEK DENETİM KAYNAĞI (istemcide zincir yok)
     // -----------------------------------------------------------------------
-    const ledgerDriver = new InMemoryLedgerStorageDriver();
-    const ledgerRepo = new ImmutableLedgerRepository(ledgerDriver);
-
-    const systemPrincipal: LedgerPrincipal = {
-      userId: 'srv_pos_system_01',
-      role: 'System',
+    // Denetim defteri ve SHA-256 zinciri yalnızca backend'de kurulur. Uçtan uca
+    // akışın istemci tarafındaki sözleşmesi şudur: kayıtlar mühürlü gelir, ham
+    // hash hiçbir katmanda bulunmaz. Aşağıdaki kontrol, ikinci bir zincirin
+    // yeniden doğmamasını güvenceye alır.
+    ManagerSurface.resetInstance();
+    const managerSurface = new ManagerSurface({ initialOrders: [] });
+    const clientSurface = {
+      ledgerRepository: (
+        managerSurface as unknown as Record<string, unknown>
+      ).ledgerRepository,
+      waitForLedgerSync: (
+        managerSurface as unknown as Record<string, unknown>
+      ).waitForLedgerSync,
     };
+    expect(clientSurface.ledgerRepository).toBeUndefined();
+    expect(clientSurface.waitForLedgerSync).toBeUndefined();
 
-    // 1. Log ORDER_CREATED
-    const entry1 = await ledgerRepo.append(
-      {
-        actor_id: systemPrincipal.userId,
-        actor_role: systemPrincipal.role,
-        action: 'order:created',
-        resource_id: customerOrder.id,
-        payload: {
-          orderNumber: customerOrder.orderNumber,
-          tableNumber: customerOrder.tableNumber,
-          itemCount: customerOrder.items.length,
-        },
-      },
-      systemPrincipal
+    const platformLogs = await tauriInvoke<Array<Record<string, unknown>>>(
+      'get_platform_audit_logs',
+      { callerRole: 'MASTER' }
     );
+    for (const row of platformLogs) {
+      expect(row).not.toHaveProperty('hash');
+      expect(row).not.toHaveProperty('current_hash');
+      expect(row).not.toHaveProperty('previous_hash');
+    }
 
-    // 2. Log KDS_ROUTED
-    const entry2 = await ledgerRepo.append(
-      {
-        actor_id: systemPrincipal.userId,
-        actor_role: systemPrincipal.role,
-        action: 'kds:station_routed',
-        resource_id: customerOrder.id,
-        payload: {
-          stations: ['Grill', 'Fryer', 'Pizza', 'Bar', 'Prep'],
-          itemCount: customerOrder.items.length,
-        },
-      },
-      systemPrincipal
+    const verification = await tauriInvoke<Record<string, unknown>>(
+      'verify_audit_ledger_integrity',
+      { callerRole: 'MASTER' }
     );
-
-    // 3. Log FIFO_INVENTORY_DEDUCTED
-    const entry3 = await ledgerRepo.append(
-      {
-        actor_id: systemPrincipal.userId,
-        actor_role: systemPrincipal.role,
-        action: 'inventory:fifo_deducted',
-        resource_id: customerOrder.id,
-        payload: {
-          totalCogs: totalOrderCogs,
-          recipesConsumed: ['Cheeseburger', 'Crispy Fries', 'Margherita Pizza'],
-        },
-      },
-      systemPrincipal
-    );
-
-    // 4. Log PAYMENT_COMPLETED
-    const entry4 = await ledgerRepo.append(
-      {
-        actor_id: systemPrincipal.userId,
-        actor_role: systemPrincipal.role,
-        action: 'payment:settled',
-        resource_id: customerOrder.id,
-        payload: {
-          settledAmount: 85.5,
-          method: 'CREDIT_CARD',
-          authCode: 'AUTH-998877',
-        },
-      },
-      systemPrincipal
-    );
-
-    // Assert sequence increments monotonically
-    expect(entry1.sequence).toBe(1);
-    expect(entry2.sequence).toBe(2);
-    expect(entry3.sequence).toBe(3);
-    expect(entry4.sequence).toBe(4);
-
-    // Assert cryptographic hash chain links
-    expect(entry1.previous_hash).toBe(HashChainBuilder.GENESIS_HASH);
-    expect(entry2.previous_hash).toBe(entry1.current_hash);
-    expect(entry3.previous_hash).toBe(entry2.current_hash);
-    expect(entry4.previous_hash).toBe(entry3.current_hash);
-
-    // Verify cryptographic integrity of full chain
-    const integrityResult = await ledgerRepo.validateLedgerIntegrity(systemPrincipal);
-    expect(integrityResult.isValid).toBe(true);
-    expect(integrityResult.totalEntries).toBe(4);
-    expect(integrityResult.verifiedEntries).toBe(4);
-    expect(integrityResult.errors).toHaveLength(0);
-
-    // Assert immutability mandate violations throw
-    expect(() => ledgerRepo.update()).toThrow(LedgerImmutabilityViolationError);
-    expect(() => ledgerRepo.delete()).toThrow(LedgerImmutabilityViolationError);
-    expect(() => ledgerRepo.clear()).toThrow(LedgerImmutabilityViolationError);
+    expect(verification.isValid).toBe(true);
+    expect(verification).not.toHaveProperty('rootHash');
+    expect(verification).not.toHaveProperty('root_hash');
 
     // -----------------------------------------------------------------------
     // STEP 5: RBAC PERMISSION ENFORCEMENT & BOUNDARY SEGREGATION
@@ -333,45 +270,16 @@ describe('Full-Stack System Orchestration E2E Test Suite', () => {
       authGuard.assertPermission(kitchenRole, 'financial:cost_settings:view');
     }).toThrow(DataBoundaryViolationError);
 
-    // Ledger role boundary enforcement:
-    const waiterPrincipal: LedgerPrincipal = { userId: 'usr_waiter_01', role: 'WAITER' };
-    const kitchenPrincipal: LedgerPrincipal = { userId: 'usr_kitchen_01', role: 'KITCHEN' };
-    const ownerPrincipal: LedgerPrincipal = { userId: 'usr_owner_01', role: 'OWNER' };
-    const auditorPrincipal: LedgerPrincipal = { userId: 'usr_auditor_01', role: 'Auditor' };
+    // Denetim okuma sınırı: yalnızca işletme sahibi ve müdür defteri okur.
+    expect(hasCapability('OWNER', 'auditRead')).toBe(true);
+    expect(hasCapability('MANAGER', 'auditRead')).toBe(true);
+    expect(hasCapability('WAITER', 'auditRead')).toBe(false);
+    expect(hasCapability('KITCHEN', 'auditRead')).toBe(false);
 
-    // Waiter and Kitchen denied from reading ledger
-    await expect(ledgerRepo.getEntries(undefined, waiterPrincipal)).rejects.toThrow(
-      LedgerRoleAccessDeniedError
-    );
-    await expect(ledgerRepo.getEntries(undefined, kitchenPrincipal)).rejects.toThrow(
-      LedgerRoleAccessDeniedError
-    );
-
-    // Owner and Auditor can READ and EXPORT ledger
-    const ownerEntries = await ledgerRepo.getEntries(undefined, ownerPrincipal);
-    expect(ownerEntries).toHaveLength(4);
-
-    const exportResult = await ledgerRepo.exportLedger(
-      { format: 'SECURE_ARCHIVE', prettyPrint: true },
-      auditorPrincipal
-    );
-    expect(exportResult.format).toBe('SECURE_ARCHIVE');
-    expect(exportResult.totalRecords).toBe(4);
-    expect(exportResult.checksumSha256).toHaveLength(64);
-
-    // Auditor and Owner have zero WRITE permissions on the ledger
+    // MASTER platform ekranını kullanır, işletme defterini göremez.
     await expect(
-      ledgerRepo.append(
-        {
-          actor_id: ownerPrincipal.userId,
-          actor_role: ownerPrincipal.role,
-          action: 'malicious:tamper',
-          resource_id: customerOrder.id,
-          payload: {},
-        },
-        ownerPrincipal
-      )
-    ).rejects.toThrow(LedgerRoleAccessDeniedError);
+      tauriInvoke('get_audit_logs', { callerRole: 'MASTER' })
+    ).rejects.toThrow(/UNAUTHORIZED/);
 
     // -----------------------------------------------------------------------
     // STEP 6: RESILIENT OUTBOX QUEUE SYNCHRONIZATION
@@ -399,7 +307,7 @@ describe('Full-Stack System Orchestration E2E Test Suite', () => {
     });
 
     await syncWorker.enqueueEvent(customerOrder.id, 'LEDGER', 'AUDIT_CHAIN_UPDATED', {
-      tipHash: entry4.current_hash,
+      // İstemci uç noktası taşımaz; yalnızca olayın kendisi kuyruğa girer.
       sequence: 4,
     });
 
@@ -413,44 +321,45 @@ describe('Full-Stack System Orchestration E2E Test Suite', () => {
   });
 
   // =========================================================================
-  // Tamper Resistance & Cryptographic Detection
+  // Denetim Sözleşmesi: Hash Sızdırmazlığı
   // =========================================================================
-  it('detects retroactive ledger payload or sequence tampering immediately', async () => {
-    const driver = new InMemoryLedgerStorageDriver();
-    const repo = new ImmutableLedgerRepository(driver);
-    const systemPrincipal: LedgerPrincipal = { userId: 'system', role: 'System' };
+  it('never exposes a raw or shortened hash across the IPC surface', async () => {
+    // Önce platform defterine bir işlem düşür: boş defter sızdırma kanıtı değildir.
+    await tauriInvoke('execute_it_action', {
+      callerRole: 'MASTER',
+      actionType: 'DIAGNOSTIC_PING',
+      tenantId: 'tenant_seal_probe',
+    });
 
-    await repo.append(
-      {
-        actor_id: 'sys',
-        actor_role: 'System',
-        action: 'payment',
-        resource_id: 'ord_1',
-        payload: { amount: 100 },
-      },
-      systemPrincipal
+    const rows = await tauriInvoke<Array<Record<string, unknown>>>(
+      'get_platform_audit_logs',
+      { callerRole: 'MASTER' }
     );
+    expect(rows.length).toBeGreaterThan(0);
 
-    await repo.append(
-      {
-        actor_id: 'sys',
-        actor_role: 'System',
-        action: 'payment',
-        resource_id: 'ord_2',
-        payload: { amount: 200 },
-      },
-      systemPrincipal
+    for (const row of rows) {
+      // Hiçbir alan 64 haneli onaltılık değer taşımamalı ve kısaltma üretmemeli.
+      for (const value of Object.values(row)) {
+        expect(typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)).toBe(false);
+        expect(typeof value === 'string' && /^[0-9a-f]{8,}$/i.test(value)).toBe(false);
+      }
+    }
+
+    const csv = buildAuditCsv(
+      rows.map((row) => ({
+        id: String(row.id ?? ''),
+        sequence: Number(row.sequence ?? 0),
+        timestamp: String(row.timestamp ?? ''),
+        actor_id: String(row.actorId ?? ''),
+        actor_role: String(row.actorRole ?? ''),
+        category: String(row.category ?? ''),
+        action: String(row.action ?? ''),
+        resource_id: String(row.resourceId ?? ''),
+        payload: null,
+        sealed: Boolean(row.sealed),
+      }))
     );
-
-    const validEntries = await repo.getEntries(undefined, systemPrincipal);
-    expect(HashChainBuilder.verifyChain(validEntries).isValid).toBe(true);
-
-    // Tamper with payload of entry 1 retroactively
-    const tamperedEntries = JSON.parse(JSON.stringify(validEntries));
-    tamperedEntries[0].payload.amount = 999999; // Fraudulent change
-
-    const invalidResult = HashChainBuilder.verifyChain(tamperedEntries);
-    expect(invalidResult.isValid).toBe(false);
-    expect(invalidResult.errors[0].type).toBe('PAYLOAD_TAMPERED');
+    expect(csv.toLowerCase()).not.toContain('hash');
+    expect(csv).toContain('Mühürlü');
   });
 });

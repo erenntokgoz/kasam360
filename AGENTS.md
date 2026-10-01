@@ -358,8 +358,3 @@ EKSİK İŞ YAPMA:
 - Saf siyah #000 / saf beyaz #FFF (sıcak tonlar kullan)
 - Neon/doygun renkler (Apple system colors kullan)
 
----
-
-Son güncelleme: 2026-10-01
-Versiyon: v2.0
-Değişiklik: Apple System Colors + Liquid Glass fizik + Patron paneli entegre
