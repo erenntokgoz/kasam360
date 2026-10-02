@@ -18,12 +18,16 @@ describe('6 Kritik Mantık Hatası Doğrulama Testleri', () => {
       name: 'Alpha Sıcak Kahveler',
       tenantId: tenantA,
       tenant_id: tenantA,
+      actorRole: 'OWNER',
+      actor_role: 'OWNER',
     });
     await tauriInvoke('create_product', {
       name: 'Alpha Filtre Kahve',
       priceCents: 4500,
       tenantId: tenantA,
       tenant_id: tenantA,
+      actorRole: 'OWNER',
+      actor_role: 'OWNER',
     });
 
     // Tenant B için masa ve kategori ekle
@@ -37,6 +41,8 @@ describe('6 Kritik Mantık Hatası Doğrulama Testleri', () => {
       name: 'Beta İçecekler',
       tenantId: tenantB,
       tenant_id: tenantB,
+      actorRole: 'OWNER',
+      actor_role: 'OWNER',
     });
 
     // Tenant A kullanıcısı olarak sorgula
@@ -204,14 +210,20 @@ describe('6 Kritik Mantık Hatası Doğrulama Testleri', () => {
   });
 
   it('6. Kuruş vs. TL Tutarlılığı: create_product ve update_product kuruş dönüşümünü tam yapar', async () => {
+    // Menü komutları artık fail-closed: oturum tenant'ı ve rol zorunludur.
+    const tenant = `tenant_kurus_${Date.now()}`;
+    const auth = { tenantId: tenant, tenant_id: tenant, actorRole: 'OWNER', actor_role: 'OWNER' };
+
     // Hem priceCents (doğrudan kuruş) hem de price (TL) parametreleri doğru price_cents olarak kaydedilmeli
     const prod1 = await tauriInvoke<any>('create_product', {
+      ...auth,
       name: 'Kuruş Test 1',
       priceCents: 3550, // 35.50 TL = 3550 kuruş
     });
     expect(prod1.price_cents).toBe(3550);
 
     const prod2 = await tauriInvoke<any>('create_product', {
+      ...auth,
       name: 'Kuruş Test 2',
       price: 42.50, // 42.50 TL = 4250 kuruş
     });
@@ -219,10 +231,11 @@ describe('6 Kritik Mantık Hatası Doğrulama Testleri', () => {
 
     // update_product test
     await tauriInvoke('update_product', {
+      ...auth,
       id: prod1.id,
       price: 50.00,
     });
-    const products = await tauriInvoke<any[]>('get_management_products');
+    const products = await tauriInvoke<any[]>('get_management_products', auth);
     const updated = products.find(p => p.id === prod1.id);
     expect(updated?.price_cents).toBe(5000);
   });

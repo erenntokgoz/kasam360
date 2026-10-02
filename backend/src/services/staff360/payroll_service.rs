@@ -135,7 +135,7 @@ pub async fn list_rules(
 
 /// `YYYY-MM` dönemini `[baslangic, bitis]` aralığına çevirir.
 /// Geçersiz dönem hata verir; sessizce tüm zaman aralığına düşmez.
-fn period_range(period: &str) -> Result<(String, String), String> {
+pub fn period_range(period: &str) -> Result<(String, String), String> {
     let parcalar: Vec<&str> = period.split('-').collect();
     if parcalar.len() != 2 || parcalar[0].len() != 4 || parcalar[1].len() != 2 {
         return Err(format!("donem YYYY-MM olmali: {period}"));
@@ -162,11 +162,11 @@ fn period_range(period: &str) -> Result<(String, String), String> {
             },
             _ => 0,
         };
-    let son = if ay == 12 {
-        format!("{}-{}-31", yil + 1, "01")
-    } else {
-        format!("{yil:04}-{ay:02}-{son_gun}")
-    };
+    // Aralık için ayrı dal YOKTUR. Önceden `yil+1-01-31` üreten dal vardı ve
+    // 2026-12 dönemini 2027-01-31'e kadar uzatıyordu: Aralıkta çalışan
+    // personelin Ocak satışı Aralık bordrosuna girer, Ocak bordrosuna da
+    // girmezdi. Aralık 31 gündür, `_ => 0` dalı zaten doğru sonucu verir.
+    let son = format!("{yil:04}-{ay:02}-{son_gun}");
     Ok((ilk, format!("{son}T23:59:59")))
 }
 

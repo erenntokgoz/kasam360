@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach } from 'vitest';
 import {
   tauriInvoke,
   resetMockStaff,
@@ -26,6 +26,43 @@ const MANAGER_AUTH = {
   tenant_id: TENANT,
   actorRole: 'MANAGER',
   actor_role: 'MANAGER',
+};
+
+/**
+ * Sözleşme tipleri.
+ *
+ * Neden burada tanımlı: `tauriInvoke` generic'siz çağrıldığında `unknown`
+ * döner ve alan erişimi TypeScript hatası verir. Tipler burada tek yerde
+ * durur ki mock sözleşmesi ile backend `Option<i64>` / `null` semantiği
+ * testte de görünür olsun.
+ */
+type ProfilDto = {
+  userId: string;
+  fullName: string;
+  role: string;
+  /** `null` = yetki yok ya da tanımlanmadı. `0` DEĞİL. */
+  baseSalaryCents: number | null;
+  commissionPercent: number | null;
+};
+
+type BordroSatiriDto = {
+  userId: string;
+  fullName: string;
+  /** Müdür için `null`: tutar görüntülenemez. */
+  amounts: { grossCents: number } | null;
+};
+
+type BahsisOzetiDto = {
+  totalCents: number;
+  distributedCents: number;
+  leftoverCents: number;
+};
+
+type KpiSatiriDto = {
+  userId: string;
+  fullName: string;
+  grossSalesCents: number;
+  topProduct: string | null;
 };
 
 beforeEach(() => {
@@ -107,13 +144,17 @@ describe('Personel profili', () => {
       },
     });
 
-    const müdürListesi = await tauriInvoke('list_staff_profiles', MANAGER_AUTH);
+    const müdürListesi = await tauriInvoke<ProfilDto[]>('list_staff_profiles', MANAGER_AUTH);
     expect(müdürListesi).toHaveLength(1);
-    expect(müdürListesi[0].baseSalaryCents).toBe(0);
-    expect(müdürListesi[0].commissionPercent).toBe(10);
 
-    const sahipListesi = await tauriInvoke('list_staff_profiles', AUTH);
+    const sahipListesi = await tauriInvoke<ProfilDto[]>('list_staff_profiles', AUTH);
     expect(sahipListesi[0].baseSalaryCents).toBe(25000);
+    // Müdür için `null`, `0` DEĞİL: 0 da bir maaş olabilir. Sıfır göstermek
+    // "maaşsız çalışıyor" yanlış yorumu yaratır.
+    expect(müdürListesi[0].baseSalaryCents).toBeNull();
+    expect(müdürListesi[0].commissionPercent).toBeNull();
+    // Kimlik bilgisi yine görünür: gizlilik tutarı gizler, kaydı değil.
+    expect(müdürListesi[0].fullName).toBe('Garson (Garson)');
   });
 
   it('olmayan kullanıcıya profil açılamaz', async () => {
@@ -198,7 +239,7 @@ describe('Maaş hesabı', () => {
       },
     });
 
-    const müdürBordrosu = await tauriInvoke('run_payroll', {
+    const müdürBordrosu = await tauriInvoke<BordroSatiriDto[]>('run_payroll', {
       ...MANAGER_AUTH,
       period: currentPeriod(),
     });
@@ -206,7 +247,7 @@ describe('Maaş hesabı', () => {
     expect(müdürBordrosu[0].amounts).toBeNull();
     expect(müdürBordrosu[0].fullName).toBeTruthy();
 
-    const sahipBordrosu = await tauriInvoke('run_payroll', { ...AUTH, period: currentPeriod() });
+    const sahipBordrosu = await tauriInvoke<BordroSatiriDto[]>('run_payroll', { ...AUTH, period: currentPeriod() });
     expect(sahipBordrosu[0].amounts?.grossCents).toBe(25000);
   });
 
@@ -241,7 +282,7 @@ describe('Bahşiş havuzu', () => {
   });
 
   it('havuz özeti kaydı olmayan dönemde sıfır döner, hata değil', async () => {
-    const ozet = await tauriInvoke('get_tip_pool_summary', { ...AUTH, period: currentPeriod() });
+    const ozet = await tauriInvoke<BahsisOzetiDto>('get_tip_pool_summary', { ...AUTH, period: currentPeriod() });
     expect(ozet.totalCents).toBe(0);
     expect(ozet.distributedCents).toBe(0);
     expect(ozet.leftoverCents).toBe(0);
@@ -436,7 +477,7 @@ describe('KPI ve radar', () => {
   });
 
   it('satış yoksa KPI boş döner, sahte ciro üretmez', async () => {
-    const kpi = await tauriInvoke('get_staff_kpi', {
+    const kpi = await tauriInvoke<KpiSatiriDto[]>('get_staff_kpi', {
       ...AUTH,
       from: '2000-01-01',
       to: '2100-01-01',

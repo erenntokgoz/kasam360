@@ -51,7 +51,7 @@ pub async fn list_staff_profiles(
 ) -> Result<Vec<StaffProfile>, String> {
     crate::rbac::require_staff_admin(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
-    staff_service::list_profiles(&pool, &tenant).await
+    staff_service::list_profiles(&pool, &tenant, can_see_amounts(&actor_role)).await
 }
 
 #[tauri::command]
@@ -64,7 +64,7 @@ pub async fn save_staff_profile(
 ) -> Result<(), String> {
     crate::rbac::require_staff_admin(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
-    staff_service::upsert_profile(&pool, &tenant, &actor_id, &input).await
+    staff_service::upsert_profile(&pool, &tenant, &actor_id, can_see_amounts(&actor_role), &input).await
 }
 
 /// Doğum günü yaklaşan personel. `days_ahead` 0-365 ile sınırlandırılır.

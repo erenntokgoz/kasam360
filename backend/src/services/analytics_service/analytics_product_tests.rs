@@ -22,7 +22,9 @@ async fn test_pool() -> SqlitePool {
         "CREATE TABLE products (tenant_id TEXT, id TEXT, name TEXT, category_id TEXT, price_cents INTEGER NOT NULL, PRIMARY KEY (tenant_id, id))",
         "CREATE TABLE orders (id TEXT PRIMARY KEY, tenant_id TEXT, status TEXT, created_at TEXT)",
         "CREATE TABLE order_items (tenant_id TEXT, id TEXT, order_id TEXT, product_id TEXT, quantity INTEGER, total_cents INTEGER, PRIMARY KEY (tenant_id, id))",
-        "CREATE TABLE inventory_batches (tenant_id TEXT, id TEXT, product_id TEXT, initial_qty INTEGER, remaining_qty INTEGER, unit_cost_cents INTEGER, PRIMARY KEY (tenant_id, id))",
+        // inventory_batches kolonlari migrations/schema.sql ile birebir ayni
+        // tutulur; sahte isimler testi yesil tutup uretimi kirmizilardi.
+        "CREATE TABLE inventory_batches (tenant_id TEXT, id TEXT, product_id TEXT, initial_quantity REAL NOT NULL, remaining_quantity REAL NOT NULL, unit_cost_cents INTEGER, PRIMARY KEY (tenant_id, id))",
     ] {
         sqlx::query(stmt)
             .execute(&pool)
@@ -33,10 +35,10 @@ async fn test_pool() -> SqlitePool {
 }
 
 /// FIFO partisi ekler. `qty`/`cost` kuruş cinsindendir.
-async fn batch(pool: &SqlitePool, tenant: &str, product: &str, qty: i64, remaining: i64, cost: i64) {
+async fn batch(pool: &SqlitePool, tenant: &str, product: &str, qty: f64, remaining: f64, cost: i64) {
     sqlx::query(
         "INSERT INTO inventory_batches
-         (tenant_id, id, product_id, initial_qty, remaining_qty, unit_cost_cents)
+         (tenant_id, id, product_id, initial_quantity, remaining_quantity, unit_cost_cents)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
     )
     .bind(tenant)
@@ -219,8 +221,8 @@ async fn urun_marji_fifo_ortalamasindan_hesaplanir() {
     let pool = test_pool().await;
     product(&pool, "t1", "p1", "Kahve", "c1", 2000).await;
     // İki parti: 6 adet 100 kuruş + 4 adet 200 kuruş -> ağırlıklı ortalama 140.
-    batch(&pool, "t1", "p1", 6, 6, 100).await;
-    batch(&pool, "t1", "p1", 4, 4, 200).await;
+    batch(&pool, "t1", "p1", 6.0, 6.0, 100).await;
+    batch(&pool, "t1", "p1", 4.0, 4.0, 200).await;
     paid_order(&pool, "t1", "o1", "2026-03-10T10:00:00Z").await;
     line(&pool, "t1", "o1", "p1", 2, 4000).await;
 
@@ -251,8 +253,8 @@ async fn tükenmiş_parti_maliyeti_bozmaz() {
     let pool = test_pool().await;
     product(&pool, "t1", "p1", "Kahve", "c1", 2000).await;
     // Tamamen tükenmiş parti ortalamaya katılmaz; elde kalan tek parti 100.
-    batch(&pool, "t1", "p1", 10, 0, 999).await;
-    batch(&pool, "t1", "p1", 5, 5, 100).await;
+    batch(&pool, "t1", "p1", 10.0, 0.0, 999).await;
+    batch(&pool, "t1", "p1", 5.0, 5.0, 100).await;
     paid_order(&pool, "t1", "o1", "2026-03-10T10:00:00Z").await;
     line(&pool, "t1", "o1", "p1", 1, 2000).await;
 
@@ -265,7 +267,7 @@ async fn kiraci_sizinti_yoktur() {
     let pool = test_pool().await;
     product(&pool, "t1", "p1", "Kahve", "c1", 2000).await;
     product(&pool, "t2", "p1", "Kahve", "c1", 2000).await;
-    batch(&pool, "t2", "p1", 5, 5, 100).await;
+    batch(&pool, "t2", "p1", 5.0, 5.0, 100).await;
     paid_order(&pool, "t1", "o1", "2026-03-10T10:00:00Z").await;
     line(&pool, "t1", "o1", "p1", 1, 2000).await;
 
@@ -279,7 +281,7 @@ async fn kiraci_sizinti_yoktur() {
 async fn iptal_siparis_ciraya_dahil_hesaplanir() {
     let pool = test_pool().await;
     product(&pool, "t1", "p1", "Kahve", "c1", 2000).await;
-    batch(&pool, "t1", "p1", 5, 5, 100).await;
+    batch(&pool, "t1", "p1", 5.0, 5.0, 100).await;
     paid_order(&pool, "t1", "o1", "2026-03-10T10:00:00Z").await;
     line(&pool, "t1", "o1", "p1", 1, 2000).await;
     sqlx::query("INSERT INTO orders (id, tenant_id, status, created_at) VALUES ('o2','t1','VOID','2026-03-10T11:00:00Z')")

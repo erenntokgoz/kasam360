@@ -399,14 +399,16 @@ pub async fn process_split_payment(
                 .map_err(|e| e.to_string())?;
         }
 
-        // Çift stok düşümünü engelle: YALNIZCA sipariş tamamen kapandığında TEK SEFERDE FIFO stok düşümü yapılır!
+// Çift stok düşümünü engelle: YALNIZCA sipariş tamamen kapandığında TEK SEFERDE FIFO stok düşümü yapılır!
         total_cogs_cents = crate::services::inventory_service::InventoryService::execute_fifo_deduction(
             &mut tx,
+            &tenant_id,
             &payload.transaction_id,
             &payload.items,
             &now_iso,
         )
-        .await?;
+        .await?
+        .total_cogs_cents;
     } else if let Some(table_id) = effective_table_id {
         sqlx::query("UPDATE tables SET current_total = ? WHERE id = ? AND tenant_id = ?")
             .bind(remaining_balance)

@@ -663,10 +663,13 @@ CREATE TABLE IF NOT EXISTS staff_profiles (
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
     user_id TEXT NOT NULL,
     full_name TEXT NOT NULL,
-    -- Maaş tutarları kuruş cinsinden; float YASAK (AGENTS.md §2)
-    base_salary_cents INTEGER NOT NULL DEFAULT 0,
+-- Maaş tutarları kuruş cinsinden; float YASAK (AGENTS.md §2).
+    -- NULL = "henüz belirlenmedi". 0 ile aynı DEĞİLDİR: maaşı 0 olan
+    -- personel ile maaşı tanımlanmamış personel farklı durumlardır ve
+    -- ekranda "Belirlenmedi" / "0" ayrı gösterilir.
+    base_salary_cents INTEGER,
     -- Yuzde modeli: 0-100 arasi, tam sayi. 0 "komsiyon yok" demektir.
-    commission_percent INTEGER NOT NULL DEFAULT 0,
+    commission_percent INTEGER,
     birth_date TEXT,
     hire_date TEXT,
     phone TEXT,

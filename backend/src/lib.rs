@@ -22,6 +22,8 @@ pub mod rbac;
 mod shift_security_tests;
 #[cfg(test)]
 mod staff360_tests;
+#[cfg(test)]
+mod menu_tenant_tests;
 pub mod user_credentials;
 pub mod print_commands;
 pub mod reservation_commands;
@@ -75,15 +77,15 @@ pub fn run() {
             commands::get_order_items,
             commands::try_lock_table,
             commands::unlock_table,
-            management_commands::get_management_categories,
-            management_commands::create_category,
-            management_commands::update_category,
-            management_commands::delete_category,
-            management_commands::get_management_products,
-            management_commands::create_product,
-            management_commands::update_product,
-            management_commands::update_product_status,
-            management_commands::delete_product,
+            management_commands::category::get_management_categories,
+            management_commands::category::create_category,
+            management_commands::category::update_category,
+            management_commands::category::delete_category,
+            management_commands::product::get_management_products,
+            management_commands::product::create_product,
+            management_commands::product::update_product,
+            management_commands::product::update_product_status,
+            management_commands::product::delete_product,
             analytics_commands::get_analytics_dashboard_data,
             analytics_commands::metrics::get_analytics_metrics,
             analytics_commands::metrics::set_monthly_target,
@@ -143,9 +145,9 @@ pub fn run() {
             platform_commands::register_device,
             platform_commands::get_global_users,
             platform_commands::get_platform_audit_logs,
-            management_commands::get_staff,
-            management_commands::create_staff_member,
-            management_commands::delete_staff_member,
+            management_commands::staff::get_staff,
+            management_commands::staff::create_staff_member,
+            management_commands::staff::delete_staff_member,
             // Faz 4: modifier yönetimi bağımsız sekmeden kalktı; komutlar
             // CategoryForm/ProductForm yüzeyinden çağrılıyor ve yaşamaya devam ediyor.
             modifier_commands::get_modifier_groups,

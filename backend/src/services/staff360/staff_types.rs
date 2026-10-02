@@ -13,8 +13,11 @@ pub struct StaffProfile {
     pub user_id: String,
     pub full_name: String,
     pub role: String,
-    pub base_salary_cents: i64,
-    pub commission_percent: i64,
+    /// Maaş tutarları yalnız `OWNER` oturumunda doludur. `MANAGER` için `None`
+    /// gelir; ekranda "Gizli" gösterilir, `0` gösterilmez. `0` gerçek bir maaş
+    /// olabilir, bu yüzden "görünmüyor" ile "sıfır" aynı kutuya konmaz.
+    pub base_salary_cents: Option<i64>,
+    pub commission_percent: Option<i64>,
     pub birth_date: Option<String>,
     pub hire_date: Option<String>,
     pub phone: Option<String>,
@@ -29,8 +32,13 @@ pub struct StaffProfile {
 pub struct StaffProfileInput {
     pub user_id: String,
     pub full_name: String,
-    pub base_salary_cents: i64,
-    pub commission_percent: i64,
+    /// `None` = "bu alanı değiştirme". `Some(0)` = "maaşı sıfıra düşür".
+    ///
+    /// İkisi ayrı olmalıdır: müdürün tutarsız kaydı gönderdiğinde maaşı
+    /// kasten sıfırladığı sanılır ve patronun bordrosu sessizce bozulur.
+    /// Yetkisi olmayan çağıran tutar alanını hiç göndermez.
+    pub base_salary_cents: Option<i64>,
+    pub commission_percent: Option<i64>,
     pub birth_date: Option<String>,
     pub hire_date: Option<String>,
     pub phone: Option<String>,

@@ -33,6 +33,56 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     let _ = sqlx::raw_sql("ALTER TABLE order_items ADD COLUMN waiter_id TEXT;").execute(&pool).await;
     let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_order_items_waiter ON order_items(tenant_id, waiter_id);").execute(&pool).await;
 
+    // P0: `staff_profiles.base_salary_cents` / `commission_percent` NOT NULL
+    // idi. "Maaş henüz belirlenmedi" ile "maaş 0" aynı kutuya sıkıştığı için
+    // müdürün profil kaydı patronun maaşını sessizce sıfırlıyordu. Kolon
+    // nullable yapılır: bilinmeyen tutar `NULL` olur (AGENTS.md §3.4).
+    // SQLite `DROP NOT NULL` desteklemediğinden tablo yeniden kurulur.
+    let profil_not_null: Option<i64> = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('staff_profiles')
+          WHERE name = 'base_salary_cents' AND \"notnull\" = 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap_or(None);
+    if profil_not_null.unwrap_or(0) > 0 {
+        sqlx::raw_sql(
+            "PRAGMA foreign_keys = OFF;
+             BEGIN;
+             CREATE TABLE staff_profiles_new (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+                user_id TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                base_salary_cents INTEGER,
+                commission_percent INTEGER,
+                birth_date TEXT,
+                hire_date TEXT,
+                phone TEXT,
+                national_id TEXT,
+                address TEXT,
+                emergency_contact TEXT,
+                notes TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(tenant_id, user_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+             );
+             INSERT INTO staff_profiles_new
+                SELECT id, tenant_id, user_id, full_name, base_salary_cents,
+                       commission_percent, birth_date, hire_date, phone,
+                       national_id, address, emergency_contact, notes,
+                       created_at, updated_at
+                  FROM staff_profiles;
+             DROP TABLE staff_profiles;
+             ALTER TABLE staff_profiles_new RENAME TO staff_profiles;
+             COMMIT;
+             PRAGMA foreign_keys = ON;",
+        )
+        .execute(&pool)
+        .await?;
+    }
+
     // DDL şemasını uygula (etki eşitsiz - tüm ifadeler CREATE TABLE IF NOT EXISTS kullanır)
     let schema = include_str!("../migrations/schema.sql");
     sqlx::raw_sql(schema).execute(&pool).await?;

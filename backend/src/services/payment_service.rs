@@ -72,13 +72,15 @@ impl PaymentService {
         PaymentRepository::close_order_if_applicable(conn, payload.order_id.as_deref(), tenant_id).await?;
 
         // 7. FIFO stok maliyeti düşümü.
-        let total_cogs_cents = InventoryService::execute_fifo_deduction(
+        let fifo = InventoryService::execute_fifo_deduction(
             conn,
+            tenant_id,
             &payload.transaction_id,
             &payload.items,
             &now_iso,
         )
         .await?;
+        let total_cogs_cents = fifo.total_cogs_cents;
 
         // 8. Denetim defteri kaydı ekle.
         //
@@ -92,6 +94,9 @@ impl PaymentService {
             "method": payload.method,
             "totalAmount": payload.total_amount,
             "cogsTotalCents": total_cogs_cents,
+            // Parti girişi olmayan ürünlerde gerçek maliyet bilinmiyor; COGS
+            // eksik hesaplanır. Sayı gizlenmez, defterde görünür.
+            "cogsUntrackedDeficit": fifo.untracked_deficit,
             "itemsCount": payload.items.len(),
             "grossCents": server_truth.gross_cents,
             "subtotalCents": server_truth.subtotal_cents,

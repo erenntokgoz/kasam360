@@ -142,7 +142,7 @@ export function TipPoolTab() {
       <StaffPanelHeader
         icon={<Coins size={22} />}
         title="Bahşiş Havuzu"
-        description="Dönemde toplanan nakit bahşiş, çalışma tabanına göre paylaştırılır."
+        description="Dönemde kaydedilen bahşiş, çalışma tabanına göre paylaştırılır."
         onRefresh={() => yukle(true)}
         refreshing={refreshing}
         actions={
@@ -182,7 +182,9 @@ export function TipPoolTab() {
       ) : !ozet || ozet.totalCents === 0 ? (
         <StaffEmptyState
           message="Bu dönemde kayıtlı bahşiş yok."
-          hint="Kasa ekranında nakit ödeme sırasında girilen bahşiş burada toplanır."
+          // Kasa ekranında bahşiş girişi **yok**; uydurma kaynak yolu göstermek
+          // patronu olmayan bir akışı aramaya iter. Gerçek durum açıkça yazılır.
+          hint="Bahşiş havuzu, dönem içinde kaydedilen bahşiş girdilerinden oluşur. Bu akış henüz bağlı değil; havuz elle doldurulana dek dağıtım yapılamaz."
         />
       ) : (
         <>

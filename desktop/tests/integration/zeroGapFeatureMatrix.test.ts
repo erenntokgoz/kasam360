@@ -280,61 +280,86 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
     const staffId = `stf_zg_${Date.now()}`;
     const invId = `inv_zg_${Date.now()}`;
 
+    // Müdür yetki matrisi (AGENTS.md §6): menüyü **okur** ve ürünün satış
+    // durumunu değiştirir; ürün/kategori **yaratamaz, düzenleyemez, silemez**.
+    // Test önceden müdür için ürün oluşturduğu için hep yeşildi, ama gerçek
+    // uygulamada bu akış reddedilir. Beklenen davranış bu testte sabitlenir.
+    const mgr = { tenantId, tenant_id: tenantId, callerRole: 'MANAGER', actorRole: 'MANAGER', actor_role: 'MANAGER' };
+    const owner = { tenantId, tenant_id: tenantId, callerRole: 'OWNER', actorRole: 'OWNER', actor_role: 'OWNER' };
+
     it('M1: Category CRUD operates end-to-end', async () => {
+      // Müdür yazamaz.
+      await expect(
+        tauriInvoke('create_category', { ...mgr, name: 'Yeni Tatlılar', displayOrder: 10 }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
+      await expect(
+        tauriInvoke('update_category', { ...mgr, id: catId, name: 'X', displayOrder: 11 }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
+      await expect(
+        tauriInvoke('delete_category', { ...mgr, id: catId }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
+
+      // İşletme sahibi tam akışı yürütebilir.
       await tauriInvoke('create_category', {
-        callerRole: 'MANAGER',
+        ...owner,
         id: catId,
         name: 'Yeni Tatlılar',
         displayOrder: 10,
-        icon: '🍰',
       });
-
       await tauriInvoke('update_category', {
-        callerRole: 'MANAGER',
+        ...owner,
         id: catId,
         name: 'Spesiyal Tatlılar',
         displayOrder: 11,
-        icon: '🍮',
       });
-
-      const cats = await tauriInvoke<any[]>('get_management_categories', { callerRole: 'MANAGER' });
+      const cats = await tauriInvoke<any[]>('get_management_categories', mgr);
       expect(cats.some(c => c.id === catId)).toBe(true);
-
-      await tauriInvoke('delete_category', { callerRole: 'MANAGER', id: catId });
+      await tauriInvoke('delete_category', { ...owner, id: catId });
     });
 
     it('M2: Product CRUD and status toggles operate end-to-end', async () => {
+      await expect(
+        tauriInvoke('create_product', {
+          ...mgr,
+          name: 'Fıstıklı Baklava',
+          priceCents: 15000,
+          categoryId: 'cat-003',
+        }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
+      await expect(
+        tauriInvoke('update_product', {
+          ...mgr,
+          id: prdId,
+          name: 'X',
+          priceCents: 1,
+          categoryId: 'cat-003',
+        }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
+      await expect(
+        tauriInvoke('delete_product', { ...mgr, id: prdId }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
+
       await tauriInvoke('create_product', {
-        callerRole: 'MANAGER',
+        ...owner,
         id: prdId,
         name: 'Fıstıklı Baklava',
         priceCents: 15000,
-        taxRate: 10.0,
         categoryId: 'cat-003',
-        sku: 'SKU-BAK-01',
       });
-
       await tauriInvoke('update_product', {
-        callerRole: 'MANAGER',
+        ...owner,
         id: prdId,
         name: 'Havuç Dilim Baklava',
         priceCents: 18000,
-        taxRate: 10.0,
         categoryId: 'cat-003',
-        sku: 'SKU-BAK-01',
       });
 
-      await tauriInvoke('update_product_status', {
-        callerRole: 'MANAGER',
-        id: prdId,
-        isActive: false,
-      });
+      // Satış durumu müdürün yetkisindedir.
+      await tauriInvoke('update_product_status', { ...mgr, id: prdId, isActive: false });
+      const prods = await tauriInvoke<any[]>('get_management_products', mgr);
+      expect(prods.find(p => p.id === prdId)?.is_active).toBe(false);
 
-      const prods = await tauriInvoke<any[]>('get_management_products', { callerRole: 'MANAGER' });
-      const found = prods.find(p => p.id === prdId);
-      expect(found).toBeDefined();
-
-      await tauriInvoke('delete_product', { callerRole: 'MANAGER', id: prdId });
+      await tauriInvoke('delete_product', { ...owner, id: prdId });
     });
 
     it('M3: Inventory stock tracking and adjustments (IN, OUT, ADJUST, WASTE)', async () => {

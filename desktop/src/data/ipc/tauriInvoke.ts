@@ -43,7 +43,6 @@ export interface MockCategory {
   tenant_id: string;
   name: string;
   display_order: number;
-  icon?: string;
 }
 
 export interface MockProduct {
@@ -76,6 +75,29 @@ const MODIFIER_MANAGEMENT_COMMANDS = new Set([
   'set_product_modifier_groups',
   'get_product_modifier_group_ids',
 ]);
+
+/**
+ * Menü yönetimi komutları — rol ve fail-closed tenant kapısı.
+ *
+ * Neden ayrı harita: bu dokuz komut menü verisini okur **ve yazar**. Kapı
+ * uygulanmazsa tarayıcı modu ile gerçek uygulama farklı yetki modelleri
+ * gösterir; testler yeşil kalırken üretimde çapraz kiracı yazma mümkündür.
+ *
+ * Yetki backend ile birebir aynıdır (AGENTS.md §6):
+ *   - `get_management_*`, `update_product_status` → OWNER + MANAGER
+ *   - `create_*`, `update_*`, `delete_*`          → yalnız OWNER
+ */
+const MENU_MANAGEMENT_ROLES: Record<string, readonly string[]> = {
+  get_management_categories: ['OWNER', 'MANAGER'],
+  get_management_products: ['OWNER', 'MANAGER'],
+  update_product_status: ['OWNER', 'MANAGER'],
+  create_category: ['OWNER'],
+  update_category: ['OWNER'],
+  delete_category: ['OWNER'],
+  create_product: ['OWNER'],
+  update_product: ['OWNER'],
+  delete_product: ['OWNER'],
+};
 
 export interface MockModifierGroup {
   id: string;
@@ -310,10 +332,13 @@ const OPEN_RESERVATION_STATUSES = ['ACTIVE', 'ARRIVED'];
 const mockTableLocks = new Map<string, { waiterId: string; at: number }>();
 
 // 2. Kategoriler
+// Backend `CategoryDto` yalnız id/name/display_order döner; `categories`
+// tablosunda ikon kolonu yoktur. Mock da aynı yüzeyi taşımalıdır, yoksa
+// tarayıcı modunda var olan alan üretimde kaybolur.
 const DEFAULT_CATEGORIES: MockCategory[] = [
-  { id: 'cat-001', tenant_id: 'DEFAULT_TENANT', name: 'Sıcak İçecekler', display_order: 1, icon: '☕' },
-  { id: 'cat-002', tenant_id: 'DEFAULT_TENANT', name: 'Soğuk İçecekler', display_order: 2, icon: '🥤' },
-  { id: 'cat-003', tenant_id: 'DEFAULT_TENANT', name: 'Yiyecekler', display_order: 3, icon: '🍽️' },
+  { id: 'cat-001', tenant_id: 'DEFAULT_TENANT', name: 'Sıcak İçecekler', display_order: 1 },
+  { id: 'cat-002', tenant_id: 'DEFAULT_TENANT', name: 'Soğuk İçecekler', display_order: 2 },
+  { id: 'cat-003', tenant_id: 'DEFAULT_TENANT', name: 'Yiyecekler', display_order: 3 },
 ];
 let mockCategories: MockCategory[] = lsLoad<MockCategory[]>('categories', DEFAULT_CATEGORIES);
 if (mockCategories.length === 0) {
@@ -390,8 +415,10 @@ type MockStaffProfile = {
   user_id: string;
   full_name: string;
   role: string;
-  base_salary_cents: number;
-  commission_percent: number;
+  /** `null` = "henüz belirlenmedi"; 0 ile aynı değildir (backend `Option<i64>`). */
+  base_salary_cents: number | null;
+  /** `null` = "komisyon tanımlanmadı". */
+  commission_percent: number | null;
   birth_date: string | null;
   hire_date: string | null;
   phone: string | null;
@@ -2116,9 +2143,26 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   }
 
   // ----- MENÜ YÖNETİMİ (Menu Management) -----
+  // Mock, backend ile aynı kapıları uygular: rol + **fail-closed tenant**.
+  // Neden ayrı: bu komutlar gerçek veri yazar (ürün adı, fiyat, silme). Tenant
+  // filtresiz çalışan mock, tarayıcı modunda yetki modelini backend'den farklı
+  // gösterir ve testler yanlış güven verir. `matchesTenant` bilinmeyen tenant'ta
+  // "eşleşiyor" sayar; burada `matchesTenantStrict` kullanılır.
+  const menuIzin = MENU_MANAGEMENT_ROLES[cmd];
+  if (menuIzin) {
+    const menuRole = String(args.actor_role || args.actorRole || args.callerRole || '')
+      .trim()
+      .toUpperCase();
+    if (!menuIzin.includes(menuRole)) {
+      throw new Error('UNAUTHORIZED: Menü yönetimi yalnızca işletme sahibine açıktır.');
+    }
+    if (!matchesTenantStrict(callerTenantId)) {
+      throw new Error('UNAUTHORIZED: oturum işletmesi yok, işlem reddedildi');
+    }
+  }
   if (cmd === 'get_management_categories') {
     return mockCategories
-      .filter((c) => matchesTenant(c.tenant_id))
+      .filter((c) => matchesTenantStrict(c.tenant_id))
       .map((c) => ({
         id: c.id,
         name: c.name,
@@ -2132,27 +2176,47 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
       tenant_id: catTenantId,
       name: (args.name as string) || 'Yeni Kategori',
       display_order: mockCategories.length + 1,
-      icon: '📁',
     };
     mockCategories = [...mockCategories, newCat];
     lsSave('categories', mockCategories);
     return newCat as unknown as T;
   }
   if (cmd === 'update_category') {
+    // Kimlik + tenant çifti eşleşmeli. Kimlikle eşleşen ama başka işletmenin
+    // kategorisi sessizce değiştirilmemeli.
+    const hedef = mockCategories.find(
+      (c) => c.id === args.id && matchesTenantStrict(c.tenant_id),
+    );
+    if (!hedef) throw new Error('NOT_FOUND: categories kaydı bulunamadı');
     mockCategories = mockCategories.map((c) =>
-      c.id === args.id ? { ...c, name: (args.name as string) || c.name } : c
+      c === hedef
+        ? {
+            ...c,
+            name: (args.name as string) || c.name,
+            display_order:
+              args.displayOrder !== undefined
+                ? Number(args.displayOrder)
+                : args.display_order !== undefined
+                  ? Number(args.display_order)
+                  : c.display_order,
+          }
+        : c,
     );
     lsSave('categories', mockCategories);
     return { success: true } as unknown as T;
   }
   if (cmd === 'delete_category') {
-    mockCategories = mockCategories.filter((c) => c.id !== args.id);
+    const hedef = mockCategories.find(
+      (c) => c.id === args.id && matchesTenantStrict(c.tenant_id),
+    );
+    if (!hedef) throw new Error('NOT_FOUND: categories kaydı bulunamadı');
+    mockCategories = mockCategories.filter((c) => c !== hedef);
     lsSave('categories', mockCategories);
     return { success: true } as unknown as T;
   }
   if (cmd === 'get_management_products') {
     return mockProducts
-      .filter((p) => matchesTenant(p.tenant_id))
+      .filter((p) => matchesTenantStrict(p.tenant_id))
       .map((p) => ({
         id: p.id,
         category_id: p.category_id,
@@ -2196,8 +2260,12 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
       updatePriceCents = Math.round(Number(args.price) * 100);
     }
 
+    // Kimlik + tenant çifti eşleşmeli; aksi hâlde başka işletmenin ürünü
+    // sessizce değiştirilir ve kullanıcı "kaydettim" sanar.
+    const hedef = mockProducts.find((p) => p.id === args.id && matchesTenantStrict(p.tenant_id));
+    if (!hedef) throw new Error('NOT_FOUND: products kaydı bulunamadı');
     mockProducts = mockProducts.map((p) =>
-      p.id === args.id
+      p === hedef
         ? {
             ...p,
             name: args.name !== undefined ? (args.name as string) : p.name,
@@ -2206,7 +2274,7 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
             category: args.categoryId !== undefined ? (args.categoryId as string) : p.category,
             is_active: args.isActive !== undefined ? Boolean(args.isActive) : p.is_active,
           }
-        : p
+        : p,
     );
     lsSave('products', mockProducts);
     return { success: true } as unknown as T;
@@ -2214,14 +2282,16 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   if (cmd === 'update_product_status') {
     const id = args.id as string;
     const isActive = args.isActive !== undefined ? Boolean(args.isActive) : Boolean(args.is_active);
-    mockProducts = mockProducts.map((p) =>
-      p.id === id ? { ...p, is_active: isActive } : p
-    );
+    const hedef = mockProducts.find((p) => p.id === id && matchesTenantStrict(p.tenant_id));
+    if (!hedef) throw new Error('NOT_FOUND: products kaydı bulunamadı');
+    mockProducts = mockProducts.map((p) => (p === hedef ? { ...p, is_active: isActive } : p));
     lsSave('products', mockProducts);
     return { success: true } as unknown as T;
   }
   if (cmd === 'delete_product') {
-    mockProducts = mockProducts.filter((p) => p.id !== args.id);
+    const hedef = mockProducts.find((p) => p.id === args.id && matchesTenantStrict(p.tenant_id));
+    if (!hedef) throw new Error('NOT_FOUND: products kaydı bulunamadı');
+    mockProducts = mockProducts.filter((p) => p !== hedef);
     lsSave('products', mockProducts);
     return { success: true } as unknown as T;
   }
@@ -2972,15 +3042,18 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   // çalışan uygulamayla gerçek uygulamanın farklı davranmasına yol açar (fail-open).
   if (cmd === 'list_staff_profiles') {
     const gate = requireStaffAdminGate(args);
+    const gorur = gate.role === 'OWNER';
     return mockStaffProfiles
       .filter((p) => mockStaff.some((s) => s.id === p.user_id && s.tenant_id === gate.tenantId))
       .map((p) => ({
         userId: p.user_id,
         fullName: p.full_name,
         role: p.role,
-        // Gizlilik kuralı mock'ta da: müdür tutarı görmez, 0 görür.
-        baseSalaryCents: gate.role === 'OWNER' ? p.base_salary_cents : 0,
-        commissionPercent: p.commission_percent,
+        // Gizlilik: müdür tutarı görmez. `null` döner, `0` DEĞİL — 0 da bir
+        // maaş olabilir; sıfır göstermek "maaşsız çalışıyor" yanlış
+        // yorumu yaratır ve backend'in `Option<i64>` sözleşmesiyle uyuşmaz.
+        baseSalaryCents: gorur ? p.base_salary_cents : null,
+        commissionPercent: gorur ? p.commission_percent : null,
         birthDate: p.birth_date,
         hireDate: p.hire_date,
         phone: p.phone,
@@ -2999,22 +3072,44 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     if (!mockStaff.some((s) => s.id === userId && s.tenant_id === gate.tenantId && s.role !== 'MASTER')) {
       throw new Error(`kullanici bulunamadi: ${userId}`);
     }
-    const cents = Number(input.baseSalaryCents ?? input.base_salary_cents ?? 0);
-    if (!Number.isFinite(cents) || cents < 0) throw new Error('maas negatif olamaz');
-    const komisyon = Number(input.commissionPercent ?? input.commission_percent ?? 0);
-    if (!Number.isInteger(komisyon) || komisyon < 0 || komisyon > 100) {
-      throw new Error('komisyon yuzdesi 0-100 araliginda olmali');
+    // Tutar alanları `undefined`/null ise "değiştirme" demektir: UPSERT
+    // eski değeri korur. `0` göndermek ise tutar yazmaya çalışmaktır ve
+    // yetkisiz çağıranda hata verir (backend ile aynı kapı).
+    const hamMaas = input.baseSalaryCents ?? input.base_salary_cents;
+    const hamKomisyon = input.commissionPercent ?? input.commission_percent;
+    const tutarGonderildi = hamMaas !== undefined && hamMaas !== null
+      || hamKomisyon !== undefined && hamKomisyon !== null;
+    if (gate.role !== 'OWNER' && tutarGonderildi) {
+      throw new Error(
+        'UNAUTHORIZED: maas ve komisyon yalnizca isletme sahibi tarafindan guncellenebilir',
+      );
+    }
+    let maas: number | null = null;
+    if (hamMaas !== undefined && hamMaas !== null) {
+      const cents = Number(hamMaas);
+      if (!Number.isFinite(cents) || cents < 0) throw new Error('maas negatif olamaz');
+      maas = Math.trunc(cents);
+    }
+    let komisyon: number | null = null;
+    if (hamKomisyon !== undefined && hamKomisyon !== null) {
+      const k = Number(hamKomisyon);
+      if (!Number.isInteger(k) || k < 0 || k > 100) {
+        throw new Error('komisyon yuzdesi 0-100 araliginda olmali');
+      }
+      komisyon = k;
     }
     const dogum = (input.birthDate ?? input.birth_date ?? null) as string | null;
     if (dogum && !mockIsIsoDate(dogum)) {
       throw new Error('dogum tarihi YYYY-MM-DD biciminde olmali');
     }
+    const mevcut = mockStaffProfiles.find((p) => p.user_id === userId);
     const kayit: MockStaffProfile = {
       user_id: userId,
       full_name: String(input.fullName ?? input.full_name ?? '').trim(),
       role: mockStaff.find((s) => s.id === userId)?.role ?? 'WAITER',
-      base_salary_cents: Math.trunc(cents),
-      commission_percent: Math.trunc(komisyon),
+      // Gönderilmeyen tutar mevcut değeri korur; sıfıra düşmez.
+      base_salary_cents: maas ?? mevcut?.base_salary_cents ?? null,
+      commission_percent: komisyon ?? mevcut?.commission_percent ?? null,
       birth_date: dogum,
       hire_date: (input.hireDate ?? input.hire_date ?? null) as string | null,
       phone: (input.phone ?? null) as string | null,
@@ -3327,9 +3422,24 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
 
     const runs = kurallar.map((r) => {
       const person = mockStaff.find((s) => s.id === r.user_id);
-      const profil = mockStaffProfiles.find((p) => p.user_id === r.user_id);
-      const taban_maas = gate.role === 'OWNER' ? profil?.base_salary_cents ?? r.base_salary_cents : 0;
-      const komisyon = r.commission_percent > 0 ? Math.trunc((taban_maas * r.commission_percent) / 100) : 0;
+      // Taban maaş **kuraldan** gelir (backend `kural.base_salary_cents`),
+      // profilden değil. Profil maaşı ile kural maaşı farklı kaynaklardır;
+      // mock profili tercih ederse tarayıcı modu gerçek hesabı yıltır.
+      const taban_maas = r.base_salary_cents;
+      // Komisyon tabanı **kendi satışıdır**, maaş değil. Satış olmadan
+      // komisyon 0'dır ve bu durum uyarı olarak raporlanır.
+      const donemSatis = mockOrders
+        .filter(
+          (o) =>
+            o.tenant_id === gate.tenantId &&
+            o.cashier_id === r.user_id &&
+            o.status === 'PAID' &&
+            o.created_at.startsWith(period),
+        )
+        .reduce((t, o) => t + (o.total_cents ?? 0), 0);
+      const komisyon = r.commission_percent > 0
+        ? Math.trunc((donemSatis * r.commission_percent) / 100)
+        : 0;
       const bahsis = r.model === 'TIP'
         ? mockTipDistributions
             .filter((d) => d.user_id === r.user_id)
@@ -3337,7 +3447,7 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
         : 0;
       const brut = taban_maas + komisyon + bahsis;
       const uyarilar: string[] = [];
-      if (r.commission_percent > 0 && komisyon === 0) {
+      if (r.commission_percent > 0 && donemSatis === 0) {
         uyarilar.push('bu donemde satış kaydı yok; komisyon hesaplanmadi');
       }
       if (r.model === 'TIP' && bahsis === 0) uyarilar.push('bu donemde dagitilmis bahsis yok');

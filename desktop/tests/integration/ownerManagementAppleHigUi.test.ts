@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Patron ve Yönetim Panelleri Apple HIG UI Entegrasyon Test Paketi
  * Path: tests/integration/ownerManagementAppleHigUi.test.ts
  *
@@ -235,7 +235,21 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
 
   it('13. Menü ürünlerinde tek tıkla ON/OFF satış durumu geçişi çalışır', async () => {
     const { tauriInvoke } = await import('../../src/data/ipc/tauriInvoke');
-    const products = await tauriInvoke<any[]>('get_management_products', { actorRole: 'OWNER' });
+    // Menü komutları fail-closed: oturum tenant'ı zorunludur.
+    const auth = {
+      tenantId: 'tenant_menu_ui',
+      tenant_id: 'tenant_menu_ui',
+      actorRole: 'OWNER',
+      actor_role: 'OWNER',
+    };
+    await tauriInvoke('create_category', { ...auth, name: 'UI Test Kategorisi' });
+    await tauriInvoke('create_product', {
+      ...auth,
+      categoryId: 'cat-ui-test',
+      name: 'UI Test Ürünü',
+      priceCents: 1200,
+    });
+    const products = await tauriInvoke<any[]>('get_management_products', auth);
     expect(Array.isArray(products)).toBe(true);
     expect(products.length).toBeGreaterThan(0);
 
@@ -244,18 +258,18 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
 
     // Durumu tersine çevir
     await tauriInvoke('update_product_status', {
-      actorRole: 'OWNER',
+      ...auth,
       id: testProd.id,
       is_active: !originalStatus,
     });
 
-    const refreshedProds = await tauriInvoke<any[]>('get_management_products', { actorRole: 'OWNER' });
+    const refreshedProds = await tauriInvoke<any[]>('get_management_products', auth);
     const toggledProd = refreshedProds.find(p => p.id === testProd.id);
     expect(toggledProd?.is_active).toBe(!originalStatus);
 
     // Eski haline getir
     await tauriInvoke('update_product_status', {
-      actorRole: 'OWNER',
+      ...auth,
       id: testProd.id,
       is_active: originalStatus,
     });

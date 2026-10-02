@@ -104,13 +104,16 @@ async fn average_unit_costs(pool: &SqlitePool,
 ) -> Result<Vec<(String, Option<i64>)>, String>
 {
     let rows = sqlx::query(
+        // Kolon adlari gercek sema ile birebir ayni olmak zorunda: test fixture'i
+        // kendi sahte tablosunu kurdugu icin hatali kolon adi yalnizca uretimde
+        // patlardi ve testler yesil kalirdi.
         "SELECT b.product_id,
-                CAST(SUM(b.initial_qty * b.unit_cost_cents)
-                     / NULLIF(SUM(b.remaining_qty), 0) AS INTEGER) AS avg_cost
+                CAST(SUM(b.initial_quantity * b.unit_cost_cents)
+                     / NULLIF(SUM(b.remaining_quantity), 0) AS INTEGER) AS avg_cost
            FROM inventory_batches b
           WHERE b.tenant_id = ?1
             AND b.product_id IS NOT NULL
-            AND b.remaining_qty > 0
+            AND b.remaining_quantity > 0
           GROUP BY b.product_id",
     )
     .bind(tenant_id)
