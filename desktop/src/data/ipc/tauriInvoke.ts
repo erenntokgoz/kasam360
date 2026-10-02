@@ -153,6 +153,11 @@ export interface MockOrder {
   status: 'OPEN' | 'IN_PROGRESS' | 'PAID' | 'VOID' | 'CANCELLED';
   total_cents: number;
   created_at: string;
+  /**
+   * Fişi kapatan personel. Faz 11 KPI'sı bu alanı okur; alan yoksa mock'ta
+   * sıfır siparişle eşleşir ve "satış yok" görünür (uydurma ciro üretilmez).
+   */
+  cashier_id?: string;
 }
 
 export interface MockCashMovement {
@@ -374,6 +379,119 @@ let mockCompetitorPrices: {
   competitor_name: string;
   price_cents: number;
 }[] = lsLoad('competitor_prices', []);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FAZ 11 · PERSONEL 360° MOCK STATE
+// ─────────────────────────────────────────────────────────────────────────────
+// Neden ayrı depolar: `mockStaff` kimlik+giriş (PIN) tutar; maaş, izin, zimmet
+// tutanakları burada. Aynı depoda tutulsaydı bir test `mockStaff`'ı sıfırladığında
+// maaş kayıtları da silinirdi ve "bordro boşaldı" gibi görünürdü.
+type MockStaffProfile = {
+  user_id: string;
+  full_name: string;
+  role: string;
+  base_salary_cents: number;
+  commission_percent: number;
+  birth_date: string | null;
+  hire_date: string | null;
+  phone: string | null;
+  national_id: string | null;
+  address: string | null;
+  emergency_contact: string | null;
+  notes: string | null;
+};
+
+type MockPayrollRule = {
+  user_id: string;
+  model: string;
+  base_salary_cents: number;
+  commission_percent: number;
+  hourly_rate_cents: number;
+  tip_multiplier_percent: number;
+  profit_share_percent: number;
+  active: boolean;
+};
+
+let mockStaffProfiles: MockStaffProfile[] = lsLoad('staff_profiles', []);
+let mockPayrollRules: MockPayrollRule[] = lsLoad('payroll_rules', []);
+let mockTipPool: { period: string; order_id: string | null; amount_cents: number; created_at: string }[] =
+  lsLoad('tip_pool_entries', []);
+let mockTipDistributions: {
+  period: string;
+  user_id: string;
+  full_name: string;
+  basis_cents: number;
+  multiplier_percent: number;
+  amount_cents: number;
+}[] = lsLoad('tip_distributions', []);
+let mockShiftPlans: {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  user_name: string;
+  plan_date: string;
+  start_time: string;
+  end_time: string;
+  planned_break_minutes: number;
+  role_required: string;
+  station: string | null;
+  status: string;
+  realized_shift_id: string | null;
+}[] = lsLoad('shift_plans', []);
+let mockLeaves: {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  kind: string;
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+  status: string;
+  approver_id: string | null;
+  decided_at: string | null;
+}[] = lsLoad('leave_requests', []);
+let mockCustody: {
+  id: string;
+  user_id: string;
+  item_name: string;
+  quantity: number;
+  status: string;
+  delivered_at: string;
+  returned_at: string | null;
+  notes: string | null;
+}[] = lsLoad('custody_records', []);
+let mockIncidents: {
+  id: string;
+  user_id: string;
+  kind: string;
+  severity: string;
+  occurred_at: string;
+  summary: string;
+  details: string | null;
+  resolution: string | null;
+  status: string;
+  recorded_by: string;
+}[] = lsLoad('staff_incidents', []);
+
+/** Testler için tüm Faz 11 depolarını fabrika ayarlarına döndürür. */
+export function resetMockStaff360(): void {
+  mockStaffProfiles = [];
+  mockPayrollRules = [];
+  mockTipPool = [];
+  mockTipDistributions = [];
+  mockShiftPlans = [];
+  mockLeaves = [];
+  mockCustody = [];
+  mockIncidents = [];
+  lsSave('staff_profiles', mockStaffProfiles);
+  lsSave('payroll_rules', mockPayrollRules);
+  lsSave('tip_pool_entries', mockTipPool);
+  lsSave('tip_distributions', mockTipDistributions);
+  lsSave('shift_plans', mockShiftPlans);
+  lsSave('leave_requests', mockLeaves);
+  lsSave('custody_records', mockCustody);
+  lsSave('staff_incidents', mockIncidents);
+}
 
 // 6. Personel (Staff) - Master Admin and seed users preserved
 const DEFAULT_STAFF: MockStaffMember[] = [
@@ -982,7 +1100,114 @@ function requireReportGate(args: Record<string, unknown>): { tenantId: string; r
   return { tenantId, role };
 }
 
-function requireReportRange(args: Record<string, unknown>): { from: string; to: string } {
+/**
+ * Vardiya kapısı: rapor kapısından farklı olarak CASHIER da kendi vardiyasını
+ * görebilir. Backend `shift_commands` içinde `[Owner, Manager, Cashier]` kabul
+ * ediyor; mock farklı davranırsa tarayıcı testi masaüstünü yıltar.
+ */
+function requireShiftGate(args: Record<string, unknown>): { tenantId: string; role: string } {
+  const role = ((args.actor_role || args.actorRole || args.callerRole || args.caller_role || '') as string)
+    .trim()
+    .toUpperCase();
+  if (role !== 'OWNER' && role !== 'MANAGER' && role !== 'CASHIER') {
+    throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, CASHIER).');
+  }
+  const tenantId = ((args.tenant_id || args.tenantId || '') as string).trim();
+  if (!tenantId) {
+    throw new Error('UNAUTHORIZED: tenant_id is required');
+  }
+  return { tenantId, role };
+}
+
+/**
+ * Faz 11 personel sicili kapısı: işletme sahibi ve müdür.
+ *
+ * Backend `rbac::require_staff_admin` ile aynı. WAITER dışlanıyor: garson
+ * başkasının personel dosyasını göremez.
+ */
+function requireStaffAdminGate(args: Record<string, unknown>): { tenantId: string; role: string } {
+  const role = ((args.actor_role || args.actorRole || args.callerRole || args.caller_role || '') as string)
+    .trim()
+    .toUpperCase();
+  if (role !== 'OWNER' && role !== 'MANAGER') {
+    throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER).');
+  }
+  const tenantId = ((args.tenant_id || args.tenantId || '') as string).trim();
+  if (!tenantId) {
+    throw new Error('UNAUTHORIZED: tenant_id zorunludur');
+  }
+  return { tenantId, role };
+}
+
+/**
+ * Faz 11 maaş **tutarı** kapısı: yalnız işletme sahibi.
+ *
+ * Neden ayrı: müdür bordroyu görür ama tutarı görmez. Mock'ta da aynı ayrım
+ * yapılmazsa tarayıcıda müdür tutarı görür ve test gerçek davranışı yıltır.
+ */
+function requirePayrollAmountGate(args: Record<string, unknown>): { tenantId: string; role: string } {
+  const gate = requireStaffAdminGate(args);
+  if (gate.role !== 'OWNER') {
+    throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER).');
+  }
+  return gate;
+}
+
+/** Faz 11 izin kapısı: her rol kendi iznini isteyebilir, KITCHEN hariç. */
+function requireLeaveRequestGate(args: Record<string, unknown>): { tenantId: string; role: string } {
+  const role = ((args.actor_role || args.actorRole || args.callerRole || args.caller_role || '') as string)
+    .trim()
+    .toUpperCase();
+  if (!['MASTER', 'OWNER', 'MANAGER', 'CASHIER', 'WAITER'].includes(role)) {
+    throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: MASTER, OWNER, MANAGER, CASHIER, WAITER).');
+  }
+  const tenantId = ((args.tenant_id || args.tenantId || '') as string).trim();
+  if (!tenantId) {
+    throw new Error('UNAUTHORIZED: tenant_id zorunludur');
+  }
+  return { tenantId, role };
+}
+
+/** `YYYY-MM` doğrulaması. Geçersiz dönem mock'ta da reddedilir. */
+function requirePeriod(args: Record<string, unknown>): string {
+  const period = ((args.period || '') as string).trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+    throw new Error(`INVALID_ARGUMENT: donem YYYY-MM olmali (${period})`);
+  }
+  return period;
+}
+
+/** Backend `kpi_service::aralik_kontrol` ile aynı: ters aralık hata. */
+function requireKpiRange(args: Record<string, unknown>): { from: string; to: string } {
+  const from = ((args.from || '') as string).trim();
+  const to = ((args.to || '') as string).trim();
+  if (!from || !to) throw new Error('INVALID_ARGUMENT: from ve to zorunludur');
+  if (from > to) throw new Error(`INVALID_ARGUMENT: tarih araligi ters: ${from} > ${to}`);
+  return { from, to };
+}
+
+/** Kuruşu TL metnine çevirir; frontend'de de aynı kural geçerlidir. */
+function mockMoney(cents: number): string {
+  return `₺${(cents / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Mock tarih üretici: testlerin yıl sonuna takılmasını önler. */
+function mockNowIso(): string {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * `YYYY-MM-DD` doğrulaması. Yalnız biçim değil, **takvimde var olma** kontrolü
+ * de yapılır: `2026-02-30` biçim olarak geçer ama gün yoktur; kabul edilirse
+ * doğum günü hesabı bir gün kayar.
+ */
+function mockIsIsoDate(raw: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) return false;
+  const d = new Date(`${raw.trim()}T00:00:00Z`);
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === raw.trim();
+}
+
+  function requireReportRange(args: Record<string, unknown>): { from: string; to: string } {
   const from = ((args.from || '') as string).trim();
   const to = ((args.to || '') as string).trim();
   if (!from) throw new Error('INVALID_ARGUMENT: from is required');
@@ -1484,7 +1709,15 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return 'Ready' as unknown as T;
   }
   if (cmd === 'waiter_clock_in') {
-    return { success: true } as unknown as T;
+    // Backend artık RBAC ve tenant zorunlu kılıyor; mock aynı sözleşmeyi izler.
+    const role = String(args.actor_role || args.actorRole || '').toUpperCase();
+    if (!['OWNER', 'MANAGER', 'WAITER'].includes(role)) {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, WAITER).');
+    }
+    if (!String(args.tenant_id || args.tenantId || '').trim()) {
+      throw new Error('tenant_id gerekli');
+    }
+    return `evt_clockin_${Date.now()}` as unknown as T;
   }
 
   // ----- SİPARİŞ (Order / POS) -----
@@ -2299,6 +2532,9 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
 
   // ----- VARDİYA (Shift / Cashier) -----
   if (cmd === 'get_active_shift') {
+    // Backend bu komutta RBAC ve tenant zorunlu kılıyor; mock aynı kapıyı
+    // uygular, aksi halde tarayıcıda geçen bir çağrı masaüstünde reddedilirdi.
+    requireShiftGate(args);
     const targetCashierId = (args.cashierId || args.cashier_id) as string | undefined;
     const active = mockShifts.find((s) => {
       if (s.status !== 'OPEN') return false;
@@ -2319,6 +2555,8 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     })) as unknown as T;
   }
   if (cmd === 'open_shift') {
+    // Faz 11 V4 düzeltmesi: beklenen bakiyeyi belirleyen komut artık rol ister.
+    requireShiftGate(args);
     const shiftTenantId = (args.tenantId || args.tenant_id || callerTenantId || '') as string;
     const targetCashierId = (args.cashierId || args.cashier_id || 'usr_cashier') as string;
     const staffMember = mockStaff.find((s) => s.id === targetCashierId);
@@ -2342,6 +2580,8 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return newShift as unknown as T;
   }
   if (cmd === 'close_shift') {
+    // Faz 11 V4 düzeltmesi: kasa farkı üreten komut rol kapısı arkasında.
+    requireShiftGate(args);
     const targetCashierId = (args.cashierId || args.cashier_id) as string | undefined;
     const targetShiftId = (args.shiftId || args.shift_id) as string | undefined;
     const closingAmount = Number(args.actualAmountCents ?? args.actual_amount_cents ?? 0);
@@ -2725,6 +2965,531 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
       });
     const kindsWithoutRecords = ['VOID', 'REFUND', 'WASTE'].filter((kind) => !seen.has(kind));
     return { rows, kinds_without_records: kindsWithoutRecords } as unknown as T;
+  }
+
+// ----- FAZ 11 · PERSONEL 360° -----
+  // Mock, backend ile **aynı** kapıları uygular. Gevşek kalan mock, tarayıcıda
+  // çalışan uygulamayla gerçek uygulamanın farklı davranmasına yol açar (fail-open).
+  if (cmd === 'list_staff_profiles') {
+    const gate = requireStaffAdminGate(args);
+    return mockStaffProfiles
+      .filter((p) => mockStaff.some((s) => s.id === p.user_id && s.tenant_id === gate.tenantId))
+      .map((p) => ({
+        userId: p.user_id,
+        fullName: p.full_name,
+        role: p.role,
+        // Gizlilik kuralı mock'ta da: müdür tutarı görmez, 0 görür.
+        baseSalaryCents: gate.role === 'OWNER' ? p.base_salary_cents : 0,
+        commissionPercent: p.commission_percent,
+        birthDate: p.birth_date,
+        hireDate: p.hire_date,
+        phone: p.phone,
+        nationalId: p.national_id,
+        address: p.address,
+        emergencyContact: p.emergency_contact,
+        notes: p.notes,
+      })) as unknown as T;
+  }
+
+  if (cmd === 'save_staff_profile') {
+    const gate = requireStaffAdminGate(args);
+    const input = (args.input ?? {}) as Record<string, unknown>;
+    const userId = String(input.userId ?? input.user_id ?? '').trim();
+    if (!userId) throw new Error('INVALID_ARGUMENT: kullanici zorunludur');
+    if (!mockStaff.some((s) => s.id === userId && s.tenant_id === gate.tenantId && s.role !== 'MASTER')) {
+      throw new Error(`kullanici bulunamadi: ${userId}`);
+    }
+    const cents = Number(input.baseSalaryCents ?? input.base_salary_cents ?? 0);
+    if (!Number.isFinite(cents) || cents < 0) throw new Error('maas negatif olamaz');
+    const komisyon = Number(input.commissionPercent ?? input.commission_percent ?? 0);
+    if (!Number.isInteger(komisyon) || komisyon < 0 || komisyon > 100) {
+      throw new Error('komisyon yuzdesi 0-100 araliginda olmali');
+    }
+    const dogum = (input.birthDate ?? input.birth_date ?? null) as string | null;
+    if (dogum && !mockIsIsoDate(dogum)) {
+      throw new Error('dogum tarihi YYYY-MM-DD biciminde olmali');
+    }
+    const kayit: MockStaffProfile = {
+      user_id: userId,
+      full_name: String(input.fullName ?? input.full_name ?? '').trim(),
+      role: mockStaff.find((s) => s.id === userId)?.role ?? 'WAITER',
+      base_salary_cents: Math.trunc(cents),
+      commission_percent: Math.trunc(komisyon),
+      birth_date: dogum,
+      hire_date: (input.hireDate ?? input.hire_date ?? null) as string | null,
+      phone: (input.phone ?? null) as string | null,
+      national_id: (input.nationalId ?? input.national_id ?? null) as string | null,
+      address: (input.address ?? null) as string | null,
+      emergency_contact: (input.emergencyContact ?? input.emergency_contact ?? null) as string | null,
+      notes: (input.notes ?? null) as string | null,
+    };
+    if (!kayit.full_name) throw new Error('ad soyad zorunludur');
+    const idx = mockStaffProfiles.findIndex((p) => p.user_id === userId);
+    if (idx >= 0) mockStaffProfiles[idx] = kayit;
+    else mockStaffProfiles.push(kayit);
+    lsSave('staff_profiles', mockStaffProfiles);
+    return undefined as unknown as T;
+  }
+
+  if (cmd === 'get_upcoming_birthdays') {
+    const gate = requireStaffAdminGate(args);
+    const horizon = Math.max(0, Math.min(365, Number(args.daysAhead ?? args.days_ahead ?? 30)));
+    const today = new Date();
+    const todayIso = today.toISOString().slice(0, 10);
+    const out: { userId: string; fullName: string; date: string }[] = [];
+    for (const profil of mockStaffProfiles) {
+      if (!profil.birth_date || !mockIsIsoDate(profil.birth_date)) continue;
+      if (!mockStaff.some((s) => s.id === profil.user_id && s.tenant_id === gate.tenantId)) continue;
+      // Ay/günü bu yılın doğum gününe sabitle; geçmişe düşerse bir yıl ileri al.
+      const ayGun = profil.birth_date.slice(5);
+      let aday = `${todayIso.slice(0, 4)}-${ayGun}`;
+      if (!mockIsIsoDate(aday)) aday = `${todayIso.slice(0, 4)}-${ayGun.slice(0, 5)}${String(Number(ayGun.slice(6, 8)) - 1).padStart(2, '0')}`;
+      if (aday < todayIso) {
+        const yil = Number(todayIso.slice(0, 4)) + 1;
+        aday = `${yil}-${ayGun}`;
+        if (!mockIsIsoDate(aday)) aday = `${yil}-${ayGun.slice(0, 5)}${String(Number(ayGun.slice(6, 8)) - 1).padStart(2, '0')}`;
+      }
+      const fark = Math.round((Date.parse(aday) - Date.parse(todayIso)) / 86_400_000);
+      if (fark <= horizon) {
+        out.push({ userId: profil.user_id, fullName: profil.full_name, date: aday });
+      }
+    }
+    out.sort((a, b) => a.date.localeCompare(b.date));
+    return out as unknown as T;
+  }
+
+  if (cmd === 'list_shift_plans') {
+    const gate = requireStaffAdminGate(args);
+    const { from, to } = requireKpiRange(args);
+    return mockShiftPlans
+      .filter((p) => p.tenant_id === gate.tenantId)
+      .filter((p) => p.plan_date >= from && p.plan_date <= to)
+      .map((p) => ({
+        id: p.id,
+        userId: p.user_id,
+        userName: p.user_name,
+        planDate: p.plan_date,
+        startTime: p.start_time,
+        endTime: p.end_time,
+        plannedBreakMinutes: p.planned_break_minutes,
+        roleRequired: p.role_required,
+        station: p.station,
+        status: p.status,
+        realizedShiftId: p.realized_shift_id,
+      })) as unknown as T;
+  }
+
+  if (cmd === 'add_shift_plan') {
+    const gate = requireStaffAdminGate(args);
+    const plan = (args.plan ?? {}) as Record<string, unknown>;
+    const userId = String(plan.userId ?? plan.user_id ?? '').trim();
+    const planDate = String(plan.planDate ?? plan.plan_date ?? '').trim();
+    const start = String(plan.startTime ?? plan.start_time ?? '');
+    const end = String(plan.endTime ?? plan.end_time ?? '');
+    if (!mockIsIsoDate(planDate)) throw new Error('plan tarihi YYYY-MM-DD biciminde olmali');
+    if (!(end > start)) throw new Error('vardiya bitisi baslangictan sonra olmali');
+    const user = mockStaff.find((s) => s.id === userId && s.tenant_id === gate.tenantId);
+    if (!user) throw new Error(`kullanici bulunamadi: ${userId}`);
+    const id = `spl_${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+    mockShiftPlans.push({
+      id,
+      tenant_id: gate.tenantId,
+      user_id: userId,
+      user_name: user.name,
+      plan_date: planDate,
+      start_time: start,
+      end_time: end,
+      planned_break_minutes: Math.max(0, Number(plan.plannedBreakMinutes ?? plan.planned_break_minutes ?? 0)),
+      role_required: String(plan.roleRequired ?? plan.role_required ?? 'WAITER'),
+      station: (plan.station ?? null) as string | null,
+      status: 'Planned',
+      realized_shift_id: null,
+    });
+    lsSave('shift_plans', mockShiftPlans);
+    return id as unknown as T;
+  }
+
+  if (cmd === 'list_leave_requests') {
+    const gate = requireLeaveRequestGate(args);
+    const userId = ((args.userId ?? args.user_id ?? null) as string | null);
+    return mockLeaves
+      .filter((l) => l.tenant_id === gate.tenantId)
+      .filter((l) => !userId || l.user_id === userId)
+      .map((l) => ({
+        id: l.id,
+        userId: l.user_id,
+        kind: l.kind,
+        startDate: l.start_date,
+        endDate: l.end_date,
+        reason: l.reason,
+        status: l.status,
+        approverId: l.approver_id,
+        decidedAt: l.decided_at,
+      })) as unknown as T;
+  }
+
+  if (cmd === 'request_leave') {
+    requireLeaveRequestGate(args);
+    const input = (args.input ?? {}) as Record<string, unknown>;
+    const userId = String(input.userId ?? input.user_id ?? '').trim();
+    const start = String(input.startDate ?? input.start_date ?? '').trim();
+    const end = String(input.endDate ?? input.end_date ?? '').trim();
+    if (!mockIsIsoDate(start) || !mockIsIsoDate(end)) {
+      throw new Error('izin tarihleri YYYY-MM-DD biciminde olmali');
+    }
+    if (end < start) throw new Error('izin bitisi baslangictan once olamaz');
+    const cakisma = mockLeaves.some(
+      (l) =>
+        l.user_id === userId &&
+        ['Bekliyor', 'Onaylandi'].includes(l.status) &&
+        l.start_date <= end &&
+        l.end_date >= start
+    );
+    if (cakisma) throw new Error('bu tarihlerde zaten bir izin talebi var');
+    const id = `lve_${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+    mockLeaves.push({
+      id,
+      tenant_id: ((args.tenantId ?? args.tenant_id ?? '') as string).trim(),
+      user_id: userId,
+      kind: String(input.kind ?? 'YILLIK'),
+      start_date: start,
+      end_date: end,
+      reason: (input.reason ?? null) as string | null,
+      status: 'Bekliyor',
+      approver_id: null,
+      decided_at: null,
+    });
+    lsSave('leave_requests', mockLeaves);
+    return id as unknown as T;
+  }
+
+  if (cmd === 'decide_leave') {
+    const gate = requireStaffAdminGate(args);
+    const leaveId = ((args.leaveId ?? args.leave_id ?? '') as string).trim();
+    const approverId = ((args.approverId ?? args.approver_id ?? '') as string).trim();
+    const approve = Boolean(args.approve);
+    const kayit = mockLeaves.find((l) => l.id === leaveId);
+    if (!kayit) throw new Error('izin talebi bulunamadi');
+    if (kayit.user_id === approverId) throw new Error('kendi iznini kendin onaylayamazsin');
+    if (kayit.status !== 'Bekliyor') throw new Error(`izin talebi zaten kararli: ${kayit.status}`);
+    kayit.status = approve ? 'Onaylandi' : 'Reddedildi';
+    kayit.approver_id = approverId;
+    kayit.decided_at = mockNowIso();
+    lsSave('leave_requests', mockLeaves);
+    void gate;
+    return undefined as unknown as T;
+  }
+
+  if (cmd === 'list_custody_records') {
+    const gate = requireStaffAdminGate(args);
+    const onlyOpen = Boolean(args.onlyOpen ?? args.only_open);
+    return mockCustody
+      .filter((c) => mockStaff.some((s) => s.id === c.user_id && s.tenant_id === gate.tenantId))
+      .filter((c) => (onlyOpen ? c.status === 'Teslim' : true))
+      .map((c) => ({
+        id: c.id,
+        userId: c.user_id,
+        itemName: c.item_name,
+        quantity: c.quantity,
+        status: c.status,
+        deliveredAt: c.delivered_at,
+        returnedAt: c.returned_at,
+        notes: c.notes,
+      })) as unknown as T;
+  }
+
+  if (cmd === 'add_custody_record') {
+    requireStaffAdminGate(args);
+    const userId = ((args.userId ?? args.user_id ?? '') as string).trim();
+    const itemName = ((args.itemName ?? args.item_name ?? '') as string).trim();
+    const quantity = Math.trunc(Number(args.quantity ?? 0));
+    if (!itemName) throw new Error('zimmet kalemi bos olamaz');
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('adet sifirdan buyuk olmali');
+    const id = `cst_${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+    mockCustody.push({
+      id,
+      user_id: userId,
+      item_name: itemName,
+      quantity,
+      status: 'Teslim',
+      delivered_at: mockNowIso(),
+      returned_at: null,
+      notes: (args.notes ?? null) as string | null,
+    });
+    lsSave('custody_records', mockCustody);
+    return id as unknown as T;
+  }
+
+  if (cmd === 'close_custody_record') {
+    requireStaffAdminGate(args);
+    const custodyId = ((args.custodyId ?? args.custody_id ?? '') as string).trim();
+    const damaged = Boolean(args.damaged);
+    const kayit = mockCustody.find((c) => c.id === custodyId);
+    if (!kayit) throw new Error('zimmet kaydi bulunamadi');
+    if (kayit.status !== 'Teslim') throw new Error(`zimmet zaten kapali: ${kayit.status}`);
+    kayit.status = damaged ? 'Hasarli' : 'Iade';
+    kayit.returned_at = mockNowIso();
+    lsSave('custody_records', mockCustody);
+    return undefined as unknown as T;
+  }
+
+  if (cmd === 'list_staff_incidents') {
+    const gate = requireStaffAdminGate(args);
+    const userId = ((args.userId ?? args.user_id ?? null) as string | null);
+    return mockIncidents
+      .filter((i) => mockStaff.some((s) => s.id === i.user_id && s.tenant_id === gate.tenantId))
+      .filter((i) => !userId || i.user_id === userId)
+      .map((i) => ({
+        id: i.id,
+        userId: i.user_id,
+        kind: i.kind,
+        severity: i.severity,
+        occurredAt: i.occurred_at,
+        summary: i.summary,
+        details: i.details,
+        resolution: i.resolution,
+        status: i.status,
+        recordedBy: i.recorded_by,
+      })) as unknown as T;
+  }
+
+  if (cmd === 'record_staff_incident') {
+    requireStaffAdminGate(args);
+    const input = (args.input ?? {}) as Record<string, unknown>;
+    const ozet = String(input.summary ?? '').trim();
+    if (!ozet) throw new Error('tutanak ozeti bos olamaz');
+    const id = `inc_${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+    mockIncidents.push({
+      id,
+      user_id: String(input.userId ?? input.user_id ?? '').trim(),
+      kind: String(input.kind ?? 'NOT'),
+      severity: String(input.severity ?? 'Dusuk'),
+      occurred_at: String(input.occurredAt ?? input.occurred_at ?? mockNowIso()),
+      summary: ozet,
+      details: (input.details ?? null) as string | null,
+      resolution: null,
+      status: 'ACIK',
+      recorded_by: ((args.actorId ?? args.actor_id ?? '') as string).trim(),
+    });
+    lsSave('staff_incidents', mockIncidents);
+    return id as unknown as T;
+  }
+
+  if (cmd === 'get_payroll_rules') {
+    const gate = requireStaffAdminGate(args);
+    return mockPayrollRules
+      .filter((r) => mockStaff.some((s) => s.id === r.user_id && s.tenant_id === gate.tenantId))
+      .map((r) => ({
+        userId: r.user_id,
+        fullName: mockStaff.find((s) => s.id === r.user_id)?.name ?? r.user_id,
+        model: r.model,
+        baseSalaryCents: gate.role === 'OWNER' ? r.base_salary_cents : 0,
+        commissionPercent: r.commission_percent,
+        hourlyRateCents: gate.role === 'OWNER' ? r.hourly_rate_cents : 0,
+        tipMultiplierPercent: r.tip_multiplier_percent,
+        profitSharePercent: r.profit_share_percent,
+        active: r.active,
+      })) as unknown as T;
+  }
+
+  if (cmd === 'set_payroll_rule') {
+    requirePayrollAmountGate(args);
+    const input = (args.input ?? {}) as Record<string, unknown>;
+    const model = String(input.model ?? '').trim().toUpperCase();
+    const MODELLER = ['FIXED', 'COMMISSION', 'TIP', 'HOURLY', 'PROFIT_SHARE'];
+    if (!MODELLER.includes(model)) throw new Error(`gecersiz maas modeli: ${model}`);
+    const userId = String(input.userId ?? input.user_id ?? '').trim();
+    if (!userId) throw new Error('calisan zorunludur');
+    const kural: MockPayrollRule = {
+      user_id: userId,
+      model,
+      base_salary_cents: Math.max(0, Math.trunc(Number(input.baseSalaryCents ?? input.base_salary_cents ?? 0))),
+      commission_percent: Math.max(0, Math.min(100, Math.trunc(Number(input.commissionPercent ?? input.commission_percent ?? 0)))),
+      hourly_rate_cents: Math.max(0, Math.trunc(Number(input.hourlyRateCents ?? input.hourly_rate_cents ?? 0))),
+      tip_multiplier_percent: Math.max(0, Math.min(500, Math.trunc(Number(input.tipMultiplierPercent ?? input.tip_multiplier_percent ?? 100)))),
+      profit_share_percent: Math.max(0, Math.min(100, Math.trunc(Number(input.profitSharePercent ?? input.profit_share_percent ?? 0)))),
+      active: true,
+    };
+    const idx = mockPayrollRules.findIndex((r) => r.user_id === userId);
+    if (idx >= 0) mockPayrollRules[idx] = kural;
+    else mockPayrollRules.push(kural);
+    lsSave('payroll_rules', mockPayrollRules);
+    return undefined as unknown as T;
+  }
+
+  if (cmd === 'run_payroll') {
+    const gate = requireStaffAdminGate(args);
+    const period = requirePeriod(args);
+    const kurallar = mockPayrollRules.filter((r) =>
+      mockStaff.some((s) => s.id === r.user_id && s.tenant_id === gate.tenantId)
+    );
+    if (kurallar.length === 0) throw new Error('bu isletmede tanimli maas kurali yok');
+
+    const runs = kurallar.map((r) => {
+      const person = mockStaff.find((s) => s.id === r.user_id);
+      const profil = mockStaffProfiles.find((p) => p.user_id === r.user_id);
+      const taban_maas = gate.role === 'OWNER' ? profil?.base_salary_cents ?? r.base_salary_cents : 0;
+      const komisyon = r.commission_percent > 0 ? Math.trunc((taban_maas * r.commission_percent) / 100) : 0;
+      const bahsis = r.model === 'TIP'
+        ? mockTipDistributions
+            .filter((d) => d.user_id === r.user_id)
+            .reduce((t, d) => t + d.amount_cents, 0)
+        : 0;
+      const brut = taban_maas + komisyon + bahsis;
+      const uyarilar: string[] = [];
+      if (r.commission_percent > 0 && komisyon === 0) {
+        uyarilar.push('bu donemde satış kaydı yok; komisyon hesaplanmadi');
+      }
+      if (r.model === 'TIP' && bahsis === 0) uyarilar.push('bu donemde dagitilmis bahsis yok');
+      return {
+        id: `pay_${r.user_id}_${period}`,
+        userId: r.user_id,
+        fullName: person?.name ?? r.user_id,
+        role: person?.role ?? 'BILINMIYOR',
+        period,
+        model: r.model,
+        amounts:
+          gate.role === 'OWNER'
+            ? {
+                baseCents: taban_maas,
+                commissionCents: komisyon,
+                tipCents: bahsis,
+                hourlyCents: 0,
+                profitShareCents: 0,
+                deductionCents: 0,
+                grossCents: brut,
+                netCents: brut,
+              }
+            : null,
+        basisNote: `sabit ${mockMoney(taban_maas)} + bahsis ${mockMoney(bahsis)}`,
+        warning: uyarilar.length > 0 ? uyarilar.join('; ') : null,
+      };
+    });
+    return runs as unknown as T;
+  }
+
+  if (cmd === 'get_tip_pool_summary') {
+    const gate = requireStaffAdminGate(args);
+    const period = requirePeriod(args);
+    const total = mockTipPool
+      .filter((t) => t.period === period)
+      .reduce((t, x) => t + x.amount_cents, 0);
+    const dagitilan = mockTipDistributions.filter((d) => d.user_id && period === period);
+    void dagitilan;
+    const dagitilanToplam = mockTipDistributions
+      .filter((_) => period === period)
+      .reduce((t, d) => t + d.amount_cents, 0);
+    void mockStaff.some((s) => s.tenant_id === gate.tenantId);
+    return {
+      period,
+      totalCents: total,
+      distributedCents: dagitilanToplam,
+      entryCount: mockTipPool.filter((t) => t.period === period).length,
+      leftoverCents: total - dagitilanToplam,
+    } as unknown as T;
+  }
+
+  if (cmd === 'distribute_tip_pool') {
+    const gate = requirePayrollAmountGate(args);
+    const period = requirePeriod(args);
+    const allocations = ((args.allocations ?? []) as Record<string, unknown>[]).map((a) => ({
+      user_id: String(a.userId ?? a.user_id ?? '').trim(),
+      basis_cents: Math.max(0, Math.trunc(Number(a.basisCents ?? a.basis_cents ?? 0))),
+      multiplier_percent: Math.max(0, Math.trunc(Number(a.multiplierPercent ?? a.multiplier_percent ?? 100))),
+    }));
+    if (allocations.length === 0) throw new Error('dagitilacak calisan yok');
+    const total = mockTipPool
+      .filter((t) => t.period === period)
+      .reduce((t, x) => t + x.amount_cents, 0);
+    if (total <= 0) throw new Error('bu donemde dagitilacak bahsis yok');
+
+    const agirlikli = allocations
+      .map((a) => ({
+        user_id: a.user_id,
+        agirlik: a.basis_cents * a.multiplier_percent,
+        basis_cents: a.basis_cents,
+        multiplier_percent: a.multiplier_percent,
+      }))
+      .sort((a, b) => a.user_id.localeCompare(b.user_id));
+    const toplamAgirlik = agirlikli.reduce((t, a) => t + a.agirlik, 0);
+    if (toplamAgirlik <= 0) throw new Error('dagitim tabani sifir; kimse calismamis');
+
+    let dagilan = 0;
+    const sonIndex = agirlikli.length - 1;
+    const sonuc = agirlikli.map((a, idx) => {
+      const pay = idx === sonIndex
+        ? total - dagilan
+        : Math.trunc((a.agirlik * total) / toplamAgirlik);
+      if (idx !== sonIndex) dagilan += pay;
+      return {
+        userId: a.user_id,
+        fullName: mockStaff.find((s) => s.id === a.user_id)?.name ?? a.user_id,
+        basisCents: a.basis_cents,
+        multiplierPercent: a.multiplier_percent,
+        amountCents: pay,
+      };
+    });
+    const toplamPay = sonuc.reduce((t, d) => t + d.amountCents, 0);
+    if (toplamPay !== total) {
+      throw new Error(`dagitim toplami havuzla uyusmuyor: ${toplamPay} != ${total}`);
+    }
+    // Yalnız bu dönemin dağıtımları değişir; geçmiş dönem kaydı silinmez.
+    const buDonemDisi = mockTipDistributions.filter((x) => x.period !== period);
+    mockTipDistributions = [
+      ...buDonemDisi,
+      ...sonuc.map((d) => ({
+        period,
+        user_id: d.userId,
+        full_name: d.fullName,
+        basis_cents: d.basisCents,
+        multiplier_percent: d.multiplierPercent,
+        amount_cents: d.amountCents,
+      })),
+    ];
+    lsSave('tip_distributions', mockTipDistributions);
+    void gate;
+    return sonuc as unknown as T;
+  }
+
+  if (cmd === 'get_staff_kpi') {
+    const gate = requireStaffAdminGate(args);
+    const { from, to } = requireKpiRange(args);
+    const userId = ((args.userId ?? args.user_id ?? null) as string | null);
+    // Mock siparişleri `mockOrders` üzerinden okur; kayıt yoksa **boş** döner,
+    // sahte ciro üretmez.
+    const siparisler = mockOrders.filter((o) => {
+      if (!o.created_at) return false;
+      const at = o.created_at.slice(0, 10);
+      return at >= from.slice(0, 10) && at <= to.slice(0, 10);
+    });
+    return mockStaff
+      .filter((s) => s.tenant_id === gate.tenantId && s.role !== 'MASTER')
+      .filter((s) => !userId || s.id === userId)
+      .map((s) => {
+        const own = siparisler.filter((o) => o.cashier_id === s.id);
+        const ciro = own.reduce((t, o) => t + (o.total_cents ?? 0), 0);
+        return {
+          userId: s.id,
+          fullName: s.name,
+          orderCount: own.length,
+          itemCount: own.length,
+          grossSalesCents: ciro,
+          avgTicketCents: own.length > 0 ? Math.trunc(ciro / own.length) : 0,
+          voidCount: own.filter((o) => o.status === 'VOID').length,
+          topProduct: null,
+        };
+      }) as unknown as T;
+  }
+
+  if (cmd === 'get_suspicious_activity') {
+    const gate = requireStaffAdminGate(args);
+    const { from, to } = requireKpiRange(args);
+    void gate;
+    // Mock, eşik altı uyarı **üretmez**: gerçek veri yoksa boş liste döner.
+    // Uydurma bayrak testi kırmızıya boyardı ve test gerçeği göstermezdi.
+    void from;
+    void to;
+    return [] as unknown as T;
   }
 
   // ----- FAZ 10 ANALİTİK -----

@@ -5,12 +5,24 @@ describe('Cashier Workstation Integration Tests', () => {
   const cashierId = 'CASHIER_TEST_01';
 
   it('get_active_shift returns active shift or null', async () => {
-    const shift = await tauriInvoke<any>('get_active_shift', { cashierId });
+    // Backend bu komutta RBAC ve tenant zorunlu kılıyor (Faz 11 V1/V4 düzeltmesi):
+    // cross-tenant kasa bakiyesi sızıntısını kapatmak için kapı eklendi.
+    const shift = await tauriInvoke<any>('get_active_shift', {
+      cashierId,
+      actorRole: 'CASHIER',
+      tenantId: 'DEFAULT_TENANT',
+    });
     expect(shift).toBeDefined();
     if (shift) {
       expect(shift.status).toBe('OPEN');
       expect(typeof (shift.expectedAmountCents ?? shift.expected_amount_cents)).toBe('number');
     }
+  });
+
+  it('get_active_shift rolsuz çağrıyı reddeder', async () => {
+    await expect(
+      tauriInvoke('get_active_shift', { cashierId, tenantId: 'DEFAULT_TENANT' }),
+    ).rejects.toThrow(/UNAUTHORIZED/);
   });
 
   it('open_shift opens a shift with expected opening balance in cents', async () => {
@@ -20,6 +32,9 @@ describe('Cashier Workstation Integration Tests', () => {
       cashier_id: cashierId,
       expectedAmountCents: openingCents,
       expected_amount_cents: openingCents,
+      // Faz 11 V4: beklenen bakiyeyi belirleyen komut rol kapısı arkasında.
+      actorRole: 'CASHIER',
+      tenantId: 'DEFAULT_TENANT',
     });
     expect(result).toBeDefined();
     expect(result.status).toBe('OPEN');
@@ -74,6 +89,9 @@ describe('Cashier Workstation Integration Tests', () => {
       cashier_id: cashierId,
       actualAmountCents: closingCents,
       actual_amount_cents: closingCents,
+      // Faz 11 V4: kasa farkı üreten komut rol kapısı arkasında.
+      actorRole: 'CASHIER',
+      tenantId: 'DEFAULT_TENANT',
     });
     expect(closeRes).toBeDefined();
   });
@@ -102,6 +120,7 @@ describe('Cashier Workstation Integration Tests', () => {
       cashierId,
       expectedAmountCents: 10000,
       tenantId,
+      actorRole: 'CASHIER',
     });
     expect(opened?.id).toBeDefined();
 

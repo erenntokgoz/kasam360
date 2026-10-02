@@ -103,20 +103,53 @@ pub async fn update_table_status(
     Ok(())
 }
 
+/// Garson vardiyaya giriş kaydı.
+///
+/// Neden yetki + tenant eklendi (AGENTS.md §3.3 ve §6): komut ne RBAC çağırıyordu
+/// ne de `tenant_id` bağlıyordu. `events` tablosundaki `tenant_id` sütunu varsayılan
+/// `DEFAULT_TENANT` olduğu için tüm garson girişleri tek bir işletmenin altında
+/// birikmişti; işletme büyüdükçe "bu garson hangi şubede çalıştı" sorusu cevaplanamaz
+/// hale geliyordu. Personelin vardiya süresi KPI'ya girdiği için bu kayıt artık
+/// kiracıya bağlı olmak zorundadır.
 #[tauri::command]
 pub async fn waiter_clock_in(
     waiter_id: String,
+    tenant_id: String,
+    actor_role: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<String, String> {
+    // Garson kendi vardiyasını açabilir; müdür ve patron da açabilir.
+    crate::rbac::require_any_present(
+        Some(actor_role.as_str()),
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Waiter,
+        ],
+    )?;
+    let tenant = tenant_id.trim().to_string();
+    if tenant.is_empty() {
+        return Err("tenant_id gerekli".to_string());
+    }
     let event_id = format!("evt_clockin_{}", uuid::Uuid::new_v4());
-    let payload = serde_json::json!({"waiterId": waiter_id, "clockedIn": true});
+    let payload = serde_json::json!({
+        "waiterId": waiter_id,
+        "clockedIn": true,
+        "tenantId": tenant,
+    });
     sqlx::query(
-        "INSERT INTO events (event_id, aggregate_id, aggregate_type, event_type, payload, created_at) VALUES (?, ?, 'WAITER_SHIFT', 'CLOCK_IN', ?, datetime('now'))"
+        "INSERT INTO events
+             (event_id, tenant_id, aggregate_id, aggregate_type, event_type, payload, created_at)
+         VALUES (?1, ?2, ?3, 'WAITER_SHIFT', 'CLOCK_IN', ?4, datetime('now'))",
     )
     .bind(&event_id)
+    .bind(&tenant)
     .bind(&waiter_id)
-    .bind(serde_json::to_string(&payload).unwrap_or_default())
-    .execute(&*pool).await.map_err(|e| e.to_string())?;
+    // `to_string` hatası yutulmaz: bozuk payload yazmak sessizce veri kaybıdır.
+    .bind(serde_json::to_string(&payload).map_err(|e| e.to_string())?)
+    .execute(&*pool)
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(event_id)
 }
 

@@ -18,6 +18,10 @@ pub mod analytics_commands;
 pub mod id_generator;
 pub mod ledger_commands;
 pub mod rbac;
+#[cfg(test)]
+mod shift_security_tests;
+#[cfg(test)]
+mod staff360_tests;
 pub mod user_credentials;
 pub mod print_commands;
 pub mod reservation_commands;
@@ -190,6 +194,28 @@ pub fn run() {
             ledger_commands::get_recurring_expenses,
             ledger_commands::get_directory_statement,
             ledger_commands::print_payment_receipt,
+            // Faz 11: Personel 360°. Maaş tutarı görmek yalnız OWNER'a açıktır;
+            // kapılar `commands::staff_commands` içinde `rbac` ile uygulanır.
+            commands::staff_commands::list_staff_profiles,
+            commands::staff_commands::save_staff_profile,
+            commands::staff_commands::get_upcoming_birthdays,
+            commands::staff_commands::list_shift_plans,
+            commands::staff_commands::add_shift_plan,
+            commands::staff_commands::list_leave_requests,
+            commands::staff_commands::request_leave,
+            commands::staff_commands::decide_leave,
+            commands::staff_commands::list_custody_records,
+            commands::staff_commands::add_custody_record,
+            commands::staff_commands::close_custody_record,
+            commands::staff_commands::list_staff_incidents,
+            commands::staff_commands::record_staff_incident,
+            commands::staff_commands::get_payroll_rules,
+            commands::staff_commands::set_payroll_rule,
+            commands::staff_commands::run_payroll,
+            commands::staff_commands::get_tip_pool_summary,
+            commands::staff_commands::distribute_tip_pool,
+            commands::staff_commands::get_staff_kpi,
+            commands::staff_commands::get_suspicious_activity,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -27,6 +27,11 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     let _ = sqlx::raw_sql("ALTER TABLE outbox ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';").execute(&pool).await;
     let _ = sqlx::raw_sql("ALTER TABLE snapshots ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';").execute(&pool).await;
     let _ = sqlx::raw_sql("ALTER TABLE order_items ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';").execute(&pool).await;
+    // Faz 11: garson karnesi kalem bazlı kırılım okur. Mevcut kurulumlarda
+    // `order_items` tablosu bu kolon olmadan oluşmuş olabilir; CREATE TABLE IF
+    // NOT EXISTS var olan tabloyu değiştirmediği için ALTER gerekir.
+    let _ = sqlx::raw_sql("ALTER TABLE order_items ADD COLUMN waiter_id TEXT;").execute(&pool).await;
+    let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_order_items_waiter ON order_items(tenant_id, waiter_id);").execute(&pool).await;
 
     // DDL şemasını uygula (etki eşitsiz - tüm ifadeler CREATE TABLE IF NOT EXISTS kullanır)
     let schema = include_str!("../migrations/schema.sql");

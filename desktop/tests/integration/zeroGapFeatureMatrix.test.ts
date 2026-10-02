@@ -27,6 +27,8 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
         cashierId,
         expectedAmountCents: 30000, // 300.00 TL
         tenantId,
+        // Faz 11 V4: kasa komutlari rol kapisi arkasinda.
+        actorRole: 'CASHIER',
       });
       expect(openRes).toBeDefined();
 
@@ -57,6 +59,8 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
       const closeRes = await tauriInvoke<any>('close_shift', {
         cashierId,
         actualAmountCents: 33000,
+        tenantId,
+        actorRole: 'CASHIER',
       });
       expect(closeRes).toBeDefined();
     });
@@ -202,11 +206,27 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
     });
 
     it('W3: waiter_clock_in and get_table_ready_status verify floor coordination', async () => {
-      const clockInRes = await tauriInvoke<any>('waiter_clock_in', { waiterId: 'usr_waiter' });
+      // Faz 11 V3 düzeltmesi: waiter_clock_in artık rol ve tenant ister; garson
+      // kendi vardiyasını açabildiği için WAITER burada yetkilidir.
+      const clockInRes = await tauriInvoke<any>('waiter_clock_in', {
+        waiterId: 'usr_waiter',
+        actorRole: 'WAITER',
+        tenantId: 'DEFAULT_TENANT',
+      });
       expect(clockInRes).toBeDefined();
 
       const readyStatus = await tauriInvoke<any>('get_table_ready_status', { tableId: tableA });
       expect(readyStatus).toBeDefined();
+    });
+
+    it('W3b: waiter_clock_in mutfak rolunu reddeder', async () => {
+      await expect(
+        tauriInvoke('waiter_clock_in', {
+          waiterId: 'usr_cook',
+          actorRole: 'KITCHEN',
+          tenantId: 'DEFAULT_TENANT',
+        }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
     });
   });
 

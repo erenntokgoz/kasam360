@@ -141,7 +141,42 @@ pub fn require_any_present(caller_role: Option<&str>, allowed: &[Role]) -> Resul
     require_any(raw, allowed)
 }
 
-/// Anlık PIN onayını verebilecek roller: MASTER, işletme sahibi ve müdür.
+/// Personel kaydı kapısı: işletme sahibi ve müdür.
+///
+/// Neden WAITER dışlanıyor: personel sicili, maaş ve tutanak bilgisi patronun
+/// en hassas verisi; garson başkasının dosyasını göremez.
+pub fn require_staff_admin(raw_role: &str) -> Result<Role, String> {
+    require_any(raw_role, &[Role::Owner, Role::Manager])
+}
+
+/// Maaş **tutarı** görme kapısı: yalnız işletme sahibi.
+///
+/// Neden ayrı fonksiyon: müdür bordroyu *görebilir* (toplam, model, kişi
+/// listesi) ama **tutarı göremez**. Bu ayrım personelin maaşını müdüre
+/// açıklamak zorunda kılmaz; rapor satırı yetkisi ile maaş gizliliği
+/// birbirine karıştırılmamalıdır (AGENTS.md §3.2).
+pub fn require_payroll_amounts(raw_role: &str) -> Result<Role, String> {
+    require_any(raw_role, &[Role::Owner])
+}
+
+/// Vardiya planı ve izin kararı kapısı: işletme sahibi ve müdür.
+/// Onaylayan kişi kendi iznini onaylayamaz (ayrıca servis seviyesinde de
+/// reddedilir); buradaki kapı yalnız rolü denetler.
+pub fn require_shift_planning(raw_role: &str) -> Result<Role, String> {
+    require_any(raw_role, &[Role::Owner, Role::Manager])
+}
+
+/// Personel izin talebi oluşturma kapısı: herkes kendi iznini isteyebilir,
+/// bu yüzden MASTER, OWNER, MANAGER, CASHIER ve WAITER dâhildir. KITCHEN
+/// dışlanır: mutfak personeli vardiya planlama ekranına girmez.
+pub fn require_leave_request(raw_role: &str) -> Result<Role, String> {
+    require_any(
+        raw_role,
+        &[Role::Master, Role::Owner, Role::Manager, Role::Cashier, Role::Waiter],
+    )
+}
+
+/// Onay PIN'i verebilecek roller: MASTER, işletme sahibi ve müdür.
 ///
 /// SPEC §34'te kasa/garson/mutfak onaylama yetkisine sahip değildir; onaylayan
 /// her zaman bu üç rolden biri olmak zorundadır.

@@ -101,6 +101,8 @@ describe('6 Kritik Mantık Hatası Doğrulama Testleri', () => {
       actualAmountCents: 15500,
       tenantId: testTenant,
       tenant_id: testTenant,
+      // Faz 11 V4 düzeltmesi: kasa farkı üreten komut artık rol ister.
+      actorRole: 'CASHIER',
     });
 
     // Kapandıktan sonra açık vardiya tekrar null olmalı
@@ -108,6 +110,7 @@ describe('6 Kritik Mantık Hatası Doğrulama Testleri', () => {
       cashierId: testCashierId,
       tenantId: testTenant,
       tenant_id: testTenant,
+      actorRole: 'CASHIER',
     });
     expect(closedShiftCheck).toBeNull();
   });

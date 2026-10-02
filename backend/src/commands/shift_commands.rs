@@ -34,6 +34,13 @@ pub async fn open_shift(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ShiftDto, String> {
+    // Neden yetki eklendi (AGENTS.md §6): komut `actor_role`'ü yalnız denetim
+    // kaydına yazıyordu, kontrol etmiyordu. Böylece mutfak ve garson rolü de
+    // kasa vardiyası açıp beklenen bakiyeyi belirleyebiliyordu.
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+    )?;
     let audit_lock =
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
@@ -102,6 +109,13 @@ pub async fn close_shift(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ShiftDto, String> {
+    // Neden yetki eklendi (AGENTS.md §6): `actor_role` kontrol edilmiyordu.
+    // Vardiya kapatma `actual_amount_cents` ile kasa farkı üretir; bunu
+    // kasiyer dışındaki bir rol yapabiliyorsa muhasebe kaydı güvenilmez olur.
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+    )?;
     let audit_lock =
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
@@ -116,11 +130,11 @@ pub async fn close_shift(
         .map_err(|e| e.to_string())?;
         
     let r = row.ok_or("Aktif açık vardiya bulunamadı (No active open shift found)")?;
-    let id: String = r.try_get("id").unwrap_or_default();
-    let expected: i32 = r.try_get("expected_amount_cents").unwrap_or(0);
-    let shift_tenant: String = r
-        .try_get("tenant_id")
-        .unwrap_or_else(|_| tenant_id.clone());
+    // `expected_amount_cents` para okumasıdır: AGENTS.md §3.4 gereği hata
+    // yukarı taşınır, sıfıra düşmez. Kasa farkı sıfır kabul edilemez.
+    let id: String = r.try_get("id").map_err(|e| e.to_string())?;
+    let expected: i32 = r.try_get("expected_amount_cents").map_err(|e| e.to_string())?;
+    let shift_tenant: String = r.try_get("tenant_id").map_err(|e| e.to_string())?;
     
     let difference = actual_amount_cents - expected;
     
@@ -169,48 +183,108 @@ pub async fn close_shift(
     })
 }
 
+/// Aktif vardiya, **yalnız bu kiracının** kasiyerine aitse döner.
+///
+/// Neden tenant_id eklendi (AGENTS.md §3.3): komut `cashier_id` ile süzüyordu.
+/// `cashier_id` başka işletmede de aynı olabileceğinden, filtre yokken bir işletme
+/// diğerinin kasa bakiyesini görebiliyordu. `cashier_id` kullanıcı kimliği
+/// olduğu için "tüm işletmeler bu kimliği paylaşıyor" varsayımı güvenli değildir.
 #[tauri::command]
-pub async fn get_active_shift(cashier_id: String, pool: tauri::State<'_, DbPool>) -> Result<Option<ShiftDto>, String> {
+pub async fn get_active_shift(
+    cashier_id: String,
+    tenant_id: String,
+    actor_role: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Option<ShiftDto>, String> {
+    crate::rbac::require_any_present(
+        Some(actor_role.as_str()),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+    )?;
+    let tenant = require_tenant_scope(Some(tenant_id.as_str()))?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let row = sqlx::query("SELECT id, tenant_id, cashier_id, status, opened_at, expected_amount_cents FROM shifts WHERE cashier_id = ? AND status = 'OPEN'")
-        .bind(&cashier_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let row = sqlx::query(
+        "SELECT id, tenant_id, cashier_id, status, opened_at, closed_at,
+                expected_amount_cents, actual_amount_cents, difference_cents
+           FROM shifts
+          WHERE tenant_id = ? AND cashier_id = ? AND status = 'OPEN'",
+    )
+    .bind(&tenant)
+    .bind(&cashier_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
 
-    if let Some(r) = row {
-        Ok(Some(ShiftDto {
-            id: r.try_get("id").unwrap_or_default(),
-            tenant_id: r.try_get("tenant_id").unwrap_or_default(),
-            cashier_id: r.try_get("cashier_id").unwrap_or_default(),
-            status: r.try_get("status").unwrap_or_default(),
-            opened_at: r.try_get("opened_at").unwrap_or_default(),
-            closed_at: None,
-            expected_amount_cents: r.try_get("expected_amount_cents").unwrap_or(0),
-            actual_amount_cents: None,
-            difference_cents: None
-        }))
-    } else {
-        Ok(None)
-    }
+    // Satır kolonları zorunludur; `unwrap_or_default` ile boş değere düşmek
+    // AGENTS.md §3.4'teki sessiz hata yasağını ihlal ederdi.
+    row.map(|r| {
+        Ok(ShiftDto {
+            id: r.try_get("id").map_err(|e| e.to_string())?,
+            tenant_id: r.try_get("tenant_id").map_err(|e| e.to_string())?,
+            cashier_id: r.try_get("cashier_id").map_err(|e| e.to_string())?,
+            status: r.try_get("status").map_err(|e| e.to_string())?,
+            opened_at: r.try_get("opened_at").map_err(|e| e.to_string())?,
+            closed_at: r.try_get("closed_at").map_err(|e| e.to_string())?,
+            expected_amount_cents: r
+                .try_get("expected_amount_cents")
+                .map_err(|e| e.to_string())?,
+            actual_amount_cents: r
+                .try_get("actual_amount_cents")
+                .map_err(|e| e.to_string())?,
+            difference_cents: r.try_get("difference_cents").map_err(|e| e.to_string())?,
+        })
+    })
+    .transpose()
 }
 
+/// Açık vardiyalar, **yalnız bu kiracının** kayıtlarıyla döner.
+///
+/// Neden tenant_id eklendi (AGENTS.md §3.3): `WHERE s.status = 'OPEN'` filtresi
+/// tüm işletmeleri kapsıyordu. `users` join'i de tenant'sızdı; kiracı sınırı hem
+/// `shifts` hem `users` tarafında uygulanmalıdır.
 #[tauri::command]
-pub async fn get_open_shifts(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<serde_json::Value>, String> {
-    crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier])?;
+pub async fn get_open_shifts(
+    actor_role: String,
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<serde_json::Value>, String> {
+    crate::rbac::require_any(
+        &actor_role,
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
+    )?;
+    let tenant = require_tenant_scope(Some(tenant_id.as_str()))?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("
-        SELECT s.id, s.cashier_id, u.name as cashier_name, s.opened_at, s.expected_amount_cents
-        FROM shifts s LEFT JOIN users u ON s.cashier_id = u.id
-        WHERE s.status = 'OPEN' ORDER BY s.opened_at ASC
-    ").fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
-    let shifts: Vec<serde_json::Value> = rows.into_iter().map(|r| serde_json::json!({
-        "id": r.try_get::<String,_>("id").unwrap_or_default(),
-        "cashierId": r.try_get::<String,_>("cashier_id").unwrap_or_default(),
-        "cashierName": r.try_get::<String,_>("cashier_name").unwrap_or_default(),
-        "openedAt": r.try_get::<String,_>("opened_at").unwrap_or_default(),
-        "openingBalance": r.try_get::<i32,_>("expected_amount_cents").unwrap_or(0),
-    })).collect();
+    let rows = sqlx::query(
+        "SELECT s.id, s.tenant_id, s.cashier_id, u.name AS cashier_name,
+                s.opened_at, s.expected_amount_cents
+           FROM shifts s
+           LEFT JOIN users u ON u.id = s.cashier_id AND u.tenant_id = s.tenant_id
+          WHERE s.tenant_id = ? AND s.status = 'OPEN'
+          ORDER BY s.opened_at ASC",
+    )
+    .bind(&tenant)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let mut shifts: Vec<serde_json::Value> = Vec::with_capacity(rows.len());
+    for r in rows {
+        shifts.push(serde_json::json!({
+            "id": r.try_get::<String, _>("id").map_err(|e| e.to_string())?,
+            "tenantId": r.try_get::<String, _>("tenant_id").map_err(|e| e.to_string())?,
+            "cashierId": r.try_get::<String, _>("cashier_id").map_err(|e| e.to_string())?,
+            // Kullanıcı bulunamazsa ad boş kalır; "Bilinmiyor" dönmesi daha
+            // dürüsttür, kasiyer adının yerine başka bir isim konmamalıdır.
+            "cashierName": r.try_get::<Option<String>, _>("cashier_name").ok().flatten(),
+            "openedAt": r.try_get::<String, _>("opened_at").map_err(|e| e.to_string())?,
+            "openingBalance": r
+                .try_get::<i64, _>("expected_amount_cents")
+                .map_err(|e| e.to_string())?,
+        }));
+    }
     Ok(shifts)
 }
 

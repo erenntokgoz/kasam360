@@ -237,19 +237,36 @@ pub async fn submit_order(    payload: SubmitOrderPayloadDto,
     }
 
     // 2. Insert parent order first (satisfying FK constraint on order_items)
-    sqlx::query("INSERT INTO orders (id, table_id, tenant_id, status, total_cents, notes, created_at, updated_at) VALUES (?, ?, ?, 'IN_PROGRESS', ?, ?, datetime('now'), datetime('now'))")
+// Garson kimliği: siparişi açan kişidir. Garson KPI'sı (Faz 11) bu kolonu
+    // okur; yazılmadığı sürece karnesi hep boş döner. `tables.waiter_id` önce
+    // denir, yoksa komutu çağıran `actor_id` kullanılır (müdür açtıysa
+    // masadaki garson kaydedilir, kişi bazlı kırılım doğru kalır).
+    let waiter_id: Option<String> = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT waiter_id FROM tables WHERE tenant_id = ? AND id = ?",
+    )
+    .bind(&tenant_id)
+    .bind(&payload.table_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?
+    .flatten()
+    .filter(|v| !v.trim().is_empty())
+    .or_else(|| actor_id.clone().filter(|v| !v.trim().is_empty()));
+
+    sqlx::query("INSERT INTO orders (id, table_id, tenant_id, status, total_cents, notes, cashier_id, created_at, updated_at) VALUES (?, ?, ?, 'IN_PROGRESS', ?, ?, ?, datetime('now'), datetime('now'))")
         .bind(&payload.order_id)
         .bind(&payload.table_id)
         .bind(&tenant_id)
         .bind(total_cents)
         .bind(&payload.notes)
+        .bind(&waiter_id)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
 
-    // 3. Insert child order_items with valid FK reference
+// 3. Insert child order_items with valid FK reference
     for p_item in prepared_items {
-        sqlx::query("INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_cents, tax_rate, subtotal_cents, tax_amount_cents, total_cents, modifiers) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_cents, tax_rate, subtotal_cents, tax_amount_cents, total_cents, modifiers, waiter_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&p_item.id)
             .bind(&payload.order_id)
             .bind(&p_item.product_id)
@@ -259,7 +276,11 @@ pub async fn submit_order(    payload: SubmitOrderPayloadDto,
             .bind(p_item.subtotal_cents)
             .bind(p_item.tax_amount_cents)
             .bind(p_item.total_cents)
-            .bind(p_item.modifiers_json)
+            .bind(&p_item.modifiers_json)
+            // Kalem bazlı garson: sipariş kalemleri farklı garsonlara ait
+            // olabilir (ortak masa devri). Sipariş seviyesindeki `waiter_id`
+            // yalnız masanın sahibidir; karnesin gerçek kaynağı bu kolondur.
+            .bind(&waiter_id)
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;

@@ -12,3 +12,4 @@ pub mod payment_service;
 pub mod report_service;
 pub mod receipt_service;
 pub mod reservation_service;
+pub mod staff360;

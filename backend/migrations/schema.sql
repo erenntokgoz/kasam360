@@ -481,6 +481,7 @@ CREATE TABLE IF NOT EXISTS stations (
 -- ORDER ITEMS (notes column for KDS visibility)
 CREATE TABLE IF NOT EXISTS order_items (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
     order_id TEXT NOT NULL,
     product_id TEXT NOT NULL,
     quantity INTEGER NOT NULL DEFAULT 1,
@@ -493,12 +494,17 @@ CREATE TABLE IF NOT EXISTS order_items (
     notes TEXT,
     station TEXT,
     status TEXT NOT NULL DEFAULT 'Pending',
+    -- Garson kimliği (Faz 11 garson karnesi). Sipariş seviyesindeki
+    -- `orders.cashier_id` masanın sahibidir; aynı masada kalemleri farklı
+    -- garsonlar girebilir, bu yüzden kırılım kalem bazlıdır.
+    waiter_id TEXT,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_station ON order_items(station);
+CREATE INDEX IF NOT EXISTS idx_order_items_waiter ON order_items(tenant_id, waiter_id);
 
 -- ============================================================================
 -- 11. CARİ & REHBER (DIRECTORIES) — Müşteri, Tedarikçi ve Personel
@@ -643,3 +649,198 @@ CREATE TABLE IF NOT EXISTS competitor_prices (
 
 CREATE INDEX IF NOT EXISTS idx_competitor_prices_lookup
     ON competitor_prices(tenant_id, product_id, competitor_name, observed_at DESC);
+
+-- ============================================================================
+-- 19. PERSONEL 360 (Faz 11) — Profil, Vardiya Planı, İzin, Maaş, Bahşiş
+-- ============================================================================
+-- Neden ayrı tablo: `users` kimlik dogrulamadir (Argon2id hash, PIN, soft-delete).
+-- `staff_profiles` isveren verisidir (maas, TC, dogum gunu, ise giris). Ayni
+-- tabloda tutulsaydi kimlik dogrulama sorgulari maas kolonlarini da tasirdi ve
+-- yetkisiz erisim yuzeyi buyurdu. Ayri tablo = "kim giris yapar" ile "kimi
+-- istihdam ediyoruz" ayrismasi.
+CREATE TABLE IF NOT EXISTS staff_profiles (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    user_id TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    -- Maaş tutarları kuruş cinsinden; float YASAK (AGENTS.md §2)
+    base_salary_cents INTEGER NOT NULL DEFAULT 0,
+    -- Yuzde modeli: 0-100 arasi, tam sayi. 0 "komsiyon yok" demektir.
+    commission_percent INTEGER NOT NULL DEFAULT 0,
+    birth_date TEXT,
+    hire_date TEXT,
+    phone TEXT,
+    national_id TEXT,
+    address TEXT,
+    emergency_contact TEXT,
+    notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_profiles_tenant
+    ON staff_profiles(tenant_id, user_id);
+
+-- Maaş modeli tanımı. Beş model tek tabloda: her model bir bayrak.
+-- Tasarım gerekçesi: model başına tablo açmak yerine tek kural tablosu, bordro
+-- yeniden hesabında hangi bileşenin kullanıldığını izlenebilir kılar.
+CREATE TABLE IF NOT EXISTS payroll_rules (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    user_id TEXT NOT NULL,
+    -- FIXED | COMMISSION | TIP | HOURLY | PROFIT_SHARE
+    model TEXT NOT NULL DEFAULT 'FIXED',
+    base_salary_cents INTEGER NOT NULL DEFAULT 0,
+    commission_percent INTEGER NOT NULL DEFAULT 0,
+    hourly_rate_cents INTEGER NOT NULL DEFAULT 0,
+    -- Bahsis katsayisi: 1.00 = tam havuz. Yuzde olarak tutulur (100 = 1.00).
+    tip_multiplier_percent INTEGER NOT NULL DEFAULT 100,
+    -- Kar payi yuzdesi (net kara karsi)
+    profit_share_percent INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Bordro kaydi: yeniden hesaplanabilir olmali, bu yuzden her hesap satirdir.
+-- UPDATE/DELETE yasak: hatali hesap duzeltilir, silinmez.
+CREATE TABLE IF NOT EXISTS payroll_runs (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    user_id TEXT NOT NULL,
+    -- YYYY-MM
+    period TEXT NOT NULL,
+    model TEXT NOT NULL,
+    base_cents INTEGER NOT NULL DEFAULT 0,
+    commission_cents INTEGER NOT NULL DEFAULT 0,
+    tip_cents INTEGER NOT NULL DEFAULT 0,
+    hourly_cents INTEGER NOT NULL DEFAULT 0,
+    profit_share_cents INTEGER NOT NULL DEFAULT 0,
+    deduction_cents INTEGER NOT NULL DEFAULT 0,
+    gross_cents INTEGER NOT NULL DEFAULT 0,
+    net_cents INTEGER NOT NULL DEFAULT 0,
+    -- Hesap girdileri: hangi veriyle hesaplandigi yeniden uretilebilsin
+    input_snapshot TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, user_id, period),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_payroll_runs_period
+    ON payroll_runs(tenant_id, period);
+
+-- Bahsis havuzu: katsayili dagitim. Havuz bir kayit, dagitim bir kayit.
+CREATE TABLE IF NOT EXISTS tip_pool_entries (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    period TEXT NOT NULL,
+    order_id TEXT,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    -- H_avuz = SUM(amount_cents); her calisan icin pay = katsayi * taban
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tip_distributions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    period TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    -- Kullanicinin havuzdan alacagi pay taban: genelde calisma saati veya fiis adedi
+    basis_cents INTEGER NOT NULL DEFAULT 0,
+    multiplier_percent INTEGER NOT NULL DEFAULT 100,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, period, user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Vardiya planlamasi: `shifts` gerceklesen KASA hareketidir (muhasebeye bagli),
+-- planlama ayri tabloda tutulur. Iki kavram birlestirilirse tablo iki isleve
+-- sahip olur ve planlama degisikligi muhasebe kaydini bozar.
+CREATE TABLE IF NOT EXISTS shift_plans (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    user_id TEXT NOT NULL,
+    -- YYYY-MM-DD
+    plan_date TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    planned_break_minutes INTEGER NOT NULL DEFAULT 0,
+    role_required TEXT NOT NULL DEFAULT 'WAITER',
+    station TEXT,
+    -- Planlandi | Onaylandi | Tamamlandi | Iptal
+    status TEXT NOT NULL DEFAULT 'Planned',
+    realized_shift_id TEXT,
+    created_by TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, user_id, plan_date, start_time),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_shift_plans_date
+    ON shift_plans(tenant_id, plan_date);
+
+-- Izin talebi: durum gecmisi `status` ile tutulur, gecmis silinmez.
+CREATE TABLE IF NOT EXISTS leave_requests (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    user_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'YILLIK',
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    reason TEXT,
+    -- Bekliyor | Onaylandi | Reddedildi | Iptal
+    status TEXT NOT NULL DEFAULT 'Bekliyor',
+    approver_id TEXT,
+    decided_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_leave_requests_user
+    ON leave_requests(tenant_id, user_id, start_date);
+
+-- Zimmet: personele teslim edilen malzeme. Iade tarihi dolunca acik kalir.
+CREATE TABLE IF NOT EXISTS custody_records (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    user_id TEXT NOT NULL,
+    item_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    -- Teslim | Iade | Hasarli
+    status TEXT NOT NULL DEFAULT 'Teslim',
+    delivered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    returned_at DATETIME,
+    notes TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_custody_open
+    ON custody_records(tenant_id, user_id, status);
+
+-- Tutanak sicili: sohbet, kaza, sikayet gibi kayitlar. Yonetici gormeli,
+-- personel erisememelidir; bu yuzden ayri tablo ve ayri yetki kapisi.
+CREATE TABLE IF NOT EXISTS staff_incidents (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    user_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'NOT',
+    severity TEXT NOT NULL DEFAULT 'Dusuk',
+    occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    summary TEXT NOT NULL,
+    details TEXT,
+    resolution TEXT,
+    -- ACIK | Inceleniyor | Kapandi
+    status TEXT NOT NULL DEFAULT 'ACIK',
+    recorded_by TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_incidents_status
+    ON staff_incidents(tenant_id, status);
