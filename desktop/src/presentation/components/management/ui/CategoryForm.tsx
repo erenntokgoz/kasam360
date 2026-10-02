@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { CategoryDto } from './MenuManagementPanel';
+import { ModifierSection } from './ModifierSection';
 
 export interface CategoryFormData {
     name: string;
@@ -12,6 +13,11 @@ interface CategoryFormProps {
     onSubmit: (data: CategoryFormData) => Promise<void>;
     editingCategory: CategoryDto | null;
     categoriesLength: number;
+    /**
+     * Yalnız işletme sahibi modifier şablonlarını yönetir. Backend bu işlemi
+     * `OWNER` rolüne açar; müdür için bölüm hiç gösterilmez.
+     */
+    canManageModifiers?: boolean;
 }
 
 export function CategoryForm({
@@ -19,7 +25,8 @@ export function CategoryForm({
     onClose,
     onSubmit,
     editingCategory,
-    categoriesLength
+    categoriesLength,
+    canManageModifiers = true,
 }: CategoryFormProps) {
     if (!isOpen) return null;
 
@@ -79,6 +86,12 @@ export function CategoryForm({
                             className="w-full backdrop-blur-md dark:bg-white/[0.05] bg-black/[0.03] border dark:border-white/10 border-black/[0.08] rounded-2xl px-4 py-2.5 dark:text-white text-zinc-900 text-sm placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-[#007AFF] transition-all"
                         />
                     </div>
+                    {/* Faz 4: modifier yönetimi ayrı sekmeden buraya gömüldü.
+                        Şablonlar kategoriye bağlanır; ürünler bu şablonları
+                        kendi formunda seçebilir. */}
+                    {canManageModifiers && (
+                        <ModifierSection mode="template" categoryId={editingCategory?.id ?? null} />
+                    )}
                     {/* Apple HIG pill kapsül buton stili */}
                     <div className="mt-4 flex justify-end gap-3">
                         <button

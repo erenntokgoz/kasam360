@@ -1,6 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { ProductDto, CategoryDto } from './MenuManagementPanel';
+import { ModifierSection } from './ModifierSection';
 
 export interface ProductFormData {
     name: string;
@@ -8,6 +9,8 @@ export interface ProductFormData {
     priceCents: number;
     imageUrl: string | null;
     isActive: boolean;
+    /** Faz 4: ürüne bağlanacak modifier grup kimlikleri. Boşsa atama değişmez. */
+    modifierGroupIds?: string[];
 }
 
 interface ProductFormProps {
@@ -19,6 +22,11 @@ interface ProductFormProps {
     initialCategoryId: string;
     hidePriceEdit?: boolean;
     currentRole?: string;
+    /** Ürüne bağlı modifier grupları (düzenleme kipinde sunucudan okunur). */
+    modifierGroupIds?: string[];
+    onModifierGroupIdsChange?: (groupIds: string[]) => void;
+    /** Yalnız işletme sahibi modifier ataması yapar. */
+    canManageModifiers?: boolean;
 }
 
 export function ProductForm({
@@ -29,16 +37,31 @@ export function ProductForm({
     categories,
     initialCategoryId,
     hidePriceEdit,
-    currentRole
+    currentRole,
+    modifierGroupIds: initialModifierGroupIds,
+    onModifierGroupIdsChange,
+    canManageModifiers = true,
 }: ProductFormProps) {
     const [selectedCategoryId, setSelectedCategoryId] = React.useState(initialCategoryId);
-    
+    const [selectedModifierGroupIds, setSelectedModifierGroupIds] = React.useState<string[]>(
+        initialModifierGroupIds ?? [],
+    );
+
     // Modal yeni proplarla açıldığında yerel durumu güncelle
     React.useEffect(() => {
         if (isOpen) {
             setSelectedCategoryId(initialCategoryId || (categories.length > 0 ? categories[0].id : ''));
+            setSelectedModifierGroupIds(initialModifierGroupIds ?? []);
         }
-    }, [isOpen, initialCategoryId, categories]);
+    }, [isOpen, initialCategoryId, initialModifierGroupIds, categories]);
+
+    const handleModifierSelection = React.useCallback(
+        (groupIds: string[]) => {
+            setSelectedModifierGroupIds(groupIds);
+            onModifierGroupIdsChange?.(groupIds);
+        },
+        [onModifierGroupIdsChange],
+    );
 
     if (!isOpen) return null;
 
@@ -61,7 +84,8 @@ export function ProductForm({
             categoryId: selectedCategoryId,
             priceCents,
             imageUrl,
-            isActive
+            isActive,
+            modifierGroupIds: selectedModifierGroupIds,
         });
     };
 
@@ -149,6 +173,18 @@ export function ProductForm({
                             Ürün Aktif (Satışta)
                         </label>
                     </div>
+                    {/* Faz 4: ürün bazlı seçenek bağlantısı. Fiyat farkı
+                        ürünün `price` alanına eklenmez; yalnız seçeneğin kendi
+                        fiyatıdır. */}
+                    {canManageModifiers && (
+                        <ModifierSection
+                            mode="assign"
+                            selectedGroupIds={selectedModifierGroupIds}
+                            onSelectionChange={handleModifierSelection}
+                            productCategoryId={selectedCategoryId}
+                            readOnly={isManager}
+                        />
+                    )}
                     {/* Apple HIG pill kapsül buton stili */}
                     <div className="mt-6 flex justify-end gap-3 border-t dark:border-white/10 border-black/[0.08] pt-4">
                         <button

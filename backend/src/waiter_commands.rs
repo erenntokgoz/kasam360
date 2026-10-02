@@ -1,79 +1,26 @@
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ModifierOptionDto {
-    pub id: String,
-    pub name: String,
-    #[serde(rename = "priceCents")]
-    pub price_cents: i64,
-}
+pub use crate::services::modifier_service::{ModifierGroupDto, ModifierOptionDto};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ModifierGroupDto {
-    pub id: String,
-    pub name: String,
-    #[serde(rename = "isRequired")]
-    pub is_required: bool,
-    #[serde(rename = "minSelections")]
-    pub min_selections: i64,
-    #[serde(rename = "maxSelections")]
-    pub max_selections: Option<i64>,
-    pub options: Vec<ModifierOptionDto>,
-}
-
+/// Ürüne bağlı modifier grupları ve seçenekleri (POS seçim penceresi).
+///
+/// Faz 4 düzeltmesi: komut `tenant_id` ile sınırlandı. Önceden ürün `id`'si tek
+/// başına yeterliydi, dolayısıyla başka işletmenin ürününe bağlı gruplar
+/// okunabiliyordu; ayrıca seçenekler grup başına ayrı sorguyla (N+1) alınıyordu.
 #[tauri::command]
 pub async fn get_product_modifiers(
     product_id: String,
+    tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<ModifierGroupDto>, String> {
-    let groups_query = "
-        SELECT mg.id, mg.name, mg.is_required, mg.min_selections, mg.max_selections 
-        FROM modifier_groups mg
-        JOIN product_modifier_groups pmg ON mg.id = pmg.group_id
-        WHERE pmg.product_id = ?
-    ";
-    
-    let groups_rows = sqlx::query_as::<_, (String, String, bool, i64, Option<i64>)>(groups_query)
-        .bind(&product_id)
-        .fetch_all(&*pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let tid = tenant_id
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())?;
 
-    let mut result = Vec::new();
-
-    for (id, name, is_required, min_selections, max_selections) in groups_rows {
-        let options_query = "
-            SELECT id, name, price_cents
-            FROM modifier_options
-            WHERE group_id = ?
-        ";
-        
-        let options_rows = sqlx::query_as::<_, (String, String, i64)>(options_query)
-            .bind(&id)
-            .fetch_all(&*pool)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        let options = options_rows.into_iter().map(|(o_id, o_name, o_price)| {
-            ModifierOptionDto {
-                id: o_id,
-                name: o_name,
-                price_cents: o_price,
-            }
-        }).collect();
-
-        result.push(ModifierGroupDto {
-            id,
-            name,
-            is_required,
-            min_selections,
-            max_selections,
-            options,
-        });
-    }
-
-    Ok(result)
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    crate::services::modifier_service::product_groups(&mut conn, &tid, &product_id).await
 }
 
 #[tauri::command]

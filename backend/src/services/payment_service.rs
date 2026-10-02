@@ -34,6 +34,7 @@ impl PaymentService {
         // 5. Sunucu tarafı toplam doğrulaması (öğe ve genel indirimler dahil).
         let server_truth = PaymentRepository::calculate_server_truth(
             conn,
+            tenant_id,
             &payload.items,
             payload.global_discount.as_ref(),
         )

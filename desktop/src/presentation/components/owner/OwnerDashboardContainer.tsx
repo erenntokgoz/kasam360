@@ -13,8 +13,7 @@ import {
   Receipt, 
   Wallet, 
   Layers, 
-  Utensils, 
-  Wrench,
+  Utensils,
   FileText,
   LayoutGrid,
   FileBarChart
@@ -24,7 +23,6 @@ import { OwnerMenuTab } from './ui/OwnerMenuTab';
 import { OwnerInventoryTab } from './ui/OwnerInventoryTab';
 import { OwnerBranchesTab } from './ui/OwnerBranchesTab';
 import { OwnerStaffTab } from './ui/OwnerStaffTab';
-import { OwnerModifiersTab } from './ui/OwnerModifiersTab';
 import { OwnerSalesTab } from './ui/OwnerSalesTab';
 import { OwnerAuditLogsTab } from './ui/OwnerAuditLogsTab';
 import { TablesOrdersPanel } from '../management/ui/TablesOrdersPanel';
@@ -42,7 +40,6 @@ export type OwnerTabId =
   | 'inventory'
   | 'staff'
   | 'logs'
-  | 'modifiers'
   | 'settings';
 
 export interface OwnerNavItem {
@@ -71,7 +68,9 @@ export function buildOwnerNavItems(can: (capability: Capability) => boolean): Ow
     ...(can('auditRead')
       ? [{ id: 'logs' as OwnerTabId, label: 'Sistem Logları', icon: <FileText size={15} /> }]
       : []),
-    { id: 'modifiers', label: 'Modifier', icon: <Wrench size={15} /> },
+    // Faz 4: bağımsız "Modifier" sekmesi kaldırıldı. Modifier yönetimi
+    // `CategoryForm` ve `ProductForm` içindeki "Seçenekler & Ekstralar"
+    // alanına gömüldü; ikinci bir yönetim yüzeyi bırakmıyoruz.
     { id: 'settings', label: 'Şubeler', icon: <Settings size={15} /> },
   ];
 }
@@ -275,8 +274,6 @@ export function OwnerDashboardContainer() {
           <OwnerStaffTab />
         ) : activeTab === 'logs' ? (
           <OwnerAuditLogsTab />
-        ) : activeTab === 'modifiers' ? (
-          <OwnerModifiersTab />
         ) : activeTab === 'settings' ? (
           <OwnerBranchesTab />
         ) : null}

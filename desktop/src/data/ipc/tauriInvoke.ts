@@ -44,9 +44,21 @@ export interface MockModifierOption {
   priceCents: number;
 }
 
+/** Backend'de `OWNER` rolüne bağlı kalan modifier yönetim komutları. */
+const MODIFIER_MANAGEMENT_COMMANDS = new Set([
+  'get_modifier_groups',
+  'create_modifier_group',
+  'add_modifier_option',
+  'delete_modifier_group',
+  'set_product_modifier_groups',
+  'get_product_modifier_group_ids',
+]);
+
 export interface MockModifierGroup {
   id: string;
   tenant_id: string;
+  /** Faz 4: kategori şablonu bağlantısı. `null` = serbest grup. */
+  category_id: string | null;
   name: string;
   isRequired: boolean;
   minSelections: number;
@@ -214,6 +226,19 @@ if (mockProducts.length === 0) {
 
 // 4. Değiştiriciler (Modifiers)
 let mockModifierGroups: MockModifierGroup[] = lsLoad<MockModifierGroup[]>('modifier_groups', []);
+// Aynı milisaniyede üretilen kayıtlar çakışmasın diye sayaç; gerçek kimlik
+// prefixed ULID olduğu için mock'ta da benzersizlik korunmalı.
+let mockModifierSeq = 0;
+const nextModifierId = (prefix: string): string => {
+  mockModifierSeq += 1;
+  return `${prefix}-${Date.now().toString(36)}${mockModifierSeq.toString(36)}`;
+};
+// Faz 4: ürün → modifier grubu atamaları. Backend'de `product_modifier_groups`
+// tablosunun karşılığıdır; atama kümesi (küme semantiği) saklanır.
+let mockProductModifierGroups: Record<string, string[]> = lsLoad<Record<string, string[]>>(
+  'product_modifier_groups',
+  {},
+);
 
 // 5. Masa Siparişleri (Order Items)
 const mockOrderItems: Record<string, unknown[]> = lsLoad<Record<string, unknown[]>>('order_items', {});
@@ -1014,7 +1039,19 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return mockProducts.filter((p) => matchesTenant(p.tenant_id)) as unknown as T;
   }
   if (cmd === 'get_product_modifiers') {
-    return mockModifierGroups.filter((g) => matchesTenant(g.tenant_id)) as unknown as T;
+    // Faz 4 düzeltmesi: mock her üründe TÜM grupları döndürüyordu; ürün
+    // filtrelenmediği için seçim penceresi hiçbir ürüne özel değildi.
+    const productId = (args.productId || args.product_id) as string | undefined;
+    const assigned = productId ? mockProductModifierGroups[productId] : undefined;
+    if (!assigned || assigned.length === 0) {
+      return [] as unknown as T;
+    }
+    return mockModifierGroups
+      .filter(g => assigned.includes(g.id) && matchesTenant(g.tenant_id))
+      .map(({ tenant_id: _tenantId, category_id: categoryId, ...rest }) => ({
+        ...rest,
+        categoryId,
+      })) as unknown as T;
   }
   if (cmd === 'get_order_items') {
     return (mockOrderItems[args.tableId as string] || []) as unknown as T;
@@ -1331,15 +1368,36 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return { success: true } as unknown as T;
   }
 
-  // ----- MODIFIER GRUPLARI (Owner Modifiers) -----
+  // ----- MODIFIER GRUPLARI (Faz 4: CategoryForm/ProductForm içinden) -----
+  // Mock, backend ile aynı kapıları uygular: rol (yalnız işletme sahibi),
+  // tenant filtresi, negatif fiyat farkı reddi ve grup/ürün sahipliği. Aksi
+  // hâlde tarayıcı modunda çalışan uygulamanın yetki modeli backend'den
+  // farklı olur ve testler yanlış güven verir.
+  // Not: kapı yalnız bu altı komut için işler; aşağıdaki `if` zinciri
+  // browserMock'ın geri kalan komutlarına da akmaya devam eder.
+  if (MODIFIER_MANAGEMENT_COMMANDS.has(cmd)) {
+    const modifierRole = (args.actorRole || args.actor_role || callerRole || '') as string;
+    if (modifierRole.trim().toUpperCase() !== 'OWNER') {
+      throw new Error('UNAUTHORIZED: Modifier yönetimi yalnızca işletme sahibine açıktır.');
+    }
+  }
   if (cmd === 'get_modifier_groups') {
-    return mockModifierGroups.filter((g) => matchesTenant(g.tenant_id)) as unknown as T;
+    const categoryFilter = (args.categoryId ?? args.category_id) as string | null | undefined;
+    return mockModifierGroups
+      .filter(g => matchesTenant(g.tenant_id))
+      .filter(g => (categoryFilter ? g.category_id === categoryFilter : true))
+      // Backend `categoryId` camelCase döndürür; mock de aynı sözleşmeyi korur.
+      .map(({ tenant_id: _tenantId, category_id: categoryId, ...rest }) => ({
+        ...rest,
+        categoryId,
+      })) as unknown as T;
   }
   if (cmd === 'create_modifier_group') {
     const modTenantId = (args.tenantId || args.tenant_id || callerTenantId || '') as string;
     const newGrp: MockModifierGroup = {
-      id: `grp-${Date.now().toString().slice(-4)}`,
+      id: nextModifierId('mod'),
       tenant_id: modTenantId,
+      category_id: (args.categoryId ?? args.category_id ?? null) as string | null,
       name: (args.name as string) || 'Yeni Grup',
       isRequired: Boolean(args.isRequired),
       minSelections: Number(args.minSelections) || 0,
@@ -1358,8 +1416,19 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     } else if (args.price !== undefined) {
       optionPriceCents = Math.round(Number(args.price) * 100);
     }
+    // Negatif fiyat farkı ekstre indirimi olur; reddedilir.
+    if (optionPriceCents < 0) {
+      throw new Error('INVALID_MODIFIER_PRICE: Seçenek fiyat farkı negatif olamaz.');
+    }
+    const target = mockModifierGroups.find(g => g.id === groupId);
+    if (!target) {
+      throw new Error('NOT_FOUND: Modifier grubu bulunamadı.');
+    }
+    if (!matchesTenant(target.tenant_id)) {
+      throw new Error('TENANT_ISOLATION: Bu modifier grubu başka işletmeye ait.');
+    }
     const newOpt: MockModifierOption = {
-      id: `opt-${Date.now().toString().slice(-4)}`,
+      id: nextModifierId('modopt'),
       name: (args.name as string) || 'Yeni Seçenek',
       priceCents: optionPriceCents,
     };
@@ -1371,9 +1440,35 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   }
   if (cmd === 'delete_modifier_group') {
     const id = (args.groupId || args.id) as string;
+    const target = mockModifierGroups.find(g => g.id === id);
+    if (!target || !matchesTenant(target.tenant_id)) {
+      throw new Error('NOT_FOUND: Modifier grubu bulunamadı.');
+    }
     mockModifierGroups = mockModifierGroups.filter((g) => g.id !== id);
     lsSave('modifier_groups', mockModifierGroups);
     return { success: true } as unknown as T;
+  }
+  if (cmd === 'set_product_modifier_groups') {
+    const productId = (args.productId || args.product_id) as string;
+    const groupIds = (args.groupIds || args.group_ids || []) as string[];
+    const product = mockProducts.find(p => p.id === productId);
+    if (!product) {
+      throw new Error('NOT_FOUND: Ürün bulunamadı.');
+    }
+    const foreign = groupIds.filter(gid => {
+      const group = mockModifierGroups.find(g => g.id === gid);
+      return !group || !matchesTenant(group.tenant_id);
+    });
+    if (foreign.length > 0) {
+      throw new Error('TENANT_ISOLATION: Seçilen grup bu işletmeye ait değil.');
+    }
+    mockProductModifierGroups[productId] = [...groupIds];
+    lsSave('product_modifier_groups', mockProductModifierGroups);
+    return { success: true } as unknown as T;
+  }
+  if (cmd === 'get_product_modifier_group_ids') {
+    const productId = (args.productId || args.product_id) as string;
+    return (mockProductModifierGroups[productId] ?? []) as unknown as T;
   }
 
   // ----- PERSONEL & ŞUBELER → aşağıda tanımlı (duplicate bloklar kaldırıldı) -----

@@ -289,14 +289,21 @@ CREATE TABLE IF NOT EXISTS branches (
 );
 
 -- MODIFIERS
+-- `category_id` NULL = serbest grup (bir ürüne doğrudan atanır),
+-- dolu = o kategorinin şablonu. Mevcut satırlar NULL kalır; veri taşınmaz.
 CREATE TABLE IF NOT EXISTS modifier_groups (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,
     name TEXT NOT NULL,
     is_required BOOLEAN NOT NULL DEFAULT 0,
     min_selections INTEGER NOT NULL DEFAULT 0,
-    max_selections INTEGER
+    max_selections INTEGER,
+    category_id TEXT,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_modifier_groups_tenant_category
+    ON modifier_groups(tenant_id, category_id);
 
 CREATE TABLE IF NOT EXISTS modifier_options (
     id TEXT PRIMARY KEY,
@@ -313,6 +320,9 @@ CREATE TABLE IF NOT EXISTS product_modifier_groups (
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
     FOREIGN KEY (group_id) REFERENCES modifier_groups(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_product_modifier_groups_product
+    ON product_modifier_groups(product_id);
 
 -- INVENTORY
 CREATE TABLE IF NOT EXISTS inventory_items (

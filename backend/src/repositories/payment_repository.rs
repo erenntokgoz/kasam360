@@ -39,8 +39,13 @@ impl PaymentRepository {
     /// Sunucu tarafı hesabın dökümü. `total_cents` tek doğruluk kaynağıdır;
     /// indirim tutarı **aynı hesaptan** türetilir, ikinci bir hesap yöntemi
     /// (ikinci gerçek) yaratılmaz.
+    ///
+    /// `tenant_id` neden parametre: seçenek fiyat farkı istemciden değil
+    /// `modifier_options`'tan okunur (faz 4) ve bu okuma tenant'a göre
+    /// filtrelenmelidir.
     pub async fn calculate_server_truth(
         conn: &mut sqlx::SqliteConnection,
+        tenant_id: &str,
         items: &[CartItemDto],
         global_discount: Option<&serde_json::Value>,
     ) -> Result<ServerTruth, String> {
@@ -55,41 +60,55 @@ impl PaymentRepository {
                 .ok_or_else(|| "Missing product.id in cart item".to_string())?;
 
             // 1. Önce siparişte dondurulmuş birim fiyat var mı kontrol et (Price Drift Koruması)
-            let frozen_order_item = sqlx::query("SELECT unit_price_cents, tax_rate FROM order_items WHERE id = ?")
+            // `order_items` kendi `tenant_id` taşımaz; sahiplik `orders` üzerinden
+            // doğrulanır, böylece başka işletmenin kalemi fiyat kaynağı olamaz.
+            let frozen_order_item = sqlx::query(
+                "SELECT oi.unit_price_cents, oi.tax_rate FROM order_items oi \
+                 JOIN orders o ON o.id = oi.order_id \
+                 WHERE oi.id = ? AND o.tenant_id = ?",
+            )
                 .bind(&item.id)
+                .bind(tenant_id)
                 .fetch_optional(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?;
 
-            let (db_price_cents, db_tax_rate): (i64, f64) = if let Some(r) = frozen_order_item {
-                (r.try_get("unit_price_cents").unwrap_or(0), r.try_get("tax_rate").unwrap_or(0.0))
+            let (db_price_cents, db_tax_rate, frozen): (i64, f64, bool) = if let Some(r) = frozen_order_item {
+                (
+                    r.try_get("unit_price_cents").unwrap_or(0),
+                    r.try_get("tax_rate").unwrap_or(0.0),
+                    true,
+                )
             } else {
-                let row = sqlx::query("SELECT price_cents, tax_rate FROM products WHERE id = ?")
+                let row = sqlx::query("SELECT price_cents, tax_rate FROM products WHERE id = ? AND tenant_id = ?")
                     .bind(product_id)
+                    .bind(tenant_id)
                     .fetch_optional(&mut *conn)
                     .await
                     .map_err(|e| e.to_string())?;
 
                 match row {
-                    Some(r) => (r.try_get("price_cents").unwrap_or(0), r.try_get("tax_rate").unwrap_or(0.0)),
+                    Some(r) => (
+                        r.try_get("price_cents").unwrap_or(0),
+                        r.try_get("tax_rate").unwrap_or(0.0),
+                        false,
+                    ),
                     None => return Err(format!("Product not found in database: {}", product_id)),
                 }
             };
 
-            let mut item_unit_price = db_price_cents;
-            if let Some(mods) = &item.modifiers {
-                if let Some(arr) = mods.as_array() {
-                    for mod_opt in arr {
-                        if let Some(pc) = mod_opt.get("priceCents").and_then(|v| v.as_i64()) {
-                            // Negatif fiyat manipülasyonunu engelle
-                            if pc < 0 {
-                                return Err("MALICIOUS_INPUT: Negative modifier price detected".to_string());
-                            }
-                            item_unit_price += pc;
-                        }
-                    }
-                }
-            }
+            // Fiyat tek yerden türetilir (faz 4): donmuş fiyat modifier'ı zaten
+            // içerir, üzerine eklenmez — eklenirse aynı ekstra iki kez ücretlenir.
+            // Donmuş fiyat yoksa seçeneklerin **veritabanı** fiyatı eklenir;
+            // istemcinin bildirdiği `priceCents` değeri kullanılmaz.
+            let item_unit_price = crate::services::modifier_service::resolve_unit_price(
+                conn,
+                tenant_id,
+                (db_price_cents, db_tax_rate),
+                item.modifiers.as_ref(),
+                if frozen { Some(db_price_cents) } else { None },
+            )
+            .await?;
 
             let quantity = item.quantity;
             let gross_cents = item_unit_price * quantity;
@@ -149,10 +168,11 @@ impl PaymentRepository {
     /// Toplam tutar: `calculate_server_truth` dökümünün tek alanıdır.
     pub async fn calculate_server_truth_total(
         conn: &mut sqlx::SqliteConnection,
+        tenant_id: &str,
         items: &[CartItemDto],
         global_discount: Option<&serde_json::Value>,
     ) -> Result<i64, String> {
-        let truth = Self::calculate_server_truth(conn, items, global_discount).await?;
+        let truth = Self::calculate_server_truth(conn, tenant_id, items, global_discount).await?;
         Ok(truth.total_cents)
     }
 
@@ -233,16 +253,21 @@ mod tests {
     use crate::commands::CartItemDto;
     use sqlx::sqlite::SqlitePoolOptions;
 
+    const TEST_TENANT: &str = "tenant_test";
+
     async fn catalog_pool() -> sqlx::SqlitePool {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             .connect("sqlite::memory:")
             .await
             .expect("bellek içi veritabanı");
+        // Faz 4: fiyat ve donmuş kalem okumaları tenant'a göre filtrelenir;
+        // `order_items` → `orders` zinciri de kurulmalı.
         sqlx::raw_sql(
-            "CREATE TABLE products (id TEXT PRIMARY KEY, price_cents INTEGER NOT NULL, tax_rate REAL NOT NULL);
-             CREATE TABLE order_items (id TEXT PRIMARY KEY, unit_price_cents INTEGER NOT NULL, tax_rate REAL NOT NULL);
-             INSERT INTO products VALUES ('prod_1', 10000, 20.0);",
+            "CREATE TABLE products (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, price_cents INTEGER NOT NULL, tax_rate REAL NOT NULL);
+             CREATE TABLE orders (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL);
+             CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, unit_price_cents INTEGER NOT NULL, tax_rate REAL NOT NULL);
+             INSERT INTO products VALUES ('prod_1', 'tenant_test', 10000, 20.0);",
         )
         .execute(&pool)
         .await
@@ -278,7 +303,7 @@ mod tests {
             2,
             Some(serde_json::json!({ "type": "PERCENTAGE", "value": 10.0 })),
         )];
-        let truth = PaymentRepository::calculate_server_truth(&mut conn, &items, None)
+        let truth = PaymentRepository::calculate_server_truth(&mut conn, TEST_TENANT, &items, None)
             .await
             .expect("hesaplanır");
 
@@ -302,7 +327,7 @@ mod tests {
             Some(serde_json::json!({ "type": "FIXED_AMOUNT", "value": 2000.0 })),
         )];
         let global = serde_json::json!({ "type": "PERCENTAGE", "value": 10.0 });
-        let truth = PaymentRepository::calculate_server_truth(&mut conn, &items, Some(&global))
+        let truth = PaymentRepository::calculate_server_truth(&mut conn, TEST_TENANT, &items, Some(&global))
             .await
             .expect("hesaplanır");
 
@@ -311,7 +336,7 @@ mod tests {
         assert_eq!(truth.total_cents, 8640);
 
         // Eski tek alanlı yardımcı da aynı sonucu vermeli (ikinci gerçek yok).
-        let total = PaymentRepository::calculate_server_truth_total(&mut conn, &items, Some(&global))
+        let total = PaymentRepository::calculate_server_truth_total(&mut conn, TEST_TENANT, &items, Some(&global))
             .await
             .expect("hesaplanır");
         assert_eq!(total, truth.total_cents);
@@ -324,7 +349,7 @@ mod tests {
         let mut conn = pool.acquire().await.expect("bağlantı");
 
         let items = vec![item(1, None)];
-        let truth = PaymentRepository::calculate_server_truth(&mut conn, &items, None)
+        let truth = PaymentRepository::calculate_server_truth(&mut conn, TEST_TENANT, &items, None)
             .await
             .expect("hesaplanır");
         assert_eq!(truth.discount_cents, 0);

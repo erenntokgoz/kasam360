@@ -3,50 +3,58 @@ import { test, expect } from '@playwright/test';
 test.describe('OWNER Role Workflows', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    const pinModeBtn = page.getByRole('button', { name: 'PIN ile Giriş Yap' });
-    if (await pinModeBtn.isVisible()) {
-      await pinModeBtn.click();
-    }
-    // Quick login as OWNER (PIN 2222)
-    const ownerBtn = page.getByRole('button', { name: '2222 Patron' });
-    await expect(ownerBtn).toBeVisible();
-    await ownerBtn.click();
+    // Giriş yüzeyi rol listesini "Test Rolleri" düğmesinin arkasında tutar;
+    // seçilen hesap bilgileri forma doldurulur, giriş "Giriş Yap" ile tamamlanır.
+    await page.getByRole('button', { name: 'Test Rolleri' }).click();
+    await page.getByRole('button', { name: /Patron/ }).first().click();
+    await page.getByRole('button', { name: 'Giriş Yap' }).click();
     // Wait for Owner Dashboard
     await expect(page.getByRole('button', { name: 'Genel Bakış' })).toBeVisible();
   });
 
   test('OWNER: dashboard and KPI metrics', async ({ page }) => {
-    await expect(page.getByText('Günün Ciro Özeti')).toBeVisible();
-    await expect(page.getByText('Toplam Sipariş')).toBeVisible();
+    await expect(page.getByText('GÜNÜN CIROSU')).toBeVisible();
+    await expect(page.getByText('TOPLAM SIPARIŞ')).toBeVisible();
   });
 
   test('OWNER: sales / report tab', async ({ page }) => {
-    await page.getByRole('button', { name: 'Satışlar' }).click();
-    await expect(page.getByRole('heading', { name: 'Satış & Ciro Raporu' })).toBeVisible();
+    await page.getByRole('button', { name: 'Satışlar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Satış & Ciro' })).toBeVisible();
   });
 
   test('OWNER: menu management (product, category, price)', async ({ page }) => {
-    await page.getByRole('button', { name: 'Menü Yönetimi' }).click();
-    await expect(page.getByRole('heading', { name: 'Menü Yönetimi' })).toBeVisible();
+    await page.getByRole('button', { name: 'Menü', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Ürün Ekle' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Kategori Ekle' })).toBeVisible();
   });
 
   test('OWNER: inventory tab', async ({ page }) => {
-    await page.getByRole('button', { name: 'Stok' }).click();
-    await expect(page.getByRole('heading', { name: 'Stok & Hammadde Yönetimi' })).toBeVisible();
+    await page.getByRole('button', { name: 'Stok & Reçete' }).click();
+    await expect(page.getByRole('heading', { name: 'Stok & Reçete Yönetimi' })).toBeVisible();
   });
 
   test('OWNER: staff tab', async ({ page }) => {
-    await page.getByRole('button', { name: 'Personel' }).click();
-    await expect(page.getByRole('heading', { name: 'Personel & Kullanıcı Yönetimi' })).toBeVisible();
+    await page.getByRole('button', { name: 'Personel', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Personel & Yetki Yönetimi' })).toBeVisible();
   });
 
-  test('OWNER: modifiers tab', async ({ page }) => {
-    await page.getByRole('button', { name: 'Modifierlar' }).click();
-    await expect(page.getByRole('heading', { name: 'Ürün Modifier & Seçenek Yönetimi' })).toBeVisible();
+  // Faz 4: bağımsız "Modifierlar" sekmesi kaldırıldı; modifier yönetimi
+  // menü yönetimine gömüldü. Test sekmeyi değil, **yeni yüzeyi** doğrular.
+  test('OWNER: modifier sekmesi kaldırıldı, menü yönetimine gömüldü', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Modifier', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Modifierlar' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Menü', exact: true }).click();
+    await page.getByRole('button', { name: 'Ürün Ekle' }).click();
+    await expect(page.getByText('Seçenekler & Ekstralar')).toBeVisible();
+    // Fiyat farkının ürün fiyatına karışmadığı yüzeyde açıklanır.
+    await expect(
+      page.getByText(/Seçenek fiyatı, ürünün temel fiyatına eklenmez/),
+    ).toBeVisible();
   });
 
   test('OWNER: branch settings tab', async ({ page }) => {
-    await page.getByRole('button', { name: 'Şube Ayarları' }).click();
-    await expect(page.getByRole('heading', { name: 'Şube Yönetimi & Ayarları' })).toBeVisible();
+    await page.getByRole('button', { name: 'Şubeler', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Şubeler' })).toBeVisible();
   });
 });

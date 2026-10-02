@@ -353,29 +353,58 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
       expect(Array.isArray(branches)).toBe(true);
     });
 
+    // Faz 4: modifier yönetimi bağımsız sekmeden `CategoryForm`/`ProductForm`
+    // yüzeyine taşındı. Test artık **gerçek kimlikleri** kullanır: eski hâli
+    // `id` gönderiyor, mock/backend kendi kimliğini üretiyor ve seçenek
+    // sahipsiz bir gruba ekleniyordu — yalnız `Array.isArray` doğruluyordu.
     it('O3: Product modifier groups and options management', async () => {
-      const grpId = `mod_${Date.now()}`;
-      await tauriInvoke('create_modifier_group', {
+      type ModifierOptionShape = { name: string; priceCents: number };
+      type ModifierGroupShape = {
+        id: string;
+        name: string;
+        maxSelections: number | null;
+        options: ModifierOptionShape[];
+      };
+      const created = await tauriInvoke<{ id: string }>('create_modifier_group', {
         actorRole: 'OWNER',
         tenantId,
-        id: grpId,
         name: 'Kahve Sütü Seçimi',
         isRequired: false,
         minSelections: 0,
         maxSelections: 1,
       });
+      expect(created.id).toBeTruthy();
 
       await tauriInvoke('add_modifier_option', {
         actorRole: 'OWNER',
-        groupId: grpId,
+        tenantId,
+        groupId: created.id,
         name: 'Yulaf Sütü',
         priceCents: 1500,
       });
 
-      const groups = await tauriInvoke<any[]>('get_modifier_groups', { actorRole: 'OWNER' });
+      const groups = await tauriInvoke<ModifierGroupShape[]>('get_modifier_groups', {
+        actorRole: 'OWNER',
+        tenantId,
+      });
       expect(Array.isArray(groups)).toBe(true);
 
-      await tauriInvoke('delete_modifier_group', { actorRole: 'OWNER', groupId: grpId });
+      const group = groups.find(g => g.id === created.id);
+      expect(group, 'oluşturulan grup listede bulunmalı').toBeDefined();
+      expect(group!.name).toBe('Kahve Sütü Seçimi');
+      expect(group!.maxSelections).toBe(1);
+      // Seçenek fiyat farkı kuruş olarak korunur (para birimi float değil).
+      expect(group!.options).toHaveLength(1);
+      expect(group!.options[0].name).toBe('Yulaf Sütü');
+      expect(group!.options[0].priceCents).toBe(1500);
+
+      await tauriInvoke('delete_modifier_group', { actorRole: 'OWNER', tenantId, groupId: created.id });
+
+      const after = await tauriInvoke<ModifierGroupShape[]>('get_modifier_groups', {
+        actorRole: 'OWNER',
+        tenantId,
+      });
+      expect(after.find(g => g.id === created.id)).toBeUndefined();
     });
   });
 

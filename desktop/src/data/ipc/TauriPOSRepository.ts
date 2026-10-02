@@ -82,9 +82,14 @@ export class TauriPOSRepository implements IPOSRepository {
   }
 
   public async getProductModifiers(productId: string): Promise<ModifierGroup[]> {
+    // Faz 4: komut tenant'a göre sınırlıdır; kimlik oturumdan gelir, çağıran
+    // bileşen kendi kafasında taşımaz.
+    const session = useAuthStore.getState().user;
     const rawGroups = await invoke<Record<string, unknown>[]>('get_product_modifiers', {
       productId,
       product_id: productId,
+      tenantId: session?.tenantId,
+      tenant_id: session?.tenantId,
     });
     if (!rawGroups || !Array.isArray(rawGroups)) return [];
     return rawGroups.map((g: Record<string, unknown>) => ({

@@ -261,6 +261,7 @@ pub async fn process_split_payment(
     // Sunucu hesabı tek doğruluk kaynağıdır, istemcinin bildirdiği indirim değil.
     let server_truth = crate::repositories::payment_repository::PaymentRepository::calculate_server_truth(
         &mut tx,
+        &tenant_id,
         &payload.items,
         payload.global_discount.as_ref(),
     )
@@ -869,9 +870,56 @@ pub struct SubmitOrderPayloadDto {
     pub notes: Option<String>,
 }
 
+/// Seçenek snapshot'ını **veritabanı fiyatlarıyla** yeniden yazar.
+///
+/// Neden: sipariş kalemi `order_items.modifiers` alanına JSON olarak dondurulur
+/// ve fiş/KDS bu snapshot'tan okur. İstemcinin gönderdiği `priceCents` değeri
+/// yazılırsa, tahsil edilen tutar ile fişte görünen ekstre ayrışır. Seçenek
+/// kimliği tenant'a ait değilse hata verilir (sessizce düşürülmez).
+async fn authoritative_modifier_snapshot(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+    modifiers: Option<&serde_json::Value>,
+) -> Result<Option<String>, String> {
+    let arr = match modifiers.and_then(|m| m.as_array()) {
+        Some(a) if !a.is_empty() => a,
+        _ => return Ok(None),
+    };
+
+    let mut snapshot: Vec<serde_json::Value> = Vec::with_capacity(arr.len());
+    for entry in arr {
+        let option_id = entry
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "MALICIOUS_INPUT: Seçenek kimliği eksik.".to_string())?;
+
+        let row: Option<(String, String, i64)> = sqlx::query_as(
+            "SELECT mo.id, mo.name, mo.price_cents FROM modifier_options mo \
+             JOIN modifier_groups mg ON mg.id = mo.group_id \
+             WHERE mo.id = ? AND mg.tenant_id = ?",
+        )
+        .bind(option_id)
+        .bind(tenant_id)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let (id, name, price_cents) = row.ok_or_else(|| {
+            "MALICIOUS_INPUT: Seçenek bu işletmeye ait değil veya silinmiş.".to_string()
+        })?;
+
+        snapshot.push(serde_json::json!({
+            "id": id,
+            "name": name,
+            "priceCents": price_cents,
+        }));
+    }
+
+    Ok(Some(serde_json::to_string(&snapshot).map_err(|e| e.to_string())?))
+}
+
 #[tauri::command]
-pub async fn submit_order(
-    payload: SubmitOrderPayloadDto,
+pub async fn submit_order(    payload: SubmitOrderPayloadDto,
     tenant_id: String,
     actor_id: Option<String>,
     actor_role: Option<String>,
@@ -909,30 +957,33 @@ pub async fn submit_order(
             .fetch_one(&mut *tx)
             .await
             .map_err(|e| format!("Product not found: {}", e))?;
-            
-        let price_cents: i32 = row.try_get("price_cents").unwrap_or(0);
-        let db_tax_rate: f64 = row.try_get::<f64, _>("tax_rate").unwrap_or(0.0);
-        let qty = item.quantity;
-        let mut item_unit_price = price_cents as i64;
-        if let Some(m) = &item.modifiers {
-            if let Some(arr) = m.as_array() {
-                for mod_opt in arr {
-                    if let Some(pc) = mod_opt.get("priceCents").and_then(|v| v.as_i64()) {
-                        item_unit_price += pc;
-                    }
-                }
-            }
-        }
-        let item_subtotal = item_unit_price * qty;
+
+            let price_cents: i32 = row.try_get("price_cents").unwrap_or(0);
+            let db_tax_rate: f64 = row.try_get::<f64, _>("tax_rate").unwrap_or(0.0);
+            let qty = item.quantity;
+            // Fiyat farkı istemciden değil `modifier_options`'tan okunur: ekstre
+            // ücreti `0` gönderilerek ödenemez. Donmuş fiyat bu aşamada henüz
+            // yoktur (kayıt aşağıda yazılıyor), dolayısıyla hep ürün + DB ekstre.
+            let item_unit_price = crate::services::modifier_service::resolve_unit_price(
+                &mut tx,
+                &tenant_id,
+                (price_cents as i64, db_tax_rate),
+                item.modifiers.as_ref(),
+                None,
+            )
+            .await?;
+            let item_subtotal = item_unit_price * qty;
         let tax_rate_int = db_tax_rate.round() as i64;
         let item_tax = (item_subtotal * tax_rate_int) / 100;
         let item_total = item_subtotal + item_tax;
         total_cents += item_total;
 
-        let modifiers_json = if let Some(m) = &item.modifiers {
-            Some(serde_json::to_string(m).unwrap_or_default())
-        } else {
-            None
+        // Snapshot: seçenek adları ve **gerçekten ücretlenen** fiyat farkı
+        // yazılır. İstemcinin gönderdiği fiyat değeri kullanılmaz; aksi hâlde
+        // fişte görünen ekstre ile tahsil edilen tutar ayrışırdı.
+        let modifiers_json = match authoritative_modifier_snapshot(&mut tx, &tenant_id, item.modifiers.as_ref()).await? {
+            Some(json) => Some(json),
+            None => None,
         };
 
         prepared_items.push(PreparedOrderItem {
@@ -2421,6 +2472,10 @@ pub async fn close_shift(
 #[cfg(test)]
 #[path = "commands_approval_tests.rs"]
 mod approval_tests;
+
+#[cfg(test)]
+#[path = "price_integrity_tests.rs"]
+mod price_integrity_tests;
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { tauriInvoke as invoke } from '../../../../data/ipc/tauriInvoke';
+import {
+    loadProductModifierGroupIds,
+    saveProductModifierGroupIds,
+} from '../../../../data/ipc/modifierAssignmentApi';
 import { MenuManagementPanel, CategoryDto, ProductDto } from '../../management/ui/MenuManagementPanel';
 import { CategoryForm, CategoryFormData } from '../../management/ui/CategoryForm';
 import { ProductForm, ProductFormData } from '../../management/ui/ProductForm';
@@ -38,6 +42,8 @@ export function OwnerMenuTab() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductDto | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  // Faz 4: formda seçilen modifier grupları; ürün kaydıyla birlikte yazılır.
+  const [productModifierGroupIds, setProductModifierGroupIds] = useState<string[]>([]);
 
   // iOS Tarzı Silme Onay Penceresi Durumu
   const [deleteModalState, setDeleteModalState] = useState<{
@@ -172,12 +178,20 @@ export function OwnerMenuTab() {
   const handleAddProduct = (categoryId: string) => {
     setEditingProduct(null);
     setSelectedCategoryId(categoryId);
+    setProductModifierGroupIds([]);
     setIsProductModalOpen(true);
   };
 
-  const handleEditProduct = (product: ProductDto) => {
+  const handleEditProduct = async (product: ProductDto) => {
     setEditingProduct(product);
     setSelectedCategoryId(product.category_id);
+    // Faz 4: ürünün bağlı olduğu modifier grupları form açılmadan önce okunur.
+    setProductModifierGroupIds(
+      await loadProductModifierGroupIds(product.id, {
+        actorRole: currentRole,
+        tenantId: user?.tenantId,
+      }),
+    );
     setIsProductModalOpen(true);
   };
 
@@ -223,6 +237,7 @@ export function OwnerMenuTab() {
 
   const handleSaveProduct = async (data: ProductFormData) => {
     try {
+      let savedProductId = editingProduct?.id ?? null;
       if (editingProduct) {
         await invoke('update_product', {
           actorRole: currentRole,
@@ -240,7 +255,7 @@ export function OwnerMenuTab() {
         });
         showToast('Ürün güncellendi.', 'success');
       } else {
-        await invoke('create_product', {
+        const created = await invoke<ProductDto>('create_product', {
           actorRole: currentRole,
           actor_role: currentRole,
           categoryId: data.categoryId,
@@ -252,8 +267,19 @@ export function OwnerMenuTab() {
           image_url: data.imageUrl,
           isActive: data.isActive,
           is_active: data.isActive,
+          tenantId: user?.tenantId,
+          tenant_id: user?.tenantId,
         });
+        savedProductId = created?.id ?? null;
         showToast('Ürün eklendi.', 'success');
+      }
+      // Faz 4: modifier ataması ürünün kendisinden sonra yazılır; yeni üründe
+      // kimlik ancak `create_product` yanıtıyla öğrenilir.
+      if (savedProductId && data.modifierGroupIds) {
+        await saveProductModifierGroupIds(savedProductId, data.modifierGroupIds, {
+          actorRole: currentRole,
+          tenantId: user?.tenantId,
+        });
       }
       setIsProductModalOpen(false);
       await fetchData();
@@ -391,6 +417,7 @@ export function OwnerMenuTab() {
         categories={categories}
         initialCategoryId={selectedCategoryId}
         currentRole={currentRole}
+        modifierGroupIds={productModifierGroupIds}
       />
 
       {/* Zarif Apple iOS Onay Dialogu (Silme İşlemi) */}

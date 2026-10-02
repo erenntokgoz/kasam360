@@ -9,7 +9,7 @@ use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
 /// Denetim defterine tek satır yazar. Yönetim komutları zaten `audit_mutex`
 /// tutuyordu ama hiçbiri kayıt yazmıyordu; menü, ürün, personel ve modifier
 /// değişiklikleri defter dışında kalıyordu.
-async fn record_audit(
+pub(crate) async fn record_audit(
     conn: &mut sqlx::SqliteConnection,
     lock: &AuditLock<'_>,
     tenant_id: &str,
@@ -36,7 +36,7 @@ async fn record_audit(
 
 /// Çağıran oturum bilgisi taşımıyorsa aktör "SYSTEM" olarak yazılır; yönetim
 /// ekranları oturum kullanıcısını `actor_id`/`actor_role` ile geçer.
-fn audit_actor(actor_id: Option<String>, actor_role: &str) -> (String, String) {
+pub(crate) fn audit_actor(actor_id: Option<String>, actor_role: &str) -> (String, String) {
     (
         actor_id.unwrap_or_else(|| "SYSTEM".to_string()),
         actor_role.to_string(),
@@ -693,133 +693,3 @@ pub async fn delete_staff_member(
     Ok(())
 }
 
-// ─── Modifier Management ─────────────────────────────────────────────────────
-
-#[tauri::command]
-pub async fn get_modifier_groups(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<serde_json::Value>, String> {
-    rbac::require_any(&actor_role, &[Role::Owner])?;
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let groups = sqlx::query("SELECT id, name, is_required, min_selections, max_selections FROM modifier_groups ORDER BY name ASC")
-        .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
-    let mut result = Vec::new();
-    for g in groups {
-        let group_id: String = g.try_get("id").unwrap_or_default();
-        let options = sqlx::query("SELECT id, name, price_cents FROM modifier_options WHERE group_id = ?")
-            .bind(&group_id).fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
-        let opts: Vec<serde_json::Value> = options.into_iter().map(|o| serde_json::json!({
-            "id": o.try_get::<String,_>("id").unwrap_or_default(),
-            "name": o.try_get::<String,_>("name").unwrap_or_default(),
-            "priceCents": o.try_get::<i64,_>("price_cents").unwrap_or(0),
-        })).collect();
-        result.push(serde_json::json!({
-            "id": group_id,
-            "name": g.try_get::<String,_>("name").unwrap_or_default(),
-            "isRequired": g.try_get::<bool,_>("is_required").unwrap_or(false),
-            "minSelections": g.try_get::<i64,_>("min_selections").unwrap_or(0),
-            "maxSelections": g.try_get::<Option<i64>,_>("max_selections").ok().flatten(),
-            "options": opts,
-        }));
-    }
-    Ok(result)
-}
-
-#[tauri::command]
-pub async fn create_modifier_group(
-    actor_role: String, name: String, is_required: bool,
-    min_selections: i64, max_selections: Option<i64>, tenant_id: String,
-    actor_id: Option<String>,
-    pool: tauri::State<'_, DbPool>, app_state: tauri::State<'_, crate::AppState>
-) -> Result<String, String> {
-    rbac::require_any(&actor_role, &[Role::Owner])?;
-    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
-    let id = uuid::Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO modifier_groups (id, tenant_id, name, is_required, min_selections, max_selections) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(&id).bind(&tenant_id).bind(&name).bind(is_required).bind(min_selections).bind(max_selections)
-        .execute(&mut *tx).await.map_err(|e| e.to_string())?;
-
-    record_audit(
-        &mut tx, &lock, &tenant_id, &actor_id, &actor_role,
-        crate::services::audit_service::category::MENU,
-        "menu:modifier_group_created", &id,
-        serde_json::json!({ "name": name, "isRequired": is_required }),
-    ).await?;
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-    Ok(id)
-}
-
-#[tauri::command]
-pub async fn add_modifier_option(
-    actor_role: String, group_id: String, name: String, price_cents: i64,
-    actor_id: Option<String>, tenant_id: Option<String>,
-    pool: tauri::State<'_, DbPool>, app_state: tauri::State<'_, crate::AppState>
-) -> Result<String, String> {
-    rbac::require_any(&actor_role, &[Role::Owner])?;
-    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let resolved_tenant: String = sqlx::query_scalar("SELECT COALESCE(tenant_id, 'DEFAULT_TENANT') FROM modifier_groups WHERE id = ?")
-        .bind(&group_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string()));
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
-    let id = uuid::Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO modifier_options (id, group_id, name, price_cents) VALUES (?, ?, ?, ?)")
-        .bind(&id).bind(&group_id).bind(&name).bind(price_cents)
-        .execute(&mut *tx).await.map_err(|e| e.to_string())?;
-
-    record_audit(
-        &mut tx, &lock, &resolved_tenant, &actor_id, &actor_role,
-        crate::services::audit_service::category::MENU,
-        "menu:modifier_option_added", &id,
-        serde_json::json!({ "groupId": group_id, "name": name, "priceCents": price_cents }),
-    ).await?;
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-    Ok(id)
-}
-
-#[tauri::command]
-pub async fn delete_modifier_group(
-    actor_role: String, group_id: String, actor_id: Option<String>, tenant_id: Option<String>,
-    pool: tauri::State<'_, DbPool>, app_state: tauri::State<'_, crate::AppState>
-) -> Result<(), String> {
-    rbac::require_any(&actor_role, &[Role::Owner])?;
-    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let resolved_tenant: String = sqlx::query_scalar("SELECT COALESCE(tenant_id, 'DEFAULT_TENANT') FROM modifier_groups WHERE id = ?")
-        .bind(&group_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string()));
-    let previous_name: Option<String> = sqlx::query_scalar("SELECT name FROM modifier_groups WHERE id = ?")
-        .bind(&group_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .ok()
-        .flatten();
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
-
-    let removed = sqlx::query("DELETE FROM modifier_groups WHERE id = ?")
-        .bind(&group_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
-
-    record_audit(
-        &mut tx, &lock, &resolved_tenant, &actor_id, &actor_role,
-        crate::services::audit_service::category::MENU,
-        "menu:modifier_group_deleted", &group_id,
-        serde_json::json!({ "name": previous_name }),
-    ).await?;
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-    let _ = removed;
-    Ok(())
-}

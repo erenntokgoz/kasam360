@@ -520,7 +520,7 @@ async fn sunucu_hesabindaki_indirim_kapiyi_acitir() {
         discount: Some(serde_json::json!({ "type": "PERCENTAGE", "value": 50.0 })),
     }];
 
-    let truth = PaymentRepository::calculate_server_truth(&mut conn, &items, None)
+    let truth = PaymentRepository::calculate_server_truth(&mut conn, TENANT, &items, None)
         .await
         .expect("sunucu hesabı çalışır");
     assert!(truth.discount_cents > 0, "indirim hesaplanmalı");

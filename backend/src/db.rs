@@ -88,6 +88,13 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_approvals_resource ON approvals(tenant_id, resource_id);").execute(&pool).await;
     let _ = sqlx::raw_sql("CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_token ON approvals(token_hash) WHERE token_hash IS NOT NULL;").execute(&pool).await;
 
+    // Faz 4 — modifier gömme: `modifier_groups.category_id` kategori şablonunu
+    // taşır. NULL = serbest grup. Eklenebilir çünkü mevcut satırlar NULL kalır;
+    // hiçbir modifier verisi taşınmaz veya silinmez.
+    let _ = sqlx::raw_sql("ALTER TABLE modifier_groups ADD COLUMN category_id TEXT;").execute(&pool).await;
+    let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_modifier_groups_tenant_category ON modifier_groups(tenant_id, category_id);").execute(&pool).await;
+    let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_product_modifier_groups_product ON product_modifier_groups(product_id);").execute(&pool).await;
+
     // Tenants tablosuna şirket/vergi/iletişim sütunlarını güvenle ekle (idempotent)
     let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN contact_person TEXT;").execute(&pool).await;
     let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN email TEXT;").execute(&pool).await;

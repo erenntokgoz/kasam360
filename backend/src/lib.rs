@@ -4,6 +4,7 @@ pub mod db;
 pub mod services;
 pub mod repositories;
 pub mod management_commands;
+pub mod modifier_commands;
 pub mod platform_commands;
 pub mod inventory_commands;
 pub mod branch_commands;
@@ -118,10 +119,14 @@ pub fn run() {
             management_commands::get_staff,
             management_commands::create_staff_member,
             management_commands::delete_staff_member,
-            management_commands::get_modifier_groups,
-            management_commands::create_modifier_group,
-            management_commands::add_modifier_option,
-            management_commands::delete_modifier_group,
+            // Faz 4: modifier yönetimi bağımsız sekmeden kalktı; komutlar
+            // CategoryForm/ProductForm yüzeyinden çağrılıyor ve yaşamaya devam ediyor.
+            modifier_commands::get_modifier_groups,
+            modifier_commands::create_modifier_group,
+            modifier_commands::add_modifier_option,
+            modifier_commands::delete_modifier_group,
+            modifier_commands::set_product_modifier_groups,
+            modifier_commands::get_product_modifier_group_ids,
             kitchen_commands::get_stations,
             kitchen_commands::create_station,
             kitchen_commands::update_kds_item_status,

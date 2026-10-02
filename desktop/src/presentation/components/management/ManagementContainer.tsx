@@ -1,5 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { tauriInvoke as invoke } from '../../../data/ipc/tauriInvoke';
+import {
+  loadProductModifierGroupIds,
+  saveProductModifierGroupIds,
+} from '../../../data/ipc/modifierAssignmentApi';
 import { MenuManagementPanel, CategoryDto, ProductDto } from './ui/MenuManagementPanel';
 import { useCartStore } from '../../store/useCartStore';
 import { CategoryForm, CategoryFormData } from './ui/CategoryForm';
@@ -30,6 +34,8 @@ export function ManagementContainer() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [isDeletingProduct, setIsDeletingProduct] = useState(false);
+  // Faz 4: formda seçilen modifier grupları; ürün kaydıyla birlikte yazılır.
+  const [productModifierGroupIds, setProductModifierGroupIds] = useState<string[]>([]);
 
   const fetchCategories = useCartStore(state => state.fetchCategories);
   const fetchCatalog = useCartStore(state => state.fetchCatalog);
@@ -37,6 +43,9 @@ export function ManagementContainer() {
 
   const user = useAuthStore(state => state.user);
   const currentRole = user?.role || 'Guest';
+  // Faz 4: modifier yönetimi işletme sahibine aittir. Backend de tüm modifier
+  // komutlarında `OWNER` kapısı arar; müdür ekranda da bölümü görmez.
+  const isOwner = currentRole.toUpperCase() === 'OWNER';
 
   // POS State ve sepet veritabanı senkronizasyonu
   const refreshPOSState = useCallback(async () => {
@@ -123,12 +132,28 @@ export function ManagementContainer() {
   const handleAddProduct = (categoryId: string) => {
     setEditingProduct(null);
     setSelectedCategoryId(categoryId);
+    setProductModifierGroupIds([]);
     setIsProductModalOpen(true);
   };
 
-  const handleEditProduct = (product: ProductDto) => {
+  const handleEditProduct = async (product: ProductDto) => {
     setEditingProduct(product);
     setSelectedCategoryId(product.category_id);
+    // Faz 4: ürünün bağlı olduğu modifier grupları form açılmadan önce okunur.
+    if (!isOwner) {
+      setProductModifierGroupIds([]);
+      setIsProductModalOpen(true);
+      return;
+    }
+    try {
+      const groupIds = await loadProductModifierGroupIds(product.id, {
+        actorRole: currentRole,
+        tenantId: user?.tenantId,
+      });
+      setProductModifierGroupIds(groupIds);
+    } catch {
+      setProductModifierGroupIds([]);
+    }
     setIsProductModalOpen(true);
   };
 
@@ -178,6 +203,7 @@ export function ManagementContainer() {
 
   const handleSaveProduct = async (data: ProductFormData) => {
     try {
+      let savedProductId: string | null = editingProduct?.id ?? null;
       if (editingProduct) {
         if (currentRole === 'MANAGER') {
           await invoke('update_product_status', {
@@ -200,7 +226,7 @@ export function ManagementContainer() {
           addToast('Ürün güncellendi.', 'success');
         }
       } else {
-        await invoke('create_product', {
+        const created = await invoke<{ id?: string }>('create_product', {
           actorRole: currentRole,
           categoryId: data.categoryId,
           name: data.name,
@@ -208,7 +234,17 @@ export function ManagementContainer() {
           imageUrl: data.imageUrl,
           isActive: data.isActive,
         });
+        savedProductId = created?.id ?? null;
         addToast('Ürün eklendi.', 'success');
+      }
+      // Faz 4: modifier ataması ürünün kendisinden sonra yazılır; yeni üründe
+      // kimlik ancak `create_product` yanıtıyla öğrenilir. Yetki sahibi
+      // olmayan roller bu komutu çağırmaz.
+      if (isOwner && savedProductId && data.modifierGroupIds) {
+        await saveProductModifierGroupIds(savedProductId, data.modifierGroupIds, {
+          actorRole: currentRole,
+          tenantId: user?.tenantId,
+        });
       }
       setIsProductModalOpen(false);
       await fetchData();
@@ -291,6 +327,7 @@ export function ManagementContainer() {
                   onSubmit={handleSaveCategory}
                   editingCategory={editingCategory}
                   categoriesLength={categories.length}
+                  canManageModifiers={isOwner}
                 />
 
                 <ProductForm
@@ -301,6 +338,8 @@ export function ManagementContainer() {
                   categories={categories}
                   initialCategoryId={selectedCategoryId}
                   currentRole={currentRole}
+                  canManageModifiers={isOwner}
+                  modifierGroupIds={productModifierGroupIds}
                   hidePriceEdit={editingProduct !== null && currentRole === 'MANAGER'}
                 />
               </>
