@@ -10,6 +10,8 @@ use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
+pub mod metrics;
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AnalyticsDashboardDataDto {
     pub total_sales_cents: i64,

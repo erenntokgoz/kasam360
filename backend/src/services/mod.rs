@@ -1,4 +1,5 @@
 pub mod audit_service;
+pub mod analytics_service;
 pub mod budget_service;
 pub mod branch_service;
 pub mod inventory_service;

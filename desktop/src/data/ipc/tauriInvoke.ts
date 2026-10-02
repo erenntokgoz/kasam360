@@ -360,6 +360,21 @@ const mockOrderItems: Record<string, unknown[]> = lsLoad<Record<string, unknown[
 let mockOrders: MockOrder[] = lsLoad<MockOrder[]>('orders', []);
 let mockCashMovements: MockCashMovement[] = lsLoad<MockCashMovement[]>('cash_movements', []);
 
+// Faz 10: yazma hedefi tarayıcıda kalıcıdır; sekmeyi yenileyince hedef kaybolmaz.
+let mockMonthlyTargets: {
+  tenant_id: string;
+  month: string;
+  category: string;
+  target_cents: number;
+}[] = lsLoad('monthly_targets', []);
+
+// Faz 10: her rakip fiyatı ayrı gözlemdir; geçmiş silinmez.
+let mockCompetitorPrices: {
+  product_id: string;
+  competitor_name: string;
+  price_cents: number;
+}[] = lsLoad('competitor_prices', []);
+
 // 6. Personel (Staff) - Master Admin and seed users preserved
 const DEFAULT_STAFF: MockStaffMember[] = [
   {
@@ -2712,7 +2727,178 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return { rows, kinds_without_records: kindsWithoutRecords } as unknown as T;
   }
 
-  // ----- PLATFORM (Master Admin) -----
+  // ----- FAZ 10 ANALİTİK -----
+  // Mock, backend ile aynı sözleşmeyi izler: bilinmeyen maliyet `null` döner,
+  // 0'a çevrilmez. Yoksa tarayıcıda "maliyet 0" görünür ve test gerçeği
+  // göstermekten çıkar.
+  if (cmd === 'get_analytics_metrics') {
+    requireReportGate(args);
+    const { from, to } = requireReportRange(args);
+    return buildMockAnalytics(from, to) as unknown as T;
+  }
+
+  if (cmd === 'set_monthly_target') {
+    const gate = requireReportGate(args);
+    if (gate.role !== 'OWNER') {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER).');
+    }
+    const input = (args.input ?? {}) as Record<string, unknown>;
+    const cents = Number(input.target_cents ?? 0);
+    if (!Number.isFinite(cents) || cents < 0) throw new Error('hedef negatif olamaz');
+    const month = String(input.month ?? '');
+    if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('ay YYYY-MM biciminde olmali');
+    const category = String(input.category ?? '').trim();
+    if (category.length === 0) throw new Error('kategori bos olamaz');
+    mockMonthlyTargets.push({
+      tenant_id: gate.tenantId,
+      month,
+      category: category.toUpperCase(),
+      target_cents: cents,
+    });
+    lsSave('monthly_targets', mockMonthlyTargets);
+    return undefined as unknown as T;
+  }
+
+  if (cmd === 'set_competitor_price') {
+    const gate = requireReportGate(args);
+    if (gate.role !== 'OWNER') {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER).');
+    }
+    const input = (args.input ?? {}) as Record<string, unknown>;
+    const cents = Number(input.price_cents ?? 0);
+    if (!Number.isFinite(cents) || cents < 0) throw new Error('rakip fiyat negatif olamaz');
+    const productId = String(input.product_id ?? '').trim();
+    const competitor = String(input.competitor_name ?? '').trim();
+    if (competitor.length === 0) throw new Error('rakip adi bos olamaz');
+    const product = mockProducts.find((p) => p.id === productId && matchesTenant(p.tenant_id));
+    if (!product) throw new Error('urun bulunamadi');
+    mockCompetitorPrices.push({
+      product_id: productId,
+      competitor_name: competitor,
+      price_cents: cents,
+    });
+    lsSave('competitor_prices', mockCompetitorPrices);
+    return undefined as unknown as T;
+  }
+
+  /**
+ * Faz 10 analitik mock verisi.
+ *
+ * Neden ayrı fonksiyon: mock, backend ile aynı sözleşmeyi izlemelidir.
+ * En kritik kural: FIFO partisi olmayan ürünün maliyeti `null` döner, 0 değil.
+ * 0 dönerse tarayıcıda "zararsız" görünür ve test gerçeği göstermekten çıkar.
+ */
+function buildMockAnalytics(from: string, to: string): Record<string, unknown> {
+  const fromMs = Date.parse(from);
+  const toMs = Date.parse(to);
+  const currentMonth = from.slice(0, 7);
+
+  const orders = mockOrders.filter((o) => {
+    const at = Date.parse(o.created_at);
+    return Number.isFinite(at) && at >= fromMs && at <= toMs;
+  });
+
+  const peakHours = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    revenue_cents: 0,
+    orders: 0,
+  }));
+  let paidCents = 0;
+  let voidedCents = 0;
+  let paidOrders = 0;
+  let voidedOrders = 0;
+
+  for (const order of orders) {
+    if (order.status !== 'VOID' && order.status !== 'PAID') continue;
+    if (order.status === 'VOID') {
+      voidedCents += order.total_cents;
+      voidedOrders += 1;
+    } else {
+      paidCents += order.total_cents;
+      paidOrders += 1;
+    }
+    const hour = new Date(Date.parse(order.created_at)).getHours();
+    peakHours[hour].revenue_cents += order.total_cents;
+    peakHours[hour].orders += 1;
+  }
+
+  const totalCents = paidCents + voidedCents;
+  const totalOrders = paidOrders + voidedOrders;
+
+  // Mock ortamda FIFO partileri tutulmaz; maliyet bilinmiyor olarak işaretlenir.
+  // Arayüz "Bilinmiyor" gösterir, sahte bir marj üretilmez.
+  const margins = mockProducts.map((product) => {
+    // Mock sipariş kalemi tutmaz; hangi ürünün kaç kez satıldığı bilinemez.
+    // Bu yüzden adet 0 ve marj null gösterilir: uydurma satış sayısı, sahte
+    // marj tablosundan daha iyidir.
+    void product;
+    return {
+      product_id: product.id,
+      product_name: product.name,
+      category_name: 'Kategori yok',
+      units_sold: 0,
+      revenue_cents: 0,
+      unit_cost_cents: null,
+      gross_profit_cents: null,
+      margin_percent: null,
+    };
+  });
+
+  const bcgMatrix = margins.map((m) => ({
+    product_id: m.product_id,
+    product_name: m.product_name,
+    quadrant: 'Dog',
+    quadrant_label: 'Soru Isareti',
+    units_sold: m.units_sold,
+    margin_percent: m.margin_percent,
+  }));
+
+  return {
+    from,
+    to,
+    currency: 'TRY',
+    product_margins: margins,
+    bcg_matrix: bcgMatrix,
+    bcg_counts: { star: 0, plowhorse: 0, cash_cow: 0, dog: margins.length },
+    combinations: [],
+    peak_hours: peakHours,
+    monthly_targets: mockMonthlyTargets
+      .filter((t) => t.month === currentMonth)
+      .map((t) => ({
+        month: t.month,
+        category: t.category,
+        target_cents: t.target_cents,
+        actual_cents: paidCents,
+        difference_cents: paidCents - t.target_cents,
+        achieved_percent: t.target_cents > 0 ? Math.round((paidCents / t.target_cents) * 100) : null,
+      })),
+    competitor_gaps: mockCompetitorPrices.map((price) => {
+      const product = mockProducts.find((p) => p.id === price.product_id);
+      const ourPrice = product ? asNumber(product.price_cents) : 0;
+      const gap = ourPrice - price.price_cents;
+      return {
+        product_id: price.product_id,
+        product_name: product ? product.name : price.product_id,
+        competitor_name: price.competitor_name,
+        our_price_cents: ourPrice,
+        competitor_price_cents: price.price_cents,
+        gap_cents: gap,
+        gap_percent: price.price_cents > 0 ? Math.round((gap / price.price_cents) * 100) : 0,
+        observed_at: to,
+      };
+    }),
+    void_loss: {
+      voided_cents: voidedCents,
+      total_cents: totalCents,
+      // Ciro 0 ise oran hesaplanamaz; 0 sanılmaz.
+      void_rate_percent: totalCents > 0 ? Math.round((voidedCents / totalCents) * 100) : null,
+      voided_orders: voidedOrders,
+      total_orders: totalOrders,
+    },
+  };
+}
+
+// ----- PLATFORM (Master Admin) -----
   if (cmd === 'get_tenants') {
     const role = (args.callerRole || args.caller_role) as string;
     const tenantId = (args.callerTenantId || args.caller_tenant_id) as string;

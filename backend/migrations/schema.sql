@@ -606,3 +606,40 @@ CREATE TABLE IF NOT EXISTS budget_limits (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     UNIQUE(tenant_id, category)
 );
+
+-- ============================================================================
+-- 17. AYLIK SATIŞ HEDEFLERİ (Faz 10 — Rapor & Analiz Merkezi)
+-- ============================================================================
+-- category = 'ALL' satır genel hedeftir; kategori satırları kırılım içindir.
+-- Yalnızca CREATE TABLE IF NOT EXISTS: mevcut veritabanları bozulmaz.
+CREATE TABLE IF NOT EXISTS monthly_targets (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    month TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'ALL',
+    target_cents INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE(tenant_id, month, category)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_targets_tenant ON monthly_targets(tenant_id, month);
+
+-- ============================================================================
+-- 18. RAKİP FİYAT TAKİBİ (Faz 10)
+-- ============================================================================
+-- Aynı ürün + rakip için gözlem zamanı benzersizdir; yeni gözlem eskisini
+-- günceller, geçmiş silinmez (karşılaştırma geçmişi korunur).
+CREATE TABLE IF NOT EXISTS competitor_prices (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    product_id TEXT NOT NULL,
+    competitor_name TEXT NOT NULL,
+    price_cents INTEGER NOT NULL DEFAULT 0,
+    observed_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE(tenant_id, product_id, competitor_name, observed_at),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_competitor_prices_lookup
+    ON competitor_prices(tenant_id, product_id, competitor_name, observed_at DESC);

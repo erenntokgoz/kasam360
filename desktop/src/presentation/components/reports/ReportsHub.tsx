@@ -1,6 +1,7 @@
 import { forwardRef, useMemo, useState } from 'react';
 import { FileSpreadsheet, FileText, Printer, TrendingUp } from 'lucide-react';
 
+import { AnalyticsPanel } from './AnalyticsPanel';
 import { ReportAdjustmentsTable } from './ReportAdjustmentsTable';
 import { ReportCategoryVolume, ReportPaymentMethods } from './ReportDistributions';
 import { ReportRangeBar } from './ReportRangeBar';
@@ -19,9 +20,10 @@ import {
   exportSalesReport,
   exportShiftsReport,
 } from './export/reportExportActions';
+import { useAnalytics } from './useAnalytics';
 import { useInitialReportRange, useReportsHub } from './useReportsHub';
 
-type ReportTabId = 'ozet' | 'fisler' | 'vardiyalar' | 'iptaller';
+type ReportTabId = 'ozet' | 'fisler' | 'vardiyalar' | 'iptaller' | 'analiz';
 
 interface ReportTab {
   id: ReportTabId;
@@ -33,6 +35,7 @@ const TABS: readonly ReportTab[] = [
   { id: 'fisler', label: 'Fişler' },
   { id: 'vardiyalar', label: 'Vardiyalar' },
   { id: 'iptaller', label: 'İptal / İade' },
+  { id: 'analiz', label: 'Analiz' },
 ];
 
 const actionClass =
@@ -59,6 +62,7 @@ export const ReportsHub = forwardRef<HTMLDivElement>(function ReportsHub(_props,
   const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   const hub = useReportsHub(range);
+  const analytics = useAnalytics(range.from, range.to);
 
   const rangeLabel = useMemo(() => {
     const start = toDateInputValue(range.from).split('-').reverse().join('.');
@@ -152,31 +156,42 @@ export const ReportsHub = forwardRef<HTMLDivElement>(function ReportsHub(_props,
         </div>
       )}
 
-      {hub.isLoading ? (
+      <nav className="reports-print-hide flex flex-wrap items-center gap-1.5" aria-label="Rapor bölümleri">
+        {TABS.map((tab) => {
+          const active = tab.id === activeTab;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={active ? 'page' : undefined}
+              className={`rounded-xl px-4 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                active
+                  ? 'bg-[#007AFF] text-white'
+                  : 'text-zinc-700 dark:text-zinc-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Analitik sekmesi kendi veri kaynağına sahip olduğu için satış raporu
+          yüklenirken de erişilebilir olmalı; aksi halde sekme görünmez kalırdı. */}
+      {activeTab === 'analiz' ? (
+        <AnalyticsPanel
+          metrics={analytics.metrics}
+          isLoading={analytics.isLoading}
+          error={analytics.error}
+          onSaveTarget={analytics.saveTarget}
+          onSaveCompetitorPrice={analytics.saveCompetitorPrice}
+          onRetry={analytics.refresh}
+        />
+      ) : hub.isLoading ? (
         <p className="py-16 text-center text-xs text-zinc-500">Raporlar yükleniyor...</p>
       ) : (
         <>
-          <nav className="reports-print-hide flex flex-wrap items-center gap-1.5" aria-label="Rapor bölümleri">
-            {TABS.map((tab) => {
-              const active = tab.id === activeTab;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  aria-current={active ? 'page' : undefined}
-                  className={`rounded-xl px-4 py-2 text-xs font-semibold transition-colors cursor-pointer ${
-                    active
-                      ? 'bg-[#007AFF] text-white'
-                      : 'text-zinc-700 dark:text-zinc-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
-
           {activeTab === 'ozet' && (
             <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <ReportPaymentMethods
