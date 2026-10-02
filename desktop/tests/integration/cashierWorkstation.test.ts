@@ -49,6 +49,8 @@ describe('Cashier Workstation Integration Tests', () => {
       reason: 'Bozuk para takviyesi',
       actorId: cashierId,
       actor_id: cashierId,
+      // Faz 7: kasa hareketi tenant'sız kaydedilmez (mock, backend ile aynı kapı).
+      tenantId: 'DEFAULT_TENANT',
     });
     expect(inRes).toBeDefined();
 
@@ -60,6 +62,7 @@ describe('Cashier Workstation Integration Tests', () => {
       reason: 'Kırtasiye gideri',
       actorId: cashierId,
       actor_id: cashierId,
+      tenantId: 'DEFAULT_TENANT',
     });
     expect(outRes).toBeDefined();
   });
@@ -91,35 +94,81 @@ describe('Cashier Workstation Integration Tests', () => {
     expect(item.status).toBe('CLOSED');
   });
 
-  it('print_receipt handles Z-Report, payment receipts and cash slips without error', async () => {
-    const zReportRes = await tauriInvoke<any>('print_receipt', {
-      order: {
-        type: 'Z_REPORT',
-        title: 'Z-RAPORU',
-        shiftId: 'shift_old_001',
-        cashierId,
-        openingBalance: 10000,
-        totalSales: 50000,
-        expectedBalance: 55000,
-        actualBalance: 55000,
-        discrepancy: 0,
-      },
-    });
-    expect(zReportRes).toBeDefined();
+  it('basım komutları yalnız kayıtlı ve bu tenant’a ait veriyi basar', async () => {
+    const tenantId = 'DEFAULT_TENANT';
 
-    const paymentSlipRes = await tauriInvoke<any>('print_receipt', {
-      order: {
-        type: 'PAYMENT_RECEIPT',
-        title: 'ÖDEME TAHSİLAT FİŞİ',
-        transactionId: 'TXN-999',
-        tableName: 'Masa 1',
-        totalAmount: 4500,
+    // Vardiya Z-Raporu: vardiya kaydı tenant'a ait olmalı.
+    const opened = await tauriInvoke<any>('open_shift', {
+      cashierId,
+      expectedAmountCents: 10000,
+      tenantId,
+    });
+    expect(opened?.id).toBeDefined();
+
+    await expect(
+      tauriInvoke('print_z_report', { shiftId: opened.id, actorRole: 'CASHIER', tenantId }),
+    ).resolves.toBeDefined();
+
+    // Rol ve tenant eksikse fail-closed: keyfi veri basılmaz.
+    await expect(
+      tauriInvoke('print_z_report', { shiftId: opened.id, tenantId }),
+    ).rejects.toThrow(/UNAUTHORIZED/);
+    await expect(
+      tauriInvoke('print_z_report', { shiftId: opened.id, actorRole: 'CASHIER' }),
+    ).rejects.toThrow(/UNAUTHORIZED/);
+
+    // Kayıt dışı vardiya basılamaz.
+    await expect(
+      tauriInvoke('print_z_report', {
+        shiftId: 'shift_yok',
+        actorRole: 'CASHIER',
+        tenantId,
+      }),
+    ).rejects.toThrow(/NOT_FOUND/);
+
+    // Tahsilat fişi: önce ödeme yapılır, sonra fiş basılır.
+    const payment = await tauriInvoke<any>('process_payment', {
+      tenantId,
+      payload: {
+        transactionId: `TXN_PRINT_${Date.now()}`,
+        orderId: 'ORD_PRINT_01',
+        timestamp: new Date().toISOString(),
+        method: 'CASH',
         amountTendered: 5000,
+        totalAmount: 4500,
         changeAmount: 500,
-        items: [{ name: 'Türk Kahvesi', quantity: 2, unitPrice: 2000, total: 4000 }],
+        items: [],
       },
     });
-    expect(paymentSlipRes).toBeDefined();
+    expect(payment.success).toBe(true);
+    await expect(
+      tauriInvoke('print_receipt', {
+        receiptId: payment.transactionId,
+        actorRole: 'CASHIER',
+        tenantId,
+      }),
+    ).resolves.toBeDefined();
+
+    // Kasa fişi: kayıtlı hareketten basılır, uydurma kimlikle basılamaz.
+    const movement = await tauriInvoke<any>('cash_in', {
+      shiftId: opened.id,
+      amountCents: 2500,
+      reason: 'Kasa açılış tamamı',
+      actorId: cashierId,
+      actorRole: 'CASHIER',
+      tenantId,
+    });
+    expect(movement?.id).toBeDefined();
+    await expect(
+      tauriInvoke('print_cash_slip', { movementId: movement.id, actorRole: 'CASHIER', tenantId }),
+    ).resolves.toBeDefined();
+    await expect(
+      tauriInvoke('print_cash_slip', {
+        movementId: 'cm_yok',
+        actorRole: 'CASHIER',
+        tenantId,
+      }),
+    ).rejects.toThrow(/NOT_FOUND/);
   });
 
   it('process_payment settles table bill, sets table AVAILABLE and computes change correctly', async () => {

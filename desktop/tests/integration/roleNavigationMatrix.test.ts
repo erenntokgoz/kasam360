@@ -121,11 +121,11 @@ describe('SPEC §34 — ekran erişimi', () => {
   const expectations: Record<Role, { views: string[]; defaultView: string }> = {
     MASTER: { views: ['PLATFORM'], defaultView: 'PLATFORM' },
     OWNER: {
-      views: ['OWNER_DASHBOARD', 'MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'CASHIER', 'RECEIPTS', 'END_OF_DAY'],
+      views: ['OWNER_DASHBOARD', 'MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'CASHIER', 'END_OF_DAY'],
       defaultView: 'OWNER_DASHBOARD',
     },
-    MANAGER: { views: ['MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'RECEIPTS', 'END_OF_DAY'], defaultView: 'MANAGEMENT' },
-    CASHIER: { views: ['CASHIER', 'POS', 'FLOOR', 'RECEIPTS', 'END_OF_DAY'], defaultView: 'CASHIER' },
+    MANAGER: { views: ['MANAGEMENT', 'FLOOR', 'POS', 'KDS', 'END_OF_DAY'], defaultView: 'MANAGEMENT' },
+    CASHIER: { views: ['CASHIER', 'POS', 'FLOOR', 'END_OF_DAY'], defaultView: 'CASHIER' },
     WAITER: { views: ['FLOOR', 'POS'], defaultView: 'FLOOR' },
     KITCHEN: { views: ['KDS'], defaultView: 'KDS' },
   };
@@ -150,9 +150,9 @@ describe('SPEC §34 — ekran erişimi', () => {
 describe('SPEC §34 — gezinme çubuğu görünürlüğü', () => {
   const expectedNav: Record<Role, string[]> = {
     MASTER: [],
-    OWNER: ['FLOOR', 'CASHIER', 'RECEIPTS', 'KDS', 'END_OF_DAY', 'OWNER_DASHBOARD'],
-    MANAGER: ['FLOOR', 'RECEIPTS', 'KDS', 'END_OF_DAY', 'MANAGEMENT'],
-    CASHIER: ['FLOOR', 'CASHIER', 'RECEIPTS', 'END_OF_DAY'],
+    OWNER: ['FLOOR', 'CASHIER', 'KDS', 'END_OF_DAY', 'OWNER_DASHBOARD'],
+    MANAGER: ['FLOOR', 'KDS', 'END_OF_DAY', 'MANAGEMENT'],
+    CASHIER: ['FLOOR', 'CASHIER', 'END_OF_DAY'],
     WAITER: ['FLOOR'],
     KITCHEN: ['KDS'],
   };

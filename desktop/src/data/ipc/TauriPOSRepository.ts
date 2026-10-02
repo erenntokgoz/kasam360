@@ -163,8 +163,20 @@ export class TauriPOSRepository implements IPOSRepository {
     return result;
   }
 
-  public async printReceipt(payload: PaymentPayload): Promise<void> {
-    await invoke<void>('print_receipt', { order: payload });
+  /**
+   * Tahsilat fişini basar. Faz 7: içerik gönderilmez; fiş tahsilat kaydından
+   * okunur, anahtar yalnızca kimliktir.
+   */
+  public async printReceipt(receiptId: string): Promise<void> {
+    const session = useAuthStore.getState().user;
+    await invoke<void>('print_receipt', {
+      receiptId,
+      receipt_id: receiptId,
+      actorRole: session?.role,
+      actor_role: session?.role,
+      tenantId: session?.tenantId,
+      tenant_id: session?.tenantId,
+    });
   }
 
   public async submitOrder(payload: SubmitOrderPayload): Promise<boolean> {

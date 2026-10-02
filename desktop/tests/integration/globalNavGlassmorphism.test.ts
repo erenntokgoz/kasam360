@@ -131,7 +131,8 @@ describe('Milestone 1 — Global Navigasyon & macOS Frosted Glass UI', () => {
   });
 
   it('8. Farklı roller için GlobalNav menü görünürlüğü AGENTS.md yetki matrisine uyar', () => {
-    // OWNER rolü: Masalar, Kasa, Fişler, KDS, Hesap Defteri ve İşletme (Yönetim doğrudan İşletme içine konsolide edilmiştir)
+    // OWNER rolü: Masalar, Kasa, KDS, Hesap Defteri ve İşletme (Yönetim doğrudan İşletme içine konsolide edilmiştir).
+    // Faz 7: ayrı "Fişler" ekranı kaldırıldı; fiş, Hesap Defteri içindeki tahsilat satırından açılır.
     useAuthStore.setState({
       user: {
         userId: 'usr_owner',
@@ -144,7 +145,9 @@ describe('Milestone 1 — Global Navigasyon & macOS Frosted Glass UI', () => {
     let html = renderToString(React.createElement(GlobalNav));
     expect(html).toContain('Masalar');
     expect(html).toContain('Kasa');
-    expect(html).toContain('Fişler');
+    // Faz 7: ayrı "Fişler" ekranı kaldırıldı; fiş, Hesap Defteri içindeki
+    // tahsilat satırından açılan penceredir.
+    expect(html).not.toContain('Fişler');
     expect(html).toContain('KDS');
     expect(html).toContain('Hesap Defteri');
     expect(html).toContain('İşletme');

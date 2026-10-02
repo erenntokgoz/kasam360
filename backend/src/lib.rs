@@ -19,6 +19,7 @@ pub mod id_generator;
 pub mod ledger_commands;
 pub mod rbac;
 pub mod user_credentials;
+pub mod print_commands;
 
 pub use db::{init_db, DbPool};
 
@@ -84,6 +85,16 @@ pub fn run() {
             commands::void_order,
             commands::get_audit_logs,
             commands::print_receipt,
+            // Faz 7: Hesap Defteri finansal hareketleri. Fiş, ayrı ekranın
+            // konusu olmaktan çıkıp harekete bağlı bağlantıya dönüştü.
+            commands::get_financial_movements,
+            commands::get_active_order_id,
+            // Faz 7: fiş dışı basımları keyfi JSON değil, veritabanından okunur.
+            print_commands::print_z_report,
+            print_commands::print_day_z_report,
+            print_commands::print_cash_slip,
+            print_commands::print_order_slip,
+            print_commands::print_void_slip,
             inventory_commands::get_inventory,
             inventory_commands::adjust_stock,
             inventory_commands::get_low_stock_alerts,

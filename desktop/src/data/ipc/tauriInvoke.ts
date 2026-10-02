@@ -93,6 +93,54 @@ export interface MockReceipt {
   total_cents: number;
   created_at: string;
   cashier_id: string | null;
+  // Faz 7: fişin tek finansal gerçekliği tahsilat kaydıdır. Bu alanlar
+  // backend `SALE_SETTLED` yüküyle birebir aynıdır; mock bunları **uydurmaz**,
+  // ödeme çağrısındaki gerçek değerleri saklar.
+  transaction_id?: string;
+  order_id?: string | null;
+  fiscal_receipt_no?: string | null;
+  method?: string;
+  amount_tendered_cents?: number | null;
+  change_cents?: number | null;
+  notes?: string | null;
+  items?: MockReceiptItem[];
+}
+
+export interface MockReceiptItem {
+  id: string;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price_cents: number;
+  tax_rate: number;
+  subtotal_cents: number;
+  tax_amount_cents: number;
+  total_cents: number;
+}
+
+/**
+ * Faz 7: adisyon/void fişleri ve kasa fişleri **kayıttan** basılır. Mock, backend
+ * ile aynı kayıtları tutar; basım içeriği çağırandan gelen serbest alanlarla
+ * değiştirilemez.
+ */
+export interface MockOrder {
+  id: string;
+  tenant_id: string;
+  table_id: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'PAID' | 'VOID' | 'CANCELLED';
+  total_cents: number;
+  created_at: string;
+}
+
+export interface MockCashMovement {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  movement_type: 'IN' | 'OUT';
+  amount_cents: number;
+  reason: string;
+  actor_id: string;
+  created_at: string;
 }
 
 export interface MockInventoryItem {
@@ -243,6 +291,12 @@ let mockProductModifierGroups: Record<string, string[]> = lsLoad<Record<string, 
 // 5. Masa Siparişleri (Order Items)
 const mockOrderItems: Record<string, unknown[]> = lsLoad<Record<string, unknown[]>>('order_items', {});
 
+// 5b. Sipariş başlıkları (adisyon/void fişi kaynağı) ve kasa hareketleri.
+// Bunlar olmadan basım komutları "kayıt bulunamadı" hatası verir; mock, backend
+// ile aynı davranışı taklit eder.
+let mockOrders: MockOrder[] = lsLoad<MockOrder[]>('orders', []);
+let mockCashMovements: MockCashMovement[] = lsLoad<MockCashMovement[]>('cash_movements', []);
+
 // 6. Personel (Staff) - Master Admin and seed users preserved
 const DEFAULT_STAFF: MockStaffMember[] = [
   {
@@ -321,6 +375,56 @@ let mockBranches: MockBranch[] = lsLoad<MockBranch[]>('branches', []);
 
 // 8. Fişler (Receipts)
 let mockReceipts: MockReceipt[] = lsLoad<MockReceipt[]>('receipts', []);
+
+/** Fiş yöntemini backend ile aynı sözlükle döndürür; bilinmeyende uydurmaz. */
+const mockPaymentMethodLabel = (raw: string | undefined): string => {
+  switch ((raw ?? '').trim().toUpperCase()) {
+    case 'CASH':
+      return 'Nakit';
+    case 'CREDIT_CARD':
+      return 'Kredi Kartı';
+    case 'SPLIT':
+      return 'Parçalı';
+    case 'DEBT':
+    case 'VERESIYE':
+      return 'Veresiye';
+    case '':
+      return 'Belirtilmemiş';
+    default:
+      return (raw as string).trim();
+  }
+};
+
+/**
+ * Mock fiş kaydını backend `ReceiptDto` biçimine çevirir.
+ *
+ * Neden yardımcı: alt toplam/KDV **yalnız saklanan kalemlerden** toplanır.
+ * Kalem yoksa `has_items` false olur ve tutarlar 0'dır — `total * 100 / 110`
+ * gibi uydurma KDV hesabı yapılmaz (backend `receipt_service` ile aynı kural).
+ */
+const toMockReceiptDto = (receipt: MockReceipt) => {
+  const items = receipt.items ?? [];
+  return {
+    id: receipt.transaction_id ?? receipt.id,
+    transaction_id: receipt.transaction_id ?? receipt.id,
+    fiscal_receipt_no: receipt.fiscal_receipt_no ?? `FISC-${receipt.id.slice(0, 6)}`,
+    order_id: receipt.order_id ?? null,
+    table_id: receipt.table_id,
+    total_cents: receipt.total_cents,
+    subtotal_cents: items.reduce((sum, item) => sum + item.subtotal_cents, 0),
+    tax_total_cents: items.reduce((sum, item) => sum + item.tax_amount_cents, 0),
+    discount_cents: 0,
+    created_at: receipt.created_at,
+    cashier_id: receipt.cashier_id,
+    cashier_name: receipt.cashier_id,
+    payment_method: mockPaymentMethodLabel(receipt.method),
+    notes: receipt.notes ?? null,
+    items,
+    tendered_cents: receipt.amount_tendered_cents ?? null,
+    change_cents: receipt.change_cents ?? null,
+    has_items: items.length > 0,
+  };
+};
 
 // 9. Envanter (Inventory)
 const DEFAULT_INVENTORY_ITEMS: MockInventoryItem[] = [
@@ -862,6 +966,19 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   };
 
   /**
+   * Katı tenant eşleşmesi (fail-closed) — Faz 7 fiş/ledger komutları için.
+   *
+   * Neden ayrı: tenant bilinmiyorsa eşleşme **yoktur**. `matchesTenant` eski
+   * komutların geçmiş davranışını korur; yeni fiş ve hareket komutları ise
+   * backend ile aynı biçimde tenant'sız isteği reddeder.
+   */
+  const matchesTenantStrict = (itemTenantId: string | undefined | null): boolean => {
+    if (isMaster) return true;
+    if (!callerTenantId) return false;
+    return itemTenantId === callerTenantId;
+  };
+
+  /**
    * Şube komutlarının tenant çözümlemesi (backend `branch_commands` ile birebir).
    *
    * `caller_tenant_id` oturum tenant'ıdır (güvenilir kaynak), `tenant_id` ise
@@ -1149,7 +1266,34 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
       })) as unknown as T;
   }
   if (cmd === 'get_order_items') {
-    return (mockOrderItems[args.tableId as string] || []) as unknown as T;
+    // Backend tenant filtresini zorunlu kılar; mock da aynı kapıyı uygular.
+    const itemsTenant = ((args.tenantId || args.tenant_id || callerTenantId) as string) || '';
+    if (!itemsTenant) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const tableId = (args.tableId || args.table_id) as string;
+    const activeOrder = mockOrders.find(
+      (order) =>
+        order.table_id === tableId &&
+        order.tenant_id === itemsTenant &&
+        (order.status === 'OPEN' || order.status === 'IN_PROGRESS'),
+    );
+    if (!activeOrder) return [] as unknown as T;
+    return (mockOrderItems[activeOrder.id] ?? mockOrderItems[tableId] ?? []) as unknown as T;
+  }
+  if (cmd === 'get_active_order_id') {
+    const orderTenant = ((args.tenantId || args.tenant_id || callerTenantId) as string) || '';
+    if (!orderTenant) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const tableKey = (args.tableId || args.table_id) as string;
+    const activeOrder = mockOrders.find(
+      (order) =>
+        order.table_id === tableKey &&
+        order.tenant_id === orderTenant &&
+        (order.status === 'OPEN' || order.status === 'IN_PROGRESS'),
+    );
+    return (activeOrder?.id ?? null) as unknown as T;
   }
   if (cmd === 'submit_order') {
     const payload = (args.payload || {}) as Record<string, unknown>;
@@ -1167,6 +1311,19 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
 
     if (!isQuickSale && rawTableId) {
       mockOrderItems[rawTableId] = items;
+      mockOrderItems[orderId] = items;
+      mockOrders = [
+        {
+          id: orderId,
+          tenant_id: orderTenantId,
+          table_id: rawTableId,
+          status: 'IN_PROGRESS',
+          total_cents: total,
+          created_at: new Date().toISOString(),
+        },
+        ...mockOrders,
+      ];
+      lsSave('orders', mockOrders);
       const targetTable = mockTables.find((t) => t.id === rawTableId);
       if (targetTable) {
         tableName = targetTable.name;
@@ -1324,20 +1481,67 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     const authUser = useAuthStore.getState().user;
     const cashierDisplayName = cashierUser?.name || (payload.cashierId as string) || authUser?.name || 'Kasiyer';
 
+    // Fiş numarası backend ile aynı biçimde tahsilat kimliğinden türetilir ve
+    // istemci tarafından **değiştirilemez**.
+    const fiscalNo = `FISC-${receiptId.slice(0, 6)}`;
+    const mockItems: MockReceiptItem[] = (Array.isArray(payload.items) ? payload.items : []).map(
+      (item: Record<string, unknown>, index: number) => {
+        const quantity = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unitPrice ?? item.unit_price_cents) || 0;
+        const subtotal = Number(item.subtotal ?? item.subtotal_cents) || unitPrice * quantity;
+        const taxAmount = Number(item.taxAmount ?? item.tax_amount_cents) || 0;
+        return {
+          id: String(item.id ?? `itm_${index}`),
+          product_id: String(item.productId ?? item.product_id ?? ''),
+          product_name: String(
+            (item.product as Record<string, unknown> | undefined)?.name ??
+              item.product_name ??
+              item.productId ??
+              'Ürün',
+          ),
+          quantity,
+          unit_price_cents: unitPrice,
+          tax_rate: Number(item.taxRate ?? item.tax_rate) || 0,
+          subtotal_cents: subtotal,
+          tax_amount_cents: taxAmount,
+          total_cents: Number(item.total ?? item.total_cents) || subtotal + taxAmount,
+        };
+      },
+    );
+
     mockReceipts = [
       {
         id: receiptId,
+        transaction_id: receiptId,
+        fiscal_receipt_no: fiscalNo,
+        order_id: (payload.orderId as string) || null,
         tenant_id: paymentTenantId,
         table_id: tableId || 'Hızlı Satış',
         total_cents: totalAmount,
         created_at: new Date().toISOString(),
         cashier_id: cashierDisplayName,
+        method: (payload.method as string) || 'CASH',
+        amount_tendered_cents: Number(payload.amountTendered) || totalAmount,
+        change_cents: Number(payload.changeAmount) || 0,
+        notes: (payload.notes as string) || null,
+        items: mockItems,
       },
       ...mockReceipts,
     ];
     lsSave('receipts', mockReceipts);
 
     if (cmd === 'void_order') {
+      // İptal fişi `print_void_slip` ile basıldığı için sipariş durumu gerçekten
+      // güncellenir; yoksa "iptal edilmiş sipariş bulunamadı" hatası çıkar.
+      const voidTenant = ((args.tenantId || args.tenant_id || callerTenantId) as string) || '';
+      const tableId = (args.tableId || args.table_id) as string;
+      mockOrders = mockOrders.map((order) =>
+        voidTenant && tableId && order.table_id === tableId && order.tenant_id === voidTenant &&
+        (order.status === 'OPEN' || order.status === 'IN_PROGRESS')
+          ? { ...order, status: 'VOID' as const }
+          : order,
+      );
+      lsSave('orders', mockOrders);
       return true as unknown as T;
     }
 
@@ -1349,7 +1553,89 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     } as unknown as T;
   }
   if (cmd === 'print_receipt') {
-    return { success: true, message: 'Yazıcıya başarıyla gönderildi.' } as unknown as T;
+    // Faz 7: basım **yalnız kayıtlı ve bu tenant'a ait** tahsilat içindir.
+    // Keyfi JSON yazdırılamaz; kaba gelen `order` yükü yok sayılır.
+    const printRole = ((args.actor_role || args.caller_role || args.actorRole) as string || '').toUpperCase();
+    if (!['OWNER', 'MANAGER', 'CASHIER'].includes(printRole)) {
+      throw new Error('UNAUTHORIZED: fiş basımı için yetki yok (izin: OWNER, MANAGER, CASHIER).');
+    }
+    const printTenant = ((args.caller_tenant_id || args.callerTenantId || callerTenantId) as string) || '';
+    if (!printTenant) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const requestedId = String(
+      (args.receipt_id || args.receiptId || args.receiptID || args.id) as string,
+    ).trim();
+    const bare = requestedId.replace(/^FISC-/, '');
+    const target = mockReceipts.find(
+      (receipt) =>
+        matchesTenantStrict(receipt.tenant_id) &&
+        (receipt.id === bare || (receipt.transaction_id ?? receipt.id) === bare),
+    );
+    if (!target) {
+      throw new Error('NOT_FOUND: bu işletmeye ait fiş bulunamadı');
+    }
+    return { success: true, message: 'Fiş termal yazıcıya gönderildi.' } as unknown as T;
+  }
+
+  // Fiş dışı basımlar: hepsi **kayıt + tenant + rol** kapısından geçer. Keyfi
+  // yük kabul edilmez; mock, backend ile aynı NOT_FOUND davranışını gösterir.
+  if (
+    cmd === 'print_z_report' ||
+    cmd === 'print_cash_slip' ||
+    cmd === 'print_order_slip' ||
+    cmd === 'print_void_slip' ||
+    cmd === 'print_day_z_report'
+  ) {
+    const role = ((args.actor_role || args.caller_role || args.actorRole) as string || '').toUpperCase();
+    if (!['OWNER', 'MANAGER', 'CASHIER'].includes(role)) {
+      throw new Error('UNAUTHORIZED: basım için yetki yok (izin: OWNER, MANAGER, CASHIER).');
+    }
+    const tenant = ((args.tenant_id || args.caller_tenant_id || args.tenantId || callerTenantId) as string) || '';
+    if (!tenant) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+
+    if (cmd === 'print_z_report') {
+      const shiftId = (args.shift_id || args.shiftId) as string;
+      const shift = mockShifts.find((s) => s.id === shiftId && s.tenant_id === tenant);
+      if (!shift) {
+        throw new Error('NOT_FOUND: bu işletmeye ait vardiya bulunamadı');
+      }
+    }
+
+    if (cmd === 'print_cash_slip') {
+      const movementId = (args.movement_id || args.movementId) as string;
+      const movement = mockCashMovements.find(
+        (m) => m.id === movementId && m.tenant_id === tenant,
+      );
+      if (!movement) {
+        throw new Error('NOT_FOUND: bu işletmeye ait kasa hareketi bulunamadı');
+      }
+    }
+
+    if (cmd === 'print_order_slip') {
+      const orderId = (args.order_id || args.orderId) as string;
+      const order = mockOrders.find((o) => o.id === orderId && o.tenant_id === tenant);
+      if (!order) {
+        throw new Error('NOT_FOUND: bu işletmeye ait sipariş bulunamadı');
+      }
+    }
+
+    if (cmd === 'print_void_slip') {
+      const tableId = (args.table_id || args.tableId) as string;
+      const voided = mockOrders.find(
+        (o) =>
+          o.table_id === tableId &&
+          o.tenant_id === tenant &&
+          (o.status === 'VOID' || o.status === 'CANCELLED'),
+      );
+      if (!voided) {
+        throw new Error('NOT_FOUND: bu masada iptal edilmiş sipariş bulunamadı');
+      }
+    }
+
+    return { success: true, message: 'Belge termal yazıcıya gönderildi.' } as unknown as T;
   }
 
   // ----- MENÜ YÖNETİMİ (Menu Management) -----
@@ -1870,7 +2156,24 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return [] as unknown as T;
   }
   if (cmd === 'cash_in' || cmd === 'cash_out') {
-    return { success: true } as unknown as T;
+    // Kasa fişi bu kayıttan basılır; bu yüzden hareket kimliği döndürülür.
+    const movementTenant = ((args.tenantId || args.tenant_id || callerTenantId) as string) || '';
+    if (!movementTenant) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const movement: MockCashMovement = {
+      id: `${cmd === 'cash_in' ? 'cmin' : 'cmout'}_${Date.now()}`,
+      tenant_id: movementTenant,
+      shift_id: (args.shiftId || args.shift_id || '') as string,
+      movement_type: cmd === 'cash_in' ? 'IN' : 'OUT',
+      amount_cents: Number(args.amountCents ?? args.amount_cents ?? 0),
+      reason: ((args.reason || '') as string) || '',
+      actor_id: (args.actorId || args.actor_id || '') as string,
+      created_at: new Date().toISOString(),
+    };
+    mockCashMovements = [movement, ...mockCashMovements];
+    lsSave('cash_movements', mockCashMovements);
+    return movement as unknown as T;
   }
   if (cmd === 'close_day') {
     return {
@@ -1926,16 +2229,98 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return rows.slice(offset, offset + limit).map(({ tenant_id: _ignored, ...rest }) => rest) as unknown as T;
   }
 
-  // ----- FİŞLER & RAPORLAR (Receipts & Analytics) -----
+  // ----- FİŞLER & HESAP DEFTERİ (Faz 7) -----
+  // Fiş, ayrı bir ekranın konusu değil; **finansal harekete** bağlı bir
+  // bağlantıdır. Bu yüzden mock da tek kaynaktan (tahsilat kaydı) üretir ve
+  // backend ile aynı kapıları uygular.
   if (cmd === 'get_receipts') {
-    // Backend ile aynı kapı: rol ve tenant zorunludur (fail-closed).
     if (!['OWNER', 'MANAGER', 'CASHIER'].includes(callerRole)) {
       throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, CASHIER).');
     }
     if (!callerTenantId) {
       throw new Error('UNAUTHORIZED: tenant_id is required');
     }
-    return mockReceipts.filter((r) => matchesTenant(r.tenant_id)) as unknown as T;
+    const limit = Number(args.limit) > 0 ? Math.min(Number(args.limit), 500) : 200;
+    return mockReceipts
+      .filter((receipt) => matchesTenantStrict(receipt.tenant_id))
+      .slice(0, limit)
+      .map(toMockReceiptDto) as unknown as T;
+  }
+  if (cmd === 'get_receipt_details') {
+    if (!['OWNER', 'MANAGER', 'CASHIER'].includes(callerRole)) {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, CASHIER).');
+    }
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const requestedId = String((args.receiptId || args.receipt_id || args.id) as string).trim();
+    const bare = requestedId.replace(/^FISC-/, '');
+    const found = mockReceipts.find(
+      (receipt) =>
+        matchesTenantStrict(receipt.tenant_id) &&
+        (receipt.id === bare || (receipt.transaction_id ?? receipt.id) === bare),
+    );
+    return (found ? toMockReceiptDto(found) : null) as unknown as T;
+  }
+  if (cmd === 'get_financial_movements') {
+    if (!['OWNER', 'MANAGER', 'CASHIER'].includes(callerRole)) {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, CASHIER).');
+    }
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const from = String(args.from || '').trim();
+    const to = String(args.to || '').trim();
+    if (!from || !to) {
+      throw new Error('INVALID_ARGUMENT: from/to are required (tarih aralığı zorunludur)');
+    }
+    const fromMs = Date.parse(from);
+    const toMs = Date.parse(to);
+    const limit = Number(args.limit) > 0 ? Math.min(Number(args.limit), 500) : 200;
+    const inRange = (value: string | undefined | null): boolean => {
+      const stamp = Date.parse(value || '');
+      return Number.isFinite(stamp) && stamp >= fromMs && stamp <= toMs;
+    };
+
+    // Tahsilat hareketleri: fiş bağlantısı vardır (aynı finansal gerçeğin iki görünümü).
+    const saleMovements = mockReceipts
+      .filter((receipt) => matchesTenantStrict(receipt.tenant_id))
+      .filter((receipt) => inRange(receipt.created_at))
+      .map((receipt) => {
+        const transactionId = receipt.transaction_id ?? receipt.id;
+        return {
+          movement_id: transactionId,
+          tenant_id: receipt.tenant_id,
+          movement_type: 'SALE_PAYMENT',
+          amount_cents: receipt.total_cents,
+          payment_method: mockPaymentMethodLabel(receipt.method),
+          description: receipt.table_id || null,
+          created_at: receipt.created_at,
+          receipt_id: transactionId,
+          fiscal_receipt_no: receipt.fiscal_receipt_no ?? `FISC-${transactionId.slice(0, 6)}`,
+        };
+      });
+
+    // Kasa hareketleri: tahsilat değildir, fişi yoktur — satır "Fiş yok" der.
+    const cashMovements = mockCashMovements
+      .filter((movement) => movement.tenant_id === callerTenantId)
+      .filter((movement) => inRange(movement.created_at))
+      .map((movement) => ({
+        movement_id: movement.id,
+        tenant_id: movement.tenant_id,
+        movement_type: 'CASH_MOVEMENT',
+        amount_cents: movement.movement_type === 'OUT' ? -movement.amount_cents : movement.amount_cents,
+        payment_method: 'CASH',
+        description: movement.reason || null,
+        created_at: movement.created_at,
+        receipt_id: null,
+        fiscal_receipt_no: null,
+      }));
+
+    const merged = [...saleMovements, ...cashMovements].sort(
+      (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+    );
+    return merged.slice(0, limit) as unknown as T;
   }
   if (cmd === 'get_daily_summary') {
     const filteredReceipts = mockReceipts.filter((r) => matchesTenant(r.tenant_id));

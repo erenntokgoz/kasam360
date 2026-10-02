@@ -10,6 +10,9 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
   // 1. CASHIER WORKFLOW & CONTRACT
   // --------------------------------------------------------------------------
   describe('Role: CASHIER', () => {
+    /** C4 testi bu tahsilat kimliğini kullanır. */
+    let settledTransactionId = '';
+
     it('C1: pos_get_categories & pos_get_products retrieve catalog items', async () => {
       const categories = await tauriInvoke<any[]>('pos_get_categories', { tenantId });
       expect(Array.isArray(categories)).toBe(true);
@@ -23,6 +26,7 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
       const openRes = await tauriInvoke<any>('open_shift', {
         cashierId,
         expectedAmountCents: 30000, // 300.00 TL
+        tenantId,
       });
       expect(openRes).toBeDefined();
 
@@ -31,6 +35,7 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
         amountCents: 5000,
         reason: 'Bozuk para',
         actorId: cashierId,
+        tenantId,
       });
       expect(inRes).toBeDefined();
 
@@ -39,6 +44,7 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
         amountCents: 2000,
         reason: 'Gider',
         actorId: cashierId,
+        tenantId,
       });
       expect(outRes).toBeDefined();
 
@@ -58,6 +64,7 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
     it('C3: process_payment handles CASH and computes exact change', async () => {
       const txnId = `TXN_${Date.now()}`;
       const paymentRes = await tauriInvoke<any>('process_payment', {
+        tenantId,
         payload: {
           transactionId: txnId,
           orderId: `ORD_${Date.now()}`,
@@ -73,18 +80,53 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
       });
       expect(paymentRes).toBeDefined();
       expect(paymentRes.success).toBe(true);
+      settledTransactionId = paymentRes.transactionId || txnId;
     });
 
-    it('C4: print_receipt processes receipt, adisyon and fiscal slips without errors', async () => {
+    // Faz 7: fiş basımı artık keyfi JSON kabul etmez; yalnız **kayıtlı tahsilat**
+    // basılır. Rol/tenant eksikse veya kayıt yoksa fail-closed hata verir.
+    it('C4: print_receipt yalnız kayıtlı tahsilatı basar, keyfi belge basmaz', async () => {
       const printRes = await tauriInvoke<any>('print_receipt', {
-        order: {
-          type: 'PAYMENT_RECEIPT',
-          title: 'FİŞ',
-          totalAmount: 18000,
-          timestamp: new Date().toISOString(),
-        }
+        receiptId: settledTransactionId,
+        actorRole: 'CASHIER',
+        tenantId,
       });
       expect(printRes).toBeDefined();
+
+      await expect(
+        tauriInvoke('print_receipt', {
+          order: { type: 'PAYMENT_RECEIPT', totalAmount: 18000 },
+          actorRole: 'CASHIER',
+          tenantId,
+        }),
+      ).rejects.toThrow();
+
+      await expect(
+        tauriInvoke('print_receipt', {
+          receiptId: settledTransactionId,
+          actorRole: 'CASHIER',
+        }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
+
+      await expect(
+        tauriInvoke('print_receipt', {
+          receiptId: 'txn_kayit_yok',
+          actorRole: 'CASHIER',
+          tenantId,
+        }),
+      ).rejects.toThrow(/NOT_FOUND/);
+    });
+
+    it('C5: günün defter Z-Raporu veritabanından basılır', async () => {
+      const res = await tauriInvoke<any>('print_day_z_report', {
+        actorRole: 'CASHIER',
+        tenantId,
+      });
+      expect(res).toBeDefined();
+
+      await expect(
+        tauriInvoke('print_day_z_report', { actorRole: 'CASHIER' }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
     });
   });
 

@@ -183,15 +183,19 @@ export function FloorPlanContainer() {
           break;
 
         case 'Adisyon Yazdır': {
-          await tauriInvoke('print_receipt', {
-            order: {
-              type: 'BILL',
-              title: 'ADİSYON',
-              tableId: table.id,
-              tableName: table.name,
-              totalAmount: Math.round(table.totalAmount || 0),
-              timestamp: new Date().toISOString(),
-            },
+          // Adisyon fişi tahsilat değildir; masanın açık siparişinden okunur.
+          const orderId = await tauriInvoke<string | null>('get_active_order_id', {
+            tableId: table.id,
+            tenantId: user?.tenantId,
+          });
+          if (!orderId) {
+            useToast.add({ title: 'Bu masa için açık sipariş bulunamadı.', type: 'error' });
+            break;
+          }
+          await tauriInvoke('print_order_slip', {
+            orderId,
+            actorRole: user?.role,
+            tenantId: user?.tenantId,
           });
           notifySuccess('Adisyon Yazdırıldı', `${table.name} masasının adisyon fişi yazıcıya gönderildi.`);
           break;

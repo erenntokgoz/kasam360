@@ -32,6 +32,7 @@ import { DirectoriesTab } from './ui/DirectoriesTab';
 import { DebtsBalanceTab } from './ui/DebtsBalanceTab';
 import { ExpensesTab } from './ui/ExpensesTab';
 import { FinancialReportsTab } from './ui/FinancialReportsTab';
+import { LedgerReceiptMovements } from '../ledger/LedgerReceiptMovements';
 
 // Günlük ciro ve ödeme yöntemleri dağılımı veri modeli (kuruş cinsinden)
 export interface DailySummaryDto {
@@ -329,108 +330,21 @@ export const EndOfDayContainer: React.FC<EndOfDayContainerProps> = ({
     }
   };
 
-  // ESC/POS termal yazıcıya Z-Raporu gönderme ve fiş basımı
+  // ESC/POS termal basım. Faz 7: içerik istemciden gönderilmez; vardiya veya gün
+  // belgesi veritabanındaki kayıtlardan basılır.
   const handlePrintZReport = async (shiftOverride?: ShiftHistoryDto | null) => {
     setIsPrinting(true);
 
     try {
-      const nowIso = new Date().toISOString();
-      const reportDate = new Date();
-      const dateKey = `${reportDate.getFullYear()}${String(reportDate.getMonth() + 1).padStart(2, '0')}${String(
-        reportDate.getDate()
-      ).padStart(2, '0')}`;
-      const reportId = shiftOverride
-        ? `Z-VARD-${shiftOverride.id.slice(0, 8).toUpperCase()}`
-        : `Z-${dateKey}-${String(Date.now()).slice(-4)}`;
-
-      const revCents = shiftOverride
-        ? (getActualCents(shiftOverride) ?? getExpectedCents(shiftOverride))
-        : (summary?.total_revenue_cents || 0);
-
-      const cashierStr = shiftOverride ? getCashierName(shiftOverride) : actorName;
-
-      // ESC/POS fiş satırları (Ödeme yöntemi dökümü)
-      const receiptItems = shiftOverride
-        ? [
-            {
-              product_name: 'Vardiya Kasa Sayımı',
-              quantity: 1,
-              unit_price_cents: revCents,
-              total_cents: revCents,
-            },
-          ]
-        : [
-            {
-              product_name: 'Nakit Tahsilat',
-              quantity: 1,
-              unit_price_cents: cashTotal,
-              total_cents: cashTotal,
-            },
-            {
-              product_name: 'Kredi Kartı / POS',
-              quantity: 1,
-              unit_price_cents: cardTotal,
-              total_cents: cardTotal,
-            },
-            ...(otherTotal > 0
-              ? [
-                  {
-                    product_name: 'Diğer / Yemek Kartı',
-                    quantity: 1,
-                    unit_price_cents: otherTotal,
-                    total_cents: otherTotal,
-                  },
-                ]
-              : []),
-          ];
-
-      const receiptOrder = {
-        id: reportId,
-        orderId: reportId,
-        reportNumber: reportId,
-        type: 'Z_REPORT',
-        reportTitle: shiftOverride ? 'VARDİYA MALİ Z-RAPORU' : 'GÜNÜN HESAP DEFTERİ MALİ Z-RAPORU',
-        table_id: 'HESAP DEFTERİ',
-        tableId: 'HESAP DEFTERİ',
-        customerRef: 'Z-RAPORU',
-        tenantId,
-        printedAt: nowIso,
-        created_at: nowIso,
-        createdAt: nowIso,
-        timestamp: nowIso,
-        cashier: cashierStr,
-        cashier_name: cashierStr,
-        cashierName: cashierStr,
-        role: actorRole,
-        payment_method: 'DEFTER KASA MUTABAKATI',
-        paymentMethod: 'DEFTER KASA MUTABAKATI',
-        total_cents: revCents,
-        totalCents: revCents,
-        subtotal_cents: revCents,
-        totalRevenueCents: revCents,
-        totalOrders: shiftOverride ? 1 : (summary?.total_orders || 0),
-        items: receiptItems,
-        paymentMethods: shiftOverride
-          ? {
-              nakit: revCents,
-            }
-          : (summary?.payment_methods || {}),
-        shiftSummary: shiftOverride
-          ? {
-              shiftId: shiftOverride.id,
-              openedAt: getOpenedAt(shiftOverride),
-              closedAt: getClosedAt(shiftOverride),
-              openingBalanceCents: getExpectedCents(shiftOverride),
-              closingBalanceCents: getActualCents(shiftOverride),
-              differenceCents: getDifferenceCents(shiftOverride),
-            }
-          : {
-              activeShiftsCount: openShifts.length,
-              status: lastClosedResult ? 'MÜHÜRLENDİ' : 'GÜNCEL_DEFTER',
-            },
-      };
-
-      await invoke('print_receipt', { order: receiptOrder });
+      if (shiftOverride) {
+        await invoke('print_z_report', {
+          shiftId: shiftOverride.id,
+          actorRole,
+          tenantId,
+        });
+      } else {
+        await invoke('print_day_z_report', { actorRole, tenantId });
+      }
       addToast('Mali Z-Raporu başarıyla termal yazıcıya gönderildi.', 'success');
     } catch (e) {
       console.error('Yazıcı hatası:', e);
@@ -692,7 +606,7 @@ export const EndOfDayContainer: React.FC<EndOfDayContainerProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 backdrop-blur-xl shadow-sm transition-all active:scale-95 cursor-pointer"
           >
             <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.7)]" />
-            <span>🤝 Borç</span>
+            <span>Borç</span>
           </button>
           <button
             type="button"
@@ -700,7 +614,7 @@ export const EndOfDayContainer: React.FC<EndOfDayContainerProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold bg-sky-500/15 hover:bg-sky-500/25 text-sky-600 dark:text-sky-400 border border-sky-500/30 backdrop-blur-xl shadow-sm transition-all active:scale-95 cursor-pointer"
           >
             <span className="w-2 h-2 rounded-full bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.7)]" />
-            <span>💰 Alacak</span>
+            <span>Alacak</span>
           </button>
 
           <div className="h-6 w-px dark:bg-white/10 bg-black/10 mx-1 hidden sm:block" />
@@ -901,6 +815,14 @@ export const EndOfDayContainer: React.FC<EndOfDayContainerProps> = ({
                 <Receipt size={24} />
               </div>
             </div>
+          </div>
+
+          {/* Finansal Hareketler & Fiş Görüntüleyici — Faz 7: fiş ayrı ekran değil,
+              tahsilat satırından açılan bir penceredir. */}
+          <div className="mb-6">
+            <LedgerReceiptMovements
+              onNotify={(message, tone) => addToast(message, tone === 'success' ? 'success' : 'error')}
+            />
           </div>
 
           {/* Ana Gövde: 2 Kolonlu Dengeli Yerleşim (Sol: Dağılım & Vardiya Çizelgesi, Sağ: Güvenli Defter Kapanışı & Mühürleme) */}

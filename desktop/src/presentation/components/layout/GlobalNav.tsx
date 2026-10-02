@@ -1,4 +1,4 @@
-import { Armchair, Receipt, ChefHat, Clock, Settings, BarChart3, Banknote } from 'lucide-react';
+import { Armchair, ChefHat, Clock, Settings, BarChart3, Banknote } from 'lucide-react';
 import { useCartStore } from '../../store/useCartStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
@@ -25,7 +25,6 @@ export function GlobalNav() {
 
   const canSeeFloor = navViews.includes('FLOOR') && isTableOrderEnabled;
   const canSeeCashier = navViews.includes('CASHIER');
-  const canSeeReceipts = navViews.includes('RECEIPTS');
   const canSeeKds = navViews.includes('KDS') && isKdsEnabled;
   const canSeeEndOfDay = navViews.includes('END_OF_DAY') && isLedgerCariEnabled;
   const canSeeOwnerDashboard = navViews.includes('OWNER_DASHBOARD');
@@ -48,14 +47,6 @@ export function GlobalNav() {
           label="Kasa"
           active={currentView === 'CASHIER'}
           onClick={() => navigate('CASHIER')}
-        />
-      )}
-      {canSeeReceipts && (
-        <NavItem
-          icon={<Receipt size={20} className="stroke-[1.6]" />}
-          label="Fişler"
-          active={currentView === 'RECEIPTS'}
-          onClick={() => navigate('RECEIPTS')}
         />
       )}
       {canSeeKds && (

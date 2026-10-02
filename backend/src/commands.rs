@@ -1614,6 +1614,15 @@ pub struct ReceiptItemDto {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ReceiptDto {
     pub id: String,
+    /// Tahsilatın bağlandığı sipariş (varsa). Fişin siparişe olan bağıdır.
+    #[serde(rename = "order_id", alias = "orderId", default)]
+    pub order_id: Option<String>,
+    /// Fiş numarası **veritabanından** türetilir; istemci gönderemez.
+    #[serde(rename = "fiscal_receipt_no", alias = "fiscalReceiptNo", default)]
+    pub fiscal_receipt_no: Option<String>,
+    /// Fişin tek finansal gerçekliği: tahsilat kaydının işlem kimliği.
+    #[serde(rename = "transaction_id", alias = "transactionId", default)]
+    pub transaction_id: String,
     #[serde(rename = "table_id", alias = "tableId")]
     pub table_id: String,
     #[serde(rename = "total_cents", alias = "totalCents")]
@@ -1639,275 +1648,24 @@ pub struct ReceiptDto {
     pub tendered_cents: Option<i64>,
     #[serde(rename = "change_cents", alias = "changeCents")]
     pub change_cents: Option<i64>,
+    /// Kalem satırı var mı? Kalem yoksa alt toplam/KDV **uydurulmaz**; 0 kalır
+    /// ve arayüz "kalem kaydı yok" durumunu gösterir.
+    #[serde(rename = "has_items", alias = "hasItems")]
+    pub has_items: bool,
 }
 
-#[tauri::command]
-/// Fiş listesini tek bir tenant'a daraltır.
+
+/// Fiş listesi — **tahsilat kaydından** türetilir (Faz 7).
 ///
-/// Neden ayrı fonksiyon: `get_receipts` komutu hem rapor yüzeyinden hem de
-/// `get_receipt_details`/`print_receipt` içinden çağrılıyordu. Parametre
-/// (rol, tenant) kontrolü komut katmanında kalır; veri katmanı yalnızca
-/// hazırlanmış tenant'a göre okur.
-async fn fetch_receipts_for_tenant(
-    conn: &mut sqlx::SqliteConnection,
-    tenant_id: &str,
-) -> Result<Vec<ReceiptDto>, String> {
-    // 1. Yalnız bu işletmenin tahsil edilmiş siparişleri
-    let rows = sqlx::query("SELECT id, table_id, total_cents, created_at, cashier_id, notes FROM orders WHERE tenant_id = ? AND status IN ('PAID', 'CLOSED') ORDER BY created_at DESC")
-        .bind(tenant_id)
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Fetch user map for cashier names
-    let user_rows = sqlx::query("SELECT id, name FROM users WHERE tenant_id = ?")
-        .bind(tenant_id)
-        .fetch_all(&mut *conn)
-        .await
-        .unwrap_or_default();
-    let mut user_map = std::collections::HashMap::new();
-    for ur in user_rows {
-        let uid: String = ur.try_get("id").unwrap_or_default();
-        let uname: String = ur.try_get("name").unwrap_or_default();
-        user_map.insert(uid, uname);
-    }
-
-    // Fetch table map for table names
-    let table_rows = sqlx::query("SELECT id, name FROM tables WHERE tenant_id = ?")
-        .bind(tenant_id)
-        .fetch_all(&mut *conn)
-        .await
-        .unwrap_or_default();
-    let mut table_map = std::collections::HashMap::new();
-    for tr in table_rows {
-        let tid: String = tr.try_get("id").unwrap_or_default();
-        let tname: String = tr.try_get("name").unwrap_or_default();
-        table_map.insert(tid, tname);
-    }
-
-    // Fetch all sale events to correlate payment method & tendered/change
-    let sale_event_rows = sqlx::query("SELECT aggregate_id, payload FROM events WHERE tenant_id = ? AND aggregate_type = 'SALE' AND event_type = 'SALE_SETTLED'")
-        .bind(tenant_id)
-        .fetch_all(&mut *conn)
-        .await
-        .unwrap_or_default();
-    let mut event_map = std::collections::HashMap::new();
-    for er in &sale_event_rows {
-        let agg_id: String = er.try_get("aggregate_id").unwrap_or_default();
-        let payload_str: String = er.try_get("payload").unwrap_or_default();
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload_str) {
-            let order_id = v.get("orderId").and_then(|x| x.as_str()).unwrap_or("");
-            if !order_id.is_empty() {
-                event_map.insert(order_id.to_string(), v.clone());
-            }
-            if !agg_id.is_empty() {
-                event_map.insert(agg_id, v);
-            }
-        }
-    }
-
-    let mut receipts = Vec::new();
-    let mut seen_ids = std::collections::HashSet::new();
-
-    for r in rows {
-        let order_id: String = r.try_get("id").unwrap_or_default();
-        let raw_table_id: String = r.try_get("table_id").unwrap_or_default();
-        let table_display = table_map.get(&raw_table_id).cloned().unwrap_or(raw_table_id.clone());
-        let total_cents: i64 = r.try_get("total_cents").unwrap_or(0);
-        let created_at: String = r.try_get("created_at").unwrap_or_default();
-        let cashier_id: Option<String> = r.try_get("cashier_id").ok();
-        let notes: Option<String> = r.try_get("notes").ok();
-
-        let cashier_name = cashier_id.as_ref().and_then(|cid| user_map.get(cid)).cloned();
-
-        // Fetch order items (kalemler tenant'ın kendi ürünleriyle eşleşir)
-        let item_rows = sqlx::query("
-            SELECT oi.id, oi.product_id, COALESCE(p.name, oi.product_id) as product_name,
-                   oi.quantity, oi.unit_price_cents, oi.tax_rate, oi.subtotal_cents,
-                   oi.tax_amount_cents, oi.total_cents, oi.modifiers, oi.notes
-            FROM order_items oi
-            LEFT JOIN products p ON oi.product_id = p.id AND p.tenant_id = ?
-            WHERE oi.order_id = ?
-        ")
-        .bind(tenant_id)
-        .bind(&order_id)
-        .fetch_all(&mut *conn)
-        .await
-        .unwrap_or_default();
-
-        let mut items = Vec::new();
-        let mut subtotal_calc: i64 = 0;
-        let mut tax_calc: i64 = 0;
-        let mut gross_calc: i64 = 0;
-
-        for ir in item_rows {
-            let qty: i64 = ir.try_get("quantity").unwrap_or(1);
-            let unit_price: i64 = ir.try_get("unit_price_cents").unwrap_or(0);
-            let subtotal: i64 = ir.try_get("subtotal_cents").unwrap_or(unit_price * qty);
-            let tax_amount: i64 = ir.try_get("tax_amount_cents").unwrap_or(0);
-            let item_total: i64 = ir.try_get("total_cents").unwrap_or(subtotal + tax_amount);
-            let tax_rate: f64 = ir.try_get("tax_rate").unwrap_or(10.0);
-            let modifiers_str: Option<String> = ir.try_get("modifiers").ok();
-            let item_notes: Option<String> = ir.try_get("notes").ok();
-            let modifiers: Vec<String> = if let Some(m) = modifiers_str {
-                serde_json::from_str(&m).unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-
-            subtotal_calc += subtotal;
-            tax_calc += tax_amount;
-            gross_calc += unit_price * qty;
-
-            items.push(ReceiptItemDto {
-                id: ir.try_get("id").unwrap_or_default(),
-                product_id: ir.try_get("product_id").unwrap_or_default(),
-                product_name: ir.try_get("product_name").unwrap_or_default(),
-                quantity: qty,
-                unit_price_cents: unit_price,
-                tax_rate,
-                subtotal_cents: subtotal,
-                tax_amount_cents: tax_amount,
-                total_cents: item_total,
-                modifiers,
-                notes: item_notes,
-            });
-        }
-
-        // Correlate with event if available
-        let event_val = event_map.get(&order_id);
-        let payment_method = event_val
-            .and_then(|v| v.get("method").and_then(|m| m.as_str()))
-            .map(|m| match m {
-                "CASH" => "Nakit",
-                "CREDIT_CARD" => "Kredi Kartı",
-                "SPLIT" => "Parçalı",
-                other => other,
-            })
-            .unwrap_or("Nakit")
-            .to_string();
-
-        let tendered_cents = event_val
-            .and_then(|v| v.get("amountTendered").and_then(|a| a.as_i64()));
-        let change_cents = event_val
-            .and_then(|v| v.get("changeAmount").and_then(|c| c.as_i64()));
-
-        let discount_cents = if gross_calc > total_cents && gross_calc > 0 {
-            gross_calc - total_cents
-        } else {
-            0
-        };
-
-        let final_subtotal = if subtotal_calc > 0 { subtotal_calc } else { (total_cents * 100) / 110 };
-        let final_tax = if tax_calc > 0 { tax_calc } else { total_cents - final_subtotal };
-
-        seen_ids.insert(order_id.clone());
-        receipts.push(ReceiptDto {
-            id: order_id,
-            table_id: table_display,
-            total_cents,
-            subtotal_cents: final_subtotal,
-            tax_total_cents: final_tax,
-            discount_cents,
-            created_at,
-            cashier_id,
-            cashier_name,
-            payment_method,
-            notes,
-            items,
-            tendered_cents,
-            change_cents,
-        });
-    }
-
-    // Also include standalone SALE_SETTLED events not in orders
-    for er in &sale_event_rows {
-        let payload_str: String = er.try_get("payload").unwrap_or_default();
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload_str) {
-            let tx_id = v.get("transactionId").and_then(|x| x.as_str()).unwrap_or("");
-            let ord_id = v.get("orderId").and_then(|x| x.as_str()).unwrap_or(tx_id);
-            if !ord_id.is_empty() && !seen_ids.contains(ord_id) {
-                seen_ids.insert(ord_id.to_string());
-                let total = v.get("totalAmount").and_then(|x| x.as_i64()).unwrap_or(0);
-                let timestamp = v.get("timestamp").and_then(|x| x.as_str()).unwrap_or("").to_string();
-                let customer_ref = v.get("customerRef").and_then(|x| x.as_str()).unwrap_or("Kasa Satışı");
-                let cashier = v.get("cashierId").and_then(|x| x.as_str()).map(|s| s.to_string());
-                let method = v.get("method").and_then(|x| x.as_str()).unwrap_or("CASH");
-                let method_tr = match method {
-                    "CASH" => "Nakit",
-                    "CREDIT_CARD" => "Kredi Kartı",
-                    "SPLIT" => "Parçalı",
-                    other => other,
-                };
-                let tendered = v.get("amountTendered").and_then(|x| x.as_i64());
-                let change = v.get("changeAmount").and_then(|x| x.as_i64());
-                let notes = v.get("notes").and_then(|x| x.as_str()).map(|s| s.to_string());
-
-                let mut items = Vec::new();
-                let mut sub_cents: i64 = 0;
-                let mut tax_cents: i64 = 0;
-                if let Some(raw_items) = v.get("items").and_then(|x| x.as_array()) {
-                    for it in raw_items {
-                        let name = it.get("product").and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("Ürün");
-                        let pid = it.get("product").and_then(|p| p.get("id")).and_then(|n| n.as_str()).unwrap_or("");
-                        let q = it.get("quantity").and_then(|x| x.as_i64()).unwrap_or(1);
-                        let up = it.get("unitPrice").and_then(|x| x.as_i64()).unwrap_or(0);
-                        let tr = it.get("taxRate").and_then(|x| x.as_f64()).unwrap_or(10.0);
-                        let sub = it.get("subtotal").and_then(|x| x.as_i64()).unwrap_or(up * q);
-                        let ta = it.get("taxAmount").and_then(|x| x.as_i64()).unwrap_or(0);
-                        let tot = it.get("total").and_then(|x| x.as_i64()).unwrap_or(sub + ta);
-                        let item_note = it.get("note").and_then(|x| x.as_str()).map(|s| s.to_string());
-
-                        sub_cents += sub;
-                        tax_cents += ta;
-
-                        items.push(ReceiptItemDto {
-                            id: format!("item_{}", Uuid::new_v4()),
-                            product_id: pid.to_string(),
-                            product_name: name.to_string(),
-                            quantity: q,
-                            unit_price_cents: up,
-                            tax_rate: tr,
-                            subtotal_cents: sub,
-                            tax_amount_cents: ta,
-                            total_cents: tot,
-                            modifiers: vec![],
-                            notes: item_note,
-                        });
-                    }
-                }
-
-                receipts.push(ReceiptDto {
-                    id: ord_id.to_string(),
-                    table_id: table_map.get(customer_ref).cloned().unwrap_or_else(|| customer_ref.to_string()),
-                    total_cents: total,
-                    subtotal_cents: if sub_cents > 0 { sub_cents } else { (total * 100) / 110 },
-                    tax_total_cents: if tax_cents > 0 { tax_cents } else { total - sub_cents },
-                    discount_cents: 0,
-                    created_at: timestamp,
-                    cashier_id: cashier.clone(),
-                    cashier_name: cashier.as_ref().and_then(|cid| user_map.get(cid)).cloned(),
-                    payment_method: method_tr.to_string(),
-                    notes,
-                    items,
-                    tendered_cents: tendered,
-                    change_cents: change,
-                });
-            }
-        }
-    }
-
-    Ok(receipts)
-}
-
-/// Rapor ve fiş ekranlarının veri kaynağı.
-///
-/// Neden yetki ve tenant eklendi: bu komut rol ve tenant almıyordu, dolayısıyla
-/// herhangi bir oturumdaki kasiyer tüm işletmelerin fişlerini okuyabiliyordu.
+/// Neden servis: Faz 6'daki şube kilidine benzer şekilde veri katmanı
+/// (`services::receipt_service`) tek kaynağı ve tenant izolasyonunu taşır.
+/// Fişin varlığı siparişten değil **tahsilattan** gelir; böylece aynı satış iki
+/// listede iki kez görünmez ve uydurma KDV hesabı ortadan kalkar.
 #[tauri::command]
 pub async fn get_receipts(
     actor_role: Option<String>,
     tenant_id: Option<String>,
+    limit: Option<i64>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<ReceiptDto>, String> {
     crate::rbac::require_any_present(
@@ -1916,7 +1674,16 @@ pub async fn get_receipts(
     )?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    fetch_receipts_for_tenant(&mut conn, &tenant).await
+    crate::services::receipt_service::list(&mut conn, &tenant, clamp_receipt_limit(limit)).await
+}
+
+/// Fiş limiti güvenli aralığa kırpılır: sıfır/negatif sınırsız tarama, çok büyük
+/// değer bellek tüketir.
+fn clamp_receipt_limit(limit: Option<i64>) -> i64 {
+    match limit {
+        Some(value) if value > 0 => value.min(500),
+        _ => 200,
+    }
 }
 
 /// Çağıranın tenant'ı zorunludur: eksik veya boşsa sorgu hiç çalışmaz.
@@ -1928,6 +1695,7 @@ fn require_tenant_scope(tenant_id: Option<&str>) -> Result<String, String> {
         .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())
 }
 
+/// Tek fiş — yalnız bu tenant'ın kendi tahsilatından.
 #[tauri::command]
 pub async fn get_receipt_details(
     receipt_id: String,
@@ -1941,10 +1709,77 @@ pub async fn get_receipt_details(
     )?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let receipts = fetch_receipts_for_tenant(&mut conn, &tenant).await?;
-    Ok(receipts.into_iter().find(|r| r.id == receipt_id))
+    crate::services::receipt_service::find(&mut conn, &tenant, &receipt_id).await
 }
 
+/// Hesap Defteri finansal hareketleri (Faz 7).
+///
+/// Hareket satırı fiş taşıyabilir ya da taşımayabilir; `receipt_id` boşsa
+/// arayüz açıkça "Fiş yok" durumunu gösterir. Fiş, ayrı bir ekranın konusu
+/// olmaktan çıkıp **harekete bağlı bir bağlantıya** dönüşür.
+#[tauri::command]
+pub async fn get_financial_movements(
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    limit: Option<i64>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<FinancialMovementDto>, String> {
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+    )?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let range = require_receipt_range(from.as_deref(), to.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let movements = crate::services::receipt_service::list_financial_movements(
+        &mut conn,
+        &tenant,
+        &range.0,
+        &range.1,
+        clamp_receipt_limit(limit),
+    )
+    .await?;
+    Ok(movements
+        .iter()
+        .map(crate::services::receipt_service::FinancialMovement::to_dto)
+        .collect())
+}
+
+/// Fiş aralığı zorunludur: "tüm zaman" taraması hem yavaştır hem de geçmiş
+/// finansal veriyi sınırsız taşır.
+fn require_receipt_range(from: Option<&str>, to: Option<&str>) -> Result<(String, String), String> {
+    let normalize = |value: Option<&str>| -> Result<String, String> {
+        let trimmed = value.map(str::trim).filter(|v| !v.is_empty()).ok_or_else(|| {
+            "INVALID_ARGUMENT: from/to are required (tarih aralığı zorunludur)".to_string()
+        })?;
+        // ISO 8601 damgası SQLite `datetime('now')` ile karşılaştırılabilir
+        // biçime indirgenir; saat dilimi son eki atılır.
+        Ok(trimmed.replace('T', " ").replace("+00:00", ""))
+    };
+    let start = normalize(from)?;
+    let end = normalize(to)?;
+    if start > end {
+        return Err("INVALID_ARGUMENT: from must be before to".to_string());
+    }
+    Ok((start, end))
+}
+
+/// Fiş DTO'su: fiş ile finansal hareket arasındaki bağlantıyı taşır.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct FinancialMovementDto {
+    pub movement_id: String,
+    pub tenant_id: String,
+    pub movement_type: String,
+    pub amount_cents: i64,
+    pub payment_method: String,
+    pub description: Option<String>,
+    pub created_at: String,
+    /// Fiş varsa tahsilat kimliği; kasa/cari hareketlerinde `None`.
+    pub receipt_id: Option<String>,
+    pub fiscal_receipt_no: Option<String>,
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct VoidOrderPayloadDto {
@@ -2274,90 +2109,94 @@ pub async fn get_audit_logs(
     Ok(logs)
 }
 
+
+
+/// Termal fiş basımı — **yalnız kayıtlı tahsilat için** (Faz 7).
+///
+/// Neden imza değişti: komut rol ve tenant almayan, kendisine gönderilen
+/// keyfi JSON'u basıyordu. Bu, hem yetkisiz fiş basımına hem de **uydurma
+/// mali fişe** yol açıyordu. Artık yalnız `receipt_id` kabul edilir; içerik
+/// veritabanındaki tahsilattan okunur, bu tenant'a ait değilse basılmaz.
+///
+/// Termal akış korunur: aynı satır düzeni, aynı ESC/POS hedefi, aynı veri
+/// kaynağı (tahsilat kaydı) kullanılır.
 #[tauri::command]
 pub async fn print_receipt(
-    order: serde_json::Value,
+    receipt_id: String,
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
 ) -> Result<(), String> {
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+    )?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let receipt = crate::services::receipt_service::find(&mut conn, &tenant, &receipt_id)
+        .await?
+        .ok_or_else(|| "NOT_FOUND: bu işletmeye ait fiş bulunamadı".to_string())?;
+
     println!("\n================================================");
     println!("             *** KASAM360 ADİSYON ***           ");
     println!("              ESC/POS 80mm TERMAL FİŞ           ");
     println!("================================================");
+    println!("Fiş No   : {}", receipt.fiscal_receipt_no.as_deref().unwrap_or(&receipt.id));
+    println!("Masa     : {}", if receipt.table_id.is_empty() { "-" } else { &receipt.table_id });
+    println!(
+        "Kasiyer  : {}",
+        receipt.cashier_name.as_deref().unwrap_or("-")
+    );
+    println!("Tarih    : {}", receipt.created_at);
+    println!("Ödeme    : {}", receipt.payment_method);
+    println!("------------------------------------------------");
+    println!("{:<22} {:>4} {:>9} {:>9}", "ÜRÜN", "ADET", "FİYAT", "TUTAR");
+    println!("------------------------------------------------");
 
-    if let Some(obj) = order.as_object() {
-        let id = obj.get("id").or_else(|| obj.get("orderId")).and_then(|v| v.as_str()).unwrap_or("N/A");
-        let table = obj.get("table_id").or_else(|| obj.get("tableId")).or_else(|| obj.get("customerRef")).and_then(|v| v.as_str()).unwrap_or("N/A");
-        let cashier = obj.get("cashier_name")
-            .or_else(|| obj.get("cashierName"))
-            .or_else(|| obj.get("cashier_id"))
-            .or_else(|| obj.get("cashierId"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("Kasiyer");
-        let date = obj.get("created_at").or_else(|| obj.get("createdAt")).or_else(|| obj.get("timestamp")).and_then(|v| v.as_str()).unwrap_or("N/A");
-        let method = obj.get("payment_method").or_else(|| obj.get("paymentMethod")).or_else(|| obj.get("method")).and_then(|v| v.as_str()).unwrap_or("NAKİT");
-        let total = obj.get("total_cents").or_else(|| obj.get("totalCents")).or_else(|| obj.get("totalAmount")).and_then(|v| v.as_i64()).unwrap_or(0);
-        let subtotal = obj.get("subtotal_cents").or_else(|| obj.get("subtotalCents")).and_then(|v| v.as_i64()).unwrap_or(total);
-        let tax = obj.get("tax_total_cents").or_else(|| obj.get("taxTotalCents")).and_then(|v| v.as_i64()).unwrap_or(0);
-        let discount = obj.get("discount_cents").or_else(|| obj.get("discountCents")).and_then(|v| v.as_i64()).unwrap_or(0);
-
-        println!("Fiş No   : {}", id);
-        println!("Masa     : {}", table);
-        println!("Kasiyer  : {}", cashier);
-        println!("Tarih    : {}", date);
-        println!("Ödeme    : {}", method);
-        println!("------------------------------------------------");
-        println!("{:<22} {:>4} {:>9} {:>9}", "ÜRÜN", "ADET", "FİYAT", "TUTAR");
-        println!("------------------------------------------------");
-
-        if let Some(items) = obj.get("items").and_then(|v| v.as_array()) {
-            for item in items {
-                let name = item.get("product_name")
-                    .or_else(|| item.get("productName"))
-                    .or_else(|| item.get("product").and_then(|p| p.get("name")))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Ürün");
-                let qty = item.get("quantity").and_then(|v| v.as_i64()).unwrap_or(1);
-                let price = item.get("unit_price_cents")
-                    .or_else(|| item.get("unitPriceCents"))
-                    .or_else(|| item.get("unitPrice"))
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0);
-                let line_total = item.get("total_cents")
-                    .or_else(|| item.get("totalCents"))
-                    .or_else(|| item.get("total"))
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(price * qty);
-
-                let short_name = if name.len() > 22 { &name[..22] } else { name };
-                println!("{:<22} {:>4} {:>7.2}TL {:>7.2}TL", 
-                    short_name, qty, (price as f64) / 100.0, (line_total as f64) / 100.0);
-            }
-        }
-        println!("------------------------------------------------");
-        if discount > 0 {
-            println!("ARA TOPLAM:                           {:>7.2} TL", (subtotal as f64) / 100.0);
-            println!("İNDİRİM:                             -{:>7.2} TL", (discount as f64) / 100.0);
-        }
-        if tax > 0 {
-            println!("HESAPLANAN KDV:                       {:>7.2} TL", (tax as f64) / 100.0);
-        }
-        println!("GENEL TOPLAM:                         {:>7.2} TL", (total as f64) / 100.0);
-        if let Some(tendered) = obj.get("tendered_cents").or_else(|| obj.get("tenderedCents")).and_then(|v| v.as_i64()) {
-            println!("Tahsil Edilen ({}):            {:>7.2} TL", method, (tendered as f64) / 100.0);
-            if let Some(change) = obj.get("change_cents").or_else(|| obj.get("changeCents")).and_then(|v| v.as_i64()) {
-                println!("Para Üstü:                            {:>7.2} TL", (change as f64) / 100.0);
-            }
-        }
-        println!("================================================");
-        println!("       MALİ DEĞERİ YOKTUR - BİLGİ FİŞİDİR       ");
-        println!("         Bizi Tercih Ettiğiniz İçin             ");
-        println!("              TEŞEKKÜR EDERİZ!                  ");
-        println!("================================================\n");
-    } else {
-        println!("PRINTING RECEIPT: {:?}", order);
+    for item in &receipt.items {
+        let short_name: String = item.product_name.chars().take(22).collect();
+        println!(
+            "{:<22} {:>4} {:>7.2}TL {:>7.2}TL",
+            short_name,
+            item.quantity,
+            item.unit_price_cents as f64 / 100.0,
+            item.total_cents as f64 / 100.0
+        );
     }
+
+    println!("------------------------------------------------");
+    if !receipt.has_items {
+        // Kalem satırı yoksa alt toplam/KDV **uydurulmaz**: fiş toplamı tek
+        // satırda gösterilir ve eksiklik açıkça yazılır.
+        println!("Kalem kaydı yok; yalnız tahsilat toplamı geçerlidir.");
+    }
+    if receipt.discount_cents > 0 {
+        println!(
+            "İNDİRİM:                             -{:>7.2} TL",
+            receipt.discount_cents as f64 / 100.0
+        );
+    }
+    println!(
+        "GENEL TOPLAM:                         {:>7.2} TL",
+        receipt.total_cents as f64 / 100.0
+    );
+    if let Some(tendered) = receipt.tendered_cents {
+        println!(
+            "Tahsil Edilen ({}):            {:>7.2} TL",
+            receipt.payment_method,
+            tendered as f64 / 100.0
+        );
+        if let Some(change) = receipt.change_cents {
+            println!("Para Üstü:                            {:>7.2} TL", change as f64 / 100.0);
+        }
+    }
+    println!("================================================");
+    println!("       MALİ DEĞERİ YOKTUR - BİLGİ FİŞİDİR       ");
+    println!("         Bizi Tercih Ettiğiniz İçin             ");
+    println!("              TEŞEKKÜR EDERİZ!                  ");
+    println!("================================================\n");
     Ok(())
 }
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -2826,15 +2665,44 @@ pub async fn get_active_shift(cashier_id: String, pool: tauri::State<'_, DbPool>
     }
 }
 
+/// Masanın açık sipariş kimliği — adisyon fişi basımının kaynak kimliğidir.
+///
+/// Neden ayrı komut: `print_order_slip` sipariş kimliği ister, çağıran elinde yalnız
+/// masa kimliği vardır. Bu komut tenant içinde çözer; filtre dışı sorgu yapılmaz.
+#[tauri::command]
+pub async fn get_active_order_id(
+    table_id: String,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Option<String>, String> {
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let order_id: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM orders WHERE table_id = ? AND tenant_id = ?
+         AND status IN ('OPEN', 'IN_PROGRESS') ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(&table_id)
+    .bind(&tenant)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(order_id)
+}
+
 #[tauri::command]
 pub async fn get_order_items(
     table_id: String,
+    tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<CartItemDto>, String> {
+    // Tenant filtresi zorunludur: filtreli olmayan sorgu başka işletmenin masasının
+    // kalemlerini bu kasaya getirirdi.
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
-    let row = sqlx::query("SELECT id FROM orders WHERE table_id = ? AND status IN ('OPEN', 'IN_PROGRESS') ORDER BY created_at DESC LIMIT 1")
+    let row = sqlx::query("SELECT id FROM orders WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS') ORDER BY created_at DESC LIMIT 1")
         .bind(&table_id)
+        .bind(&tenant)
         .fetch_optional(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;

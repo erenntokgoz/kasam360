@@ -8,7 +8,6 @@ import { useCartStore } from './presentation/store/useCartStore';
 import { FloorPlanContainer } from './presentation/components/floor/FloorPlanContainer';
 import { ManagementContainer } from './presentation/components/management/ManagementContainer';
 import { KdsContainer } from './presentation/components/kds/KdsContainer';
-import { ReceiptsContainer } from './presentation/components/receipts/ReceiptsContainer';
 import { EndOfDayContainer } from './presentation/components/endofday/EndOfDayContainer';
 import { AppShell } from './presentation/components/layout/AppShell';
 import { LoginPage } from './presentation/components/auth/LoginPage';
@@ -101,8 +100,6 @@ export default function App(): JSX.Element {
           user?.role === 'OWNER' ? <OwnerDashboardContainer /> : <ManagementContainer />
         ) : currentView === 'KDS' ? (
           <KdsContainer />
-        ) : currentView === 'RECEIPTS' ? (
-          <ReceiptsContainer />
         ) : currentView === 'END_OF_DAY' ? (
           <EndOfDayContainer />
         ) : currentView === 'OWNER_DASHBOARD' ? (

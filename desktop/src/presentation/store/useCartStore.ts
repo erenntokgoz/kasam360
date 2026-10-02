@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { IPOSRepository } from '../../domain/repositories/IPOSRepository';
 import {
   CartItem,
@@ -21,13 +21,13 @@ const getRepo = (stateRepo?: IPOSRepository | null): IPOSRepository => {
 };
 
 /**
- * NOT: Modül yükleme sırasında TauriPOSRepository.getInstance() fonksiyonunu ÇAĞIRMAYIN.
- * Tauri WebView IPC köprüsü (window.__TAURI_INTERNALS__) JS paketi değerlendirildikten
- * SONRA asenkron olarak enjekte edilir. Bu enjeksiyondan önce invoke() fonksiyonuna erişmek
- * şu hataya neden olur:
+ * NOT: ModÃ¼l yÃ¼kleme sÄ±rasÄ±nda TauriPOSRepository.getInstance() fonksiyonunu Ã‡AÄIRMAYIN.
+ * Tauri WebView IPC kÃ¶prÃ¼sÃ¼ (window.__TAURI_INTERNALS__) JS paketi deÄŸerlendirildikten
+ * SONRA asenkron olarak enjekte edilir. Bu enjeksiyondan Ã¶nce invoke() fonksiyonuna eriÅŸmek
+ * ÅŸu hataya neden olur:
  *   TypeError: Cannot read properties of undefined (reading 'invoke')
- * Aşağıdaki posRepository alanı null olarak başlatılır ve uygulama giriş noktasından
- * çağrılan setPOSRepository() aracılığıyla ilk kullanımda tembel olarak doldurulur.
+ * AÅŸaÄŸÄ±daki posRepository alanÄ± null olarak baÅŸlatÄ±lÄ±r ve uygulama giriÅŸ noktasÄ±ndan
+ * Ã§aÄŸrÄ±lan setPOSRepository() aracÄ±lÄ±ÄŸÄ±yla ilk kullanÄ±mda tembel olarak doldurulur.
  */
 
 export function calculateItemAmounts(
@@ -60,9 +60,9 @@ export function calculateItemAmounts(
 }
 
 export interface CartStoreState {
-  currentView: 'FLOOR' | 'POS' | 'MANAGEMENT' | 'KDS' | 'RECEIPTS' | 'END_OF_DAY' | 'OWNER_DASHBOARD' | 'CASHIER' | 'PLATFORM';
+  currentView: 'FLOOR' | 'POS' | 'MANAGEMENT' | 'KDS'  | 'END_OF_DAY' | 'OWNER_DASHBOARD' | 'CASHIER' | 'PLATFORM';
   activeTableId: string | null;
-  navigate: (view: 'FLOOR' | 'POS' | 'MANAGEMENT' | 'KDS' | 'RECEIPTS' | 'END_OF_DAY' | 'OWNER_DASHBOARD' | 'CASHIER' | 'PLATFORM') => void;
+  navigate: (view: 'FLOOR' | 'POS' | 'MANAGEMENT' | 'KDS'  | 'END_OF_DAY' | 'OWNER_DASHBOARD' | 'CASHIER' | 'PLATFORM') => void;
   selectTable: (tableId: string) => Promise<void>;
 
   items: CartItem[];
@@ -83,22 +83,22 @@ export interface CartStoreState {
   lastPaymentResult: PaymentResult | null;
 
   /**
-   * Aşama 2 — Etki eşitsizliği (Idempotency) koruması.
-   * Her ödeme gönderim denemesi için oluşturulan bir UUID. Arka ucun (backend)
-   * yinelenen gönderimleri tespit edip reddedebilmesi için veri yüküne (payload) eklenir.
-   * Bir sonuç (başarı veya başarısızlık) alındıktan sonra null olarak sıfırlanır.
+   * AÅŸama 2 â€” Etki eÅŸitsizliÄŸi (Idempotency) korumasÄ±.
+   * Her Ã¶deme gÃ¶nderim denemesi iÃ§in oluÅŸturulan bir UUID. Arka ucun (backend)
+   * yinelenen gÃ¶nderimleri tespit edip reddedebilmesi iÃ§in veri yÃ¼kÃ¼ne (payload) eklenir.
+   * Bir sonuÃ§ (baÅŸarÄ± veya baÅŸarÄ±sÄ±zlÄ±k) alÄ±ndÄ±ktan sonra null olarak sÄ±fÄ±rlanÄ±r.
    */
   idempotencyKey: string | null;
 
   /**
-   * Aşama 2 — Çifte gönderim koruması.
-   * processPayment girişinde senkron olarak true değerine ayarlanır ve
-   * finally bloğunda temizlenir. True iken yapılan herhangi bir yeniden giriş anında
-   * geri dönerek, aynı store örneğinden çift tıklamaları ve eşzamanlı gönderimleri engeller.
+   * AÅŸama 2 â€” Ã‡ifte gÃ¶nderim korumasÄ±.
+   * processPayment giriÅŸinde senkron olarak true deÄŸerine ayarlanÄ±r ve
+   * finally bloÄŸunda temizlenir. True iken yapÄ±lan herhangi bir yeniden giriÅŸ anÄ±nda
+   * geri dÃ¶nerek, aynÄ± store Ã¶rneÄŸinden Ã§ift tÄ±klamalarÄ± ve eÅŸzamanlÄ± gÃ¶nderimleri engeller.
    */
   isSubmitting: boolean;
 
-  // Temiz Mimari Soyut Depo Köprüsü
+  // Temiz Mimari Soyut Depo KÃ¶prÃ¼sÃ¼
   posRepository: IPOSRepository;
 
   getTotals: () => CartTotals;
@@ -128,13 +128,13 @@ export interface CartStoreState {
     amountTendered: number,
     splits?: SplitPaymentDetail[],
     /**
-     * Anlık PIN onayından gelen tek kullanımlık jeton. Sepette indirim veya
-     * ikram varsa **zorunludur**; backend jetonsuz indirimli ödemeyi reddeder.
+     * AnlÄ±k PIN onayÄ±ndan gelen tek kullanÄ±mlÄ±k jeton. Sepette indirim veya
+     * ikram varsa **zorunludur**; backend jetonsuz indirimli Ã¶demeyi reddeder.
      */
     approvalToken?: string
   ) => Promise<PaymentResult>;
 
-  // Temiz Mimari ve Birim Testi için Bağımlılık Enjeksiyonu
+  // Temiz Mimari ve Birim Testi iÃ§in BaÄŸÄ±mlÄ±lÄ±k Enjeksiyonu
   setPOSRepository: (repo: IPOSRepository) => void;
 
   submitOrder: () => Promise<void>;
@@ -163,13 +163,13 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
   isProcessingPayment: false,
   lastPaymentResult: null,
 
-  // Aşama 2 denetim korumaları — boşta (idle) duruma başlatıldı
+  // AÅŸama 2 denetim korumalarÄ± â€” boÅŸta (idle) duruma baÅŸlatÄ±ldÄ±
   idempotencyKey: null,
   isSubmitting: false,
 
-  // Tembel (Lazy) singleton: TauriPOSRepository ile başlatıldı
+  // Tembel (Lazy) singleton: TauriPOSRepository ile baÅŸlatÄ±ldÄ±
   posRepository: TauriPOSRepository.getInstance(),
-  navigate: (view: 'FLOOR' | 'POS' | 'MANAGEMENT' | 'KDS' | 'RECEIPTS' | 'END_OF_DAY' | 'OWNER_DASHBOARD' | 'CASHIER' | 'PLATFORM') => {
+  navigate: (view: 'FLOOR' | 'POS' | 'MANAGEMENT' | 'KDS'  | 'END_OF_DAY' | 'OWNER_DASHBOARD' | 'CASHIER' | 'PLATFORM') => {
     const currentView = get().currentView;
     const activeTableId = get().activeTableId;
     if (currentView === 'POS' && view !== 'POS' && activeTableId) {
@@ -435,7 +435,7 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
       set({ products, isLoadingCatalog: false });
     } catch (error) {
       set({
-        catalogError: error instanceof Error ? error.message : 'Ürün kataloğu yüklenemedi.',
+        catalogError: error instanceof Error ? error.message : 'ÃœrÃ¼n kataloÄŸu yÃ¼klenemedi.',
         isLoadingCatalog: false,
       });
     }
@@ -475,13 +475,13 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
     splits?: SplitPaymentDetail[],
     approvalToken?: string
   ): Promise<PaymentResult> => {
-    // Aşama 2: Çifte gönderim koruması — herhangi bir await'ten önce senkron kontrol
+    // AÅŸama 2: Ã‡ifte gÃ¶nderim korumasÄ± â€” herhangi bir await'ten Ã¶nce senkron kontrol
     if (get().isSubmitting) {
       return {
         success: false,
         transactionId: '',
         timestamp: new Date().toISOString(),
-        message: 'Ödeme işlemi zaten devam ediyor. Lütfen bekleyin.',
+        message: 'Ã–deme iÅŸlemi zaten devam ediyor. LÃ¼tfen bekleyin.',
       };
     }
 
@@ -489,11 +489,11 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
     const totals = getTotals();
 
     if (items.length === 0) {
-      throw new Error('Sepet boşken ödeme alınamaz.');
+      throw new Error('Sepet boÅŸken Ã¶deme alÄ±namaz.');
     }
 
     if (amountTendered < totals.grandTotal && method !== 'SPLIT') {
-      throw new Error('Alınan tutar toplam tutardan az olamaz.');
+      throw new Error('AlÄ±nan tutar toplam tutardan az olamaz.');
     }
 
     const idempotencyKey = crypto.randomUUID();
@@ -536,7 +536,10 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
 
       if (result.success) {
         get().clearCart();
-        repo.printReceipt(payload).catch(e => console.error('Print receipt failed', e));
+        const receiptId = result.transactionId || payload.transactionId;
+        if (receiptId) {
+          repo.printReceipt(receiptId).catch(e => console.error('Print receipt failed', e));
+        }
       }
 
       return result;
@@ -545,7 +548,7 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
         success: false,
         transactionId: payload.transactionId,
         timestamp: new Date().toISOString(),
-        message: err instanceof Error ? err.message : 'Ödeme işlemi başarısız oldu.',
+        message: err instanceof Error ? err.message : 'Ã–deme iÅŸlemi baÅŸarÄ±sÄ±z oldu.',
       };
       set({ lastPaymentResult: failure, isProcessingPayment: false });
       return failure;
@@ -582,7 +585,7 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
         }
       }
     } catch (err) {
-      console.error('Sipariş onaylanırken hata:', err);
+      console.error('SipariÅŸ onaylanÄ±rken hata:', err);
       throw err;
     } finally {
       set({ isSubmitting: false });
@@ -609,7 +612,7 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
         get().navigate('FLOOR');
       }
     } catch (err) {
-      console.error('Sipariş iptal edilirken hata:', err);
+      console.error('SipariÅŸ iptal edilirken hata:', err);
       throw err;
     } finally {
       set({ isSubmitting: false });

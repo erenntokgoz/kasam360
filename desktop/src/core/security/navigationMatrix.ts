@@ -14,7 +14,6 @@ export type AppView =
   | 'POS'
   | 'MANAGEMENT'
   | 'KDS'
-  | 'RECEIPTS'
   | 'END_OF_DAY'
   | 'OWNER_DASHBOARD'
   | 'CASHIER'
@@ -127,7 +126,8 @@ export const CAPABILITY_MATRIX: Readonly<Record<Capability, Partial<Record<Role,
  * Bileşik koşullar bilinçlidir: bir rolün iki ayrı yetkiye de sahip olması, o
  * işi yapabileceği anlamına gelir. Örneğin CASHIER ekranı hem Ödeme Alma hem Vardiya
  * ister; bu yüzden MUDUR vardiya açabiliyor olsa da tahsilat alamaz ve kasa ekranına
- * giremez. RECEIPTS, Masa Açma ile Vardiya'nın kesişimi olduğu için WAITER'a açılmaz.
+ * giremez. Fişler ayrı ekran değildir (Faz 7): fiş, END_OF_DAY içindeki tahsilat
+ * satırından açılan penceredir; bu yüzden `ledgerAccess` ister.
  */
 const VIEW_CAPABILITIES: Readonly<Record<AppView, readonly Capability[]>> = {
   PLATFORM: ['platformManage'],
@@ -137,7 +137,6 @@ const VIEW_CAPABILITIES: Readonly<Record<AppView, readonly Capability[]>> = {
   POS: ['tableOpen'],
   KDS: ['kdsManage'],
   CASHIER: ['paymentTake', 'shiftManage'],
-  RECEIPTS: ['tableOpen', 'shiftManage'],
   END_OF_DAY: ['ledgerAccess'],
 };
 
@@ -153,7 +152,6 @@ const DEFAULT_VIEW_PRIORITY: readonly AppView[] = [
   'KDS',
   'FLOOR',
   'POS',
-  'RECEIPTS',
   'END_OF_DAY',
 ];
 

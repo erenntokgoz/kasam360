@@ -233,23 +233,12 @@ export function CashierWorkstationContainer() {
   const handlePrintZReport = async () => {
     if (!zReportShift || !zReportSummary) return;
     try {
-      await tauriInvoke('print_receipt', {
-        order: {
-          type: 'Z_REPORT',
-          title: 'Z-RAPORU (GÜN SONU MUTABAKATI)',
-          shiftId: zReportShift.id,
-          cashierId: zReportShift.cashierId,
-          openedAt: zReportShift.openedAt,
-          closedAt: zReportShift.closedAt,
-          openingBalance: zReportShift.expectedAmountCents,
-          totalSales: zReportSummary.totalSales,
-          totalCashIn: zReportSummary.totalCashIn,
-          totalCashOut: zReportSummary.totalCashOut,
-          expectedBalance: zReportSummary.expectedBalance,
-          actualBalance: zReportShift.actualAmountCents,
-          discrepancy: zReportSummary.discrepancy,
-          timestamp: new Date().toISOString(),
-        },
+      // Faz 7: Z-Rapor artık çağıranın gönderdiği tutarlarla değil, veritabanındaki
+      // vardiya kaydından basılır; özet ekranda gösterilen değerlerle eşleşir.
+      await tauriInvoke('print_z_report', {
+        shiftId: zReportShift.id,
+        actorRole: cashierRole,
+        tenantId: user?.tenantId,
       });
       showToast('success', 'Z-Raporu yazıcıya gönderildi.');
     } catch (err) {
@@ -276,6 +265,7 @@ export function CashierWorkstationContainer() {
       const items = await tauriInvoke<Record<string, unknown>[]>('get_order_items', {
         tableId,
         table_id: tableId,
+        tenantId: user?.tenantId,
       });
 
       if (items && items.length > 0) {
@@ -408,24 +398,10 @@ export function CashierWorkstationContainer() {
 
         // Vardiya kapanışında otomatik Z-Raporu yazdır
         if (activeShift && shiftSummary) {
-          const diff = amountCents - shiftSummary.expectedBalance;
-          await tauriInvoke('print_receipt', {
-            order: {
-              type: 'Z_REPORT',
-              title: 'Z-RAPORU (GÜN SONU MUTABAKATI)',
-              shiftId: activeShift.id,
-              cashierId: activeShift.cashierId,
-              openedAt: activeShift.openedAt,
-              closedAt: new Date().toISOString(),
-              openingBalance: activeShift.expectedAmountCents,
-              totalSales: shiftSummary.totalSales,
-              totalCashIn: shiftSummary.totalCashIn,
-              totalCashOut: shiftSummary.totalCashOut,
-              expectedBalance: shiftSummary.expectedBalance,
-              actualBalance: amountCents,
-              discrepancy: diff,
-              timestamp: new Date().toISOString(),
-            },
+          await tauriInvoke('print_z_report', {
+            shiftId: activeShift.id,
+            actorRole: cashierRole,
+            tenantId: user?.tenantId,
           }).catch(console.error);
         }
 
@@ -481,21 +457,10 @@ export function CashierWorkstationContainer() {
   const handlePrintXReport = async () => {
     if (!activeShift || !xReportSummary) return;
     try {
-      await tauriInvoke('print_receipt', {
-        order: {
-          type: 'X_REPORT',
-          title: 'X-RAPORU (GÜN İÇİ ARA MUTABAKAT)',
-          shiftId: activeShift.id,
-          cashierId: activeShift.cashierId,
-          openedAt: activeShift.openedAt,
-          reportTime: new Date().toISOString(),
-          openingBalance: activeShift.expectedAmountCents,
-          totalSales: xReportSummary.totalSales,
-          totalCashIn: xReportSummary.totalCashIn,
-          totalCashOut: xReportSummary.totalCashOut,
-          expectedBalance: xReportSummary.expectedBalance,
-          timestamp: new Date().toISOString(),
-        },
+      await tauriInvoke('print_z_report', {
+        shiftId: activeShift.id,
+        actorRole: cashierRole,
+        tenantId: user?.tenantId,
       });
       showToast('success', 'X-Raporu yazıcıya gönderildi.');
     } catch (err) {
@@ -527,24 +492,20 @@ export function CashierWorkstationContainer() {
         actor_id: cashierId,
       };
 
-      if (showCashModal === 'IN') {
-        await tauriInvoke('cash_in', args);
-      } else {
-        await tauriInvoke('cash_out', args);
-      }
+      // Kasa fişi kayıtlı hareketten basılır: ekranda yazan tutar değil,
+      // veritabanındaki hareket satırı esas alınır.
+      const movement = await tauriInvoke<{ id?: string }>(
+        showCashModal === 'IN' ? 'cash_in' : 'cash_out',
+        args,
+      );
 
-      await tauriInvoke('print_receipt', {
-        order: {
-          type: showCashModal === 'IN' ? 'CASH_IN_SLIP' : 'CASH_OUT_SLIP',
-          title: showCashModal === 'IN' ? 'KASA GİRİŞ FİŞİ' : 'KASA ÇIKIŞ FİŞİ',
-          shiftId: activeShift.id,
-          cashierId,
-          movementType: showCashModal,
-          amountCents,
-          reason: cashReason.trim(),
-          timestamp: new Date().toISOString(),
-        },
-      }).catch(console.error);
+      if (movement?.id) {
+        await tauriInvoke('print_cash_slip', {
+          movementId: movement.id,
+          actorRole: cashierRole,
+          tenantId: user?.tenantId,
+        }).catch(console.error);
+      }
 
       setShowCashModal(null);
       setCashAmount('');
@@ -588,17 +549,10 @@ export function CashierWorkstationContainer() {
         tenant_id: user?.tenantId || 'DEFAULT_TENANT',
       });
 
-      await tauriInvoke('print_receipt', {
-        order: {
-          type: 'VOID_RECEIPT',
-          title: 'HESAP İPTAL (VOID) FİŞİ',
-          tableName: selectedTable?.name || selectedTableId,
-          tableId: selectedTableId,
-          cashierId,
-          reason: voidReason.trim(),
-          totalAmount: grandTotalCents,
-          timestamp: new Date().toISOString(),
-        },
+      await tauriInvoke('print_void_slip', {
+        tableId: selectedTableId,
+        actorRole: cashierRole,
+        tenantId: user?.tenantId,
       }).catch(console.error);
 
       setShowApprovalModal(false);
@@ -726,34 +680,20 @@ export function CashierWorkstationContainer() {
 
       const paidItems = [...tableItems];
       const tableName = selectedTable?.name || selectedTableId;
+      const transactionId = res?.transactionId || txnId;
 
-      const receiptData = {
-        type: 'PAYMENT_RECEIPT',
-        title: 'ÖDEME TAHSİLAT FİŞİ',
-        transactionId: res?.transactionId || txnId,
-        tableName,
-        tableId: selectedTableId,
-        cashierId,
-        method,
-        amountTendered: finalAmountCents,
-        totalAmount: grandTotalCents,
-        changeAmount: changeAmountCents,
-        items: paidItems.map(it => ({
-          name: it.product.name,
-          quantity: it.quantity,
-          unitPrice: it.unitPrice,
-          total: it.total,
-        })),
-        timestamp: new Date().toISOString(),
-      };
-
-      await tauriInvoke('print_receipt', { order: receiptData }).catch((err) => {
+      // Fiş içeriği tahsilat kaydından okunur; burada yalnız kimlik gönderilir.
+      await tauriInvoke('print_receipt', {
+        receiptId: transactionId,
+        actorRole: cashierRole,
+        tenantId: user?.tenantId,
+      }).catch((err) => {
         console.warn('Fiş yazdırma uyarısı:', err);
       });
 
       setPaymentSuccess({
         method,
-        transactionId: res?.transactionId || txnId,
+        transactionId,
         totalCents: grandTotalCents,
         tenderedCents: finalAmountCents,
         changeCents: changeAmountCents,
@@ -780,24 +720,20 @@ export function CashierWorkstationContainer() {
   const handlePrintBill = async () => {
     if (!selectedTableId || grandTotalCents <= 0) return;
     try {
-      const billData = {
-        type: 'BILL_SLIP',
-        title: 'ADİSYON BİLGİ FİŞİ',
-        tableName: selectedTable?.name || selectedTableId,
+      // Adisyon fişi tahsilat değildir; içerik masanın açık siparişinden okunur.
+      const orderId = await tauriInvoke<string | null>('get_active_order_id', {
         tableId: selectedTableId,
-        cashierId,
-        totalAmount: grandTotalCents,
-        subtotal: tableTotals.subtotal,
-        taxTotal: tableTotals.taxTotal,
-        items: tableItems.map(it => ({
-          name: it.product.name,
-          quantity: it.quantity,
-          unitPrice: it.unitPrice,
-          total: it.total,
-        })),
-        timestamp: new Date().toISOString(),
-      };
-      await tauriInvoke('print_receipt', { order: billData });
+        tenantId: user?.tenantId,
+      });
+      if (!orderId) {
+        showToast('error', 'Bu masa için açık sipariş bulunamadı.');
+        return;
+      }
+      await tauriInvoke('print_order_slip', {
+        orderId,
+        actorRole: cashierRole,
+        tenantId: user?.tenantId,
+      });
       showToast('success', 'Adisyon bilgi fişi yazıcıya iletildi.');
     } catch (err) {
       showToast('error', `Yazdırma hatası: ${String(err)}`);
@@ -809,24 +745,9 @@ export function CashierWorkstationContainer() {
     if (!paymentSuccess) return;
     try {
       await tauriInvoke('print_receipt', {
-        order: {
-          type: 'PAYMENT_RECEIPT',
-          title: 'ÖDEME TAHSİLAT FİŞİ (KOPYA)',
-          transactionId: paymentSuccess.transactionId,
-          tableName: paymentSuccess.tableName,
-          cashierId,
-          method: paymentSuccess.method,
-          amountTendered: paymentSuccess.tenderedCents,
-          totalAmount: paymentSuccess.totalCents,
-          changeAmount: paymentSuccess.changeCents,
-          items: paymentSuccess.items.map(it => ({
-            name: it.product.name,
-            quantity: it.quantity,
-            unitPrice: it.unitPrice,
-            total: it.total,
-          })),
-          timestamp: new Date().toISOString(),
-        },
+        receiptId: paymentSuccess.transactionId,
+        actorRole: cashierRole,
+        tenantId: user?.tenantId,
       });
       showToast('success', 'Fiş tekrar yazıcıya iletildi.');
     } catch (err) {

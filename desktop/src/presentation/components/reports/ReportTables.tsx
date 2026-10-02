@@ -4,6 +4,7 @@ import { Clock, Printer, Receipt, Search } from 'lucide-react';
 import { AppleGlassCard } from '../common/AppleGlassCard';
 import { MoneyDisplay } from '../common/MoneyDisplay';
 import { tauriInvoke } from '../../../data/ipc/tauriInvoke';
+import { useAuthStore } from '../../store/useAuthStore';
 import { ReceiptReportRow, ShiftReportRow } from './reportTypes';
 
 const tableHeadClass =
@@ -57,6 +58,7 @@ export const ReportReceiptsTable = forwardRef<HTMLDivElement, ReportReceiptsTabl
   function ReportReceiptsTable({ receipts }, ref) {
     const [searchTerm, setSearchTerm] = useState('');
     const [printStatus, setPrintStatus] = useState<string | null>(null);
+    const user = useAuthStore((state) => state.user);
 
     const filtered = useMemo(() => {
       const term = searchTerm.trim().toLowerCase();
@@ -72,7 +74,11 @@ export const ReportReceiptsTable = forwardRef<HTMLDivElement, ReportReceiptsTabl
     const handlePrint = async (row: ReceiptReportRow) => {
       setPrintStatus('Yazıcıya gönderiliyor...');
       try {
-        await tauriInvoke('print_receipt', { order: row });
+        await tauriInvoke('print_receipt', {
+          receiptId: row.id,
+          actorRole: user?.role,
+          tenantId: user?.tenantId,
+        });
         setPrintStatus('Fiş yazıcıya gönderildi.');
       } catch (err) {
         setPrintStatus('Yazdırma hatası: ' + String(err));

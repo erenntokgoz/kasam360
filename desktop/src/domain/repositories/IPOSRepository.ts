@@ -19,7 +19,7 @@ export interface IPOSRepository {
   getProductModifiers(productId: string): Promise<import('../../presentation/types').ModifierGroup[]>;
   processPayment(payload: PaymentPayload): Promise<PaymentResult>;
   processSplitPayment(payload: PaymentPayload): Promise<PaymentResult>;
-  printReceipt(payload: PaymentPayload): Promise<void>;
+  printReceipt(receiptId: string): Promise<void>;
   submitOrder(payload: SubmitOrderPayload): Promise<boolean>;
   voidOrder(payload: VoidOrderPayload): Promise<boolean>;
   getOrderItems(tableId: string): Promise<import('../../presentation/types').CartItem[]>;
