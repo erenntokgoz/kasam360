@@ -8,6 +8,11 @@ import { DirectoriesTab } from './ui/DirectoriesTab';
 import { DebtsBalanceTab } from './ui/DebtsBalanceTab';
 import { ExpensesTab } from './ui/ExpensesTab';
 import { FinancialReportsTab } from './ui/FinancialReportsTab';
+import { NetBalanceStrip } from './ui/NetBalanceStrip';
+import { BudgetAlerts, BudgetStatus } from './ui/BudgetAlerts';
+import { RecurringSchedule, RecurringDue } from './ui/RecurringSchedule';
+import { ProfitAndLoss } from './ui/ProfitAndLoss';
+import { CashReconciliation } from './ui/CashReconciliation';
 import { LedgerReceiptMovements } from '../ledger/LedgerReceiptMovements';
 import { HeaderActions } from './ui/HeaderActions';
 import { TabBar } from './ui/TabBar';
@@ -57,6 +62,8 @@ export const EndOfDayContainer: React.FC<{
   const [isPrinting, setIsPrinting] = useState(false);
   const [lastClosedResult, setLastClosedResult] = useState<CloseDayResultDto | null>(null);
   const [quickModalType, setQuickModalType] = useState<QuickTransactionType | null>(null);
+  const [budgetItems, setBudgetItems] = useState<BudgetStatus[]>([]);
+  const [recurringItems, setRecurringItems] = useState<RecurringDue[]>([]);
 
   const addToast = useCallback(
     (msg: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => notifySafe(msg, type),
@@ -87,6 +94,32 @@ export const EndOfDayContainer: React.FC<{
     initialShiftHistory,
     onNotify: addToast,
   });
+
+  // Bütçe ve tekrarlayan gider verisi yalnız Gider Defteri sekmesinde gerekir.
+  useEffect(() => {
+    if (activeTab !== 'GIDER_DEFTERI') return;
+    let cancelled = false;
+
+    const loadSideData = async () => {
+      try {
+        const [budgetData, recurringData] = await Promise.all([
+          invoke<BudgetStatus[]>('get_budget_status', {}),
+          invoke<RecurringDue[]>('get_recurring_expenses', {}),
+        ]);
+        if (cancelled) return;
+        setBudgetItems(Array.isArray(budgetData) ? budgetData : []);
+        setRecurringItems(Array.isArray(recurringData) ? recurringData : []);
+      } catch (e) {
+        if (!cancelled) addToast(`Butce verisi alinamadi: ${String(e)}`, 'error');
+      }
+    };
+
+    loadSideData();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Arşiv sekmesine geçildiğinde verileri güncelle
   useEffect(() => {
@@ -259,9 +292,31 @@ export const EndOfDayContainer: React.FC<{
       )}
 
       {activeTab === 'CARI_REHBERLER' && <DirectoriesTab />}
-      {activeTab === 'BORC_ALACAK' && <DebtsBalanceTab />}
-      {activeTab === 'GIDER_DEFTERI' && <ExpensesTab onOpenNewExpense={() => setQuickModalType('GIDER')} />}
-      {canSeeFinancialReports && activeTab === 'FINANSAL_RAPORLAR' && <FinancialReportsTab />}
+      {activeTab === 'BORC_ALACAK' && (
+        <div className="space-y-4">
+          <NetBalanceStrip />
+          <DebtsBalanceTab />
+        </div>
+      )}
+      {activeTab === 'GIDER_DEFTERI' && (
+        <div className="space-y-4">
+          <ExpensesTab onOpenNewExpense={() => setQuickModalType('GIDER')} />
+          <BudgetAlerts items={budgetItems} />
+          <RecurringSchedule
+            items={recurringItems}
+            onPrint={(item) => addToast(`${item.title} yazdirma kuyruguna alindi.`, 'info')}
+          />
+        </div>
+      )}
+      {canSeeFinancialReports && activeTab === 'FINANSAL_RAPORLAR' && (
+        <div className="space-y-4">
+          <ProfitAndLoss
+            onNotify={(message, tone) => addToast(message, tone === 'success' ? 'success' : 'error')}
+          />
+          <CashReconciliation rows={shiftRows} />
+          <FinancialReportsTab />
+        </div>
+      )}
 
       {showConfirmCloseModal && (
         <CloseDayModal

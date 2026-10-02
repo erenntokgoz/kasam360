@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import { tauriInvoke } from '../../../../data/ipc/tauriInvoke';
 import { toast } from '@core/components/ui/toast';
+import { DirectoryGuide } from './DirectoryGuide';
+import { DirectoryStatement } from './DirectoryStatement';
+import { OwnerPersonalPanel } from './OwnerPersonalPanel';
 
 export interface DirectoryItem {
   id: string;
@@ -60,6 +63,7 @@ export const DirectoriesTab: React.FC = () => {
   const [newLimitStr, setNewLimitStr] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedDirectoryId, setSelectedDirectoryId] = useState<string | null>(null);
 
   // Bildirim yöneticisi
   const showToast = (title: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -142,8 +146,30 @@ export const DirectoriesTab: React.FC = () => {
     }).format(liras);
   };
 
+  const selectedDirectory = useMemo(
+    () => directories.find((d) => d.id === selectedDirectoryId) ?? null,
+    [directories, selectedDirectoryId]
+  );
+
   return (
     <div className="space-y-6">
+      {/* Seçili rehber: alan kataloğu + ekstre + Patron Şahsi */}
+      {selectedDirectory && (
+        <>
+          <DirectoryGuide type={selectedDirectory.type} record={selectedDirectory} />
+          <DirectoryStatement
+            directoryId={selectedDirectory.id}
+            onNotify={(message, tone) => showToast(message, tone)}
+          />
+          {selectedDirectory.type === 'OWNER_PERSONAL' && (
+            <OwnerPersonalPanel
+              directoryId={selectedDirectory.id}
+              onNotify={(message, tone) => showToast(message, tone)}
+            />
+          )}
+        </>
+      )}
+
       {/* Üst Filtre ve Aksiyon Barı */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         {/* 5 Ayrıştırılmış Rehber Butonları */}
@@ -222,7 +248,13 @@ export const DirectoriesTab: React.FC = () => {
             return (
               <div
                 key={dir.id}
-                className="backdrop-blur-xl dark:bg-white/[0.04] bg-white/75 border dark:border-white/10 border-black/[0.08] rounded-3xl p-5 shadow-xl transition-all hover:border-[#007AFF]/40 apple-specular flex flex-col justify-between"
+                data-testid={`directory-card-${dir.id}`}
+                onClick={() => setSelectedDirectoryId(dir.id)}
+                className={`backdrop-blur-xl dark:bg-white/[0.04] bg-white/75 border rounded-3xl p-5 shadow-xl transition-all apple-specular flex flex-col justify-between cursor-pointer ${
+                  selectedDirectoryId === dir.id
+                    ? 'border-[#007AFF]/60 dark:bg-white/[0.08]'
+                    : 'border dark:border-white/10 border-black/[0.08] hover:border-[#007AFF]/40'
+                }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-3">
