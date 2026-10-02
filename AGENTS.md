@@ -53,6 +53,18 @@
 - Cross-tenant veri sızıntısı YASAK
 - Feature flag kapalıyken route açık YASAK (404 dönmeli)
 
+### 3.4. Finansal Sessiz Hata (Ek kural)
+- Finansal toplamlarda `unwrap_or(0)`, `unwrap_or_default()`, `unwrap_or_else(|| 0)` YASAK
+- Gerekçe: SQL hatası sıfıra dönüşünce P&L "zarar yok" der ve **hatasız** görünür.
+  Yanlış rapor, hata mesajından daha tehlikelidir: patron gerçeği yanlış görür.
+- Zorunlu yazım: `.map_err(|e| e.to_string())?` — hata yukarı taşınır, komut `Err` döner.
+- `try_get(...).unwrap_or_default()` / `unwrap_or(0)` de aynı yasağa tabidir: kolon eksikse
+  satır sessizce 0'a dönüşür. `try_get` sonucu `?` ile yükseltilir.
+- Kapsam: `debts`, `debt_payments`, `general_expenses`, `receipts`, `orders`,
+  `cash_movements`, `shifts`, `budget_limits`, `recurring_expenses` üzerinden
+  gelen her para/tutar/sayaç okuması.
+- Test: hata senaryosu `Err` döndüğünü kanıtlamalı, `0` dönmediğini de.
+
 ---
 
 ## 4. LIQUID GLASS / APPLE HIG ANAYASASI

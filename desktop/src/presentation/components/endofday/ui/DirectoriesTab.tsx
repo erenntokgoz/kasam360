@@ -326,11 +326,11 @@ export const DirectoriesTab: React.FC = () => {
                   onChange={(e) => setNewType(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl border dark:border-white/10 border-black/10 dark:bg-black/30 bg-black/[0.04] dark:text-white text-zinc-900 text-xs focus:outline-none"
                 >
-                  <option value="CUSTOMER">👥 Müşteri Veresiye</option>
-                  <option value="SUPPLIER">🚚 Toptancı Firma</option>
-                  <option value="STAFF">👨‍🍳 Personel Finansı</option>
-                  <option value="FIXED_EXPENSE">⚡ Sabit Gider Adresi</option>
-                  <option value="OWNER_PERSONAL">👑 Patron Şahsi Hesabı</option>
+                  <option value="CUSTOMER">Müşteri Veresiye</option>
+                  <option value="SUPPLIER">Toptancı Firma</option>
+                  <option value="STAFF">Personel Finansı</option>
+                  <option value="FIXED_EXPENSE">Sabit Gider Adresi</option>
+                  <option value="OWNER_PERSONAL">Patron Şahsi Hesabı</option>
                 </select>
               </div>
 

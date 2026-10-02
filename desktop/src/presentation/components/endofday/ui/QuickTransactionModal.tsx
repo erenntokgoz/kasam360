@@ -13,7 +13,7 @@ interface QuickTransactionModalProps {
 }
 
 /**
- * 4 Hızlı Aksiyon Cam Modalı (+ Gelir, - Gider, 🤝 Borç, 💰 Alacak).
+ * 4 Hızlı Aksiyon Cam Modalı (+ Gelir, - Gider, Borç, Alacak).
  * Gerçek Apple visionOS ışık kırılması (apple-specular) ve ambiyans ışımasıyla çalışır.
  */
 export const QuickTransactionModal: React.FC<QuickTransactionModalProps> = ({

@@ -214,7 +214,7 @@ export const DebtsBalanceTab: React.FC = () => {
 
       {/* İkili Bilanço Kolonları: Sol Yeşil (Alacaklar) vs Sağ Kırmızı (Borçlar) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* SOL: 🟢 ALACAKLAR */}
+        {/* SOL: ALACAKLAR */}
         <div className="space-y-3">
           <div className="flex items-center justify-between px-2">
             <h4 className="text-sm font-bold tracking-tight text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
@@ -267,7 +267,7 @@ export const DebtsBalanceTab: React.FC = () => {
           </div>
         </div>
 
-        {/* SAĞ: 🔴 BORÇLAR */}
+        {/* SAĞ: BORÇLAR */}
         <div className="space-y-3">
           <div className="flex items-center justify-between px-2">
             <h4 className="text-sm font-bold tracking-tight text-rose-600 dark:text-rose-400 flex items-center gap-2">

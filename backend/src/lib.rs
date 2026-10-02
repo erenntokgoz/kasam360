@@ -180,6 +180,13 @@ pub fn run() {
             ledger_commands::get_expenses,
             ledger_commands::create_expense,
             ledger_commands::get_financial_report,
+            ledger_commands::export_financial_report,
+            ledger_commands::record_owner_personal,
+            ledger_commands::get_net_balance,
+            ledger_commands::get_budget_status,
+            ledger_commands::get_recurring_expenses,
+            ledger_commands::get_directory_statement,
+            ledger_commands::print_payment_receipt,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

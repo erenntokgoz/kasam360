@@ -70,7 +70,7 @@ export const FinancialReportsTab: React.FC = () => {
       const data = await tauriInvoke<FinancialReportData>('get_financial_report', { actorRole: role });
       setReport(data);
     } catch (err) {
-      showToast('Finansal raporlar yÃ¼klenemedi', 'error');
+      showToast('Finansal raporlar yüklenemedi', 'error');
     } finally {
       setIsLoading(false);
     }
