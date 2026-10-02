@@ -77,6 +77,10 @@ describe('Cashier Workstation Integration Tests', () => {
 
   it('get_shift_history returns list of closed shifts with opening and closing balances', async () => {
     const history = await tauriInvoke<any[]>('get_shift_history', {
+      callerRole: 'CASHIER',
+      // Faz 5: komut artık tenant'ı zorunlu ister; oturum yoksa çağıran açıkça
+      // vermek zorundadır (backend ile aynı fail-closed davranış).
+      tenantId: 'DEFAULT_TENANT',
       cashierId,
       cashier_id: cashierId,
     });

@@ -778,6 +778,77 @@ function consumeMockApproval(
   return { ok: true };
 }
 
+/**
+ * Rapor komutlarının tarayıcı modundaki kapısı.
+ *
+ * Backend `report_commands` ile aynı sözleşmeyi uygular: yalnızca işletme
+ * sahibi ve müdür, tenant zorunlu ve aralık zorunludur. Mock'un gevşek
+ * kalması tarayıcıda çalışan uygulamayla gerçek uygulamanın farklı davranmasına
+ * yol açar (fail-open), bu yüzden kapı burada da fail-closed'tır.
+ */
+function requireReportGate(args: Record<string, unknown>): { tenantId: string; role: string } {
+  const role = ((args.actor_role || args.actorRole || args.callerRole || args.caller_role || '') as string)
+    .trim()
+    .toUpperCase();
+  if (role !== 'OWNER' && role !== 'MANAGER') {
+    throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER).');
+  }
+  const tenantId = ((args.tenant_id || args.tenantId || '') as string).trim();
+  if (!tenantId) {
+    throw new Error('UNAUTHORIZED: tenant_id is required');
+  }
+  return { tenantId, role };
+}
+
+function requireReportRange(args: Record<string, unknown>): { from: string; to: string } {
+  const from = ((args.from || '') as string).trim();
+  const to = ((args.to || '') as string).trim();
+  if (!from) throw new Error('INVALID_ARGUMENT: from is required');
+  if (!to) throw new Error('INVALID_ARGUMENT: to is required');
+  if (Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to))) {
+    throw new Error('INVALID_ARGUMENT: from ve to ISO-8601 olmalıdır');
+  }
+  if (Date.parse(to) < Date.parse(from)) {
+    throw new Error('INVALID_ARGUMENT: to must not be before from');
+  }
+  return { from, to };
+}
+
+function clampReportLimit(raw: unknown): number {
+  const value = typeof raw === 'number' && Number.isFinite(raw) ? raw : 200;
+  return Math.min(Math.max(1, Math.trunc(value)), 500);
+}
+
+/** Denetim kaydı alanlarını daraltılmış tipte okur; mock satırları gevşek tiplidir. */
+function auditText(log: Record<string, unknown>, key: string): string {
+  const value = log[key];
+  return typeof value === 'string' ? value : '';
+}
+
+/** Serbest gelen payload alanlarını güvenli sayıya çevirir. */
+function asNumber(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function auditPayload(log: Record<string, unknown>): Record<string, unknown> {
+  const payload = log.payload;
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    return payload as Record<string, unknown>;
+  }
+  if (typeof payload === 'string' && payload.length > 0) {
+    try {
+      const parsed = JSON.parse(payload);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   console.warn(`[Tarayıcı Modu] tauriInvoke mock: ${cmd}`, args);
 
@@ -1691,7 +1762,18 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     } as unknown as T;
   }
   if (cmd === 'get_shift_history') {
-    const closedShifts = mockShifts.filter((s) => s.status === 'CLOSED' && matchesTenant(s.tenant_id));
+    // Backend ile aynı kapı: tenant zorunlu, rol OWNER/MANAGER/CASHIER.
+    const role = callerRole;
+    if (!['OWNER', 'MANAGER', 'CASHIER'].includes(role)) {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, CASHIER).');
+    }
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const requested = ((args.cashierId || args.cashier_id || '') as string).trim();
+    const closedShifts = mockShifts
+      .filter((s) => s.status === 'CLOSED' && matchesTenant(s.tenant_id))
+      .filter((s) => (requested && requested !== 'ALL' ? s.cashierId === requested : true));
     if (closedShifts.length > 0) {
       return closedShifts as unknown as T;
     }
@@ -1757,6 +1839,13 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
 
   // ----- FİŞLER & RAPORLAR (Receipts & Analytics) -----
   if (cmd === 'get_receipts') {
+    // Backend ile aynı kapı: rol ve tenant zorunludur (fail-closed).
+    if (!['OWNER', 'MANAGER', 'CASHIER'].includes(callerRole)) {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, CASHIER).');
+    }
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
     return mockReceipts.filter((r) => matchesTenant(r.tenant_id)) as unknown as T;
   }
   if (cmd === 'get_daily_summary') {
@@ -1769,6 +1858,15 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     } as unknown as T;
   }
   if (cmd === 'get_analytics_dashboard_data') {
+    // Backend artık aralık ve tenant istiyor; kategori dağılımı uydurma değil,
+    // gerçek satırlardan türetilir. Kategori bilgisi yoksa boş bırakılır.
+    if (!callerRole) {
+      throw new Error('UNAUTHORIZED: caller_role is required');
+    }
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    requireReportRange(args);
     const filteredReceipts = mockReceipts.filter((r) => matchesTenant(r.tenant_id));
     const totalSales = filteredReceipts.reduce((acc, r) => acc + (r.total_cents || 0), 0);
     const count = filteredReceipts.length;
@@ -1778,7 +1876,137 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
       transaction_count: count,
       average_order_value_cents: avg,
       popular_categories: {},
+      from: args.from,
+      to: args.to,
     } as unknown as T;
+  }
+
+  // ----- FAZ 5: BİRLEŞİK RAPOR MERKEZİ -----
+  // Backend `report_service` DTO'larıyla birebir aynı alan adları (snake_case).
+  if (cmd === 'get_sales_report') {
+    requireReportGate(args);
+    const { from, to } = requireReportRange(args);
+    const fromMs = Date.parse(from);
+    const toMs = Date.parse(to);
+    const inRange = mockReceipts
+      .filter((r) => matchesTenant(r.tenant_id))
+      .filter((r) => {
+        const created = Date.parse(r.created_at || '');
+        return Number.isFinite(created) && created >= fromMs && created <= toMs;
+      });
+    const totalRevenue = inRange.reduce((acc, r) => acc + (r.total_cents || 0), 0);
+
+    // İptal toplamı yalnız denetim kaydından gelir; kayıt yoksa sıfırdır ve
+    // bu sıfır "tutar" değil, "kayıt bulunamadı" sonucudur (satır yok).
+    const voided = mockAuditLogs
+      .filter((l) => matchesTenant(auditText(l, 'tenant_id')))
+      .filter((l) => auditText(l, 'action') === 'order:voided')
+      .filter((l) => {
+        const at = Date.parse(auditText(l, 'timestamp'));
+        return Number.isFinite(at) && at >= fromMs && at <= toMs;
+      })
+      .reduce((acc, l) => {
+        const payload = auditPayload(l);
+        return acc + Number(payload.orderTotalCents || 0);
+      }, 0);
+
+    // Ödeme yöntemi ve kategori hacmi mock fişlerde tutulmaz; boş liste dürüst
+    // yanıttır, uydurma oran/kategori üretilmez.
+    return {
+      total_revenue_cents: totalRevenue,
+      total_orders: inRange.length,
+      average_order_value_cents: inRange.length > 0 ? Math.round(totalRevenue / inRange.length) : 0,
+      voided_cents: voided,
+      payment_methods: [],
+      category_volume: [],
+      from,
+      to,
+    } as unknown as T;
+  }
+  if (cmd === 'get_shift_report') {
+    requireReportGate(args);
+    const { from, to } = requireReportRange(args);
+    const limit = clampReportLimit(args.limit);
+    const fromMs = Date.parse(from);
+    const toMs = Date.parse(to);
+    return mockShifts
+      .filter((s) => matchesTenant(s.tenant_id))
+      .filter((s) => {
+        const opened = Date.parse(s.openedAt || '');
+        return Number.isFinite(opened) && opened >= fromMs && opened <= toMs;
+      })
+      .sort((a, b) => Date.parse(b.openedAt || '0') - Date.parse(a.openedAt || '0'))
+      .slice(0, limit)
+      .map((s) => ({
+        id: s.id,
+        cashier_id: s.cashierId,
+        cashier_name: s.cashierName,
+        status: s.status,
+        opened_at: s.openedAt,
+        closed_at: s.closedAt ?? null,
+        expected_amount_cents: s.expectedAmountCents,
+        actual_amount_cents: s.actualAmountCents ?? null,
+        difference_cents: s.differenceCents ?? null,
+      })) as unknown as T;
+  }
+  if (cmd === 'get_receipts_report') {
+    requireReportGate(args);
+    const { from, to } = requireReportRange(args);
+    const limit = clampReportLimit(args.limit);
+    const fromMs = Date.parse(from);
+    const toMs = Date.parse(to);
+    return mockReceipts
+      .filter((r) => matchesTenant(r.tenant_id))
+      .filter((r) => {
+        const created = Date.parse(r.created_at || '');
+        return Number.isFinite(created) && created >= fromMs && created <= toMs;
+      })
+      .sort((a, b) => Date.parse(b.created_at || '0') - Date.parse(a.created_at || '0'))
+      .slice(0, limit)
+      .map((r) => ({
+        id: r.id,
+        table_id: r.table_id,
+        total_cents: r.total_cents,
+        created_at: r.created_at,
+        cashier_id: r.cashier_id,
+        status: 'PAID',
+        item_count: 0,
+        items_total_cents: r.total_cents,
+      })) as unknown as T;
+  }
+  if (cmd === 'get_adjustments_report') {
+    requireReportGate(args);
+    const { from, to } = requireReportRange(args);
+    const fromMs = Date.parse(from);
+    const toMs = Date.parse(to);
+    const seen = new Set<string>();
+    const rows = mockAuditLogs
+      .filter((l) => matchesTenant(auditText(l, 'tenant_id')))
+      .filter((l) => ['order:voided', 'payment:refund', 'stock:waste'].includes(auditText(l, 'action')))
+      .filter((l) => {
+        const at = Date.parse(auditText(l, 'timestamp'));
+        return Number.isFinite(at) && at >= fromMs && at <= toMs;
+      })
+      .map((l) => {
+        const payload = auditPayload(l);
+        const action = auditText(l, 'action');
+        const kind = action === 'order:voided' ? 'VOID' : action === 'payment:refund' ? 'REFUND' : 'WASTE';
+        seen.add(kind);
+        const actorId = auditText(l, 'actor_id');
+        const approverId = typeof payload.approverId === 'string' ? payload.approverId : actorId;
+        return {
+          kind,
+          resource_id: auditText(l, 'resource_id'),
+          amount_cents: kind === 'VOID' ? asNumber(payload.orderTotalCents) : asNumber(payload.amountCents),
+          reason: typeof payload.reason === 'string' ? payload.reason : '',
+          actor_id: actorId,
+          approver_id: approverId,
+          approver_role: typeof payload.approverRole === 'string' ? payload.approverRole : '',
+          occurred_at: auditText(l, 'timestamp'),
+        };
+      });
+    const kindsWithoutRecords = ['VOID', 'REFUND', 'WASTE'].filter((kind) => !seen.has(kind));
+    return { rows, kinds_without_records: kindsWithoutRecords } as unknown as T;
   }
 
   // ----- PLATFORM (Master Admin) -----

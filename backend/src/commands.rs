@@ -1642,17 +1642,26 @@ pub struct ReceiptDto {
 }
 
 #[tauri::command]
-pub async fn get_receipts(pool: tauri::State<'_, DbPool>) -> Result<Vec<ReceiptDto>, String> {
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-
-    // 1. Fetch closed/paid orders from orders table
-    let rows = sqlx::query("SELECT id, table_id, total_cents, created_at, cashier_id, notes FROM orders WHERE status IN ('PAID', 'CLOSED') ORDER BY created_at DESC")
+/// Fiş listesini tek bir tenant'a daraltır.
+///
+/// Neden ayrı fonksiyon: `get_receipts` komutu hem rapor yüzeyinden hem de
+/// `get_receipt_details`/`print_receipt` içinden çağrılıyordu. Parametre
+/// (rol, tenant) kontrolü komut katmanında kalır; veri katmanı yalnızca
+/// hazırlanmış tenant'a göre okur.
+async fn fetch_receipts_for_tenant(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+) -> Result<Vec<ReceiptDto>, String> {
+    // 1. Yalnız bu işletmenin tahsil edilmiş siparişleri
+    let rows = sqlx::query("SELECT id, table_id, total_cents, created_at, cashier_id, notes FROM orders WHERE tenant_id = ? AND status IN ('PAID', 'CLOSED') ORDER BY created_at DESC")
+        .bind(tenant_id)
         .fetch_all(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
 
     // Fetch user map for cashier names
-    let user_rows = sqlx::query("SELECT id, name FROM users")
+    let user_rows = sqlx::query("SELECT id, name FROM users WHERE tenant_id = ?")
+        .bind(tenant_id)
         .fetch_all(&mut *conn)
         .await
         .unwrap_or_default();
@@ -1664,7 +1673,8 @@ pub async fn get_receipts(pool: tauri::State<'_, DbPool>) -> Result<Vec<ReceiptD
     }
 
     // Fetch table map for table names
-    let table_rows = sqlx::query("SELECT id, name FROM tables")
+    let table_rows = sqlx::query("SELECT id, name FROM tables WHERE tenant_id = ?")
+        .bind(tenant_id)
         .fetch_all(&mut *conn)
         .await
         .unwrap_or_default();
@@ -1676,7 +1686,8 @@ pub async fn get_receipts(pool: tauri::State<'_, DbPool>) -> Result<Vec<ReceiptD
     }
 
     // Fetch all sale events to correlate payment method & tendered/change
-    let sale_event_rows = sqlx::query("SELECT aggregate_id, payload FROM events WHERE aggregate_type = 'SALE' AND event_type = 'SALE_SETTLED'")
+    let sale_event_rows = sqlx::query("SELECT aggregate_id, payload FROM events WHERE tenant_id = ? AND aggregate_type = 'SALE' AND event_type = 'SALE_SETTLED'")
+        .bind(tenant_id)
         .fetch_all(&mut *conn)
         .await
         .unwrap_or_default();
@@ -1709,15 +1720,16 @@ pub async fn get_receipts(pool: tauri::State<'_, DbPool>) -> Result<Vec<ReceiptD
 
         let cashier_name = cashier_id.as_ref().and_then(|cid| user_map.get(cid)).cloned();
 
-        // Fetch order items
+        // Fetch order items (kalemler tenant'ın kendi ürünleriyle eşleşir)
         let item_rows = sqlx::query("
-            SELECT oi.id, oi.product_id, COALESCE(p.name, oi.product_id) as product_name, 
-                   oi.quantity, oi.unit_price_cents, oi.tax_rate, oi.subtotal_cents, 
+            SELECT oi.id, oi.product_id, COALESCE(p.name, oi.product_id) as product_name,
+                   oi.quantity, oi.unit_price_cents, oi.tax_rate, oi.subtotal_cents,
                    oi.tax_amount_cents, oi.total_cents, oi.modifiers, oi.notes
             FROM order_items oi
-            LEFT JOIN products p ON oi.product_id = p.id
+            LEFT JOIN products p ON oi.product_id = p.id AND p.tenant_id = ?
             WHERE oi.order_id = ?
         ")
+        .bind(tenant_id)
         .bind(&order_id)
         .fetch_all(&mut *conn)
         .await
@@ -1888,12 +1900,48 @@ pub async fn get_receipts(pool: tauri::State<'_, DbPool>) -> Result<Vec<ReceiptD
     Ok(receipts)
 }
 
+/// Rapor ve fiş ekranlarının veri kaynağı.
+///
+/// Neden yetki ve tenant eklendi: bu komut rol ve tenant almıyordu, dolayısıyla
+/// herhangi bir oturumdaki kasiyer tüm işletmelerin fişlerini okuyabiliyordu.
+#[tauri::command]
+pub async fn get_receipts(
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<ReceiptDto>, String> {
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+    )?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    fetch_receipts_for_tenant(&mut conn, &tenant).await
+}
+
+/// Çağıranın tenant'ı zorunludur: eksik veya boşsa sorgu hiç çalışmaz.
+fn require_tenant_scope(tenant_id: Option<&str>) -> Result<String, String> {
+    tenant_id
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())
+}
+
 #[tauri::command]
 pub async fn get_receipt_details(
     receipt_id: String,
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Option<ReceiptDto>, String> {
-    let receipts = get_receipts(pool).await?;
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+    )?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let receipts = fetch_receipts_for_tenant(&mut conn, &tenant).await?;
     Ok(receipts.into_iter().find(|r| r.id == receipt_id))
 }
 
@@ -2946,21 +2994,32 @@ pub async fn get_open_shifts(actor_role: String, pool: tauri::State<'_, DbPool>)
 #[tauri::command]
 pub async fn get_shift_history(
     cashier_id: Option<String>,
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<ShiftDto>, String> {
+    // Neden yetki/tenant eklendi: komut parametresi olmadan tüm işletmelerin
+    // vardiyalarını (kasa beklenen/gerçek tutarlarıyla) döküyordu.
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+    )?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let cid = cashier_id.unwrap_or_default();
     let rows = if cid.is_empty() || cid == "ALL" {
         sqlx::query(
-            "SELECT id, tenant_id, cashier_id, status, opened_at, closed_at, expected_amount_cents, actual_amount_cents, difference_cents 
-             FROM shifts ORDER BY opened_at DESC LIMIT 50"
+            "SELECT id, tenant_id, cashier_id, status, opened_at, closed_at, expected_amount_cents, actual_amount_cents, difference_cents
+             FROM shifts WHERE tenant_id = ? ORDER BY opened_at DESC LIMIT 50"
         )
+        .bind(&tenant)
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?
     } else {
         sqlx::query(
-            "SELECT id, tenant_id, cashier_id, status, opened_at, closed_at, expected_amount_cents, actual_amount_cents, difference_cents 
-             FROM shifts WHERE cashier_id = ? ORDER BY opened_at DESC LIMIT 50"
+            "SELECT id, tenant_id, cashier_id, status, opened_at, closed_at, expected_amount_cents, actual_amount_cents, difference_cents
+             FROM shifts WHERE tenant_id = ? AND cashier_id = ? ORDER BY opened_at DESC LIMIT 50"
         )
+        .bind(&tenant)
         .bind(&cid)
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?
     };

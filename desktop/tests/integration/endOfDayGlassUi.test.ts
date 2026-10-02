@@ -93,6 +93,9 @@ describe('Milestone 6: Gün Sonu & Kasa Kapanış — Dengeli Glass UX & Finansa
 
   it('6. Geçmiş vardiya listesi (get_shift_history) kapanan vardiyaları listeler', async () => {
     const history = await tauriInvoke<ShiftHistoryDto[]>('get_shift_history', {
+      callerRole: 'CASHIER',
+      // Faz 5: tenant zorunlu kapsama girdi (backend ile aynı kapı).
+      tenantId: 'DEFAULT_TENANT',
       cashierId: 'ALL',
     });
 

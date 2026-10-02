@@ -12,7 +12,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { toast as useToast } from '@core/components/ui/toast';
 import { TablesOrdersPanel } from './ui/TablesOrdersPanel';
 import { InventoryManagementPanel } from './ui/InventoryManagementPanel';
-import { ReportsPanel } from './ui/ReportsPanel';
+import { ReportsHub } from '../reports/ReportsHub';
 import { ConfirmationModal } from './ui/ConfirmationModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@core/components/ui/tabs';
 
@@ -351,7 +351,7 @@ export function ManagementContainer() {
           </TabsContent>
 
           <TabsContent value="reports" className="h-full m-0">
-            <ReportsPanel />
+            <ReportsHub />
           </TabsContent>
         </div>
       </Tabs>

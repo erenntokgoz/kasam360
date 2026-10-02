@@ -23,17 +23,22 @@ import { OwnerMenuTab } from './ui/OwnerMenuTab';
 import { OwnerInventoryTab } from './ui/OwnerInventoryTab';
 import { OwnerBranchesTab } from './ui/OwnerBranchesTab';
 import { OwnerStaffTab } from './ui/OwnerStaffTab';
-import { OwnerSalesTab } from './ui/OwnerSalesTab';
 import { OwnerAuditLogsTab } from './ui/OwnerAuditLogsTab';
 import { TablesOrdersPanel } from '../management/ui/TablesOrdersPanel';
-import { ReportsPanel } from '../management/ui/ReportsPanel';
+import { ReportsHub } from '../reports/ReportsHub';
+import { buildPresetRange } from '../reports/reportTypes';
 
 // İşletme Sahibi (Patron) Portalı: Onaylar, Personel, Sistem Logları, Stok & Reçete ve Operasyonel Masa/Rapor Panelleri
 
-/** Patron portalının sekme kimlikleri. */
+/**
+ * Patron portalının sekme kimlikleri.
+ *
+ * Faz 5: `sales` ve `reports` ayrı sekmelerdi ama ikisi de aynı rapor verisini
+ * gösteriyordu. Tek `reports` sekmesi bırakıldı; ikinci bir rapor yüzeyi
+ * aynı veriyi farklı filtrelerle tekrar gösteriyordu.
+ */
 export type OwnerTabId =
   | 'dashboard'
-  | 'sales'
   | 'tables'
   | 'reports'
   | 'menu'
@@ -59,9 +64,8 @@ export interface OwnerNavItem {
 export function buildOwnerNavItems(can: (capability: Capability) => boolean): OwnerNavItem[] {
   return [
     { id: 'dashboard', label: 'Genel Bakış', icon: <BarChart3 size={15} /> },
-    { id: 'sales', label: 'Satışlar', icon: <TrendingUp size={15} /> },
     { id: 'tables', label: 'Masa Yönetimi', icon: <LayoutGrid size={15} /> },
-    { id: 'reports', label: 'Operasyonel Raporlar', icon: <FileBarChart size={15} /> },
+    { id: 'reports', label: 'Raporlar', icon: <FileBarChart size={15} /> },
     { id: 'menu', label: 'Menü', icon: <Utensils size={15} /> },
     { id: 'inventory', label: 'Stok & Reçete', icon: <Package size={15} /> },
     { id: 'staff', label: 'Personel', icon: <Users size={15} /> },
@@ -86,12 +90,19 @@ export function OwnerDashboardContainer() {
   const [activeTab, setActiveTab] = useState<OwnerTabId>('dashboard');
 
   // Dashboard özet istatistiklerini yükle
+  //
+  // Faz 5: komut artık tenant + tarih aralığı istiyor (filtresiz tarama yasak).
+  // Gösterge paneli "bugün" aralığını kullanır; tarih seçimi olan raporlar
+  // `ReportsHub` üzerinden açılır.
   const fetchSummary = useCallback(async () => {
     if (!user) return;
     setIsLoading(true);
     try {
-      const actorRole = user.role === 'OWNER' ? 'Owner' : user.role === 'MASTER' ? 'Master Admin' : user.role === 'MANAGER' ? 'Manager' : user.role;
-      const data = await invoke<AnalyticsDashboardDataDto>('get_analytics_dashboard_data', { actorRole });
+      const today = buildPresetRange('today');
+      const data = await invoke<AnalyticsDashboardDataDto>('get_analytics_dashboard_data', {
+        from: today.from,
+        to: today.to,
+      });
       setSummary(data);
       setError(null);
     } catch (err) {
@@ -254,18 +265,15 @@ export function OwnerDashboardContainer() {
               </div>
             </div>
           </div>
-        ) : activeTab === 'sales' ? (
-          <OwnerSalesTab />
         ) : activeTab === 'tables' ? (
           // Masa & Siparişler: Anlık salon ve sipariş durumunu bağımsız yüzen renksiz cam ada içerisinde sunar
           <div className="rounded-3xl dark:bg-white/[0.04] bg-white/80 backdrop-blur-xl border dark:border-white/10 border-black/[0.08] p-6 shadow-xl max-w-7xl mx-auto">
             <TablesOrdersPanel />
           </div>
         ) : activeTab === 'reports' ? (
-          // Operasyonel Raporlar: Vardiya ve fiş dökümlerini bağımsız yüzen renksiz cam ada içerisinde sunar
-          <div className="rounded-3xl dark:bg-white/[0.04] bg-white/80 backdrop-blur-xl border dark:border-white/10 border-black/[0.08] p-6 shadow-xl max-w-7xl mx-auto">
-            <ReportsPanel />
-          </div>
+          // Birleşik rapor merkezi: satış, vardiya, fiş ve iptal/iade/zayi
+          // bölümlerini tek tarih aralığı ve tenant kapsamı altında sunar.
+          <ReportsHub />
         ) : activeTab === 'menu' ? (
           <OwnerMenuTab />
         ) : activeTab === 'inventory' ? (

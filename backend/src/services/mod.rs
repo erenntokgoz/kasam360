@@ -3,3 +3,4 @@ pub mod inventory_service;
 pub mod modifier_service;
 pub mod payment_approval;
 pub mod payment_service;
+pub mod report_service;

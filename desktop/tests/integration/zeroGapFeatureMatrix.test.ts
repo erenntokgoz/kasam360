@@ -1,6 +1,7 @@
 
 /// <reference types="vite/client" />
 import { tauriInvoke } from '../../src/data/ipc/tauriInvoke';
+import { buildPresetRange } from '../../src/presentation/components/reports/reportTypes';
 
 describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
   const tenantId = 'tenant_zerogap_test';
@@ -336,8 +337,17 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
   // --------------------------------------------------------------------------
   describe('Role: OWNER', () => {
     it('O1: Analytics dashboard data retrieval', async () => {
-      const data = await tauriInvoke<any>('get_analytics_dashboard_data', { tenantId });
+      // Faz 5: gösterge komutu artık rol, tenant ve tarih aralığı istiyor
+      // (filtresiz tarama ve uydurma kategori dağılımı kaldırıldı).
+      const today = buildPresetRange('today');
+      const data = await tauriInvoke<any>('get_analytics_dashboard_data', {
+        callerRole: 'OWNER',
+        tenantId,
+        from: today.from,
+        to: today.to,
+      });
       expect(data).toBeDefined();
+      expect(typeof data.total_sales_cents).toBe('number');
     });
 
     it('O2: Branches management', async () => {

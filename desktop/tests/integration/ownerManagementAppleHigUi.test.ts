@@ -12,12 +12,11 @@ import { OwnerDashboardContainer } from '../../src/presentation/components/owner
 import { OwnerBranchesTab } from '../../src/presentation/components/owner/ui/OwnerBranchesTab';
 import { OwnerInventoryTab } from '../../src/presentation/components/owner/ui/OwnerInventoryTab';
 import { OwnerMenuTab } from '../../src/presentation/components/owner/ui/OwnerMenuTab';
-import { OwnerSalesTab } from '../../src/presentation/components/owner/ui/OwnerSalesTab';
 import { ManagementContainer } from '../../src/presentation/components/management/ManagementContainer';
 import { OperationsDashboard } from '../../src/presentation/components/management/ui/OperationsDashboard';
 import { ConfirmationModal } from '../../src/presentation/components/management/ui/ConfirmationModal';
 import { TablesOrdersPanel } from '../../src/presentation/components/management/ui/TablesOrdersPanel';
-import { ReportsPanel } from '../../src/presentation/components/management/ui/ReportsPanel';
+import { ReportsHub } from '../../src/presentation/components/reports/ReportsHub';
 
 describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', () => {
   it('1. OwnerDashboardContainer Apple koyu arka plan (#09090b) ve segmented navigasyon ile render edilir', () => {
@@ -44,10 +43,12 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
     expect(OwnerMenuTab).toBeInstanceOf(Function);
   });
 
-  it('5. OwnerSalesTab Apple Borsa/Sağlık trend çizgili kartları ve minimalist fiş tablosu ile render edilir', () => {
-    const element = React.createElement(OwnerSalesTab);
+  it('5. Birleşik rapor merkezi (ReportsHub) tek ekran olarak sunulur', () => {
+    // Faz 5: `OwnerSalesTab` ve `ReportsPanel` ayrı rapor yüzeyleriydi; ikisi de
+    // tenant'sız komutlardan besleniyordu. Artık tek yüzey ve tek veri katmanı var.
+    const element = React.createElement(ReportsHub);
     expect(element).toBeDefined();
-    expect(OwnerSalesTab).toBeInstanceOf(Function);
+    expect(element.type).toBe(ReportsHub);
   });
 
   it('6. ManagementContainer sadeleştirilmiş Apple HIG başlık ve segmented tab yapısı sunar', () => {
@@ -115,11 +116,10 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
     expect(labels).toEqual(
       expect.arrayContaining([
         'Genel Bakış',
-        'Satışlar',
         'Menü',
         'Stok & Reçete',
         'Masa Yönetimi',
-        'Operasyonel Raporlar',
+        'Raporlar',
         'Personel',
         'Sistem Logları',
       ]),
@@ -128,10 +128,15 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
     // Faz 3 / C-3: onay kuyruğu yerine anlık PIN penceresi vardır. Sekme ve
     // onay kuyruğu komutları kaldırıldığı için burada **bulunmamalıdır**.
     expect(labels).not.toContain('Onaylar');
+    // Faz 5: "Satışlar" ve "Operasyonel Raporlar" ayrı sekmelerdi ama ikisi de
+    // aynı rapor verisini gösteriyordu; tek "Raporlar" sekmesi kaldı.
+    expect(labels).not.toContain('Satışlar');
+    expect(labels).not.toContain('Operasyonel Raporlar');
     // Sekme kimliği artık `OwnerTabId` birliğinde değildir; bu yüzden genişletilmiş
     // tip üzerinden "kalmadığı" denetlenir.
     const ids = items.map((item) => item.id as string);
     expect(ids).not.toContain('approvals');
+    expect(ids).not.toContain('sales');
 
     // Bileşen yine de render edilebilir olmalı.
     const html = renderToString(React.createElement(OwnerDashboardContainer));
@@ -259,12 +264,12 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
     });
   });
 
-  it('14. Patron Portalı operasyonel yönetim yeteneklerini (Masa & Siparişler ve Operasyonel Raporlar) bağımsız cam ada olarak içerir', () => {
+  it('14. Patron Portalı masa yönetimini ve birleşik rapor merkezini içerir', () => {
     const tablesEl = React.createElement(TablesOrdersPanel);
-    const reportsEl = React.createElement(ReportsPanel);
+    const reportsEl = React.createElement(ReportsHub);
     expect(tablesEl).toBeDefined();
     expect(reportsEl).toBeDefined();
     expect(TablesOrdersPanel).toBeInstanceOf(Function);
-    expect(ReportsPanel).toBeInstanceOf(Function);
+    expect(reportsEl.type).toBe(ReportsHub);
   });
 });

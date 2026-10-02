@@ -5,6 +5,7 @@ pub mod services;
 pub mod repositories;
 pub mod management_commands;
 pub mod modifier_commands;
+pub mod report_commands;
 pub mod platform_commands;
 pub mod inventory_commands;
 pub mod branch_commands;
@@ -127,6 +128,12 @@ pub fn run() {
             modifier_commands::delete_modifier_group,
             modifier_commands::set_product_modifier_groups,
             modifier_commands::get_product_modifier_group_ids,
+            // Faz 5: tek rapor merkezi. `get_daily_summary`, `get_receipts` ve
+            // `get_shift_history` tenant'sız kaldığı için bu kapıdan geçemez.
+            report_commands::get_sales_report,
+            report_commands::get_shift_report,
+            report_commands::get_receipts_report,
+            report_commands::get_adjustments_report,
             kitchen_commands::get_stations,
             kitchen_commands::create_station,
             kitchen_commands::update_kds_item_status,
