@@ -9,7 +9,6 @@
 
 import React from 'react';
 import { OwnerDashboardContainer } from '../../src/presentation/components/owner/OwnerDashboardContainer';
-import { OwnerBranchesTab } from '../../src/presentation/components/owner/ui/OwnerBranchesTab';
 import { OwnerInventoryTab } from '../../src/presentation/components/owner/ui/OwnerInventoryTab';
 import { OwnerMenuTab } from '../../src/presentation/components/owner/ui/OwnerMenuTab';
 import { ManagementContainer } from '../../src/presentation/components/management/ManagementContainer';
@@ -23,12 +22,6 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
     const element = React.createElement(OwnerDashboardContainer);
     expect(element).toBeDefined();
     expect(OwnerDashboardContainer).toBeInstanceOf(Function);
-  });
-
-  it('2. OwnerBranchesTab rehber metinleri barındırmaz ve Apple metrik kartlarını içerir', () => {
-    const element = React.createElement(OwnerBranchesTab);
-    expect(element).toBeDefined();
-    expect(OwnerBranchesTab).toBeInstanceOf(Function);
   });
 
   it('3. OwnerInventoryTab Apple Borsa/Sağlık tarzı 3 lü metrik ve minimalist tablo ile render edilir', () => {
@@ -137,6 +130,10 @@ describe('Patron ve Yönetim Panelleri — Apple HIG & iOS UI Standartları', ()
     const ids = items.map((item) => item.id as string);
     expect(ids).not.toContain('approvals');
     expect(ids).not.toContain('sales');
+    // Faz 6: patron panelinde şube sekmesi kalktı; şube yönetimi MASTER'da,
+    // patronun tek şube yetkisi üst bardaki geçiş dropdown'ıdır.
+    expect(labels).not.toContain('Şubeler');
+    expect(ids).not.toContain('settings');
 
     // Bileşen yine de render edilebilir olmalı.
     const html = renderToString(React.createElement(OwnerDashboardContainer));

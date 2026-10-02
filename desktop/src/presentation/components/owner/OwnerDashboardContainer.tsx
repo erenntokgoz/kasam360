@@ -9,7 +9,6 @@ import {
   TrendingUp, 
   Users, 
   Package, 
-  Settings, 
   Receipt, 
   Wallet, 
   Layers, 
@@ -21,7 +20,6 @@ import {
 import { AnalyticsDashboardDataDto } from '../../types/analytics';
 import { OwnerMenuTab } from './ui/OwnerMenuTab';
 import { OwnerInventoryTab } from './ui/OwnerInventoryTab';
-import { OwnerBranchesTab } from './ui/OwnerBranchesTab';
 import { OwnerStaffTab } from './ui/OwnerStaffTab';
 import { OwnerAuditLogsTab } from './ui/OwnerAuditLogsTab';
 import { TablesOrdersPanel } from '../management/ui/TablesOrdersPanel';
@@ -36,6 +34,11 @@ import { buildPresetRange } from '../reports/reportTypes';
  * Faz 5: `sales` ve `reports` ayrı sekmelerdi ama ikisi de aynı rapor verisini
  * gösteriyordu. Tek `reports` sekmesi bırakıldı; ikinci bir rapor yüzeyi
  * aynı veriyi farklı filtrelerle tekrar gösteriyordu.
+ *
+ * Faz 6: `settings` (Şubeler) sekmesi **kaldırıldı**. AGENTS.md §6 patron
+ * panelinde şube sekmesi olmadığını, şube yazımının yalnız MASTER'a ait
+ * olduğunu söyler. Patronun şube üzerindeki tek yetkisi oturduğu şubeyi
+ * seçmektir; bu seçim `TopHeader` içindeki `BranchSwitcher` ile yapılır.
  */
 export type OwnerTabId =
   | 'dashboard'
@@ -44,8 +47,7 @@ export type OwnerTabId =
   | 'menu'
   | 'inventory'
   | 'staff'
-  | 'logs'
-  | 'settings';
+  | 'logs';
 
 export interface OwnerNavItem {
   id: OwnerTabId;
@@ -75,7 +77,7 @@ export function buildOwnerNavItems(can: (capability: Capability) => boolean): Ow
     // Faz 4: bağımsız "Modifier" sekmesi kaldırıldı. Modifier yönetimi
     // `CategoryForm` ve `ProductForm` içindeki "Seçenekler & Ekstralar"
     // alanına gömüldü; ikinci bir yönetim yüzeyi bırakmıyoruz.
-    { id: 'settings', label: 'Şubeler', icon: <Settings size={15} /> },
+    // Faz 6: "Şubeler" sekmesi de kaldırıldı; şube yönetimi MASTER'a taşındı.
   ];
 }
 
@@ -282,8 +284,6 @@ export function OwnerDashboardContainer() {
           <OwnerStaffTab />
         ) : activeTab === 'logs' ? (
           <OwnerAuditLogsTab />
-        ) : activeTab === 'settings' ? (
-          <OwnerBranchesTab />
         ) : null}
       </main>
     </div>

@@ -5,6 +5,7 @@ import { useCartStore } from '../../store/useCartStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useFloorStore } from '../../store/useFloorStore';
 import { UserProfileModal } from '../auth/UserProfileModal';
+import { BranchSwitcher } from './BranchSwitcher';
 
 /**
  * macOS Frosted Glass üst bilgi ve aksiyon çubuğu.
@@ -16,7 +17,7 @@ export function TopHeader() {
   const { theme, toggleTheme } = useTheme();
   const currentView = useCartStore((state) => state.currentView);
   const navigate = useCartStore((state) => state.navigate);
-  const { user, logout, lock, branchName } = useAuthStore();
+  const { user, logout, lock } = useAuthStore();
   const openOrdersCount = useFloorStore((state) => state.tables.filter((t) => t.status === 'OCCUPIED').length);
 
   useEffect(() => {
@@ -43,11 +44,9 @@ export function TopHeader() {
           )}
           <div className="flex items-center gap-2.5">
             <span className="text-base font-bold tracking-tight dark:text-white text-zinc-900">KASAM<span className="text-[#007AFF]">360</span></span>
-            {branchName && (
-              <span className="text-xs font-normal dark:text-zinc-400 text-zinc-600 dark:bg-white/5 bg-black/5 border dark:border-white/10 border-black/10 px-3 py-1 rounded-full hidden sm:inline">
-                {branchName}
-              </span>
-            )}
+            {/* Faz 6: şube sekmesi kalktı; üst barda yalnız geçiş var.
+                Geçiş `feat_multi_branch` ve rol kapılarına bağlıdır. */}
+            <BranchSwitcher />
           </div>
           {openOrdersCount > 0 && (
             <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs text-emerald-600 dark:text-emerald-400 font-mono">

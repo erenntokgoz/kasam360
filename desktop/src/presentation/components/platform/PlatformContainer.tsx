@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { PlatformDashboard } from './PlatformDashboard';
 import { TenantManagement } from './TenantManagement';
+import { PlatformBranchesPanel } from './ui/PlatformBranchesPanel';
 import {
   LayoutDashboard,
   Building2,
   Lock,
   LogOut,
   Command,
+  MapPin,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { AppBadge } from '../common/AppBadge';
@@ -16,14 +18,19 @@ import { AppBadge } from '../common/AppBadge';
  * KASAM360 Platform Konteyneri (Master Admin Portal).
  */
 export function PlatformContainer() {
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'TENANTS'>('DASHBOARD');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'TENANTS' | 'BRANCHES'>(
+    'DASHBOARD',
+  );
   const user = useAuthStore(s => s.user);
   const lock = useAuthStore(s => s.lock);
   const logout = useAuthStore(s => s.logout);
 
+  // Faz 6: şube yazımı MASTER'a taşındı; panel `feat_multi_branch` kapalı
+  // işletmede 404 yüzeyi gösterir.
   const navItems = [
     { id: 'DASHBOARD' as const, label: 'Platform Özeti', icon: LayoutDashboard },
     { id: 'TENANTS' as const, label: 'İşletme Yönetimi', icon: Building2 },
+    { id: 'BRANCHES' as const, label: 'Şube Yönetimi', icon: MapPin },
   ];
 
   return (
@@ -112,6 +119,7 @@ export function PlatformContainer() {
             <span className="font-medium dark:text-white text-zinc-900">
               {activeTab === 'DASHBOARD' && 'Platform Özeti'}
               {activeTab === 'TENANTS' && 'İşletmeler'}
+              {activeTab === 'BRANCHES' && 'Şubeler'}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -126,6 +134,7 @@ export function PlatformContainer() {
         <div className="flex-1 p-8 overflow-y-auto">
           {activeTab === 'DASHBOARD' && <PlatformDashboard />}
           {activeTab === 'TENANTS' && <TenantManagement />}
+          {activeTab === 'BRANCHES' && <PlatformBranchesPanel />}
         </div>
       </div>
     </div>

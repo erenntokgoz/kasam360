@@ -351,16 +351,41 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
     });
 
     it('O2: Branches management', async () => {
-      const branchRes = await tauriInvoke<any>('create_branch', {
+      // Faz 6: şube **yazma** yetkisi patron'dan alındı (AGENTS.md §6). Patron
+      // artık yalnız kendi tenant'ının şubelerini okur; ekleme/güncelleme/
+      // arşivleme MASTER'ın işidir.
+      await expect(
+        tauriInvoke('create_branch', {
+          callerRole: 'OWNER',
+          tenantId,
+          name: 'Kadıköy Şubesi',
+          address: 'Moda Cad. No: 12',
+        }),
+      ).rejects.toThrow(/FORBIDDEN/);
+
+      // Oturum tenant'ı `caller_tenant_id` ile ayrıca gönderilir: uygulamada bu
+      // alan oturumdan otomatik enjekte edilir ve hedef tenant ile karışmaz.
+      const branches = await tauriInvoke<any[]>('get_branches', {
         callerRole: 'OWNER',
         tenantId,
-        name: 'Kadıköy Şubesi',
-        address: 'Moda Cad. No: 12',
+        caller_tenant_id: tenantId,
       });
-      expect(branchRes).toBeDefined();
-
-      const branches = await tauriInvoke<any[]>('get_branches', { callerRole: 'OWNER', tenantId });
       expect(Array.isArray(branches)).toBe(true);
+      expect(branches.every((branch) => branch.tenant_id === tenantId)).toBe(true);
+
+      // Patron başka bir işletmenin şubelerini okuyamaz.
+      await expect(
+        tauriInvoke('get_branches', {
+          callerRole: 'OWNER',
+          tenantId: 'BASKA_ISLETME',
+          caller_tenant_id: tenantId,
+        }),
+      ).rejects.toThrow(/FORBIDDEN/);
+
+      // Oturum tenant'ı olmadan şube okuması da fail-closed reddedilir.
+      await expect(
+        tauriInvoke('get_branches', { callerRole: 'OWNER', tenantId: 'BASKA_ISLETME' }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
     });
 
     // Faz 4: modifier yönetimi bağımsız sekmeden `CategoryForm`/`ProductForm`

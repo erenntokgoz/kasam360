@@ -244,13 +244,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
+  // Şube geçişi (Faz 6): seçilen şube hem oturumda hem terminal oturumunda
+  // yazılır. Önceden yalnızca state'e yazıyordu; sayfa yenilendiğinde geçiş
+  // kaybolduğu için üst bardaki rozet eski şubeyi gösteriyordu.
   setBranch: (branchId: string, branchName?: string) => {
-    set((state) => ({
-      branchId,
-      branchName: branchName || state.branchName,
-      user: state.user
-        ? { ...state.user, branchId, branchName: branchName || state.user.branchName }
-        : null,
-    }));
+    const resolvedName = branchName || '';
+    set((state) => {
+      const nextSession: TerminalSession | null = state.terminalSession
+        ? {
+            ...state.terminalSession,
+            branchId,
+            branchName: resolvedName || state.terminalSession.branchName,
+          }
+        : null;
+
+      if (nextSession && typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(TERMINAL_SESSION_KEY, JSON.stringify(nextSession));
+        } catch {
+          // Depolama kotası dolu veya özel mod: geçiş yalnızca oturumda tutulur.
+        }
+      }
+
+      return {
+        branchId,
+        branchName: resolvedName || state.branchName,
+        terminalSession: nextSession,
+        user: state.user
+          ? {
+              ...state.user,
+              branchId,
+              branchName: resolvedName || state.user.branchName,
+            }
+          : null,
+      };
+    });
   },
 }));

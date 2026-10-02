@@ -861,6 +861,30 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return itemTenantId === callerTenantId || !itemTenantId;
   };
 
+  /**
+   * Şube komutlarının tenant çözümlemesi (backend `branch_commands` ile birebir).
+   *
+   * `caller_tenant_id` oturum tenant'ıdır (güvenilir kaynak), `tenant_id` ise
+   * hedef işletmedir. MASTER hedefi seçebilir; işletme sahibi yalnız kendi
+   * tenant'ında işlem yapabilir, aksi hâlde istek reddedilir. Tarayıcı mock'u
+   * backend kapısını gevşetmemeli: testler bu yüzden gerçek RBAC ile aynı
+   * sonucu görmeli.
+   */
+  const resolveBranchTargetTenant = (): string => {
+    const sessionTenant = ((args.caller_tenant_id || args.callerTenantId) as string) || '';
+    const requestedTenant = ((args.tenant_id || args.tenantId) as string) || '';
+    if (isMaster) return requestedTenant || sessionTenant;
+    if (!sessionTenant) throw new Error('UNAUTHORIZED: tenant_id is required');
+    if (requestedTenant && requestedTenant !== sessionTenant) {
+      throw new Error('FORBIDDEN: başka bir işletmenin şubesi erişilemez');
+    }
+    return sessionTenant;
+  };
+
+  const requireMasterForBranchWrites = (): void => {
+    if (!isMaster) throw new Error('FORBIDDEN: şube yönetimi yalnız MASTER içindir');
+  };
+
   if (cmd === 'auth_login_credentials') {
     const rawEmail = (args.email || args.identifier || '') as string;
     const rawPassword = (args.password || args.secret || '') as string;
@@ -1595,21 +1619,86 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   }
 
   // ----- ŞUBELER (Branches) -----
+  // Faz 6: okuma OWNER/MANAGER/MASTER'a açık ve tenant'a kilitli; yazma
+  // (ekle/güncelle/arşivle) yalnız MASTER'ın. Silme yok, arşivleme var.
   if (cmd === 'get_branches') {
-    return mockBranches.filter((b) => matchesTenant(b.tenant_id)) as unknown as T;
+    if (!['OWNER', 'MANAGER', 'MASTER', 'SUPERADMIN'].includes(callerRole)) {
+      throw new Error('UNAUTHORIZED: caller_role is required');
+    }
+    const targetTenantId = resolveBranchTargetTenant();
+    const includeArchived =
+      (args.includeArchived as boolean | undefined) ?? (args.include_archived as boolean | undefined);
+    return mockBranches.filter(
+      (branch) =>
+        branch.tenant_id === targetTenantId && (includeArchived || branch.status !== 'ARCHIVED'),
+    ) as unknown as T;
   }
   if (cmd === 'create_branch') {
+    requireMasterForBranchWrites();
+    const tenantId = resolveBranchTargetTenant();
+    const name = ((args.name as string) || '').trim();
+    if (!name) throw new Error('INVALID_ARGUMENT: name is required');
+    const duplicate = mockBranches.some(
+      (branch) => branch.tenant_id === tenantId && branch.name === name && branch.status !== 'ARCHIVED',
+    );
+    if (duplicate) throw new Error('CONFLICT: aynı isimli aktif şube zaten var');
     const newBranch: MockBranch = {
-      id: `branch_${Date.now().toString().slice(-4)}`,
-      tenant_id: (args.tenantId || args.tenant_id || callerTenantId || '') as string,
-      name: (args.name as string) || 'Yeni Şube',
-      address: (args.address as string) || null,
+      id: `br_${Math.random().toString(36).slice(2, 10)}`,
+      tenant_id: tenantId,
+      name,
+      address: ((args.address as string) || '').trim() || null,
       status: 'ACTIVE',
       created_at: new Date().toISOString(),
     };
     mockBranches = [...mockBranches, newBranch];
     lsSave('branches', mockBranches);
     return newBranch as unknown as T;
+  }
+  if (cmd === 'update_branch') {
+    requireMasterForBranchWrites();
+    const tenantId = resolveBranchTargetTenant();
+    const branchId = ((args.branchId || args.branch_id) as string) || '';
+    const target = mockBranches.find(
+      (branch) => branch.tenant_id === tenantId && branch.id === branchId,
+    );
+    if (!target) throw new Error('NOT_FOUND: şube bulunamadı');
+    const name = ((args.name as string) || '').trim() || target.name;
+    if (name !== target.name) {
+      const duplicate = mockBranches.some(
+        (branch) =>
+          branch.tenant_id === tenantId &&
+          branch.id !== branchId &&
+          branch.name === name &&
+          branch.status !== 'ARCHIVED',
+      );
+      if (duplicate) throw new Error('CONFLICT: aynı isimli aktif şube zaten var');
+    }
+    const updated: MockBranch = {
+      ...target,
+      name,
+      address: (args.address as string) !== undefined ? ((args.address as string) || null) : target.address,
+    };
+    mockBranches = mockBranches.map((branch) => (branch.id === branchId ? updated : branch));
+    lsSave('branches', mockBranches);
+    return updated as unknown as T;
+  }
+  if (cmd === 'archive_branch') {
+    requireMasterForBranchWrites();
+    const tenantId = resolveBranchTargetTenant();
+    const branchId = ((args.branchId || args.branch_id) as string) || '';
+    const target = mockBranches.find(
+      (branch) => branch.tenant_id === tenantId && branch.id === branchId,
+    );
+    if (!target) throw new Error('NOT_FOUND: şube bulunamadı');
+    if (target.status === 'ARCHIVED') throw new Error('CONFLICT: şube zaten arşivlenmiş');
+    const activeCount = mockBranches.filter(
+      (branch) => branch.tenant_id === tenantId && branch.status !== 'ARCHIVED',
+    ).length;
+    if (activeCount <= 1) throw new Error('CONFLICT: son aktif şube arşivlenemez');
+    const archived: MockBranch = { ...target, status: 'ARCHIVED' };
+    mockBranches = mockBranches.map((branch) => (branch.id === branchId ? archived : branch));
+    lsSave('branches', mockBranches);
+    return { success: true } as unknown as T;
   }
 
   // ----- STOK & ENVANTER (Inventory) -----
@@ -2657,6 +2746,10 @@ export async function tauriInvoke<T>(cmd: string, args?: InvokeArgs): Promise<T>
     // yetkinin tek yerden (oturum) yönetilmesini sağlar.
     if (finalArgs.caller_role === undefined) finalArgs.caller_role = user.role;
     if (finalArgs.callerRole === undefined) finalArgs.callerRole = user.role;
+    // Oturum tenant'ı ayrı bir alanda taşınır: `tenant_id` MASTER için hedef
+    // işletmeyi ifade edebilir, bu yüzden güvenilir kaynak kaybolmasın.
+    if (finalArgs.caller_tenant_id === undefined) finalArgs.caller_tenant_id = user.tenantId;
+    if (finalArgs.callerTenantId === undefined) finalArgs.callerTenantId = user.tenantId;
     if (finalArgs.branchId === undefined && user.branchId) finalArgs.branchId = user.branchId;
     if (finalArgs.branch_id === undefined && user.branchId) finalArgs.branch_id = user.branchId;
   } else {

@@ -72,8 +72,11 @@ test.describe('OWNER Role Workflows', () => {
     ).toBeVisible();
   });
 
-  test('OWNER: branch settings tab', async ({ page }) => {
-    await page.getByRole('button', { name: 'Şubeler', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Şubeler' })).toBeVisible();
+  // Faz 6: patron panelindeki "Şubeler" sekmesi **kaldırıldı**. Şube yazımı
+  // yalnız platform yöneticisine (MASTER) açıktır; patronun tek şube yetkisi
+  // üst bardaki geçiş açılır listesidir.
+  test('OWNER: şube sekmesi kaldırıldı', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Şubeler', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Şubeler' })).toHaveCount(0);
   });
 });

@@ -14,8 +14,27 @@ export type FeatureFlagKey =
   | 'feat_loss_radar';
 
 /**
+ * Çok şubeli modülün açık olup olmadığını **işletmenin** modül listesinden
+ * çözer (saf fonksiyon; render'a bağımlı değil, doğrudan test edilir).
+ *
+ * Neden rol MASTER'a "her şey açık" muafiyeti vermiyor: AGENTS.md §8'de
+ * `feat_multi_branch` **KAPALI**dır ve bayrağın sahibi işletmedir. MASTER'ın
+ * kendi tenant'ı olmadığı için bu bayrak MASTER için de "yönettiği işletmenin
+ * modülü kapalıysa kapalı" sonucunu verir. Aksi hâlde platform konsolunda
+ * kapalı bir özellik açık görünür ve 404 kuralı (AGENTS.md §3.3) ihlal edilir.
+ */
+export function isMultiBranchEnabledForModules(
+  modules: readonly string[] | undefined,
+  role: string | undefined,
+): boolean {
+  if (role !== 'MASTER' && !modules) return false;
+  return Array.isArray(modules) && modules.includes('feat_multi_branch');
+}
+
+/**
  * Super Admin 11 Granüler Özellik Bayrağı (Feature Flags) kancası.
- * Master rolü her zaman tüm modülleri yetkili olarak görüntüler.
+ * Master rolü çoğu modülü yetkili olarak görüntüler; `feat_multi_branch`
+ * bu muafiyetten çıkarılır (bkz. `isMultiBranchEnabledForModules`).
  * İşletme bazında aktif olmayan modüller arayüzde ve menüde gizlenir.
  */
 export function useFeatureFlags() {
@@ -23,6 +42,9 @@ export function useFeatureFlags() {
   const isMaster = user?.role === 'MASTER';
 
   const isEnabled = (key: FeatureFlagKey): boolean => {
+    if (key === 'feat_multi_branch') {
+      return isMultiBranchEnabledForModules(user?.activeModules, user?.role);
+    }
     if (isMaster) return true;
     if (!user?.activeModules) {
       // Varsayılan açık çekirdek modüller

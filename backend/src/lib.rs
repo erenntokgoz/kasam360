@@ -90,6 +90,8 @@ pub fn run() {
             inventory_commands::create_inventory_item,
             branch_commands::get_branches,
             branch_commands::create_branch,
+            branch_commands::update_branch,
+            branch_commands::archive_branch,
             // Faz 3: anlık PIN onayı. Kuyruk komutları (`request_approval`,
             // `get_pending_approvals`, `process_approval`) kaldırıldı: onay
             // anında PIN ile alınır, kuyrukta bekletilmez.
