@@ -1,6 +1,17 @@
 import { useState, useMemo } from 'react';
 import { TableCard } from './TableCard';
 
+/** Masa kartında gösterilen rezervasyon özeti. */
+export interface TableReservationSummary {
+  customerName: string;
+  partySize: number;
+  /** Rezervasyonun yaratıldığı an (epoch ms): bekleme sayacı bu değerden işler. */
+  waitingSince: number;
+  /** `ACTIVE` = bekliyor, `ARRIVED` = geldi, adisyon bekliyor. */
+  status: 'ACTIVE' | 'ARRIVED';
+  reservedAtLabel: string;
+}
+
 export interface TableItem {
   id: string;
   name: string;
@@ -11,18 +22,20 @@ export interface TableItem {
   isReady?: boolean;
   mergedWith?: string[];
   transferInfo?: string;
+  reservation?: TableReservationSummary;
 }
 
 export interface FloorPlanPanelProps {
   tables: TableItem[];
   onTableClick: (tableId: string) => void;
+  onQuickReserve?: (tableId: string) => void;
   onEditTable?: (tableId: string, currentName: string) => void;
   onDeleteTable?: (tableId: string) => void;
 }
 
 type FilterStatus = 'all' | 'empty' | 'occupied' | 'reserved' | 'ready';
 
-export function FloorPlanPanel({ tables, onTableClick }: FloorPlanPanelProps) {
+export function FloorPlanPanel({ tables, onTableClick, onQuickReserve }: FloorPlanPanelProps) {
   const [filter, setFilter] = useState<FilterStatus>('all');
 
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
@@ -164,7 +177,11 @@ export function FloorPlanPanel({ tables, onTableClick }: FloorPlanPanelProps) {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-6 gap-4 sm:gap-5">
             {filteredTables.map((table) => (
               <div key={table.id} className="relative w-full">
-                <TableCard table={table} onClick={() => onTableClick(table.id)} />
+                <TableCard
+                  table={table}
+                  onClick={() => onTableClick(table.id)}
+                  onQuickReserve={onQuickReserve ? () => onQuickReserve(table.id) : undefined}
+                />
               </div>
             ))}
           </div>

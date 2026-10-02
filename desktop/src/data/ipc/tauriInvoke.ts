@@ -15,6 +15,29 @@ export interface MockTable {
   currentTotal: number;
 }
 
+/**
+ * Faz 8 rezervasyon kaydı. Backend `reservations` tablosunun birebir karşılığıdır:
+ * mor "Rezerve" blok müşteri adı, kişi sayısı ve randevu saati olmadan anlamsız
+ * olduğu için mock yalnız `tables.status` bayrağını tutmaz, kaydın kendisini tutar.
+ */
+export interface MockReservation {
+  id: string;
+  tenant_id: string;
+  table_id: string;
+  status: 'ACTIVE' | 'ARRIVED' | 'SEATED' | 'CANCELLED' | 'NO_SHOW' | 'EXPIRED';
+  customer_name: string;
+  customer_phone?: string;
+  party_size: number;
+  reserved_at: string;
+  created_at: string;
+  arrived_at?: string;
+  closed_at?: string;
+  note?: string;
+  created_by?: string;
+  created_by_role?: string;
+  close_reason?: string;
+}
+
 export interface MockCategory {
   id: string;
   tenant_id: string;
@@ -240,6 +263,46 @@ if (mockTables.length === 0) {
   mockTables = [...DEFAULT_TABLES];
   lsSave('tables', mockTables);
 }
+
+// Faz 8 rezervasyon deposu. Salon planındaki rezerve blokları bu kayıttan türer;
+// `tables.status = 'RESERVED'` tek başına yeterli değildir.
+let mockReservations: MockReservation[] = lsLoad<MockReservation[]>('reservations', []);
+// Sürüm değişimi: eski localStorage kaydı şemasıyla uyuşmayabilir, bozuk kayıt
+// salon planını yanlış dolduracağı için atılır.
+mockReservations = mockReservations.filter((r) => Boolean(r?.id && r?.table_id && r?.tenant_id));
+let mockReservationSeq = 0;
+const nextReservationId = (): string => {
+  mockReservationSeq += 1;
+  return `rsv-mock-${Date.now().toString(36)}${mockReservationSeq.toString(36)}`;
+};
+
+/** Backend `ReservationDto` ile aynı alan adlarına (camelCase) çevirir. */
+const toMockReservationDto = (reservation: MockReservation, tableName?: string) => ({
+  id: reservation.id,
+  tableId: reservation.table_id,
+  tableName: tableName ?? '',
+  status: reservation.status,
+  customerName: reservation.customer_name,
+  customerPhone: reservation.customer_phone,
+  partySize: reservation.party_size,
+  reservedAt: reservation.reserved_at,
+  createdAt: reservation.created_at,
+  arrivedAt: reservation.arrived_at,
+  closedAt: reservation.closed_at,
+  note: reservation.note,
+  createdBy: reservation.created_by,
+  createdByRole: reservation.created_by_role,
+  closeReason: reservation.close_reason,
+});
+
+const OPEN_RESERVATION_STATUSES = ['ACTIVE', 'ARRIVED'];
+
+/**
+ * Eşzamanlı adisyon kilidi deposu (backend `state.table_locks` karşılığı).
+ * Anahtar masa kimliği, değer kilidi tutan personel ve kilit zamanıdır; 30 dakika
+ * sonra süresi dolan kilitler açılır.
+ */
+const mockTableLocks = new Map<string, { waiterId: string; at: number }>();
 
 // 2. Kategoriler
 const DEFAULT_CATEGORIES: MockCategory[] = [
@@ -958,6 +1021,8 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
 
   const callerTenantId = (args.tenant_id || args.tenantId || '') as string;
   const callerRole = ((args.actor_role || args.actorRole || args.callerRole || args.caller_role || '') as string).toUpperCase();
+  // Denetim defterinde "kim yaptı" alanı; oturum yoksa rol yazılır, kişi uydurulmaz.
+  const callerUserId = ((args.actor_id || args.actorId || args.callerId || args.caller_id || '') as string) || callerRole;
   const isMaster = callerRole === 'MASTER' || callerRole === 'SUPERADMIN';
   const matchesTenant = (itemTenantId: string | undefined | null): boolean => {
     if (isMaster) return true;
@@ -1181,21 +1246,69 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return mockTables.filter((t) => matchesTenant(t.tenant_id)) as unknown as T;
   }
   if (cmd === 'update_table_status') {
-    const tableId = (args.tableId || args.table_id) as string;
-    const status = args.status as string;
-    mockTables = mockTables.map((t) =>
-      t.id === tableId ? { ...t, status } : t
-    );
+    // Backend `waiter_commands::update_table_status` ile aynı kapı: rol, tenant,
+    // izin verilen durum ve rezervasyon bütünlüğü. Mock gevşetilirse tarayıcı
+    // modunda testler backend'de geçmeyen akışları "çalışıyor" gösterir.
+    if (!['OWNER', 'MANAGER', 'WAITER'].includes(callerRole)) {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, WAITER).');
+    }
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const tableId = String(args.tableId || args.table_id || '').trim();
+    const status = String(args.status || '').trim().toUpperCase();
+    if (!['AVAILABLE', 'OCCUPIED'].includes(status)) {
+      throw new Error(`VALIDATION: '${status}' geçerli bir masa durumu değil (AVAILABLE, OCCUPIED)`);
+    }
+    const target = mockTables.find((t) => t.id === tableId && t.tenant_id === callerTenantId);
+    if (!target) {
+      throw new Error('NOT_FOUND: bu işletmeye ait masa bulunamadı');
+    }
+    if (status === 'AVAILABLE') {
+      // Masa boşaltılıyorsa açık rezervasyon kaydı da kapanır; aksi halde kayıt
+      // açık kalır ve masa yeniden rezerve edilemezdi.
+      const now = new Date().toISOString();
+      mockReservations = mockReservations.map((r) =>
+        r.table_id === tableId && r.tenant_id === callerTenantId && OPEN_RESERVATION_STATUSES.includes(r.status)
+          ? { ...r, status: 'CANCELLED', closed_at: now, close_reason: 'MASYA_BOSALTILDI' }
+          : r
+      );
+    }
+    target.status = status;
     lsSave('tables', mockTables);
+    lsSave('reservations', mockReservations);
     return { success: true } as unknown as T;
   }
-  if (cmd === 'move_table') {
-    const fromId = args.fromId as string;
-    const toId = args.toId as string;
-    const fromTable = mockTables.find((t) => t.id === fromId);
-    const toTable = mockTables.find((t) => t.id === toId);
+  if (cmd === 'move_table' || cmd === 'merge_tables') {
+    const fromId = (
+      cmd === 'move_table'
+        ? args.fromId || args.from_id
+        : args.sourceId || args.sourceTableId || args.source_table_id
+    ) as string;
+    const toId = (
+      cmd === 'move_table' ? args.toId || args.to_id : args.targetId || args.targetTableId || args.target_table_id
+    ) as string;
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    // Açık rezervasyonlu masa taşınamaz/birleştirilemez (backend CONFLICT ile aynı).
+    for (const tableId of [fromId, toId]) {
+      const hasOpen = mockReservations.some(
+        (r) =>
+          r.table_id === tableId &&
+          r.tenant_id === callerTenantId &&
+          OPEN_RESERVATION_STATUSES.includes(r.status)
+      );
+      if (hasOpen) {
+        throw new Error(
+          'CONFLICT: açık rezervasyonu olan masa taşınamaz/birleştirilemez; önce rezervasyonu kaldırın'
+        );
+      }
+    }
+    const fromTable = mockTables.find((t) => t.id === fromId && t.tenant_id === callerTenantId);
+    const toTable = mockTables.find((t) => t.id === toId && t.tenant_id === callerTenantId);
     if (fromTable && toTable) {
-      toTable.currentTotal = fromTable.currentTotal;
+      toTable.currentTotal = (fromTable.currentTotal as number) || 0;
       toTable.status = 'OCCUPIED';
       fromTable.currentTotal = 0;
       fromTable.status = 'AVAILABLE';
@@ -1206,35 +1319,151 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     }
     lsSave('tables', mockTables);
     lsSave('order_items', mockOrderItems);
-    return mockTables.filter((t) => matchesTenant(t.tenant_id)) as unknown as T;
-  }
-  if (cmd === 'merge_tables') {
-    const sourceId = (args.sourceTableId || args.source_table_id || args.sourceId) as string;
-    const targetId = (args.targetTableId || args.target_table_id || args.targetId) as string;
-    const sourceTable = mockTables.find((t) => t.id === sourceId);
-    const targetTable = mockTables.find((t) => t.id === targetId);
-    if (sourceTable && targetTable) {
-      const sourceTotal = (sourceTable.currentTotal as number) || 0;
-      const targetTotal = (targetTable.currentTotal as number) || 0;
-      targetTable.currentTotal = targetTotal + sourceTotal;
-      targetTable.status = 'OCCUPIED';
-      sourceTable.currentTotal = 0;
-      sourceTable.status = 'AVAILABLE';
-      if (mockOrderItems[sourceId]) {
-        mockOrderItems[targetId] = [...(mockOrderItems[targetId] || []), ...mockOrderItems[sourceId]];
-        delete mockOrderItems[sourceId];
-      }
-    }
-    lsSave('tables', mockTables);
-    lsSave('order_items', mockOrderItems);
     return { success: true } as unknown as T;
   }
   if (cmd === 'reserve_table') {
-    mockTables = mockTables.map((t) =>
-      t.id === args.tableId ? { ...t, status: 'RESERVED' } : t
+    // Backend `reservation_commands::reserve_table` ile aynı kapı: rol, tenant,
+    // boş masa ön koşulu, tek açık rezervasyon ve zorunlu alanlar.
+    if (!['OWNER', 'MANAGER', 'WAITER'].includes(callerRole)) {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, WAITER).');
+    }
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const request = (args.request || args) as Record<string, unknown>;
+    const tableId = String(request.tableId || request.table_id || '').trim();
+    const customerName = String(request.customerName || request.customer_name || '').trim();
+    const partySize = Number(request.partySize ?? request.party_size ?? 1);
+    const reservedAt = String(request.reservedAt || request.reserved_at || '').trim();
+    if (!customerName) {
+      throw new Error('VALIDATION: müşteri adı zorunludur');
+    }
+    if (!reservedAt) {
+      throw new Error('VALIDATION: randevu saati zorunludur');
+    }
+    if (!Number.isFinite(partySize) || partySize < 1 || partySize > 500) {
+      throw new Error('VALIDATION: kişi sayısı 1 ile 500 arasında olmalıdır');
+    }
+    const table = mockTables.find((t) => t.id === tableId && t.tenant_id === callerTenantId);
+    if (!table) {
+      throw new Error('NOT_FOUND: bu işletmeye ait masa bulunamadı');
+    }
+    if (table.status !== 'AVAILABLE') {
+      throw new Error(`CONFLICT: yalnızca boş masalar rezerve edilebilir (masa durumu: ${table.status})`);
+    }
+    const alreadyOpen = mockReservations.some(
+      (r) => r.table_id === tableId && r.tenant_id === callerTenantId && OPEN_RESERVATION_STATUSES.includes(r.status)
     );
+    if (alreadyOpen) {
+      throw new Error('CONFLICT: bu masada hâlâ açık bir rezervasyon var');
+    }
+    const created: MockReservation = {
+      id: nextReservationId(),
+      tenant_id: callerTenantId,
+      table_id: tableId,
+      status: 'ACTIVE',
+      customer_name: customerName,
+      customer_phone: (String(request.customerPhone || request.customer_phone || '').trim()) || undefined,
+      party_size: partySize,
+      reserved_at: reservedAt,
+      created_at: new Date().toISOString(),
+      note: (String(request.note || '').trim()) || undefined,
+      created_by: callerUserId,
+      created_by_role: callerRole,
+    };
+    mockReservations = [...mockReservations, created];
+    table.status = 'RESERVED';
+    lsSave('reservations', mockReservations);
     lsSave('tables', mockTables);
-    return mockTables.filter((t) => matchesTenant(t.tenant_id)) as unknown as T;
+    return toMockReservationDto(created, table.name) as unknown as T;
+  }
+  if (cmd === 'get_reservations') {
+    if (!['OWNER', 'MANAGER', 'WAITER'].includes(callerRole)) {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, WAITER).');
+    }
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    return mockReservations
+      .filter((r) => matchesTenantStrict(r.tenant_id) && OPEN_RESERVATION_STATUSES.includes(r.status))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .map((r) => toMockReservationDto(r, mockTables.find((t) => t.id === r.table_id)?.name)) as unknown as T;
+  }
+  if (
+    cmd === 'cancel_reservation' ||
+    cmd === 'mark_reservation_no_show' ||
+    cmd === 'mark_reservation_arrived'
+  ) {
+    if (!['OWNER', 'MANAGER', 'WAITER'].includes(callerRole)) {
+      throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, WAITER).');
+    }
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const reservationId = String(args.reservationId || args.reservation_id || '').trim();
+    const reservation = mockReservations.find(
+      (r) => r.id === reservationId && r.tenant_id === callerTenantId
+    );
+    if (!reservation) {
+      throw new Error('NOT_FOUND: bu işletmeye ait rezervasyon bulunamadı');
+    }
+    const now = new Date().toISOString();
+    const table = mockTables.find((t) => t.id === reservation.table_id);
+
+    if (cmd === 'mark_reservation_arrived') {
+      if (reservation.status !== 'ACTIVE') {
+        throw new Error(
+          `CONFLICT: yalnızca bekleyen (ACTIVE) rezervasyon 'geldi' işaretlenebilir (mevcut: ${reservation.status})`
+        );
+      }
+      reservation.status = 'ARRIVED';
+      reservation.arrived_at = now;
+    } else {
+      if (!OPEN_RESERVATION_STATUSES.includes(reservation.status)) {
+        throw new Error(`CONFLICT: rezervasyon zaten '${reservation.status}' durumunda kapatılmış`);
+      }
+      const noShow = cmd === 'mark_reservation_no_show';
+      reservation.status = noShow ? 'NO_SHOW' : 'CANCELLED';
+      reservation.closed_at = now;
+      reservation.close_reason = noShow ? 'NO_SHOW' : String(args.reason || 'VAZGEÇILDI');
+      // Masa yalnız `RESERVED` ise boşaltılır: dolu masanın durumu tahsilattan
+      // sonra değişir, elle boşaltma burada yanlış olur.
+      if (table && table.status === 'RESERVED') {
+        table.status = 'AVAILABLE';
+      }
+    }
+    lsSave('reservations', mockReservations);
+    lsSave('tables', mockTables);
+    return toMockReservationDto(reservation, table?.name) as unknown as T;
+  }
+  // Eşzamanlı adisyon kilidi: backend `try_lock_table` (30 dk TTL) ile aynı söz.
+  // Mock önceden genel "işlem başarılı" dönüşüne düşüyordu, bu yüzden tarayıcı
+  // modunda kilit hiç işlevsel değildi.
+  if (cmd === 'try_lock_table') {
+    if (!callerTenantId) {
+      throw new Error('UNAUTHORIZED: tenant_id is required');
+    }
+    const tableId = String(args.tableId || args.table_id || '').trim();
+    const waiterId = String(args.waiterId || args.waiter_id || 'UNKNOWN');
+    const now = Date.now();
+    for (const [key, lock] of mockTableLocks.entries()) {
+      if (now - lock.at > 30 * 60000) mockTableLocks.delete(key);
+    }
+    const existing = mockTableLocks.get(tableId);
+    if (existing && existing.waiterId !== waiterId) {
+      return false as unknown as T;
+    }
+    mockTableLocks.set(tableId, { waiterId, at: now });
+    return true as unknown as T;
+  }
+  if (cmd === 'unlock_table') {
+    const tableId = String(args.tableId || args.table_id || '').trim();
+    const waiterId = String(args.waiterId || args.waiter_id || 'UNKNOWN');
+    const existing = mockTableLocks.get(tableId);
+    if (existing && existing.waiterId === waiterId) {
+      mockTableLocks.delete(tableId);
+    }
+    return { success: true } as unknown as T;
   }
   if (cmd === 'get_table_ready_status') {
     return 'Ready' as unknown as T;

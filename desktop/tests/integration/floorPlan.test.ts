@@ -1,11 +1,20 @@
 
 import { useFloorStore } from '../../src/presentation/store/useFloorStore';
+import { useAuthStore } from '../../src/presentation/store/useAuthStore';
 
 describe('Floor Plan Store & IPC Integration Tests', () => {
   beforeEach(async () => {
+    // Oturum principal'ı yazılır: masa ve rezervasyon komutları rol + tenant
+    // kapısından geçer, oturum yoksa istek fail-closed reddedilir (backend ile aynı).
+    useAuthStore.setState({
+      user: { userId: 'usr_test_owner', role: 'OWNER', name: 'Test Patron', tenantId: 'DEFAULT_TENANT' },
+      isAuthenticated: true,
+      isLocked: false,
+    });
     // Reset floor store before each test
     useFloorStore.setState({
       tables: [],
+      reservations: [],
       isLoading: false,
       error: null,
       readyStatuses: {},
@@ -89,17 +98,29 @@ describe('Floor Plan Store & IPC Integration Tests', () => {
     expect(updated?.name).toBe(newName);
   });
 
-  it('reserveTable: masayı RESERVED durumuna geçirir', async () => {
+  it('reserveTable: boş masayı RESERVED durumuna geçirir ve rezervasyon kaydı yazar', async () => {
     const store = useFloorStore.getState();
     await store.fetchFloorPlan();
 
     const available = useFloorStore.getState().tables.find((t) => t.status === 'AVAILABLE');
     expect(available).toBeDefined();
 
-    await store.reserveTable(available!.id);
+    const created = await store.reserveTable(available!.id, {
+      customerName: 'Ayşe Yılmaz',
+      partySize: 4,
+      reservedAt: new Date().toISOString(),
+    });
+
+    expect(created.customerName).toBe('Ayşe Yılmaz');
 
     const updated = useFloorStore.getState().tables.find((t) => t.id === available!.id);
     expect(updated?.status).toBe('RESERVED');
+
+    // Rezervasyon kaydı salon planının ayrı kaynağıdır; müşteri adı buradan okunur.
+    const reservations = useFloorStore.getState().reservations;
+    const record = reservations.find((r) => r.tableId === available!.id);
+    expect(record).toBeDefined();
+    expect(record?.status).toBe('ACTIVE');
   });
 
   it('moveTable: masayı taşır (kaynak boşalır, hedef dolar ve tutar aktarılır)', async () => {

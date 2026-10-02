@@ -10,8 +10,10 @@ import {
   Combine,
   CreditCard,
   PlusCircle,
-  BookmarkCheck,
+  BookmarkX,
   Printer,
+  UserCheck,
+  UserX,
   X,
   AlertTriangle,
 } from 'lucide-react';
@@ -74,7 +76,14 @@ export function TableActionModal({
   };
 
   const availableEmptyTables = allTables.filter((t) => t.id !== table.id && t.status === 'empty');
-  const otherTablesForMerge = allTables.filter((t) => t.id !== table.id);
+  // Birleştirme hedefi artık durumunu doğru gösterir ve rezerve masalar dışlanır:
+  // eski sürümde her hedef "Boş" görünüyordu, backend de rezervasyonu sessizce
+  // eziyordu (artık `CONFLICT` döner, bu yüzden hedef listeden de çıkarılır).
+  const otherTablesForMerge = allTables.filter(
+    (t) => t.id !== table.id && t.status !== 'reserved'
+  );
+  const reservation = table.reservation;
+  const hasArrived = reservation?.status === 'ARRIVED';
 
   // 35 dakika hareketsiz kalan dolu masa kilitlenir; koşul dört yerde tekrar ettiği
   // için tek türetilmiş bayrağa indirgeniyor (yanlışlıkla 35dk sayısını değiştirmemek için)
@@ -150,6 +159,24 @@ export function TableActionModal({
                   </span>
                 </p>
               )}
+              {table.status === 'reserved' && (
+                <p className="text-xs dark:text-white/60 text-zinc-600 mt-1">
+                  {reservation ? (
+                    <>
+                      <span className="font-medium dark:text-white text-zinc-900">{reservation.customerName}</span>
+                      {' • '}
+                      {reservation.partySize} kişi
+                      {' • '}
+                      {reservation.reservedAtLabel}
+                    </>
+                  ) : (
+                    // Kayıt okunamadıysa boş etiket yazılmaz; eksiklik açıkça belirtilir.
+                    <span className="text-[#FF9500] dark:text-[#FF9F0A]">
+                      Rezervasyon kaydı bulunamadı
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
           </div>
           <button
@@ -209,33 +236,37 @@ export function TableActionModal({
             </div>
           ) : mode === 'menu' ? (
             <div className="grid grid-cols-2 gap-3.5">
-              {/* 1. Sipariş Ekle - Akıcı POS Ekranına Geçiş */}
-              <button
-                type="button"
-                disabled={isStaleLocked}
-                onClick={async () => {
-                  if (isStaleLocked) return;
-                  await onAction('Sipariş Ekle');
-                  handleClose();
-                }}
-                className={`h-24 rounded-2xl text-base font-semibold flex flex-col items-center justify-center gap-2 transition-all active:scale-95 touch-manipulation cursor-pointer ${
-                  isStaleLocked
-                    ? 'bg-zinc-500/10 border border-zinc-500/20 text-zinc-400 cursor-not-allowed opacity-60'
-                    : 'bg-[#007AFF] hover:bg-[#0071E3] text-white shadow-lg shadow-[#007AFF]/20'
-                }`}
-              >
-                {isStaleLocked ? (
-                  <>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                    <span>Kilitli (35dk)</span>
-                  </>
-                ) : (
-                  <>
-                    <PlusCircle className="w-6 h-6" />
-                    <span>Sipariş Ekle</span>
-                  </>
-                )}
-              </button>
+              {/* 1. Sipariş Ekle - Akıcı POS Ekranına Geçiş.
+                  Rezerve masada yalnız "müşteri geldi" işaretlendikten sonra
+                  görünür: gelmeden adisyon açmak rezervasyonu anlamsızlaştırır. */}
+              {(table.status !== 'reserved' || hasArrived) && (
+                <button
+                  type="button"
+                  disabled={isStaleLocked}
+                  onClick={async () => {
+                    if (isStaleLocked) return;
+                    await onAction('Sipariş Ekle');
+                    handleClose();
+                  }}
+                  className={`h-24 rounded-2xl text-base font-semibold flex flex-col items-center justify-center gap-2 transition-all active:scale-95 touch-manipulation cursor-pointer ${
+                    isStaleLocked
+                      ? 'bg-zinc-500/10 border border-zinc-500/20 text-zinc-400 cursor-not-allowed opacity-60'
+                      : 'bg-[#007AFF] hover:bg-[#0071E3] text-white shadow-lg shadow-[#007AFF]/20'
+                  }`}
+                >
+                  {isStaleLocked ? (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                      <span>Kilitli (35dk)</span>
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle className="w-6 h-6" />
+                      <span>Sipariş Ekle</span>
+                    </>
+                  )}
+                </button>
+              )}
 
               {/* 2. Tahsilat / Ödeme (Kasiyer ve İşletme Sahibi) */}
               {canTakePayment && (
@@ -287,25 +318,59 @@ export function TableActionModal({
                 <span>Masaları Birleştir</span>
               </button>
 
-              {/* 6. Rezerve Et / Rezervasyon Kaldır (Dolu masalarda rezerve engellenir) */}
-              <button
-                type="button"
-                disabled={table.status === 'occupied'}
-                onClick={async () => {
-                  if (table.status === 'occupied') return;
-                  await onAction('Rezerve Et');
-                  handleClose();
-                }}
-                className={`h-24 rounded-2xl text-base font-medium flex flex-col items-center justify-center gap-2 transition-all touch-manipulation cursor-pointer ${
-                  table.status === 'occupied'
-                    ? 'opacity-40 cursor-not-allowed bg-zinc-500/10 border border-zinc-500/20 text-zinc-400'
-                    : 'bg-[#5856D6]/15 hover:bg-[#5856D6]/25 border border-[#5856D6]/30 text-[#5856D6] dark:text-[#5E5CE6] active:scale-95'
-                }`}
-                title={table.status === 'occupied' ? 'Dolu masalar rezerve edilemez' : undefined}
-              >
-                <BookmarkCheck className="w-6 h-6" />
-                <span>{table.status === 'reserved' ? 'Rezervasyonu Kaldır' : 'Rezerve Et'}</span>
-              </button>
+              {/* 6. Rezervasyon aksiyonları — DOLU MASADA YOKTUR (Spec §11).
+                  Eski sürümde buton dolu masada görünür ama pasifti (`disabled`),
+                  bu da "neden tıklayabiliyorum?" sorusunu uyandırıyordu. Artık
+                  dolu masa rezerve edilemez ve bu bilgi arayüzde hiç gösterilmez;
+                  rezervasyon yalnızca boş masadaki hızlı rezerve ikonundan veya
+                  rezerve masanın modalından yönetilir. */}
+              {table.status === 'reserved' && reservation && (
+                <>
+                  <button
+                    type="button"
+                    disabled={hasArrived}
+                    onClick={async () => {
+                      if (hasArrived) return;
+                      await onAction('Müşteri Geldi');
+                      handleClose();
+                    }}
+                    className={`h-24 rounded-2xl text-base font-medium flex flex-col items-center justify-center gap-2 transition-all touch-manipulation cursor-pointer ${
+                      hasArrived
+                        ? 'opacity-60 cursor-not-allowed bg-[#34C759]/10 border border-[#34C759]/20 text-[#34C759] dark:text-[#32D74B]'
+                        : 'bg-[#34C759] hover:bg-[#30B753] text-white shadow-lg shadow-[#34C759]/20 active:scale-95'
+                    }`}
+                  >
+                    <UserCheck className="w-6 h-6" />
+                    <span>{hasArrived ? 'Müşteri Geldi' : 'Müşteri Geldi'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await onAction('Rezervasyonu Kaldır');
+                      handleClose();
+                    }}
+                    className="h-24 rounded-2xl text-base font-medium flex flex-col items-center justify-center gap-2 transition-all touch-manipulation cursor-pointer bg-[#5856D6]/15 hover:bg-[#5856D6]/25 border border-[#5856D6]/30 text-[#5856D6] dark:text-[#5E5CE6] active:scale-95"
+                  >
+                    <BookmarkX className="w-6 h-6" />
+                    <span>Rezervasyonu Kaldır</span>
+                  </button>
+
+                  {!hasArrived && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await onAction('Müşteri Gelmedi');
+                        handleClose();
+                      }}
+                      className="h-24 rounded-2xl text-base font-medium flex flex-col items-center justify-center gap-2 transition-all touch-manipulation cursor-pointer bg-[#FF9500]/10 hover:bg-[#FF9500]/20 border border-[#FF9500]/25 text-[#FF9500] dark:text-[#FF9F0A] active:scale-95"
+                    >
+                      <UserX className="w-6 h-6" />
+                      <span>Müşteri Gelmedi</span>
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           ) : mode === 'select_move' ? (
             <div className="space-y-4">

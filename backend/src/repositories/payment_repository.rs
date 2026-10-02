@@ -235,7 +235,22 @@ impl PaymentRepository {
                     .await
                     .map_err(|e| e.to_string())?;
 
-                sqlx::query("UPDATE tables SET status = 'AVAILABLE' WHERE id = ? AND status = 'RESERVED' AND tenant_id = ?")
+                // Faz 8: masa tahsilat sonrası boşalır ve varsa açık rezervasyon
+                // kaydı kapanır. Önceden yalnız `status = 'RESERVED'` masalar
+                // boşaltılıyordu; dolu masada tahsilat sonrası masa `OCCUPIED`
+                // kalıyor ve salon planı yanlış gösteriyordu. Ayrıca
+                // `orders.status = 'OPEN'` filtresi `IN_PROGRESS` siparişleri
+                // atlıyordu.
+                let _ = crate::services::reservation_service::close_open_for_table(
+                    &mut *conn,
+                    tenant_id,
+                    &table_id,
+                    "TAHSILAT",
+                    "TAHSILAT",
+                )
+                .await?;
+
+                sqlx::query("UPDATE tables SET status = 'AVAILABLE', current_total = 0 WHERE id = ? AND tenant_id = ?")
                     .bind(&table_id)
                     .bind(tenant_id)
                     .execute(&mut *conn)

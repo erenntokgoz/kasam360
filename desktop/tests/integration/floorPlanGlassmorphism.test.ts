@@ -182,7 +182,7 @@ describe('Masalar (Floor Plan) — macOS Frosted Glass & İş Akışı Düzenlem
       expect(html).not.toContain('Masa Adı Değiştir');
     });
 
-    it('Garson rolündeyken "Adisyon Yazdır" butonu kaldırılır (Taşıma, Birleştirme, Rezerve Etme kalır)', () => {
+    it('Garson rolündeyken "Adisyon Yazdır" butonu kaldırılır ve dolu masada rezervasyon aksiyonu GÖRÜNMEZ (Spec §11)', () => {
       useAuthStore.setState({
         user: {
           userId: 'usr_waiter',
@@ -212,7 +212,53 @@ describe('Masalar (Floor Plan) — macOS Frosted Glass & İş Akışı Düzenlem
       expect(html).toContain('Sipariş Ekle');
       expect(html).toContain('Masa Taşı');
       expect(html).toContain('Masaları Birleştir');
-      expect(html).toContain('Rezerve Et');
+      // Faz 8: dolu masa rezerve edilemez. Buton önceden "pasif" olarak
+      // render ediliyordu (disabled) ve tıklanabilir görünüyordu; şimdi hiç
+      // render edilmez.
+      expect(html).not.toContain('Rezerve Et');
+      expect(html).not.toContain('Rezervasyonu Kaldır');
+    });
+
+    it('Rezerve masada garson için yalnız rezervasyon aksiyonları görünür (Spec §11)', () => {
+      useAuthStore.setState({
+        user: {
+          userId: 'usr_waiter',
+          tenantId: 'DEFAULT_TENANT',
+          role: 'WAITER',
+          name: 'Garson Ali',
+        },
+        isAuthenticated: true,
+      });
+
+      const reservedTable: TableItem = {
+        id: 't-2',
+        name: 'Masa 2',
+        status: 'reserved',
+        reservation: {
+          customerName: 'Ayşe Yılmaz',
+          partySize: 4,
+          waitingSince: Date.now(),
+          status: 'ACTIVE',
+          reservedAtLabel: '02.10 20:30',
+        },
+      };
+      const html = renderToString(
+        React.createElement(TableActionModal, {
+          table: reservedTable,
+          isOpen: true,
+          onClose: vi.fn(),
+          onAction: vi.fn(),
+        })
+      );
+
+      // Rezervasyon bilgisi kullanıcıya gösterilir.
+      expect(html).toContain('Ayşe Yılmaz');
+      // Gerçek aksiyonlar sunulur.
+      expect(html).toContain('Müşteri Geldi');
+      expect(html).toContain('Rezervasyonu Kaldır');
+      expect(html).toContain('Müşteri Gelmedi');
+      // "Geldi" işaretlenmeden adisyon açılmaz.
+      expect(html).not.toContain('Sipariş Ekle');
     });
 
     it('Kasiyer ve Yönetici rolündeyken dolu masada "Adisyon Yazdır" butonu görüntülenir', () => {

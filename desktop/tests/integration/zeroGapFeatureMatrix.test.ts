@@ -150,11 +150,52 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
     });
 
     it('W2: Table operations: reserve_table, move_table, merge_tables', async () => {
-      await tauriInvoke('reserve_table', { tableId: tableA });
+      // Faz 8: rezervasyon artık müşteri verisi ister ve açık rezervasyonlu masa
+      // taşınamaz/birleştirilemez. Test bu kuralları gerçek kapılarla doğrular:
+      // önce rezervasyon yazılır, sonra kaldırılır, ardından taşıma/birleştirme.
+      // Rol oturumdan gelmezse (bu test doğrudan `tauriInvoke` çağırıyor) kapı
+      // fail-closed reddeder; bu yüzden rol açıkça WAITER olarak verilir.
+      const reserved = await tauriInvoke<any>('reserve_table', {
+        request: {
+          tableId: tableA,
+          customerName: 'W2 Test Misafir',
+          partySize: 2,
+          reservedAt: new Date().toISOString(),
+        },
+        tenantId,
+        callerRole: 'WAITER',
+      });
+      expect(reserved.status).toBe('ACTIVE');
 
-      await tauriInvoke('move_table', { fromTableId: tableA, toTableId: tableB });
+      // Açık rezervasyonlu masa taşınamaz: kapı CONFLICT döner.
+      const moveError = await tauriInvoke('move_table', { fromId: tableA, toId: tableB, tenantId }).then(
+        () => null,
+        (err: unknown) => String(err)
+      );
+      expect(moveError).toContain('CONFLICT');
 
-      await tauriInvoke('merge_tables', { sourceId: tableB, targetId: tableA, actorId: 'usr_waiter' });
+      const mergeError = await tauriInvoke('merge_tables', {
+        sourceId: tableA,
+        targetId: tableB,
+        actorId: 'usr_waiter',
+        tenantId,
+        callerRole: 'WAITER',
+      }).then(
+        () => null,
+        (err: unknown) => String(err)
+      );
+      expect(mergeError).toContain('CONFLICT');
+
+      await tauriInvoke('cancel_reservation', { reservationId: reserved.id, tenantId, callerRole: 'WAITER' });
+
+      await tauriInvoke('move_table', { fromId: tableA, toId: tableB, tenantId });
+      await tauriInvoke('merge_tables', {
+        sourceId: tableB,
+        targetId: tableA,
+        actorId: 'usr_waiter',
+        tenantId,
+        callerRole: 'WAITER',
+      });
 
       const floor = await tauriInvoke<any[]>('get_floor_plan', { tenantId });
       expect(Array.isArray(floor)).toBe(true);

@@ -11,8 +11,34 @@ export interface FloorPlanData {
   currentTotal: number; // Kuruş (cents)
 }
 
+/// Rezervasyon kaydı. Masa durumundan **ayrı** bir varlıktır: müşteri adı, telefon,
+/// kişi sayısı ve randevu saati yalnız bu kayıtta tutulur.
+export interface Reservation {
+  id: string;
+  tableId: string;
+  tableName?: string;
+  status: 'ACTIVE' | 'ARRIVED' | 'SEATED' | 'CANCELLED' | 'NO_SHOW' | 'EXPIRED';
+  customerName: string;
+  customerPhone?: string;
+  partySize: number;
+  reservedAt: string;
+  createdAt: string;
+  arrivedAt?: string;
+  note?: string;
+  closeReason?: string;
+}
+
+export interface ReserveTableInput {
+  customerName: string;
+  customerPhone?: string;
+  partySize: number;
+  reservedAt: string;
+  note?: string;
+}
+
 export interface FloorStoreState {
   tables: FloorPlanData[];
+  reservations: Reservation[];
   isLoading: boolean;
   error: string | null;
   readyStatuses: Record<string, boolean>;
@@ -25,7 +51,12 @@ export interface FloorStoreState {
   updateTableName: (id: string, name: string) => Promise<void>;
   moveTable: (fromId: string, toId: string) => Promise<void>;
   mergeTables: (sourceId: string, targetId: string, actorId?: string) => Promise<void>;
-  reserveTable: (tableId: string) => Promise<void>;
+  reserveTable: (tableId: string, input: ReserveTableInput) => Promise<Reservation>;
+  cancelReservation: (reservationId: string) => Promise<void>;
+  markReservationNoShow: (reservationId: string) => Promise<void>;
+  markReservationArrived: (reservationId: string) => Promise<void>;
+  fetchReservations: () => Promise<Reservation[]>;
+  reservationForTable: (tableId: string) => Reservation | undefined;
   getTableReadyStatus: (tableId: string) => Promise<string>;
   pollReadyStatuses: () => Promise<Record<string, boolean>>;
   waiterClockIn: (waiterId?: string) => Promise<string>;
@@ -33,8 +64,26 @@ export interface FloorStoreState {
   clearError: () => void;
 }
 
+/**
+ * Rezervasyon sonrası salon planını ve rezervasyon listesini birlikte tazeler.
+ *
+ * Neden ortak yenileme: rezervasyon hem `tables.status` değerini hem de
+ * `reservations` satırını değiştirir. Yalnız biri tazelenirse salon kartı ile
+ * modal birbirini yalanlar (kart "Rezerve" derken liste boş kalır).
+ */
+const refreshFloorAndReservations = async (): Promise<{ tables: FloorPlanData[]; reservations: Reservation[] }> => {
+  const user = useAuthStore.getState().user;
+  const tenantId = user?.tenantId || 'DEFAULT_TENANT';
+  const [tables, reservations] = await Promise.all([
+    invoke<FloorPlanData[]>('get_floor_plan', { tenantId }),
+    invoke<Reservation[]>('get_reservations', { tenantId }),
+  ]);
+  return { tables: tables || [], reservations: reservations || [] };
+};
+
 export const useFloorStore = create<FloorStoreState>((set, get) => ({
   tables: [],
+  reservations: [],
   isLoading: false,
   error: null,
   readyStatuses: {},
@@ -155,20 +204,80 @@ export const useFloorStore = create<FloorStoreState>((set, get) => ({
     }
   },
 
-  reserveTable: async (tableId: string) => {
+  reserveTable: async (tableId: string, input: ReserveTableInput) => {
     set({ isLoading: true, error: null });
     try {
       const user = useAuthStore.getState().user;
       const tenantId = user?.tenantId || 'DEFAULT_TENANT';
-      await invoke('reserve_table', { tableId, tenantId });
-      const data = await invoke<FloorPlanData[]>('get_floor_plan', { tenantId });
-      set({ tables: data || [], isLoading: false });
+      const created = await invoke<Reservation>('reserve_table', {
+        request: { tableId, ...input },
+        tenantId,
+      });
+      const refreshed = await refreshFloorAndReservations();
+      set({ tables: refreshed.tables, reservations: refreshed.reservations, isLoading: false });
+      return created;
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       set({ error: msg, isLoading: false });
       throw error;
     }
   },
+
+  cancelReservation: async (reservationId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await invoke('cancel_reservation', { reservationId, reason: 'VAZGEÇILDI' });
+      const refreshed = await refreshFloorAndReservations();
+      set({ tables: refreshed.tables, reservations: refreshed.reservations, isLoading: false });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      set({ error: msg, isLoading: false });
+      throw error;
+    }
+  },
+
+  markReservationNoShow: async (reservationId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await invoke('mark_reservation_no_show', { reservationId });
+      const refreshed = await refreshFloorAndReservations();
+      set({ tables: refreshed.tables, reservations: refreshed.reservations, isLoading: false });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      set({ error: msg, isLoading: false });
+      throw error;
+    }
+  },
+
+  markReservationArrived: async (reservationId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await invoke('mark_reservation_arrived', { reservationId });
+      const refreshed = await refreshFloorAndReservations();
+      set({ tables: refreshed.tables, reservations: refreshed.reservations, isLoading: false });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      set({ error: msg, isLoading: false });
+      throw error;
+    }
+  },
+
+  fetchReservations: async () => {
+    try {
+      const user = useAuthStore.getState().user;
+      const tenantId = user?.tenantId || 'DEFAULT_TENANT';
+      const reservations = await invoke<Reservation[]>('get_reservations', { tenantId });
+      set({ reservations: reservations || [] });
+      return reservations || [];
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      set({ error: msg });
+      throw error;
+    }
+  },
+
+  reservationForTable: (tableId: string) =>
+    get().reservations.find((reservation) => reservation.tableId === tableId),
 
   getTableReadyStatus: async (tableId: string) => {
     try {

@@ -158,14 +158,65 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 CREATE TABLE IF NOT EXISTS tables (
-    id TEXT PRIMARY KEY,
+    id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
     name TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'AVAILABLE',
+    status TEXT NOT NULL DEFAULT 'AVAILABLE'
+        CHECK (status IN ('AVAILABLE', 'RESERVED', 'OCCUPIED')),
     opened_at DATETIME,
     waiter_id TEXT,
     current_total INTEGER NOT NULL DEFAULT 0
 );
+
+-- Faz 8 — Rezervasyon kaydı.
+--
+-- Neden ayrı tablo: rezervasyon bir "durum bayrağı" değil, müşteri adı, telefon,
+-- kişi sayısı ve randevu saati taşıyan **kendi kimliği olan bir kayıttır**. Eski
+-- modelde `tables.status = 'RESERVED'` tek başına rezervasyonu temsil ediyordu;
+-- dolu masaya rezerve etme, rezervasyonu kaldırma ve geciken rezervasyon takibi
+-- bu yüzden mümkün değildi.
+--
+-- Durum makinesi: ACTIVE → ARRIVED → SEATED (adisyon açıldı), ya da
+-- ACTIVE/ARRIVED → CANCELLED (vazgeçti) / NO_SHOW (gelmedi) / EXPIRED (süre doldu).
+-- Kapanan kayıt SİLİNMEZ; salon planındaki mor blok bu satırın varlığından
+-- türetilir, "gelmeyen misafir" geçmişi de kaybolmaz.
+CREATE TABLE IF NOT EXISTS reservations (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    table_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE', 'ARRIVED', 'SEATED', 'CANCELLED', 'NO_SHOW', 'EXPIRED')),
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT,
+    party_size INTEGER NOT NULL DEFAULT 1 CHECK (party_size > 0),
+    -- Müşterinin verdiği randevu saati (ISO-8601). Bekleme sayacı bu değere göre
+    -- değil, `created_at` değerine göre işler: randevu saati ileriye dönük olabilir.
+    reserved_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    arrived_at TEXT,
+    closed_at TEXT,
+    note TEXT,
+    created_by TEXT,
+    created_by_role TEXT,
+    closed_by TEXT,
+    close_reason TEXT,
+    FOREIGN KEY (table_id) REFERENCES tables(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservations_tenant_status
+    ON reservations(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_reservations_tenant_table
+    ON reservations(tenant_id, table_id);
+CREATE INDEX IF NOT EXISTS idx_reservations_created_at
+    ON reservations(created_at);
+
+-- Kısmi tekil indeks: aynı kiracıda bir masada aynı anda **tek açık** rezervasyon
+-- durabilir. Uygulama katmanındaki kontroller yarış koşulunda (iki garson aynı
+-- anda tıklarsa) yetersiz kalır; bu indeks kuralı veritabanı seviyesinde
+-- zorunlu kılar ve eşzamanlı adisyon güvenliğini tamamlar.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reservations_one_open_per_table
+    ON reservations(tenant_id, table_id)
+    WHERE status IN ('ACTIVE', 'ARRIVED');
 
 -- Orders table — Blocker B-3 fix
 -- total_cents is INTEGER to prevent floating-point financial errors (KASAM360 Rule #17)

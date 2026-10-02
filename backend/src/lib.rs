@@ -20,6 +20,7 @@ pub mod ledger_commands;
 pub mod rbac;
 pub mod user_credentials;
 pub mod print_commands;
+pub mod reservation_commands;
 
 pub use db::{init_db, DbPool};
 
@@ -58,7 +59,12 @@ pub fn run() {
             commands::get_active_tickets,
             commands::get_floor_plan,
             commands::move_table,
-            commands::reserve_table,
+            reservation_commands::get_reservations,
+            reservation_commands::get_reservation_day,
+            reservation_commands::reserve_table,
+            reservation_commands::cancel_reservation,
+            reservation_commands::mark_reservation_no_show,
+            reservation_commands::mark_reservation_arrived,
             commands::pos_get_categories,
             commands::pos_get_products,
             commands::submit_order,

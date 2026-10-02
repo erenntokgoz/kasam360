@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FloorPlanPanel, TableItem } from './ui/FloorPlanPanel';
+import { ReserveTableModal, ReserveTableInput } from './ui/ReserveTableModal';
 import { useCartStore } from '../../store/useCartStore';
 import { useFloorStore } from '../../store/useFloorStore';
 import { TableActionModal } from './ui/TableActionModal';
@@ -18,17 +19,23 @@ export function FloorPlanContainer() {
 
   const {
     tables,
+    reservations,
     readyStatuses,
     isClockedIn,
     fetchFloorPlan,
+    fetchReservations,
     moveTable,
     mergeTables,
     reserveTable,
+    cancelReservation,
+    markReservationNoShow,
+    markReservationArrived,
     pollReadyStatuses,
     waiterClockIn,
   } = useFloorStore();
 
   const [selectedOccupiedTable, setSelectedOccupiedTable] = useState<TableItem | null>(null);
+  const [reserveTargetTableId, setReserveTargetTableId] = useState<string | null>(null);
 
   // Birleşen masalar ve transfer bilgilerini operasyonel oturum boyunca takip eden yerel durumlar
   const [mergeMap, setMergeMap] = useState<Record<string, string[]>>({});
@@ -57,16 +64,20 @@ export function FloorPlanContainer() {
     fetchFloorPlan().catch((e) => {
       notifyError('Masa Planı Yüklenemedi', e);
     });
-  }, [fetchFloorPlan]);
+    // Rezervasyon listesi ayrı okunur: salon kartındaki müşteri adı ve bekleme
+    // sayacı bu kayıttan gelir, `tables.status` yalnız rengi belirler.
+    fetchReservations().catch(() => {});
+  }, [fetchFloorPlan, fetchReservations]);
 
-  // 2. Mutfakta hazır sipariş polling'i (5 saniyede bir)
+  // 2. Mutfakta hazır sipariş ve rezervasyon polling'i (5 saniyede bir)
   useEffect(() => {
     pollReadyStatuses().catch(() => {});
     const interval = setInterval(() => {
       pollReadyStatuses().catch(() => {});
+      fetchReservations().catch(() => {});
     }, 5000);
     return () => clearInterval(interval);
-  }, [tables, pollReadyStatuses]);
+  }, [tables, pollReadyStatuses, fetchReservations]);
 
   // Garson Mesai Başlatma
   const handleClockIn = async () => {
@@ -78,17 +89,59 @@ export function FloorPlanContainer() {
     }
   };
 
-  const mappedTables: TableItem[] = tables.map((t) => ({
-    id: t.id,
-    name: t.name,
-    status: t.status === 'AVAILABLE' ? 'empty' : t.status === 'OCCUPIED' ? 'occupied' : 'reserved',
-    openedAt: t.openedAt ? new Date(t.openedAt).getTime() : undefined,
-    waiterName: t.waiterId,
-    totalAmount: t.currentTotal,
-    isReady: readyStatuses[t.id] || false,
-    mergedWith: mergeMap[t.id],
-    transferInfo: transferMap[t.id],
-  }));
+  // Rezervasyon durumunu arayüz diline çevirir. "Bilinmeyen durum" artık rezerve
+  // sayılmaz: eski eşleme `status === 'AVAILABLE' ? empty : status === 'OCCUPIED'
+  // ? occupied : reserved` idi ve bozuk/öngörülmemiş her değer mor "Rezerve"
+  // bloğuna dönüşüyordu. Bilinmeyen değer boş kabul edilmez, açıkça işaretlenir.
+  const mapTableStatus = (status: string): TableItem['status'] => {
+    if (status === 'OCCUPIED') return 'occupied';
+    if (status === 'RESERVED') return 'reserved';
+    if (status === 'AVAILABLE') return 'empty';
+    console.warn(`[FloorPlan] bilinmeyen masa durumu: ${status}`);
+    return 'empty';
+  };
+
+  const formatReservedAt = (value?: string): string => {
+    if (!value) return 'Saat belirtilmedi';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return 'Saat belirtilmedi';
+    return parsed.toLocaleString('tr-TR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const mappedTables: TableItem[] = tables.map((t) => {
+    const status = mapTableStatus(t.status);
+    // Rezervasyon yalnız `RESERVED` masalarda aranır: dolu/boş masada açık kayıt
+    // bulunması bir tutarsızlıktır ve bu yüzden gösterilmez.
+    const reservation = status === 'reserved'
+      ? reservations.find((item) => item.tableId === t.id)
+      : undefined;
+    const waitingSince = reservation?.createdAt ? new Date(reservation.createdAt).getTime() : NaN;
+    return {
+      id: t.id,
+      name: t.name,
+      status,
+      openedAt: t.openedAt ? new Date(t.openedAt).getTime() : undefined,
+      waiterName: t.waiterId,
+      totalAmount: t.currentTotal,
+      isReady: readyStatuses[t.id] || false,
+      mergedWith: mergeMap[t.id],
+      transferInfo: transferMap[t.id],
+      reservation: reservation
+        ? {
+            customerName: reservation.customerName,
+            partySize: reservation.partySize,
+            waitingSince: Number.isNaN(waitingSince) ? Date.now() : waitingSince,
+            status: reservation.status === 'ARRIVED' ? 'ARRIVED' : 'ACTIVE',
+            reservedAtLabel: formatReservedAt(reservation.reservedAt),
+          }
+        : undefined,
+    };
+  });
 
   const handleTableClick = async (tableId: string) => {
     const table = mappedTables.find((t) => t.id === tableId);
@@ -114,6 +167,29 @@ export function FloorPlanContainer() {
     } else {
       setSelectedOccupiedTable(table);
     }
+  };
+
+  const handleQuickReserve = (tableId: string) => {
+    const table = tables.find((t) => t.id === tableId);
+    if (!table) return;
+    // Hızlı rezerve yalnızca boş masada açılır. Dolu masaya rezervasyon
+    // backend'de `CONFLICT` ile reddedilir; burada hiç pencere açılmaz.
+    if (mapTableStatus(table.status) !== 'empty') {
+      notifyError('Masa Rezerve Edilemez', 'Yalnızca boş masalar rezerve edilebilir.');
+      return;
+    }
+    setReserveTargetTableId(tableId);
+  };
+
+  const handleReserveSubmit = async (input: ReserveTableInput) => {
+    if (!reserveTargetTableId) return;
+    const table = tables.find((t) => t.id === reserveTargetTableId);
+    await reserveTable(reserveTargetTableId, input);
+    setReserveTargetTableId(null);
+    notifySuccess(
+      'Masa Rezerve Edildi',
+      `${table?.name || 'Masa'} masası ${input.customerName} adına ${formatReservedAt(input.reservedAt)} saatine rezerve edildi.`
+    );
   };
 
   const handleModalAction = async (action: string, targetTableId?: string) => {
@@ -177,10 +253,41 @@ export function FloorPlanContainer() {
           break;
         }
 
-        case 'Rezerve Et':
-          await reserveTable(table.id);
-          notifySuccess('Masa Rezerve Edildi', `${table.name} masası rezerve olarak işaretlendi.`);
+        case 'Rezervasyonu Kaldır': {
+          const reservation = reservations.find((item) => item.tableId === table.id);
+          if (!reservation) {
+            notifyError('Rezervasyon Bulunamadı', 'Bu masa için açık bir rezervasyon kaydı yok.');
+            break;
+          }
+          await cancelReservation(reservation.id);
+          notifySuccess('Rezervasyon Kaldırıldı', `${table.name} masası yeniden boş duruma geçti.`);
           break;
+        }
+
+        case 'Müşteri Gelmedi': {
+          const reservation = reservations.find((item) => item.tableId === table.id);
+          if (!reservation) {
+            notifyError('Rezervasyon Bulunamadı', 'Bu masa için açık bir rezervasyon kaydı yok.');
+            break;
+          }
+          await markReservationNoShow(reservation.id);
+          notifySuccess('Gelmedi İşaretlendi', `${reservation.customerName} adına kayıt "gelmedi" olarak kapatıldı.`);
+          break;
+        }
+
+        case 'Müşteri Geldi': {
+          const reservation = reservations.find((item) => item.tableId === table.id);
+          if (!reservation) {
+            notifyError('Rezervasyon Bulunamadı', 'Bu masa için açık bir rezervasyon kaydı yok.');
+            break;
+          }
+          await markReservationArrived(reservation.id);
+          notifySuccess(
+            'Müşteri Geldi',
+            `${reservation.customerName} adına kayıt "geldi" olarak işaretlendi. Adisyonu POS ekranından açabilirsiniz.`
+          );
+          break;
+        }
 
         case 'Adisyon Yazdır': {
           // Adisyon fişi tahsilat değildir; masanın açık siparişinden okunur.
@@ -251,6 +358,17 @@ export function FloorPlanContainer() {
         <FloorPlanPanel
           tables={mappedTables}
           onTableClick={handleTableClick}
+          onQuickReserve={handleQuickReserve}
+        />
+      )}
+
+      {/* Hızlı Rezervasyon Penceresi — boş masadaki ikonu açan yüzey */}
+      {reserveTargetTableId && (
+        <ReserveTableModal
+          tableName={tables.find((t) => t.id === reserveTargetTableId)?.name || 'Masa'}
+          isOpen={true}
+          onClose={() => setReserveTargetTableId(null)}
+          onSubmit={handleReserveSubmit}
         />
       )}
 

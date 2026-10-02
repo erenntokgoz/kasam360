@@ -157,6 +157,20 @@ async fn table_tenant(
         .unwrap_or_else(|| "DEFAULT_TENANT".to_string())
 }
 
+/// Kiracı kimliğini fail-closed çözer.
+///
+/// Neden: `move_table`/`merge_tables` gibi komutlar `tenant_id` parametresi
+/// almadığı için hedef masanın tenant'ı denetlenmeden yazılıyordu. Boş
+/// string veya eksik değer kabul edilirse sorgular `tenant_id = ''` ile
+/// eşleşmez ve yazma sessizce başarısız olur; bu yüzden hata fırlatılır.
+fn require_tenant_id(tenant_id: Option<&str>) -> Result<String, String> {
+    tenant_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())
+}
+
 #[tauri::command]
 pub async fn process_payment(
     payload: PaymentPayloadDto,
@@ -191,14 +205,28 @@ pub async fn process_payment(
 
     // Aktif siparişi temizle ve masayı AVAILABLE olarak ayarla
     if let Some(table_id) = &payload.customer_ref {
-        sqlx::query("UPDATE tables SET status = 'AVAILABLE', current_total = 0 WHERE id = ?")
-            .bind(table_id)
+        // Faz 8: masa boşaltılıyorsa açık rezervasyon kaydı da kapatılır.
+        // Yazma tenant filtresizdi; başka bir işletmenin masası bu yolla
+        // boşaltılabiliyordu (AGENTS.md §3.3 ihlali).
+        let _ = crate::services::reservation_service::close_open_for_table(
+            &mut tx,
+            &tenant_id,
+            table_id.trim(),
+            &actor_role,
+            "TAHSILAT",
+        )
+        .await?;
+
+        sqlx::query("UPDATE tables SET status = 'AVAILABLE', current_total = 0 WHERE id = ? AND tenant_id = ?")
+            .bind(table_id.trim())
+            .bind(&tenant_id)
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
 
-        sqlx::query("UPDATE orders SET status = 'PAID' WHERE table_id = ? AND status IN ('OPEN', 'IN_PROGRESS')")
-            .bind(table_id)
+        sqlx::query("UPDATE orders SET status = 'PAID' WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')")
+            .bind(table_id.trim())
+            .bind(&tenant_id)
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
@@ -321,22 +349,36 @@ pub async fn process_split_payment(
 
     if remaining_balance <= 0 {
         if let Some(order_id) = &payload.order_id {
-            sqlx::query("UPDATE orders SET status = 'PAID', updated_at = datetime('now') WHERE id = ?")
+            sqlx::query("UPDATE orders SET status = 'PAID', updated_at = datetime('now') WHERE id = ? AND tenant_id = ?")
                 .bind(order_id)
+                .bind(&tenant_id)
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
         }
 
         if let Some(table_id) = effective_table_id {
-            sqlx::query("UPDATE tables SET status = 'AVAILABLE', current_total = 0 WHERE id = ?")
-                .bind(table_id)
+            // Faz 8: tam tahsilatta masa boşalıyorsa açık rezervasyon kaydı da
+            // kapanır; yazmalar tenant filtresizdi.
+            let _ = crate::services::reservation_service::close_open_for_table(
+                &mut tx,
+                &tenant_id,
+                table_id.trim(),
+                &actor_role,
+                "TAHSILAT",
+            )
+            .await?;
+
+            sqlx::query("UPDATE tables SET status = 'AVAILABLE', current_total = 0 WHERE id = ? AND tenant_id = ?")
+                .bind(table_id.trim())
+                .bind(&tenant_id)
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
 
-            sqlx::query("UPDATE orders SET status = 'PAID', updated_at = datetime('now') WHERE table_id = ? AND status IN ('OPEN', 'IN_PROGRESS')")
-                .bind(table_id)
+            sqlx::query("UPDATE orders SET status = 'PAID', updated_at = datetime('now') WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')")
+                .bind(table_id.trim())
+                .bind(&tenant_id)
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -351,9 +393,10 @@ pub async fn process_split_payment(
         )
         .await?;
     } else if let Some(table_id) = effective_table_id {
-        sqlx::query("UPDATE tables SET current_total = ? WHERE id = ?")
+        sqlx::query("UPDATE tables SET current_total = ? WHERE id = ? AND tenant_id = ?")
             .bind(remaining_balance)
-            .bind(table_id)
+            .bind(table_id.trim())
+            .bind(&tenant_id)
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
@@ -714,6 +757,7 @@ pub async fn move_table(
     to_id: String,
     actor_id: Option<String>,
     actor_role: Option<String>,
+    tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
@@ -722,21 +766,41 @@ pub async fn move_table(
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    sqlx::query("UPDATE tables SET status='AVAILABLE' WHERE id=?")
+    // Tenant çözümlemesi: masa taşıma kiracı sınırını aşamaz. Bu komut Faz 8
+    // öncesi `WHERE id=?` filtresiyle çalışıyordu; başka bir işletmenin masası
+    // taşınabiliyor ve o işletmenin rezervasyonu sessizce eziliyordu.
+    let tenant = require_tenant_id(tenant_id.as_deref())?;
+
+    // Açık rezervasyonlu masalar taşınamaz: taşıma kaynak masayı `AVAILABLE`
+    // yapıyor, rezervasyon kaydı ortada kalınca hedef masaya hayalet blok
+    // bindirilirdi. Önce rezervasyon kaldırılmalıdır.
+    crate::services::reservation_service::assert_no_open_reservation(
+        &mut tx, &tenant, &from_id,
+    )
+    .await?;
+    crate::services::reservation_service::assert_no_open_reservation(
+        &mut tx, &tenant, &to_id,
+    )
+    .await?;
+
+    sqlx::query("UPDATE tables SET status='AVAILABLE' WHERE id=? AND tenant_id=?")
         .bind(&from_id)
+        .bind(&tenant)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
 
-    sqlx::query("UPDATE tables SET status='OCCUPIED' WHERE id=?")
+    sqlx::query("UPDATE tables SET status='OCCUPIED' WHERE id=? AND tenant_id=?")
         .bind(&to_id)
+        .bind(&tenant)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
 
-    sqlx::query("UPDATE orders SET table_id=? WHERE table_id=? AND status IN ('OPEN', 'IN_PROGRESS')")
+    sqlx::query("UPDATE orders SET table_id=? WHERE table_id=? AND tenant_id=? AND status IN ('OPEN', 'IN_PROGRESS')")
         .bind(&to_id)
         .bind(&from_id)
+        .bind(&tenant)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -748,52 +812,13 @@ pub async fn move_table(
         "toId": to_id
     });
     let ctx = crate::services::audit_service::AuditContext::new(
-        table_tenant(&mut tx, &to_id).await,
+        tenant.clone(),
         actor_id,
         actor_role,
         crate::services::audit_service::category::SIPARIS_MASA,
         "table:move",
         to_id,
         payload,
-        now_iso,
-    )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn reserve_table(
-    table_id: String,
-    tenant_id: String,
-    actor_id: Option<String>,
-    actor_role: Option<String>,
-    pool: tauri::State<'_, DbPool>,
-    state: tauri::State<'_, crate::AppState>,
-) -> Result<(), String> {
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-
-    sqlx::query("UPDATE tables SET status='RESERVED' WHERE id=? AND tenant_id=?")
-        .bind(&table_id)
-        .bind(&tenant_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let now_iso = chrono::Utc::now().to_rfc3339();
-    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
-    let ctx = crate::services::audit_service::AuditContext::new(
-        tenant_id,
-        actor_id,
-        actor_role,
-        crate::services::audit_service::category::SIPARIS_MASA,
-        "table:reserved",
-        table_id.clone(),
-        serde_json::json!({ "tableId": table_id }),
         now_iso,
     )?;
     crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
@@ -1027,6 +1052,18 @@ pub async fn submit_order(    payload: SubmitOrderPayloadDto,
             .await
             .map_err(|e| e.to_string())?;
     }
+
+    // Faz 8: masada açık bir rezervasyon varsa kayıt `SEATED` ile kapatılır.
+    // Eski davranışta rezervasyon kaydı hiç oluşmadığı için rezerve masaya
+    // sipariş açıldığında "müşteri geldi" gerçeği kayboluyordu. Çağrı toplam
+    // hesabından **önce** yapılır; aşağıdaki UPDATE `current_total`'ı doğru yazar.
+    let _seat = crate::services::reservation_service::seat_for_order(
+        &mut tx,
+        &tenant_id,
+        &payload.table_id,
+        "POS",
+    )
+    .await?;
 
     sqlx::query("UPDATE tables SET status='OCCUPIED', current_total = (SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE table_id = ? AND status IN ('OPEN', 'IN_PROGRESS')), opened_at = COALESCE(opened_at, datetime('now')) WHERE id=? AND tenant_id=?")
         .bind(&payload.table_id)
@@ -1925,6 +1962,16 @@ pub async fn void_order(
     let remaining: i64 = count_row.try_get("count").unwrap_or(0);
 
     if remaining == 0 {
+        // Faz 8: iptal masayı boşaltıyorsa açık rezervasyon kaydı da kapanır.
+        let _ = crate::services::reservation_service::close_open_for_table(
+            &mut tx,
+            &tenant_id,
+            &payload.table_id,
+            "VOID",
+            "SIPARIS_IPTAL",
+        )
+        .await?;
+
         sqlx::query("UPDATE tables SET status = 'AVAILABLE', current_total = 0 WHERE id = ? AND tenant_id = ?")
             .bind(&payload.table_id)
             .bind(&tenant_id)
@@ -2763,6 +2810,7 @@ pub async fn merge_tables(
     target_id: String,
     actor_id: String,
     actor_role: Option<String>,
+    tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
@@ -2770,28 +2818,43 @@ pub async fn merge_tables(
     let audit_lock =
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-    
+
+    let tenant = require_tenant_id(tenant_id.as_deref())?;
+
+    // Birleştirme açık rezervasyonlu masayı da boşaltıyordu; rezervasyon kaydı
+    // ortada kalınca hedef masaya hayalet blok bindiriliyordu. Kapı: iki masada da
+    // açık rezervasyon olmamalıdır.
+    crate::services::reservation_service::assert_no_open_reservation(
+        &mut tx, &tenant, &source_id,
+    )
+    .await?;
+    crate::services::reservation_service::assert_no_open_reservation(
+        &mut tx, &tenant, &target_id,
+    )
+    .await?;
+
     // Move all open orders from source to target
-    sqlx::query("UPDATE orders SET table_id = ? WHERE table_id = ? AND status IN ('OPEN', 'IN_PROGRESS')")
-        .bind(&target_id).bind(&source_id)
+    sqlx::query("UPDATE orders SET table_id = ? WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')")
+        .bind(&target_id).bind(&source_id).bind(&tenant)
         .execute(&mut *tx).await.map_err(|e| e.to_string())?;
-    
+
     // Move all order_items if needed (they reference order_id, so no change needed)
-    
+
     // Free the source table
-    sqlx::query("UPDATE tables SET status = 'AVAILABLE', current_total = 0, waiter_id = NULL, opened_at = NULL WHERE id = ?")
-        .bind(&source_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
-    
+    sqlx::query("UPDATE tables SET status = 'AVAILABLE', current_total = 0, waiter_id = NULL, opened_at = NULL WHERE id = ? AND tenant_id = ?")
+        .bind(&source_id).bind(&tenant)
+        .execute(&mut *tx).await.map_err(|e| e.to_string())?;
+
     // Recalculate target table total
-    sqlx::query("UPDATE tables SET current_total = (SELECT COALESCE(SUM(total_cents),0) FROM orders WHERE table_id = ? AND status IN ('OPEN','IN_PROGRESS')) WHERE id = ?")
-        .bind(&target_id).bind(&target_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    sqlx::query("UPDATE tables SET current_total = (SELECT COALESCE(SUM(total_cents),0) FROM orders WHERE table_id = ? AND status IN ('OPEN','IN_PROGRESS')) WHERE id = ? AND tenant_id = ?")
+        .bind(&target_id).bind(&target_id).bind(&tenant)
+        .execute(&mut *tx).await.map_err(|e| e.to_string())?;
 
     let now_iso = chrono::Utc::now().to_rfc3339();
-    let tenant_id = table_tenant(&mut tx, &target_id).await;
     let (_, actor_role) = audit_actor(None, actor_role);
     let payload = serde_json::json!({"sourceId": source_id, "targetId": target_id});
     let ctx = crate::services::audit_service::AuditContext::new(
-        tenant_id,
+        tenant,
         actor_id,
         actor_role,
         crate::services::audit_service::category::SIPARIS_MASA,

@@ -247,7 +247,11 @@ export function CashierWorkstationContainer() {
     }
   };
 
-  const occupiedTables = tables.filter((t) => t.status === 'OCCUPIED' || t.status === 'RESERVED');
+  // Faz 8: "Açık Hesaplar" yalnızca siparişi açık masaları listeler. Rezerve masa
+  // burada sayılıyordu; rezervasyon sipariş değildir, kasa ekranında "açık hesap"
+  // olarak görünmesi kasaya olmayan bir borç gösteriyordu. Rezerve masanın
+  // adisyonu, "Müşteri Geldi" sonrası POS'tan açılır ve o zaman burada görünür.
+  const occupiedTables = tables.filter((t) => t.status === 'OCCUPIED');
   const filteredTables = tableSearch.trim()
     ? occupiedTables.filter((t) => t.name.toLowerCase().includes(tableSearch.trim().toLowerCase()))
     : occupiedTables;

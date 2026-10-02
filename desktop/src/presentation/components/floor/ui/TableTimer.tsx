@@ -1,8 +1,32 @@
 import { useState, useEffect } from 'react';
 import { Clock } from 'lucide-react';
 
-export function TableTimer({ openedAt }: { openedAt?: number }) {
-  const [durationInMinutes, setDurationInMinutes] = useState(0);
+export interface TableTimerProps {
+  /** Sayacın başlangıcı (epoch ms). */
+  openedAt?: number;
+  /**
+   * Bekleme başlığı. Dolu masada "açık" anlamına gelir; rezerve masada ise
+   * "müşterinin beklendiği" anlamına gelir. 35 dk eşiği her ikisinde de aynı
+   * kuralla işler, bu yüzden eşik değeri burada tek yerde tutulur.
+   */
+  mode?: 'open' | 'waiting';
+}
+
+/**
+ * Masa bekleme sayacı (35 dk hareketsizlik uyarısı).
+ *
+ * Neden Faz 8'de kullanımı genişledi: bu sayaç yalnız `tables.opened_at` değerini
+ * okuyordu ve rezerve masada hiç çalışmıyordu. Rezervasyonda bekleme başlangıcı
+ * `reservations.created_at` olduğu için aynı bileşen `mode="waiting"` ile
+ * rezerve kartında da gösterilir.
+ */
+export function TableTimer({ openedAt, mode = 'open' }: TableTimerProps) {
+  // Süre ilk render'da **senkron** hesaplanır: önceden 0 başlıyordu ve sayaç
+  // ancak `useEffect` çalıştıktan sonra doğru değeri gösteriyordu. Sunucu/ilk
+  // boyamada 35 dk eşiğini aşmış bekleme, uyarısız render edilebiliyordu.
+  const [durationInMinutes, setDurationInMinutes] = useState(() =>
+    openedAt ? Math.floor((Date.now() - openedAt) / 60000) : 0
+  );
 
   useEffect(() => {
     if (!openedAt) return;
@@ -34,7 +58,10 @@ export function TableTimer({ openedAt }: { openedAt?: number }) {
   const timeString = hours > 0 ? `${hours}s ${minutes}d` : `${minutes} dk`;
 
   return (
-    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-mono font-medium ${badgeStyle} shadow-sm backdrop-blur-md`}>
+    <div
+      title={mode === 'waiting' ? 'Müşterinin beklendiği süre' : 'Masanın açık olduğu süre'}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-mono font-medium ${badgeStyle} shadow-sm backdrop-blur-md`}
+    >
       <Clock size={11} className="shrink-0 opacity-70" />
       <span>{timeString}</span>
     </div>

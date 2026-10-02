@@ -23,16 +23,81 @@ pub async fn get_product_modifiers(
     crate::services::modifier_service::product_groups(&mut conn, &tid, &product_id).await
 }
 
+/// Masa durumunu doğrudan yazar.
+///
+/// Neden bu komut en zayıf kapıydı: `status` serbest metin alınıyor, tenant
+/// filtresi yoktu (`WHERE id = ?`) ve rol denetimi hiç yoktu. Bu yüzden herhangi
+/// bir oturum başka bir işletmenin masasını boşaltabiliyor, "RESERVED" olmayan
+/// bir değer yazabiliyor ve şemadaki CHECK'i yalnız SQLite yakalıyordu.
+///
+/// Faz 8 kuralları:
+/// - **Yalnız izin verilen üç durum:** `AVAILABLE`, `RESERVED`, `OCCUPIED`.
+/// - **Tenant zorunlu** ve hedef masa bu kiracıya ait olmalı.
+/// - **RBAC:** masa durumu yalnız garson, müdür ve işletme sahibi tarafından
+///   değiştirilir; kasa ve mutfak değiştiremez.
+/// - **Rezervasyon bütünlüğü:** rezervasyon bloğu elle kapatılamaz. Bir masa
+///   `AVAILABLE` yapılırken varsa açık rezervasyon kaydı önce iptal edilir;
+///   `RESERVED` yazmak ise **reservations tablosuna kayıt olmadan** mümkün değildir,
+///   bu yüzden bu komuttan `RESERVED` geçişi kaldırıldı (yalnız `reserve_table`).
 #[tauri::command]
 pub async fn update_table_status(
     table_id: String,
     status: String,
+    tenant_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<(), String> {
-    sqlx::query("UPDATE tables SET status = ? WHERE id = ?")
-        .bind(status)
-        .bind(table_id)
-        .execute(&*pool)
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Waiter,
+        ],
+    )?;
+    let tenant = tenant_id
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())?;
+    let target = status.trim().to_uppercase();
+    if !matches!(target.as_str(), "AVAILABLE" | "OCCUPIED") {
+        return Err(format!(
+            "VALIDATION: '{}' geçerli bir masa durumu değil (AVAILABLE, OCCUPIED)",
+            target
+        ));
+    }
+
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let exists: Option<String> =
+        sqlx::query_scalar("SELECT id FROM tables WHERE id = ? AND tenant_id = ?")
+            .bind(table_id.trim())
+            .bind(&tenant)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Err("NOT_FOUND: bu işletmeye ait masa bulunamadı".to_string());
+    }
+
+    // Masa boşaltılıyorsa açık rezervasyon kaydı da kapatılır; aksi halde kayıt
+    // açık kalır ve kısmi tekil indeks yüzünden aynı masa yeniden rezerve
+    // edilemezdi.
+    if target == "AVAILABLE" {
+        let _ = crate::services::reservation_service::close_open_for_table(
+            &mut conn,
+            &tenant,
+            table_id.trim(),
+            "MANUEL_DURUM",
+            "MASYA_BOSALTILDI",
+        )
+        .await?;
+    }
+
+    sqlx::query("UPDATE tables SET status = ? WHERE id = ? AND tenant_id = ?")
+        .bind(&target)
+        .bind(table_id.trim())
+        .bind(&tenant)
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
