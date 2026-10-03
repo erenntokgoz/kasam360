@@ -40,6 +40,19 @@ fn record_successful_pin() {
     PIN_LOCKED_UNTIL.store(0, Ordering::Relaxed);
 }
 
+/// PIN değiştirme için mevcut PIN'in **zorunlu** olduğunu doğrular ve temizler.
+///
+/// Neden ayrı yordam: kapı Tauri komutu içinde test edilemez (`State` kurulamaz),
+/// kuralın kendisi ise saf bir işlevdir. Ayrıca kural tek yerde yazılır; iki
+/// çağrı yeri birbirinden ayrışamaz.
+pub(crate) fn mevcut_pin_zorunlu(current_pin: Option<&str>) -> Result<String, String> {
+    current_pin
+        .map(str::trim)
+        .filter(|deger| !deger.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| "UNAUTHORIZED: PIN değiştirmek için mevcut PIN gereklidir".to_string())
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UserDto {
     pub id: String,
@@ -80,6 +93,12 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
         return Err("Geçersiz kimlik bilgileri".to_string());
     }
 
+    // Kaba kuvvet koruması bu yolda da zorunludur. Önceden yalnız PIN yolu
+    // kilitleniyordu; parola tahmin etmek makul hızda denenebildiği için
+    // sınırsız deneme mümkündü. Aynı sayaç bilinçli olarak paylaşılır: iki
+    // yol ayrı sayaçlarla korunsaydı saldırgan sınırsız olan yolu tercih ederdi.
+    check_pin_rate_limit()?;
+
     // İlk olarak platform_admins tablosuna bak (MASTER yetkisi için).
     // Sütun `pin_hash`: düz metin `pin` kaldırıldı, yalnızca Argon2id PHC kabul edilir.
     let admin_row = sqlx::query(
@@ -98,6 +117,7 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
         };
 
         if is_valid {
+            record_successful_pin();
             return Ok(UserDto {
                 id: row.try_get("id").unwrap_or_default(),
                 role: "MASTER".to_string(),
@@ -123,7 +143,10 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
     .await
     .map_err(|e| e.to_string())?;
 
+    // Kullanıcı bulunamadı da bulundu, hata **aynı** metni döner: aksi halde
+    // "bu e-posta kayıtlı" diyerek kayıtlı hesapları saymak mümkün olurdu.
     let Some(row) = row else {
+        record_failed_pin();
         return Err("Geçersiz kimlik bilgileri".to_string());
     };
     // Yalnızca Argon2 hash'i kabul edilir; düz metin PIN sütunu artık yoktur ve
@@ -137,8 +160,10 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
     };
 
     if !is_valid {
+        record_failed_pin();
         return Err("Geçersiz kimlik bilgileri".to_string());
     }
+    record_successful_pin();
     Ok(user_dto_with_modules(pool, &row).await)
 }
 
@@ -253,11 +278,15 @@ pub async fn change_self_pin(
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
-    // Mevcut PIN gönderilmişse Argon2 üzerinden doğrula.
-    if let Some(ref cur_pin) = current_pin {
-        if !crate::user_credentials::verify_user_pin(&mut conn, &user_id, cur_pin).await? {
-            return Err("Mevcut PIN hatalı.".to_string());
-        }
+    // Mevcut PIN **zorunludur**. Önceden `current_pin: None` geldiğinde
+    // doğrulama hiç çalışmıyordu: `user_id` bilen bir çağıran (arayüz alanı
+    // boş bırakıldığında `undefined` gönderir) mevcut PIN'i bilmeden yeni PIN
+    // yazabiliyordu. Parametre tipi `Option` kaldı çünkü IPC sözleşmesi
+    // değişirse arayüz kırılır; tipin `String` olması Faz 17'de arayüzle
+    // birlikte yapılacak (bkz. docs/FAZ-15-PLAN.md).
+    let cur_pin = mevcut_pin_zorunlu(current_pin.as_deref())?;
+    if !crate::user_credentials::verify_user_pin(&mut conn, &user_id, &cur_pin).await? {
+        return Err("Mevcut PIN hatalı.".to_string());
     }
 
     let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
@@ -310,4 +339,94 @@ pub async fn change_self_pin(
         "user_id": user_id,
         "new_pin": new_pin,
     }))
+}
+
+// ---------------------------------------------------------------------------
+// Faz 15 B1 regresyon testleri
+//
+// Bu modüldeki statik sayaç (`FAILED_PIN_ATTEMPTS`) **global**dir; testler
+// birbirini etkilemesin diye her test sonunda `record_successful_pin()` ile
+// sıfırlanır. Kilit 300 saniye sürdüğü için sıfırlanmazsa sonraki testler
+// kalıcı olarak kilitli kalırdı.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    use std::str::FromStr;
+
+    async fn havuz() -> DbPool {
+        let secenek = SqliteConnectOptions::from_str("sqlite::memory:")
+            .expect("gecerli baglanti secenekleri")
+            .create_if_missing(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(secenek)
+            .await
+            .expect("havuz acilir");
+        sqlx::raw_sql(include_str!("../../migrations/schema.sql"))
+            .execute(&pool)
+            .await
+            .expect("sema uygulanir");
+        record_successful_pin();
+        pool
+    }
+
+    /// A1: PIN değiştirme mevcut PIN olmadan yapılamaz.
+    #[test]
+    fn pin_degistirme_mevcut_pinsiz_reddedilir() {
+        assert!(mevcut_pin_zorunlu(None).is_err());
+        assert!(mevcut_pin_zorunlu(Some("")).is_err());
+        assert!(mevcut_pin_zorunlu(Some("   ")).is_err());
+
+        // Kenarlıklar temizlenir: " 1234 " ile "1234" aynı PIN'dir.
+        assert_eq!(mevcut_pin_zorunlu(Some(" 1234 ")).expect("gecerli"), "1234");
+
+        let hata = mevcut_pin_zorunlu(None).expect_err("mecvut pin zorunlu");
+        assert!(hata.starts_with("UNAUTHORIZED"), "{hata}");
+    }
+
+    /// A5: parola yolu da kaba kuvvet kilidine tabidir.
+    ///
+    /// Önceden bu yol `check_pin_rate_limit` çağırmıyordu: sınırsız deneme
+    /// mümkündü. Beşinci hatalı denemeden sonra altıncı deneme kilit mesajı
+    /// vermeli.
+    #[tokio::test]
+    async fn parola_yolu_kaba_kuvvet_kilidine_dahil() {
+        let pool = havuz().await;
+
+        for deneme in 1..=5 {
+            let hata = authenticate_by_identifier(&pool, "yok@ornek.com", "yanlis")
+                .await
+                .unwrap_err();
+            assert!(
+                hata.contains("Geçersiz kimlik bilgileri"),
+                "{deneme}. deneme hatalı olmali: {hata}"
+            );
+        }
+
+        let kilit = authenticate_by_identifier(&pool, "yok@ornek.com", "yanlis")
+            .await
+            .expect_err("kilit devrede olmali");
+        assert!(kilit.starts_with("RATE_LIMIT_EXCEEDED"), "{kilit}");
+
+        record_successful_pin();
+    }
+
+    /// Kilit yalnız hatalı denemede ilerlemeli; doğru PIN sayacı sıfırlar.
+    #[tokio::test]
+    async fn basarili_giris_sayaci_sifirlar() {
+        // Bu test veritabanı kullanmaz; yalnız sayaç durumu.
+        record_failed_pin();
+        record_failed_pin();
+        PIN_LOCKED_UNTIL.store(0, Ordering::Relaxed);
+        record_successful_pin();
+        assert_eq!(
+            FAILED_PIN_ATTEMPTS.load(Ordering::Relaxed),
+            0,
+            "basarili giris sayaci sifirlamali"
+        );
+        assert!(check_pin_rate_limit().is_ok(), "kilit kalmamali");
+    }
 }

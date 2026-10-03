@@ -1,3 +1,17 @@
+//! Platform yönetimi komutları (facade).
+//!
+//! AGENTS.md dosya boyutunda 500 satır tavanı koyar. Cihaz bloğu
+//! `platform_commands/devices.rs` alt modülüne taşındı; burada `pub use` ile
+//! eski yollar korunur, böylece `tauri::generate_handler!` satırları ve
+//! `crate::platform_commands::*` kullanan çağıranlar değişmez.
+
+pub mod devices;
+
+pub use devices::{
+    delete_device, get_devices, record_device_heartbeat, register_device, toggle_device_status,
+    DeviceDto,
+};
+
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::{Acquire, Row};
@@ -426,115 +440,6 @@ pub async fn update_tenant_modules(
     )?;
     AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
 
-    Ok(())
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DeviceDto {
-    pub id: String,
-    pub tenant_id: String,
-    pub name: String,
-    pub device_type: String,
-    pub status: String,
-    pub last_heartbeat: Option<String>,
-}
-
-#[tauri::command]
-pub async fn get_devices(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<DeviceDto>, String> {
-    crate::rbac::require_master(&caller_role)?;
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT id, tenant_id, name, device_type, status, last_heartbeat FROM devices")
-        .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
-    let devices = rows.into_iter().map(|r| DeviceDto {
-        id: r.try_get("id").unwrap_or_default(),
-        tenant_id: r.try_get("tenant_id").unwrap_or_default(),
-        name: r.try_get("name").unwrap_or_default(),
-        device_type: r.try_get("device_type").unwrap_or_default(),
-        status: r.try_get("status").unwrap_or_default(),
-        last_heartbeat: r.try_get("last_heartbeat").ok(),
-    }).collect();
-    Ok(devices)
-}
-
-#[tauri::command]
-pub async fn record_device_heartbeat(device_id: String, pool: tauri::State<'_, DbPool>) -> Result<(), String> {
-    sqlx::query("UPDATE devices SET last_heartbeat = datetime('now') WHERE id = ?")
-        .bind(&device_id).execute(&*pool).await.map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn register_device(caller_role: String, tenant_id: String, name: String, device_type: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<DeviceDto, String> {
-    crate::rbac::require_master(&caller_role)?;
-    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let id = uuid::Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO devices (id, tenant_id, name, device_type, status) VALUES (?, ?, ?, ?, 'ACTIVE')")
-        .bind(&id).bind(&tenant_id).bind(&name).bind(&device_type)
-        .execute(&*pool).await.map_err(|e| e.to_string())?;
-
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let ctx = AuditContext::new(
-        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
-        crate::services::audit_service::category::SISTEM,
-        "system:device_registered", id.clone(),
-        serde_json::json!({ "tenantId": tenant_id, "name": name, "deviceType": device_type }),
-        chrono::Utc::now().to_rfc3339(),
-    )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
-
-    Ok(DeviceDto { id, tenant_id, name, device_type, status: "ACTIVE".to_string(), last_heartbeat: None })
-}
-
-/// Toggle a device administratively.  This is deliberately a persisted state
-/// change (rather than the browser demo's in-memory switch).
-#[tauri::command]
-pub async fn toggle_device_status(caller_role: String, device_id: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<DeviceDto, String> {
-    crate::rbac::require_master(&caller_role)?;
-    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let previous_status: Option<String> = sqlx::query_scalar("SELECT status FROM devices WHERE id = ?")
-        .bind(&device_id).fetch_optional(&mut *conn).await.ok().flatten();
-    let row = sqlx::query("UPDATE devices SET status = CASE WHEN status = 'ACTIVE' THEN 'INACTIVE' ELSE 'ACTIVE' END WHERE id = ? RETURNING id, tenant_id, name, device_type, status, last_heartbeat")
-        .bind(&device_id).fetch_optional(&mut *conn).await.map_err(|e| e.to_string())?
-        .ok_or_else(|| "DEVICE_NOT_FOUND".to_string())?;
-    let dto = DeviceDto {
-        id: row.try_get("id").map_err(|e| e.to_string())?, tenant_id: row.try_get("tenant_id").map_err(|e| e.to_string())?,
-        name: row.try_get("name").map_err(|e| e.to_string())?, device_type: row.try_get("device_type").map_err(|e| e.to_string())?,
-        status: row.try_get("status").map_err(|e| e.to_string())?, last_heartbeat: row.try_get("last_heartbeat").ok(),
-    };
-
-    let ctx = AuditContext::new(
-        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
-        crate::services::audit_service::category::SISTEM,
-        "system:device_status_changed", dto.id.clone(),
-        serde_json::json!({
-            "changes": { "status": { "old": previous_status, "new": dto.status } }
-        }),
-        chrono::Utc::now().to_rfc3339(),
-    )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
-
-    Ok(dto)
-}
-
-#[tauri::command]
-pub async fn delete_device(caller_role: String, device_id: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
-    crate::rbac::require_master(&caller_role)?;
-    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let previous_name: Option<String> = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?")
-        .bind(&device_id).fetch_optional(&mut *conn).await.ok().flatten();
-    let result = sqlx::query("DELETE FROM devices WHERE id = ?").bind(&device_id).execute(&mut *conn).await.map_err(|e| e.to_string())?;
-    if result.rows_affected() != 1 { return Err("DEVICE_NOT_FOUND".into()); }
-
-    let ctx = AuditContext::new(
-        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
-        crate::services::audit_service::category::SISTEM,
-        "system:device_deleted", device_id.clone(),
-        serde_json::json!({ "name": previous_name }),
-        chrono::Utc::now().to_rfc3339(),
-    )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
     Ok(())
 }
 

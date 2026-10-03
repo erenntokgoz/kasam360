@@ -153,9 +153,13 @@ pub fn run() {
             platform_commands::suspend_tenant,
             platform_commands::activate_tenant,
             platform_commands::update_tenant_modules,
-            platform_commands::get_devices,
-            platform_commands::record_device_heartbeat,
-            platform_commands::register_device,
+            // Cihaz komutları alt modülde (`platform_commands::devices`). `generate_handler!`
+// `__cmd__` makrolarını hedef modülün **kendi yolunda** arar; yalnız `pub use`
+// yeniden dışa aktarımı yetmez, bu yüzden tam yol yazılır (Faz 14'te
+// `legal360_commands` için aynı zorunluluk vardı).
+            platform_commands::devices::get_devices,
+            platform_commands::devices::record_device_heartbeat,
+            platform_commands::devices::register_device,
             platform_commands::get_global_users,
             platform_commands::get_platform_audit_logs,
             management_commands::staff::get_staff,
@@ -183,8 +187,8 @@ pub fn run() {
             commands::get_active_shift,
             commands::auth_login_credentials,
             commands::change_self_pin,
-            platform_commands::toggle_device_status,
-            platform_commands::delete_device,
+            platform_commands::devices::toggle_device_status,
+            platform_commands::devices::delete_device,
             platform_commands::verify_audit_ledger_integrity,
             platform_commands::create_remote_session,
             platform_commands::execute_it_action,
