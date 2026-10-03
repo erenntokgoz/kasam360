@@ -31,6 +31,12 @@ pub mod operation {
     pub const VOID: &str = "VOID_ORDER";
     pub const DISCOUNT: &str = "DISCOUNT";
     pub const COMPLIMENTARY: &str = "COMPLIMENTARY";
+    /// Kasa çıkışı (D3): kasadan para çıkarmak. Bugün onaysızdı.
+    pub const CASH_OUT: &str = "CASH_OUT";
+    /// Gün sonu (D3): vardiyayı kapatmak ve kasayı devretmek.
+    pub const CLOSE_DAY: &str = "CLOSE_DAY";
+    /// Ödeme toplamı (D3): eşiği aşan ödeme.
+    pub const PAYMENT: &str = "PAYMENT";
 }
 
 /// %20 veya 500 TL üzeri indirimlerde onaylayan yalnız işletme sahibi veya
@@ -292,21 +298,52 @@ fn mint_token(material: &str) -> String {
 /// indirimde onaylayan yalnız OWNER veya MANAGER olabilir. İkram, %100 indirim
 /// olduğu için daima bu yüksek eşiğe girer; kasa ikram onaylayamaz.
 pub fn requires_privileged_approver(request: &ApprovalRequest) -> bool {
-    if request.operation != operation::DISCOUNT && request.operation != operation::COMPLIMENTARY {
-        return false;
+    requires_privileged_approver_with(request, LARGE_DISCOUNT_CENTS)
+}
+
+/// Kiracının **DB'deki** eşiğiyle aynı soruyu yanıtlar (D3).
+///
+/// Saf sürüm (`requires_privileged_approver`) testlerin ve saf hesapların
+/// kullanabilmesi için korunur; üretim yolu bu yordamı çağırır. Eşik okunamadıysa
+/// hata yükselir ve işlem durur: eşiği bilmeden onay kararı vermek, eşiği
+/// yok saymaktan farksızdır.
+pub async fn requires_privileged_approver_db(
+    conn: &mut sqlx::SqliteConnection,
+    request: &ApprovalRequest,
+) -> Result<bool, String> {
+    let esik = crate::services::security360::threshold::esik_oku(conn, &request.tenant_id).await?;
+    Ok(requires_privileged_approver_with(request, esik))
+}
+
+/// Eşik değerini dışarıdan alan çekirdek kural.
+///
+/// Kural (K2 + D3): her tutarda indirim onay ister; eşiği aşan her para
+/// çıkışında onaylayan yalnız OWNER veya MANAGER olabilir. İkram, %100 indirim
+/// olduğu için daima yüksek eşiğe girer; kasa ikram onaylayamaz.
+pub fn requires_privileged_approver_with(request: &ApprovalRequest, esik_cents: i64) -> bool {
+    match request.operation.as_str() {
+        // Eşiğe bağlı yüzeyler: indirim, ödeme, kasa çıkışı, gün sonu.
+        operation::DISCOUNT
+        | operation::PAYMENT
+        | operation::CASH_OUT
+        | operation::CLOSE_DAY => {
+            // Yüzde kolu yalnız indirimde anlamlıdır; diğerlerinde 0 gelir.
+            request.approved_percent_hint >= LARGE_DISCOUNT_PERCENT
+                || request.amount_cents >= esik_cents
+        }
+        operation::COMPLIMENTARY => true,
+        // VOID_ORDER eşik tablosunda değildir; onaylayan herhangi bir onay
+        // rolü olabilir (bugünkü davranış).
+        _ => false,
     }
-    if request.operation == operation::COMPLIMENTARY {
-        return true;
-    }
-    request.approved_percent_hint >= LARGE_DISCOUNT_PERCENT
-        || request.amount_cents >= LARGE_DISCOUNT_CENTS
 }
 
 /// Onay PIN'ini doğrular ve tek kullanımlık jeton üretir.
 ///
 /// Sıra önemlidir ve bilinçlidir:
-/// 1. kilit kontrolü, 2. PIN biçimi, 3. tenant içi Argon2 araması,
-/// 4. rol kapısı, 5. büyük indirim eşiği, 6. ayrım gözetimi.
+///   1. kilit kontrolü, 2. PIN biçimi, 3. tenant içi Argon2 araması,
+///   4. rol kapısı, 5. büyük indirim eşiği, 6. ayrım gözetimi.
+///
 /// Böylece hatalı PIN denemesi hiçbir bilgi sızdırmaz (aynı hata mesajı).
 pub async fn verify_and_issue(
     conn: &mut SqliteConnection,
@@ -333,7 +370,8 @@ pub async fn verify_and_issue(
         rbac::canonical_role(&found.role).ok_or_else(|| error::NOT_APPROVER.to_string())?;
 
     // Rol kapısı işleme göre daralır: büyük indirimde MASTER da onaylayamaz.
-    let allowed: Vec<Role> = if requires_privileged_approver(request) {
+    // Eşik kiracının DB kaydından okunur (D3).
+    let allowed: Vec<Role> = if requires_privileged_approver_db(conn, request).await? {
         vec![Role::Owner, Role::Manager]
     } else {
         rbac::APPROVER_ROLES.to_vec()
@@ -460,8 +498,10 @@ pub async fn consume_token(
 
     // Eşik kuralı tüketim anında da yeniden denetlenir: jeton üretilirken küçük
     // bir indirim için MASTER onayı verilmişse, işlem yürütme anındaki gerçek
-    // tutar büyük eşiğe girdiyse jeton kabul edilmez.
-    let allowed: Vec<Role> = if requires_privileged_approver(request) {
+    // tutar büyük eşiğe girdiyse jeton kabul edilmez. Eşik **yeniden okunur**:
+    // onay anındaki eşik ile yürütme anındaki eşik farklıysa yürütme anındaki
+    // geçerlidir, çünkü o andaki kural uygulanmaktadır.
+    let allowed: Vec<Role> = if requires_privileged_approver_db(conn, request).await? {
         vec![Role::Owner, Role::Manager]
     } else {
         rbac::APPROVER_ROLES.to_vec()

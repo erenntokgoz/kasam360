@@ -107,6 +107,9 @@ pub async fn cash_out(
     actor_id: String,
     actor_role: Option<String>,
     tenant_id: Option<String>,
+    approval_token: Option<String>,
+    #[allow(non_snake_case)]
+    approvalToken: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<CashMovementDto, String> {
@@ -114,10 +117,72 @@ pub async fn cash_out(
 
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-    
+
     let id = format!("cmout_{}", Uuid::new_v4());
     let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
-    
+    let actor_role = actor_role.unwrap_or_else(|| "Cashier".to_string());
+    let jeton = approval_token.or(approvalToken);
+
+    // Kasa çıkışı para hareketidir: negatif veya sıfır tutar "çıkış" değildir.
+    // Negatif bir tutar `IN` hareketi gibi toplamlara ters yönde işler ve
+    // vardiya farkını yapay olarak şişirir.
+    use crate::services::security360::money_gate as gate;
+    gate::nakit_tutar_gecerli_mi(amount_cents)?;
+    gate::gerekce_gecerli_mi(&reason)?;
+
+    // Vardiya bu kiracının mı? Önceden hiç sorulmuyordu: başka bir işletmenin
+    // vardiya kimliğiyle hareket yazılabiliyor ve para başka kasanın defterine
+    // gidiyordu. Vardiya `closed_at` doluysa da hareket yazılamaz.
+    let vardiya = sqlx::query("SELECT id, status FROM shifts WHERE id = ? AND tenant_id = ?")
+        .bind(&shift_id)
+        .bind(&tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let durum: Option<String> = match &vardiya {
+        Some(satir) => Some(satir.try_get("status").map_err(|e| e.to_string())?),
+        None => None,
+    };
+    gate::vardiya_kabul_eder_mi(durum.as_deref())?;
+
+    // Eşik aşımı onay gerektirir (D3). Eşik kiracının DB kaydından okunur.
+    let esik = crate::services::security360::threshold::esik_oku(&mut tx, &tenant_id).await?;
+    if gate::onay_gerekli_mi(amount_cents, esik) {
+        let token = gate::onay_jetonunu_zorunlu_kil(jeton.as_deref())?;
+
+        let request = crate::approval_service::ApprovalRequest {
+            tenant_id: tenant_id.clone(),
+            operation: crate::approval_service::operation::CASH_OUT.to_string(),
+            resource_id: id.clone(),
+            actor_id: actor_id.trim().to_string(),
+            actor_role: actor_role.clone(),
+            amount_cents,
+            approved_percent_hint: 0,
+            terminal_id: "terminal_cash".to_string(),
+        };
+        let approver = crate::approval_service::consume_token(&mut tx, token, &request).await?;
+
+        let ctx = AuditContext::new(
+            tenant_id.clone(),
+            approver.approver_id.clone(),
+            approver.approver_role.as_str().to_string(),
+            category::GUVENLIK,
+            "approval:consumed",
+            id.clone(),
+            serde_json::json!({
+                "operation": crate::approval_service::operation::CASH_OUT,
+                "amountCents": amount_cents,
+                "thresholdCents": esik,
+                "actorId": request.actor_id,
+                "approverId": approver.approver_id,
+                "approverRole": approver.approver_role.as_str(),
+            }),
+            chrono::Utc::now().to_rfc3339(),
+        )?;
+        AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+    }
+
     sqlx::query(
         "INSERT INTO cash_movements (id, tenant_id, shift_id, movement_type, amount_cents, reason, actor_id, created_at)
          VALUES (?, ?, ?, 'OUT', ?, ?, ?, datetime('now'))"
@@ -135,7 +200,7 @@ pub async fn cash_out(
     let ctx = AuditContext::new(
         tenant_id,
         actor_id.clone(),
-        actor_role.unwrap_or_else(|| "Cashier".to_string()),
+        actor_role,
         category::FINANS,
         "cash:movement_out",
         id.clone(),
@@ -183,11 +248,14 @@ pub async fn get_shift_summary(
     }
     
     let shift = shift_row.unwrap();
-    let opening_balance: i32 = shift.try_get("expected_amount_cents").unwrap_or(0);
-    let opening_balance = opening_balance as i64;
-    let actual_closing_balance: Option<i32> = shift.try_get("actual_amount_cents").ok();
-    let actual_closing_balance = actual_closing_balance.map(|v| v as i64);
-    
+    // Para ve sayaç okumaları `unwrap_or(0)` **olamaz** (AGENTS.md §3.4): SQL
+    // hatası sıfıra dönüşünce vardiya farkı "sıfır" görünür ve kasa açığı
+    // hatasız raporlanır. Yanlış rapor, hata mesajından daha tehlikelidir.
+    let opening_balance: i64 = shift
+        .try_get("expected_amount_cents")
+        .map_err(|e| e.to_string())?;
+    let actual_closing_balance: Option<i64> = shift.try_get("actual_amount_cents").ok();
+
     let opened_at: String = shift.try_get("opened_at").unwrap_or_default();
     let closed_at: Option<String> = shift.try_get("closed_at").ok();
 
@@ -220,30 +288,42 @@ pub async fn get_shift_summary(
         (s, cs)
     };
     
-    let total_sales: i64 = sales_row.try_get("total").unwrap_or(0);
-    let cash_sales: i64 = cash_sales_row.try_get("total").unwrap_or(0);
-    
-    // Get total cash in/out
-    let cash_in_row = sqlx::query("SELECT COALESCE(SUM(amount_cents), 0) as total FROM cash_movements WHERE shift_id = ? AND movement_type = 'IN'")
-        .bind(&shift_id)
-        .fetch_one(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-    let total_cash_in: i64 = cash_in_row.try_get("total").unwrap_or(0);
-    
-    let cash_out_row = sqlx::query("SELECT COALESCE(SUM(amount_cents), 0) as total FROM cash_movements WHERE shift_id = ? AND movement_type = 'OUT'")
-        .bind(&shift_id)
-        .fetch_one(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-    let total_cash_out: i64 = cash_out_row.try_get("total").unwrap_or(0);
-    
+    let total_sales: i64 = sales_row.try_get("total").map_err(|e| e.to_string())?;
+    let cash_sales: i64 = cash_sales_row.try_get("total").map_err(|e| e.to_string())?;
+
+    // Kasa hareketleri **mutlaka** kiracı filtresiyle okunur. Önceden filtre
+    // yoktu: `shift_id` çapraz tenant'ta benzersiz olmadığı için başka bir
+    // işletmenin kasa çıkışları bu vardiyanın toplamına giriyor ve fark
+    // yapay olarak büyüyordu.
+    let cash_in_row = sqlx::query(
+        "SELECT COALESCE(SUM(amount_cents), 0) as total FROM cash_movements
+         WHERE shift_id = ? AND tenant_id = ? AND movement_type = 'IN'",
+    )
+    .bind(&shift_id)
+    .bind(&tenant_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    let total_cash_in: i64 = cash_in_row.try_get("total").map_err(|e| e.to_string())?;
+
+    let cash_out_row = sqlx::query(
+        "SELECT COALESCE(SUM(amount_cents), 0) as total FROM cash_movements
+         WHERE shift_id = ? AND tenant_id = ? AND movement_type = 'OUT'",
+    )
+    .bind(&shift_id)
+    .bind(&tenant_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    let total_cash_out: i64 = cash_out_row.try_get("total").map_err(|e| e.to_string())?;
+
     // Yalnızca nakit satışlar kasa çekmecesine eklenir (Kredi kartı/yemek kartı hariç tutulur)
     let expected_balance = opening_balance + cash_sales + total_cash_in - total_cash_out;
-    let discrepancy = if let Some(actual) = actual_closing_balance {
-        actual - expected_balance
-    } else {
-        0
+    // Kapatılmamış vardiyada fark **hesaplanamaz**; sıfır yazmak "kasa tutuyor"
+    // izlenimi verir. Alan boş kalır, arayüz "vardiya açık" der.
+    let discrepancy = match actual_closing_balance {
+        Some(actual) => actual - expected_balance,
+        None => 0,
     };
     
     Ok(ShiftSummaryDto {

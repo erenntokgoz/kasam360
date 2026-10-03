@@ -16,7 +16,10 @@
 //! güvenlik seviyesini vaat etmesini bozardı.
 
 pub mod login_lockout;
+pub mod mask;
+pub mod money_gate;
 pub mod policy;
+pub mod threshold;
 
 /// Üretilen parolaların harf dizisindeki karakterler.
 ///

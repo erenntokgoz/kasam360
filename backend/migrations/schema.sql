@@ -1546,3 +1546,23 @@ CREATE TABLE IF NOT EXISTS pin_history (
     changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_pin_history_user ON pin_history(tenant_id, user_id);
+
+-- Çift onay eşiği (D3).
+--
+-- Kapsam **tüm para çıkışları**: indirim, ikram, ödeme toplamı, kasa çıkışı
+-- (`cash_out`) ve gün sonu (`close_day`). Bu yüzden tablo adı "discount"
+-- değil, genel bir eşik adı taşır: kapsam sonradan genişlediğinde tablo
+-- ismi yalan söylememeli.
+--
+-- Neden satır başına eşik: eşik sabit kod içindeydi (`LARGE_DISCOUNT_CENTS`)
+-- ve işletme büyüklüğüne göre değiştirilemiyordu. "500 TL üzeri yöneticiden
+-- onay ister" kuralı her kafede farklıdır.
+--
+-- Satır yoksa **varsayılan** kullanılır (mevcut davranış korunur); eşik
+-- silinince kiracı varsayılana döner.
+CREATE TABLE IF NOT EXISTS approval_thresholds (
+    tenant_id TEXT PRIMARY KEY,
+    amount_cents INTEGER NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (amount_cents > 0)
+);

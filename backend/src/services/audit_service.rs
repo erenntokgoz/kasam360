@@ -73,6 +73,15 @@ impl AuditContext {
         if !category::is_valid(category) {
             return Err(format!("UNKNOWN_AUDIT_CATEGORY: '{}'", category));
         }
+        // Maskeleme **yazma noktasında** yapılır (Faz 15 B3). Arayüzde
+        // maskelemek işe yaramaz: veri o arada diske yazılmış olur ve sonradan
+        // gizlemek kaydı geri döndürülemez hale getirmez. `new` tek yazma
+        // noktası olduğu için buraya yerleştirmek yeterlidir.
+        //
+        // Önemli: maskeleme hash girdisi **değil**, `payload_json`; yani
+        // `compute_audit_hash` aynı kanonik formu alır ve zincir bozulmaz.
+        let mut payload = payload;
+        crate::services::security360::mask::maskele(&mut payload);
         Ok(Self {
             tenant_id,
             actor_id,
@@ -320,8 +329,91 @@ mod tests {
         .expect("geçerli kategori")
     }
 
-    #[test]
-    fn test_compute_audit_hash() {
+/// KVKK maskeleme **yazma noktasında** çalışır: diske giden satır maskelenmiş
+/// olmalıdır (Faz 15 B3).
+///
+/// Saf fonksiyon testi yetmez — maske katmanı `AuditContext::new` içine
+/// yerleştirilmiştir ve burada o bağlantı kanıtlanır: ham veri SQLite'a
+/// hiç girmiyor.
+#[tokio::test]
+async fn kisisel_veri_deftere_maskeli_yazilir() {
+    let pool = ledger_pool().await;
+    let mutex = tokio::sync::Mutex::new(());
+    let audit_lock = AuditLock::new(mutex.lock().await);
+    let mut conn = pool.acquire().await.expect("bağlantı");
+
+    let ctx = AuditContext::new(
+        "tenant_a".to_string(),
+        "usr_1".to_string(),
+        "Owner".to_string(),
+        category::GUVENLIK,
+        "security:test",
+        "res_1".to_string(),
+        serde_json::json!({
+            "phone": "05321234567",
+            "tcNo": "12345678901",
+            "email": "ayse@ornek.com",
+            "amountCents": 250_050,
+            "shiftId": "shf_1",
+        }),
+        "2026-10-03T10:00:00+00:00".to_string(),
+    )
+    .expect("geçerli kategori");
+
+    AuditService::append(&mut conn, &audit_lock, &ctx)
+        .await
+        .expect("kayıt yazılır");
+
+    // Ham veri **hiçbir yerde** bulunmamalı: ne payload'da ne de dosyada.
+    let satir: String = sqlx::query_scalar("SELECT payload FROM audit_ledger WHERE action = 'security:test'")
+        .fetch_one(&mut *conn)
+        .await
+        .expect("satır okunur");
+
+    assert!(!satir.contains("05321234567"), "telefon sızdı: {satir}");
+    assert!(!satir.contains("12345678901"), "TCKN sızdı: {satir}");
+    assert!(!satir.contains("ayse@ornek.com"), "e-posta sızdı: {satir}");
+
+    // Finansal kanıt korunmalı: maske katmanı parayı silmemeli.
+    assert!(satir.contains("250050"), "tutar kayboldu: {satir}");
+    assert!(satir.contains("shf_1"), "vardiya kimliği kayboldu: {satir}");
+}
+
+/// Maskeleme hash girdisi **değil**; `payload_json` maskelenmiş haliyle
+/// serileştirilir. Bu yüzden zincir doğrulaması bozulmaz.
+#[tokio::test]
+async fn maskeleme_zinir_dogrulamasini_bozmaz() {
+    let pool = ledger_pool().await;
+    let mutex = tokio::sync::Mutex::new(());
+    let audit_lock = AuditLock::new(mutex.lock().await);
+    let mut conn = pool.acquire().await.expect("bağlantı");
+
+    for sira in 1..=3 {
+        let ctx = AuditContext::new(
+            "tenant_a".to_string(),
+            format!("usr_{sira}"),
+            "Owner".to_string(),
+            category::GUVENLIK,
+            "security:zincir",
+            format!("res_{sira}"),
+            serde_json::json!({ "phone": "05321234567", "totalCents": 100 * sira }),
+            format!("2026-10-03T10:00:0{sira}+00:00"),
+        )
+        .expect("geçerli kategori");
+        AuditService::append(&mut conn, &audit_lock, &ctx)
+            .await
+            .expect("kayıt yazılır");
+    }
+
+    let sonuc = AuditService::verify_chain(&mut conn)
+        .await
+        .expect("zincir doğrulanır");
+    assert!(sonuc.is_valid, "zincir bozuldu: {:?}", sonuc.failure_reason);
+    assert_eq!(sonuc.verified_count, 3);
+}
+
+#[test]
+fn test_compute_audit_hash() {
         let sequence = 1;
         let timestamp = "2024-01-01T10:00:00Z";
         let actor_id = "test_actor";
