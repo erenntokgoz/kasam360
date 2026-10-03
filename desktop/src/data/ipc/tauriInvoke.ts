@@ -1,5 +1,10 @@
 import { invoke, InvokeArgs } from '@tauri-apps/api/core';
 import { useAuthStore } from '../../presentation/store/useAuthStore';
+import {
+  isMockInventory360Command,
+  mockInventory360CommandNames,
+  mockInventory360Result,
+} from './inventory360Mock';
 
 // ---------------------------------------------------------------------------
 // Tarayıcı modu: stateful mock veri (Tauri/backend olmadan çalışmak için)
@@ -376,7 +381,7 @@ const nextModifierId = (prefix: string): string => {
 };
 // Faz 4: ürün → modifier grubu atamaları. Backend'de `product_modifier_groups`
 // tablosunun karşılığıdır; atama kümesi (küme semantiği) saklanır.
-let mockProductModifierGroups: Record<string, string[]> = lsLoad<Record<string, string[]>>(
+const mockProductModifierGroups: Record<string, string[]> = lsLoad<Record<string, string[]>>(
   'product_modifier_groups',
   {},
 );
@@ -391,7 +396,7 @@ let mockOrders: MockOrder[] = lsLoad<MockOrder[]>('orders', []);
 let mockCashMovements: MockCashMovement[] = lsLoad<MockCashMovement[]>('cash_movements', []);
 
 // Faz 10: yazma hedefi tarayıcıda kalıcıdır; sekmeyi yenileyince hedef kaybolmaz.
-let mockMonthlyTargets: {
+const mockMonthlyTargets: {
   tenant_id: string;
   month: string;
   category: string;
@@ -399,7 +404,7 @@ let mockMonthlyTargets: {
 }[] = lsLoad('monthly_targets', []);
 
 // Faz 10: her rakip fiyatı ayrı gözlemdir; geçmiş silinmez.
-let mockCompetitorPrices: {
+const mockCompetitorPrices: {
   product_id: string;
   competitor_name: string;
   price_cents: number;
@@ -1038,8 +1043,8 @@ interface MockApprovalRecord {
   expiresAt: number;
 }
 
-let mockApprovalLedger: MockApprovalRecord[] = [];
-let mockApprovalAttempts: Record<string, number> = {};
+const mockApprovalLedger: MockApprovalRecord[] = [];
+const mockApprovalAttempts: Record<string, number> = {};
 
 function bumpApprovalAttempts(scopeKey: string, current: number): void {
   mockApprovalAttempts[scopeKey] = current + 1;
@@ -1282,6 +1287,21 @@ function auditPayload(log: Record<string, unknown>): Record<string, unknown> {
   }
   return {};
 }
+
+export {
+  resetMockInventory360,
+  readMockInventory360State,
+  mockInventory360CommandNames,
+} from './inventory360Mock';
+
+/**
+ * Arayüzün bildiği Faz 12 komutları.
+ *
+ * Testler bu listeyi backend `generate_handler!` kaydıyla karşılaştırır: mock'ta
+ * var olan ama handler'da olmayan komut, tarayıcıda çalışıp üretimde
+ * "command not found" vermek demektir.
+ */
+export const INVENTORY360_COMMAND_NAMES = mockInventory360CommandNames();
 
 function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   console.warn(`[Tarayıcı Modu] tauriInvoke mock: ${cmd}`, args);
@@ -1764,7 +1784,7 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     }
     return mockModifierGroups
       .filter(g => assigned.includes(g.id) && matchesTenant(g.tenant_id))
-      .map(({ tenant_id: _tenantId, category_id: categoryId, ...rest }) => ({
+      .map(({ tenant_id: _tenant_id, category_id: categoryId, ...rest }) => ({
         ...rest,
         categoryId,
       })) as unknown as T;
@@ -2315,7 +2335,7 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
       .filter(g => matchesTenant(g.tenant_id))
       .filter(g => (categoryFilter ? g.category_id === categoryFilter : true))
       // Backend `categoryId` camelCase döndürür; mock de aynı sözleşmeyi korur.
-      .map(({ tenant_id: _tenantId, category_id: categoryId, ...rest }) => ({
+      .map(({ tenant_id: _tenant_id, category_id: categoryId, ...rest }) => ({
         ...rest,
         categoryId,
       })) as unknown as T;
@@ -2780,7 +2800,7 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     const offset = Math.max(0, filter.offset ?? 0);
     const limit = Math.min(Math.max(1, filter.limit ?? 100), 500);
     // Backend DTO'su tenant_id döndürmez; mock de döndürmemeli.
-    return rows.slice(offset, offset + limit).map(({ tenant_id: _ignored, ...rest }) => rest) as unknown as T;
+    return rows.slice(offset, offset + limit).map(({ tenant_id: _tenant_id, ...rest }) => rest) as unknown as T;
   }
 
   // ----- FİŞLER & HESAP DEFTERİ (Faz 7) -----
@@ -3479,17 +3499,15 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   }
 
   if (cmd === 'get_tip_pool_summary') {
-    const gate = requireStaffAdminGate(args);
+    // Kapı yan etki olarak çalışır: yetkisiz rol burada reddedilir.
+    requireStaffAdminGate(args);
     const period = requirePeriod(args);
     const total = mockTipPool
       .filter((t) => t.period === period)
       .reduce((t, x) => t + x.amount_cents, 0);
-    const dagitilan = mockTipDistributions.filter((d) => d.user_id && period === period);
-    void dagitilan;
     const dagitilanToplam = mockTipDistributions
-      .filter((_) => period === period)
+      .filter((d) => d.period === period)
       .reduce((t, d) => t + d.amount_cents, 0);
-    void mockStaff.some((s) => s.tenant_id === gate.tenantId);
     return {
       period,
       totalCents: total,
@@ -4388,6 +4406,16 @@ function buildMockAnalytics(from: string, to: string): Record<string, unknown> {
       tableId: t.id,
       status: t.status === 'OCCUPIED' ? 'Ready' : 'Unknown',
     })) as unknown as T;
+  }
+
+// ----- FAZ 12 · ENVENTER 360° -----
+  // Mock, backend ile **aynı** kapıları uygular: rol, tenant ve feature bayrağı.
+  // Gevşek kalan mock, tarayıcıda çalışan uygulamayla gerçek uygulamanın farklı
+  // davranmasına yol açar (fail-open). Bayrak kapalıyken 404 fırlatılır; boş
+  // dizi değil, çünkü panel "özellik yok" yüzeyini hata sanar.
+
+  if (isMockInventory360Command(cmd)) {
+    return mockInventory360Result(cmd, args) as unknown as T;
   }
 
   // ----- GENEL: get_* / list_* → boş dizi fallback -----

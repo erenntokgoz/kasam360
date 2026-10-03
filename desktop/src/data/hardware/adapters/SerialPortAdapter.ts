@@ -21,7 +21,6 @@ export class SerialPortAdapter extends BaseAdapter {
     return true;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async writeData(_data: Uint8Array): Promise<boolean> {
     if (!this.connected) throw new Error('Not connected');
     // Veri yazmak için Tauri komutunu çağır

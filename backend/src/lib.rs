@@ -1,32 +1,33 @@
-pub mod commands;
-pub mod auth;
-pub mod db;
-pub mod services;
-pub mod repositories;
-pub mod management_commands;
-pub mod modifier_commands;
-pub mod report_commands;
-pub mod platform_commands;
-pub mod inventory_commands;
-pub mod branch_commands;
+pub mod analytics_commands;
 pub mod approval_commands;
 pub mod approval_service;
+pub mod auth;
+pub mod branch_commands;
 pub mod cashier_commands;
-pub mod waiter_commands;
-pub mod kitchen_commands;
-pub mod analytics_commands;
+pub mod commands;
+pub mod db;
 pub mod id_generator;
+pub mod inventory360_commands;
+pub mod inventory_commands;
+pub mod kitchen_commands;
 pub mod ledger_commands;
+pub mod management_commands;
+#[cfg(test)]
+mod menu_tenant_tests;
+pub mod modifier_commands;
+pub mod platform_commands;
+pub mod print_commands;
 pub mod rbac;
+pub mod report_commands;
+pub mod repositories;
+pub mod reservation_commands;
+pub mod services;
 #[cfg(test)]
 mod shift_security_tests;
 #[cfg(test)]
 mod staff360_tests;
-#[cfg(test)]
-mod menu_tenant_tests;
 pub mod user_credentials;
-pub mod print_commands;
-pub mod reservation_commands;
+pub mod waiter_commands;
 
 pub use db::{init_db, DbPool};
 
@@ -44,8 +45,8 @@ pub struct AppState {
 pub fn run() {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let pool = rt.block_on(async {
-        let database_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "sqlite://kasam360.db".to_string());
+        let database_url =
+            std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://kasam360.db".to_string());
         init_db(&database_url)
             .await
             .expect("Failed to initialize database")
@@ -218,6 +219,44 @@ pub fn run() {
             commands::staff_commands::distribute_tip_pool,
             commands::staff_commands::get_staff_kpi,
             commands::staff_commands::get_suspicious_activity,
+            // Faz 12: Envanter 360°. Reçete ve raf ömrü komutları kendi feature
+            // bayrağı kapalıyken 404 döner; bayrak kontrolü komutun ilk adımıdır.
+            // Yollar tanım alt modülüne göre yazılır: `#[tauri::command]` gizli
+            // `__cmd__` modülünü üretir ve bu modül `pub use` ile taşınamaz.
+            inventory360_commands::pricing_commands::get_effective_price,
+            inventory360_commands::pricing_commands::set_product_86d_command,
+            inventory360_commands::menu_availability_commands::set_product_active_window,
+            inventory360_commands::pricing_commands::bulk_update_product_prices,
+            inventory360_commands::menu_availability_commands::get_service_windows,
+            inventory360_commands::menu_availability_commands::upsert_service_window_command,
+            inventory360_commands::menu_availability_commands::set_menu_window_product,
+            inventory360_commands::pricing_commands::create_price_list_command,
+            inventory360_commands::pricing_commands::delete_price_list_command,
+            inventory360_commands::pricing_commands::create_price_freeze_command,
+            inventory360_commands::menu_availability_commands::get_pricing_rules,
+            inventory360_commands::menu_availability_commands::upsert_pricing_rule_command,
+            inventory360_commands::pricing_commands::list_price_lists,
+            inventory360_commands::recipe_commands::list_inventory_recipes,
+            inventory360_commands::recipe_commands::create_recipe_command,
+            inventory360_commands::recipe_commands::deactivate_recipe_command,
+            inventory360_commands::recipe_commands::get_recipe_cost,
+            inventory360_commands::supplier_commands::get_inventory_suppliers,
+            inventory360_commands::supplier_commands::upsert_supplier_command,
+            inventory360_commands::supplier_commands::set_supplier_product_command,
+            inventory360_commands::supplier_commands::compare_supplier_prices_command,
+            inventory360_commands::supplier_commands::create_purchase_order_command,
+            inventory360_commands::supplier_commands::receive_purchase_order_command,
+            inventory360_commands::shelf_life_commands::get_expiry_report,
+            inventory360_commands::shelf_life_commands::list_shelf_life_policies_command,
+            inventory360_commands::shelf_life_commands::upsert_shelf_life_policy_command,
+            inventory360_commands::shelf_life_commands::set_batch_expiry_date,
+            inventory360_commands::waste_commands::record_waste_command,
+            inventory360_commands::waste_commands::list_waste_records_command,
+            inventory360_commands::waste_commands::open_stock_count_command,
+            inventory360_commands::waste_commands::record_count_line_command,
+            inventory360_commands::waste_commands::close_stock_count_command,
+            inventory360_commands::waste_commands::get_stock_count_command,
+            inventory360_commands::waste_commands::list_stock_counts_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

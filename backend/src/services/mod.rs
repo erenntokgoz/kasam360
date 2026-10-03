@@ -1,15 +1,19 @@
-pub mod audit_service;
 pub mod analytics_service;
-pub mod budget_service;
+pub mod audit_service;
 pub mod branch_service;
+pub mod budget_service;
+pub mod inventory360;
 pub mod inventory_service;
 pub mod ledger_service;
 pub mod ledger_statement;
-pub mod pnl_service;
 pub mod modifier_service;
 pub mod payment_approval;
 pub mod payment_service;
-pub mod report_service;
+pub mod pnl_service;
 pub mod receipt_service;
+pub mod report_service;
 pub mod reservation_service;
 pub mod staff360;
+
+#[cfg(test)]
+mod inventory360_tests;

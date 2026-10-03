@@ -152,8 +152,8 @@ async fn v1_baska_kiracida_vardiya_yoksa_null_doner() {
     let p = pool().await;
     add_shift(&p, "tenant_a", "shf_a", "usr_cash_a", 50_000).await;
 
-    let yabancı = active_shift_sql(&p, "tenant_b", "usr_cash_a").await.expect("okunmali");
-    assert!(yabancı.is_none(), "var olmayan vardiya null dönmeli, sıfır tutar değil");
+    let yabanci = active_shift_sql(&p, "tenant_b", "usr_cash_a").await.expect("okunmali");
+    assert!(yabanci.is_none(), "var olmayan vardiya null dönmeli, sıfır tutar değil");
 }
 
 // ---------------------------------------------------------------------------

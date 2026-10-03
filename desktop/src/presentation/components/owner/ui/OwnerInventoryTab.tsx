@@ -15,8 +15,10 @@ import {
   Layers,
   ChefHat,
   Trash2,
+  Gauge,
 } from 'lucide-react';
 import { toast as useToast } from '@core/components/ui/toast';
+import { Inventory360Tab } from '../inventory/Inventory360Tab';
 
 export interface InventoryItem {
   id: string;
@@ -94,7 +96,8 @@ export function OwnerInventoryTab() {
   const addToast = (msg: string, type: 'success' | 'error' | 'info') => useToast.add({ title: msg, type });
 
   // Alt Sekmeler: 'INVENTORY' (Hammadde & Stok) | 'RECIPES' (Ürün Reçeteleri)
-  const [subTab, setSubTab] = useState<'INVENTORY' | 'RECIPES'>('INVENTORY');
+  // | 'ENVANTER360' (Faz 12)
+  const [subTab, setSubTab] = useState<'INVENTORY' | 'RECIPES' | 'ENVANTER360'>('INVENTORY');
 
   // Stok Verileri
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -453,6 +456,17 @@ export function OwnerInventoryTab() {
             <ChefHat size={14} />
             <span>Ürün Reçeteleri ({recipes.length})</span>
           </button>
+          <button
+            onClick={() => setSubTab('ENVANTER360')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+              subTab === 'ENVANTER360'
+                ? 'dark:bg-white/15 bg-white dark:text-white text-[#007AFF] shadow-sm'
+                : 'dark:text-zinc-400 text-zinc-600 hover:dark:text-white hover:text-zinc-900'
+            }`}
+          >
+            <Gauge size={14} />
+            <span>Envanter 360</span>
+          </button>
         </div>
 
         {/* Aksiyon Butonları — Renksiz Cam Butonlar */}
@@ -466,7 +480,7 @@ export function OwnerInventoryTab() {
             <span>Yenile</span>
           </button>
 
-          {subTab === 'INVENTORY' ? (
+          {subTab === 'INVENTORY' && (
             <button
               onClick={() => {
                 setError(null);
@@ -477,7 +491,9 @@ export function OwnerInventoryTab() {
               <Plus size={15} />
               <span>Yeni Hammadde</span>
             </button>
-          ) : (
+          )}
+
+          {subTab === 'RECIPES' && (
             <button
               onClick={() => openRecipeEditor()}
               className="flex items-center gap-1.5 px-4 py-2 dark:bg-white/[0.08] bg-black/[0.05] hover:dark:bg-white/[0.14] hover:bg-black/[0.08] border dark:border-white/15 border-black/10 dark:text-white text-zinc-900 rounded-2xl text-xs font-semibold transition-all shadow-sm cursor-pointer"
@@ -498,6 +514,9 @@ export function OwnerInventoryTab() {
           </button>
         </div>
       )}
+
+      {/* FAZ 12 · Envanter 360 — fiyat, reçete maliyeti, tedarikçi, raf ömrü, fire */}
+      {subTab === 'ENVANTER360' && <Inventory360Tab />}
 
       {/* GÖRÜNÜM 1: HAMMADDE & STOK YÖNETİMİ */}
       {subTab === 'INVENTORY' && (

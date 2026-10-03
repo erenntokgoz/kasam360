@@ -154,8 +154,16 @@ CREATE TABLE IF NOT EXISTS products (
     stock_quantity INTEGER,
     color TEXT,
     image_url TEXT,
+    -- Faz 12 · 86'd: "stok bitti, menüden kalktı". `is_active` ile karışmasın
+    -- diye ayrı tutuldu; `is_active` kalıcı, `is_86` geçicidir.
+    is_86 BOOLEAN NOT NULL DEFAULT 0,
+    stockout_reason TEXT,
+    stockout_at TEXT,
+    stockout_by TEXT,
     FOREIGN KEY (category_id) REFERENCES categories(id)
 );
+CREATE INDEX IF NOT EXISTS idx_products_tenant_86
+    ON products(tenant_id, is_86);
 
 CREATE TABLE IF NOT EXISTS tables (
     id TEXT NOT NULL PRIMARY KEY,
@@ -389,7 +397,10 @@ CREATE TABLE IF NOT EXISTS inventory_items (
 CREATE TABLE IF NOT EXISTS stock_movements (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    inventory_item_id TEXT NOT NULL,
+    -- Nullable: hareket ya eski `inventory_items` kaydına ya da `products`
+    -- kaydına bağlıdır. Faz 12 kör sayım düzeltmesi ürüne yazılır.
+    inventory_item_id TEXT,
+    product_id TEXT,
     movement_type TEXT NOT NULL CHECK(movement_type IN ('IN', 'OUT', 'WASTE', 'ADJUST')),
     quantity REAL NOT NULL,
     actor_id TEXT NOT NULL,
@@ -401,15 +412,21 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 -- FIFO PARTİ / LOT KUYRUĞU (GERÇEK FIFO MALİYETİ)
 CREATE TABLE IF NOT EXISTS inventory_batches (
     id TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    -- Varsayılan YOK: tenant_id bind edilmeden yazılan parti ortak havuza
+    -- düşmemeli, veritabanı hatası vermeli (AGENTS.md §3.3).
+    tenant_id TEXT NOT NULL,
     inventory_item_id TEXT,
     product_id TEXT,
     batch_code TEXT,
-    received_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Raf ömrü (Faz 12): aynı ürünün partileri farklı günlerde dolabildiği
+    -- için son kullanma tarihi partinin kendisinde durur.
+    expiry_date TEXT,
+    received_by TEXT,
     initial_quantity REAL NOT NULL,
     remaining_quantity REAL NOT NULL,
     unit_cost_cents INTEGER NOT NULL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_inv_batches_prod ON inventory_batches(product_id, received_at ASC);
 CREATE INDEX IF NOT EXISTS idx_inv_batches_item ON inventory_batches(inventory_item_id, received_at ASC);
@@ -846,4 +863,400 @@ CREATE TABLE IF NOT EXISTS staff_incidents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_staff_incidents_status
-    ON staff_incidents(tenant_id, status);
+    ON staff_incidents(tenant_id, status);-- ===========================================================================
+-- FAZ 12 · MENÜ & STOK DERİNLEŞTİRME
+-- ===========================================================================
+-- Kapsam: dinamik tarife, happy hour, 86'd, fiyat dondurma, öğle/akşam menü,
+-- toplu fiyat güncelleme, yarı mamul reçete, randıman/fire, kör sayım, birim
+-- çevrim, raf ömrü, tedarikçi karşılaştırma.
+--
+-- Tasarım kuralları (AGENTS.md):
+--   · Tüm tablolarda `tenant_id` NOT NULL ve her sorguda filtrelenir.
+--   · Tüm tutarlar `*_cents` INTEGER; float YASAK.
+--   · Kimlikler prefixed ULID (id_generator), AUTOINCREMENT YASAK.
+--   · `audit_ledger` gibi değişmez tablolara yazılmaz; bunun yerine kendi
+--     değişmez günlük tabloları tutulur.
+
+-- ---------------------------------------------------------------------------
+-- BİRİM ÇEVRİM — "1 kg = 4 adet" gibi dönüşümler
+-- ---------------------------------------------------------------------------
+-- Neden ayrı tablo: reçete ve sayım miktarları farklı birimlerle gelir
+-- (kilo, gram, adet, litre, paket). Çevrim olmadan stok ile tüketim
+-- kıyaslanamaz; elle "/4" yazmak sessiz hata üretir.
+CREATE TABLE IF NOT EXISTS unit_conversions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    from_unit TEXT NOT NULL,
+    to_unit TEXT NOT NULL,
+    -- Kaç `from_unit`, kaç `to_unit` eder. REAL: dönüşüm oranı tam sayı olmak
+    -- zorunda değildir (1 L = 1000 mL). TUTAR DEĞİLDİR; kuruş kuralı geçerli
+    -- değildir.
+    factor REAL NOT NULL CHECK (factor > 0),
+    is_bidirectional BOOLEAN NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by TEXT NOT NULL,
+    UNIQUE(tenant_id, from_unit, to_unit)
+);
+CREATE INDEX IF NOT EXISTS idx_unit_conv_lookup
+    ON unit_conversions(tenant_id, from_unit);
+
+-- ---------------------------------------------------------------------------
+-- TEDARİKÇİ — Fiyat ve performans karşılaştırması
+-- ---------------------------------------------------------------------------
+-- Not: `directories.type='SUPPLIER'` yalnız bir kişi/şirket kaydıdır; sipariş
+-- fiyatı, teslim süresi ve performans burada tutulur. Ayırmak zorunluydu,
+-- çünkü karşılaştırma sayısal fiyat ister, dizin kaydı sayısal taşımaz.
+CREATE TABLE IF NOT EXISTS suppliers (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    contact_person TEXT,
+    phone TEXT,
+    email TEXT,
+    tax_number TEXT,
+    address TEXT,
+    -- Ödeme vadesi (gün). Geç ödeme riski raporlanabilsin diye saklanır.
+    payment_term_days INTEGER NOT NULL DEFAULT 0 CHECK (payment_term_days >= 0),
+    -- Teslim süresi (gün). Karşılaştırma tablosunda gösterilir.
+    lead_time_days INTEGER NOT NULL DEFAULT 0 CHECK (lead_time_days >= 0),
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by TEXT NOT NULL,
+    UNIQUE(tenant_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_suppliers_active
+    ON suppliers(tenant_id, is_active);
+
+-- Tedarikçi → ürün fiyatı ve minimum sipariş miktarı.
+CREATE TABLE IF NOT EXISTS supplier_products (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    supplier_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    -- Tek birim alış fiyatı (kuruş). `*_cents` kuralı: float YASAK.
+    unit_cost_cents INTEGER NOT NULL CHECK (unit_cost_cents >= 0),
+    -- Minimum sipariş miktarı (ürünün kendi birimi).
+    min_order_quantity REAL NOT NULL DEFAULT 1 CHECK (min_order_quantity > 0),
+    pack_size TEXT,
+    is_preferred BOOLEAN NOT NULL DEFAULT 0,
+    valid_from TEXT,
+    valid_to TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, supplier_id, product_id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_supplier_products_product
+    ON supplier_products(tenant_id, product_id);
+
+-- Satın alma siparişi: fiyat geçmişi ve fire kökeni buradan izlenir.
+CREATE TABLE IF NOT EXISTS purchase_orders (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    supplier_id TEXT NOT NULL,
+    order_number TEXT NOT NULL,
+    -- TASI | ALINDI | Iptal
+    status TEXT NOT NULL DEFAULT 'TASI'
+        CHECK (status IN ('TASI', 'ALINDI', 'IPTAL')),
+    ordered_at TEXT NOT NULL,
+    expected_at TEXT,
+    received_at TEXT,
+    -- Sipariş toplamı (kuruş). Hesaplanmış alan: satırlar girildikçe
+    -- güncellenir. float YASAK.
+    total_cents INTEGER NOT NULL DEFAULT 0 CHECK (total_cents >= 0),
+    created_by TEXT NOT NULL,
+    notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, order_number),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+);
+CREATE INDEX IF NOT EXISTS idx_po_status
+    ON purchase_orders(tenant_id, status);
+
+CREATE TABLE IF NOT EXISTS purchase_order_items (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    purchase_order_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    quantity REAL NOT NULL CHECK (quantity > 0),
+    -- Sipariş anındaki birim fiyat (kuruş). Kasıtlanan maliyettir; sonradan
+    -- değişirse geçmiş fatura ile karşılaştırılabilir olsun diye dondurulur.
+    unit_cost_cents INTEGER NOT NULL CHECK (unit_cost_cents >= 0),
+    received_quantity REAL NOT NULL DEFAULT 0 CHECK (received_quantity >= 0),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+CREATE INDEX IF NOT EXISTS idx_poi_order
+    ON purchase_order_items(tenant_id, purchase_order_id);
+
+-- ---------------------------------------------------------------------------
+-- YARI MAMUL REÇETE (BOM) — Spec §2.12
+-- ---------------------------------------------------------------------------
+-- Neden gerekli: "kruasan" tek başına satılmayan, un + yağ + maya + tuz'dan
+-- yapılan bir yarı mamuldür. Reçetesiz satış, maliyeti ve fireyi
+-- görünmez kılar. Satılan ürünün maliyeti reçete + randıman ile çözülür.
+CREATE TABLE IF NOT EXISTS recipes (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    -- Üretim verimi yüzdesi: 100 gram hamurdan 80 gram mayalı hamur
+    -- çıkıyorsa verim 80'dir. Fire bu oranın eksiğidir. 0-100.
+    yield_percent REAL NOT NULL DEFAULT 100
+        CHECK (yield_percent > 0 AND yield_percent <= 100),
+    -- Standart üretim miktarı (ürün birimi). Maliyet bu miktara göre
+    -- normalize edilir, böylece kısmi üretim yanlış maliyet vermez.
+    output_quantity REAL NOT NULL DEFAULT 1 CHECK (output_quantity > 0),
+    output_unit TEXT NOT NULL DEFAULT 'adet',
+    -- Aktif reçete tek olmalıdır: aynı ürün için iki "aktif" reçete maliyeti
+    -- belirsizleştirir. Kısmi benzersiz indeks bunu veritabanında garanti
+    -- eder (aşağıda).
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    version INTEGER NOT NULL DEFAULT 1,
+    notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by TEXT NOT NULL,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+-- NOT: SQLite kısmi UNIQUE indeks destekler; aynı ürün için ikinci bir aktif
+-- reçete eklenemez.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_recipes_active_unique
+    ON recipes(tenant_id, product_id) WHERE is_active = 1;
+CREATE INDEX IF NOT EXISTS idx_recipes_product
+    ON recipes(tenant_id, product_id);
+
+CREATE TABLE IF NOT EXISTS recipe_items (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    recipe_id TEXT NOT NULL,
+    -- Malzeme ya da alt yarı mamul. `is_sub_recipe` ayrımı, maliyet
+    -- çözümünün rekürsif olmasını sağlar.
+    component_product_id TEXT NOT NULL,
+    is_sub_recipe BOOLEAN NOT NULL DEFAULT 0,
+    quantity REAL NOT NULL CHECK (quantity > 0),
+    unit TEXT NOT NULL,
+    -- Fire payı yüzdesi: temel kayıp (kırpma, buharlaşma) kayıtta tutulur;
+    -- randımandan ayrıdır çünkü üretim kaybı değil işleme kaybıdır.
+    waste_percent REAL NOT NULL DEFAULT 0
+        CHECK (waste_percent >= 0 AND waste_percent < 100),
+    notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+    FOREIGN KEY (component_product_id) REFERENCES products(id)
+);
+CREATE INDEX IF NOT EXISTS idx_recipe_items_recipe
+    ON recipe_items(tenant_id, recipe_id);
+
+-- ---------------------------------------------------------------------------
+-- RAF ÖMRÜ
+-- ---------------------------------------------------------------------------
+-- `inventory_batches.expiry_date` ile birlikte çalışır: parti tarihi bilinir,
+-- kalan miktar bilinir, raf ömrü dolmuşsa fire yazılır.
+CREATE TABLE IF NOT EXISTS shelf_life_policies (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    -- Raf ömrü gün sayısı. Üretim tarihine eklenerek son kullanma tarihi
+    -- hesaplanır; tarih elle girilmez, yanlış girilmesi engellenir.
+    shelf_life_days INTEGER NOT NULL CHECK (shelf_life_days > 0),
+    -- Uyarı eşiği: kalan günler bu değere düşünce "yaklaşıyor" sayılır.
+    warning_days INTEGER NOT NULL DEFAULT 3 CHECK (warning_days >= 0),
+    storage_instruction TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, product_id),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+-- ---------------------------------------------------------------------------
+-- FİYAT LİSTELERİ VE DİNAMİK TARİFE
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS price_lists (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    -- PERAKENDE | TOPTAN | KAMPANYA
+    kind TEXT NOT NULL DEFAULT 'PERAKENDE'
+        CHECK (kind IN ('PERAKENDE', 'TOPTAN', 'KAMPANYA')),
+    -- Opsiyonel etkinlik penceresi. Kapalıysa liste uygulanmaz.
+    valid_from TEXT,
+    valid_to TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by TEXT NOT NULL,
+    UNIQUE(tenant_id, name),
+    CHECK (valid_to IS NULL OR valid_from IS NULL OR valid_to >= valid_from)
+);
+
+CREATE TABLE IF NOT EXISTS price_list_items (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    price_list_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, price_list_id, product_id),
+    FOREIGN KEY (price_list_id) REFERENCES price_lists(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+-- Dinamik tarife ve happy hour aynı tabloda: ikisi de "belirli saatlerde
+-- indirim" kuralıdır, ayrı tablolar kuralı iki yerde çoğaltırdı.
+CREATE TABLE IF NOT EXISTS dynamic_pricing_rules (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    -- HAPPY_HOUR | OGLE | AKSAM | OZEL
+    kind TEXT NOT NULL DEFAULT 'HAPPY_HOUR'
+        CHECK (kind IN ('HAPPY_HOUR', 'OGLE', 'AKSAM', 'OZEL')),
+    -- İndirim oranı yüzde (1-90). Yüzde 100+ indirim değil, fiyat sıfırlamadır;
+    -- kapsam dışı bırakıldı.
+    discount_percent INTEGER NOT NULL CHECK (discount_percent > 0 AND discount_percent <= 90),
+    -- `HH:MM` biçiminde. Gün sonu 23:59.
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    -- 1=Pazartesi ... 7=Pazar. Boşsa kural her gün geçerlidir.
+    days_of_week TEXT,
+    -- Kural yalnız bu ürünlere uygulanır; boşsa tüm menüye.
+    product_ids TEXT,
+    category_ids TEXT,
+    valid_from TEXT,
+    valid_to TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    -- Öncelik: çakışan kurallar için yüksek değer kazanır.
+    priority INTEGER NOT NULL DEFAULT 100,
+created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by TEXT NOT NULL,
+    -- Pencere gün sonunu aşabilir ("22:00"-"02:00"): bu yüzden sıralama değil
+    -- eşitlik yasaklanır. `end_time > start_time` kısıtı gece yarısını aşan
+    -- kuralı veritabanı katmanında sessizce öldürürdü, kural kaydedilmez ve
+    -- "kuralım çalışmıyor" sebebi görünmez olurdu.
+    CHECK (end_time <> start_time)
+);
+CREATE INDEX IF NOT EXISTS idx_dpr_active
+    ON dynamic_pricing_rules(tenant_id, is_active);
+
+-- Fiyat dondurma: zam geldiğinde "bu fiyat şu tarihe kadar değişmeyecek"
+-- taahhüdü. Zamdan etkilenen ürünlerde menü fiyatını sabit tutar.
+CREATE TABLE IF NOT EXISTS price_freezes (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    frozen_price_cents INTEGER NOT NULL CHECK (frozen_price_cents >= 0),
+    reason TEXT,
+    valid_from TEXT NOT NULL,
+    valid_to TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    created_by TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (valid_to >= valid_from),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_freezes_active
+    ON price_freezes(tenant_id, is_active, product_id);
+
+-- Öğle/akşam menü: hangi ürün hangi dilimde satılır.
+CREATE TABLE IF NOT EXISTS menu_service_windows (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    -- Kahvaltı | OGLE | AKSAM | GECE
+    name TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (end_time > start_time)
+);
+
+CREATE TABLE IF NOT EXISTS menu_window_products (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    window_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    is_available BOOLEAN NOT NULL DEFAULT 1,
+    UNIQUE(tenant_id, window_id, product_id),
+    FOREIGN KEY (window_id) REFERENCES menu_service_windows(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+-- ---------------------------------------------------------------------------
+-- FIRE (ZAYİ) VE KÖR SAYIM
+-- ---------------------------------------------------------------------------
+-- Neden `waste_records` ayrı tablo: `stock_movements` hareketi kaydeder ama
+-- firein **gerekçesi** (bozulan, son kullanma tarihi geçen, kırılan, fire
+-- edilen) finansal raporda ayrı satır olmalıdır. Zararın kaynağı bilinmeden
+-- "stok farkı" denmez.
+CREATE TABLE IF NOT EXISTS waste_records (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    inventory_item_id TEXT,
+    -- BOZULDU | RAF_OMRU_DOLDI | KIRILDI | SIZINTI | HATA_GIRIS | FIRE_EDILDI
+    reason TEXT NOT NULL
+        CHECK (reason IN ('BOZULDU', 'RAF_OMRU_DOLDI', 'KIRILDI', 'SIZINTI', 'HATA_GIRIS', 'FIRE_EDILDI')),
+    quantity REAL NOT NULL CHECK (quantity > 0),
+    -- Fire edilen partinin maliyeti. Kuruş cinsinden; parti bilinmiyorsa
+    -- NULL (uydurulmaz) ve raporda "maliyeti bilinmiyor" görünür.
+    unit_cost_cents INTEGER,
+    total_cost_cents INTEGER,
+    occurred_at TEXT NOT NULL,
+    recorded_by TEXT NOT NULL,
+    notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_waste_product
+    ON waste_records(tenant_id, product_id);
+CREATE INDEX IF NOT EXISTS idx_waste_date
+    ON waste_records(tenant_id, occurred_at);
+
+-- Kör sayım: sayılan miktar, sistem miktarı GÖSTERİLMEZ. Farkı sayan kişi
+-- gerçeği kendi ölçümüyle belirler; beklenen değeri görüp ona göre yazarsa
+-- sayım anlamını yitirir.
+CREATE TABLE IF NOT EXISTS stock_counts (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    -- ACIK | KAPALI | UYGULANDI
+    status TEXT NOT NULL DEFAULT 'ACIK'
+        CHECK (status IN ('ACIK', 'KAPALI', 'UYGULANDI')),
+    location TEXT,
+    started_by TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    closed_by TEXT,
+    closed_at TEXT,
+    notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_stock_counts_status
+    ON stock_counts(tenant_id, status);
+
+CREATE TABLE IF NOT EXISTS stock_count_lines (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    stock_count_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    inventory_item_id TEXT,
+    -- Sayılan miktar. Beklenen miktar bilinçli olarak tutulmaz; kapanışta
+    -- hesaplanır ve defterde fark olarak yazılır.
+    counted_quantity REAL NOT NULL DEFAULT 0 CHECK (counted_quantity >= 0),
+    counted_by TEXT,
+    counted_at TEXT,
+    -- Kapanışta dolar: beklenen miktar ve fark.
+    expected_quantity REAL,
+    variance_quantity REAL,
+    variance_cost_cents INTEGER,
+    adjustment_applied BOOLEAN NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, stock_count_id, product_id),
+    FOREIGN KEY (stock_count_id) REFERENCES stock_counts(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+CREATE INDEX IF NOT EXISTS idx_count_lines_count
+    ON stock_count_lines(tenant_id, stock_count_id);
