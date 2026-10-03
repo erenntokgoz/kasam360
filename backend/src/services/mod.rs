@@ -15,6 +15,7 @@ pub mod pnl_service;
 pub mod receipt_service;
 pub mod report_service;
 pub mod reservation_service;
+pub mod security360;
 pub mod staff360;
 
 #[cfg(test)]

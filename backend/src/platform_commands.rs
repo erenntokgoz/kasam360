@@ -159,7 +159,17 @@ pub async fn create_tenant(
         .clone()
         .or_else(|| email.clone())
         .unwrap_or_else(|| format!("owner@kasam360.com"));
-    let raw_password = owner_password.unwrap_or_else(|| format!("Kasam-{}", &Uuid::new_v4().to_string()[..8]));
+    // Yönetici parolası verilmezse üretilir. Önceden `Kasam-{uuid[..8]}` idi: sabit
+    // önek + 8 onaltılık karakter = **32 bit** entropi. Argon2 maliyeti bunu
+    // telafi etmez, çünkü parolanın kendisi zayıftır.
+    let raw_password = match owner_password {
+        Some(verilen) => verilen,
+        None => format!("K3s-{}", crate::services::security360::rastgele_parola(20)),
+    };
+    // Politika yalnızca üretilen parolaya değil **kullanıcının seçtiğine** de
+    // uygulanır: işletme sahibi `1234` parola seçebiliyordu.
+    crate::services::security360::policy::parola_dogrula(&raw_password, Some(&final_owner_email))
+        .map_err(|e| format!("Yönetici parolası kabul edilmedi: {e}"))?;
     // Hash'leme hatası yutulmaz: önceden bilinen bir sabit ("argon2_hash_placeholder")
     // yazılıyordu. PHC olarak parse edilemediği için fiilen girişi kapatıyordu, ancak
     // kurulum başarıyla görünürken kimlik bilgisi kullanılamaz hale geliyordu.
@@ -682,21 +692,50 @@ pub async fn reset_user_password(
 ) -> Result<serde_json::Value, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let new_password = format!("Kasam-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+
+    // Üretilen parola: önceden `Kasam-{uuid[..8]}` idi, yani **32 bit** entropi.
+    // Argon2 maliyeti zayıf parolayı telafi etmez; kaba kuvvet saldırganı parolanın
+    // kendisini hedefler, hash'i değil. 20 karakterlik taban57 gövde ~114 bit verir.
+    let new_password = format!("K3s-{}", crate::services::security360::rastgele_parola(20));
+    crate::services::security360::policy::parola_dogrula(&new_password, None)?;
     let hash = crate::auth::hash_credential(&new_password)?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+
+    // Yazma ve defter kaydı **tek transaction** içindedir. Önceden ikisi ayrı
+    // çalışıyordu: defter yazımı başarısız olsa bile parola değişmiş görünür,
+    // yani kimin parolası ne zaman sıfırlandığı kanıtlanamazdı.
+    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+
     let tenant_id: String = sqlx::query_scalar("SELECT tenant_id FROM users WHERE id = ?")
         .bind(&user_id)
-        .fetch_optional(&mut *conn)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| e.to_string())?
-        .unwrap_or_else(|| PLATFORM_AUDIT_TENANT.to_string());
+        .ok_or_else(|| "Kullanıcı bulunamadı.".to_string())?;
 
-    sqlx::query("UPDATE users SET credential_hash = ? WHERE id = ?")
+    // `tenant_id` hedef kullanıcının **kendi** kiracısıdır: MASTER bir kiracının
+    // parolasını sıfırlayabilir ama başka kiracınınki değiştirilemez. Satır
+    // etkilenmezse hata verilir; aksi halde "bulunamadı" mesajı sessizce yutulur.
+    let etkilenen = sqlx::query("UPDATE users SET credential_hash = ? WHERE id = ? AND tenant_id = ?")
         .bind(&hash)
         .bind(&user_id)
-        .execute(&mut *conn)
+        .bind(&tenant_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if etkilenen.rows_affected() == 0 {
+        return Err("Kullanıcı bulunamadı.".to_string());
+    }
+
+    // Sıfırlamadan sonra o hesabın giriş kilidi temizlenir: kullanıcı yeni
+    // parolayla giremezse eski hatalı denemeleri yüzünden kilitli kalır ve
+    // "parolam sıfırlandı ama giremiyorum" durumu oluşur.
+    sqlx::query("DELETE FROM login_attempts WHERE scope IN (?, ?)")
+        .bind(crate::services::security360::login_lockout::hesap_kapsami(&user_id))
+        .bind(crate::services::security360::login_lockout::pin_kapsami(&tenant_id))
+        .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -708,7 +747,9 @@ pub async fn reset_user_password(
         serde_json::json!({ "targetUserId": user_id }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(serde_json::json!({
         "user_id": user_id,

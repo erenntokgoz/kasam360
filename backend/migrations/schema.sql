@@ -1503,3 +1503,46 @@ CREATE TABLE IF NOT EXISTS e_invoices (
 );
 CREATE INDEX IF NOT EXISTS idx_e_invoices_tenant ON e_invoices(tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_e_invoices_order ON e_invoices(tenant_id, order_id);
+
+-- ============================================================================
+-- FAZ 15 · GÜVENLİK SERTLEŞTİRME
+-- ============================================================================
+
+-- Giriş deneme sayacı (kaba kuvvet koruması).
+--
+-- `scope` kapsam anahtarıdır ve iki biçimde kurulur:
+--   * `hesap:<kucuk harf kimlik>` — e-posta/kullanıcı adıyla giriş (kimlik
+--     doğrulanmadan önce bilinmez, bu yüzden kapsam kimlik metnidir),
+--   * `pin:<tenant_id>`          — PIN ile giriş (PIN kiracı içinde benzersizdir).
+--
+-- Neden `locked_until INTEGER` ve `DATETIME` değil: kilit süresi bir süre
+-- hesabıdır (`now + 300`). Metin karşılaştırması saat dilimi ve biçim
+-- farklarına açıktır; Unix saniyesi belirsizlik taşımaz.
+--
+-- Neden tablo, RAM değil: uygulama yeniden başlayınca sayaç sıfırlanıyordu.
+-- Kilit yeniden başlatmayla kaybolursa kaba kuvvet koruması her yeniden
+-- başlatmada bedava deneme hakkı kazandırır.
+CREATE TABLE IF NOT EXISTS login_attempts (
+    scope TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    locked_until INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- PIN geçmişi: aynı PIN'in yeniden kullanılmasını engeller.
+--
+-- Neden gerekir: personel PIN'i unutur, eskisini geri yazar. Kısa ve tahmin
+-- edilebilir bir PIN (4 hane) için son 5 PIN'i reddetmek, tahmin alanını
+-- kaldırmadan unuttuğu PIN'i geri yazmasını da engeller.
+--
+-- `pin_hash` düz metin değil Argon2id PHC'dir: geçmiş tablosu bir kimlik
+-- döküm tablosuna dönüşmemelidir.
+CREATE TABLE IF NOT EXISTS pin_history (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    pin_hash TEXT NOT NULL,
+    changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_pin_history_user ON pin_history(tenant_id, user_id);

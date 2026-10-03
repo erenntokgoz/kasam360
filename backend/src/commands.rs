@@ -67,6 +67,13 @@ mod tests {
                 name TEXT NOT NULL,
                 email TEXT,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+             );
+             CREATE TABLE login_attempts (
+                scope TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                failed_count INTEGER NOT NULL DEFAULT 0,
+                locked_until INTEGER NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
              );",
         )
         .execute(&pool)
@@ -129,6 +136,13 @@ mod tests {
                 is_active INTEGER NOT NULL DEFAULT 1
              );
              CREATE TABLE tenant_modules (tenant_id TEXT NOT NULL, module_id TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1);
+             CREATE TABLE login_attempts (
+                scope TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                failed_count INTEGER NOT NULL DEFAULT 0,
+                locked_until INTEGER NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+             );
              INSERT INTO platform_admins (id, pin_hash, name, email) VALUES ('adm_1', ?, 'Süper Admin', 'master@kasam360.com');",
         )
         .execute(&pool)
