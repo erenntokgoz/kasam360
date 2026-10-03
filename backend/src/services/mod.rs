@@ -2,6 +2,7 @@ pub mod analytics_service;
 pub mod audit_service;
 pub mod branch_service;
 pub mod budget_service;
+pub mod floor360;
 pub mod inventory360;
 pub mod inventory_service;
 pub mod ledger_service;

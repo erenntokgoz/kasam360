@@ -10,11 +10,17 @@ use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
 
 mod faz12;
+// Faz 13 migration'ı servis testleri tarafından da doğrudan çağrılır
+// (salon şemasının hizmet testi içinde kurulabilmesi için), bu yüzden
+// `pub(crate)`.
+pub(crate) mod faz13;
 mod seeds;
 mod tables_migration;
 
 #[cfg(test)]
 mod faz12_tests;
+#[cfg(test)]
+mod faz13_tests;
 #[cfg(test)]
 mod tests;
 
@@ -306,6 +312,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     faz12::migrate_products_for_86d(&pool).await?;
     faz12::migrate_inventory_batches_for_shelf_life(&pool).await?;
     faz12::migrate_stock_movements_for_products(&pool).await?;
+    faz13::migrate_floor_plan_layout(&pool).await?;
 
     // -------------------------------------------------------------------------
     // Tohum koruması (Seed guard) 1: Masalar, ürünler ve kategoriler — sadece ilk çalıştırmada.

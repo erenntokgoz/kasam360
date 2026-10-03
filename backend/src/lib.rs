@@ -66,6 +66,17 @@ pub fn run() {
             commands::get_active_tickets,
             commands::get_floor_plan,
             commands::move_table,
+            // Faz 13: Kroki çizim. `get_floor_plan` ile karıştırılmamalı —
+            // o komut kart görünümünün işletim verisini verir, bunlar kroki
+            // geometrisini okur ve yazar.
+            commands::floor_plan_commands::get_floor_layout,
+            commands::floor_plan_commands::save_floor_layout,
+            commands::floor_plan_commands::create_floor_zone,
+            commands::floor_plan_commands::delete_floor_zone,
+            commands::floor_plan_commands::create_floor_object,
+            commands::floor_plan_commands::delete_floor_object,
+            commands::floor_plan_commands::apply_floor_template,
+            commands::floor_plan_commands::list_floor_templates,
             reservation_commands::get_reservations,
             reservation_commands::get_reservation_day,
             reservation_commands::reserve_table,

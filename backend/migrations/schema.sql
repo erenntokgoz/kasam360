@@ -167,14 +167,71 @@ CREATE INDEX IF NOT EXISTS idx_products_tenant_86
 
 CREATE TABLE IF NOT EXISTS tables (
     id TEXT NOT NULL PRIMARY KEY,
-    tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+    -- Neden varsayılan YOK: `DEFAULT 'DEFAULT_TENANT'` kalsaydı `tenant_id`
+    -- bind etmeyen bir INSERT sessizce ortak havuza düşer ve kiracı izolasyonu
+    -- delinirdi (AGENTS.md §3.3). Tenant çağırandan gelir.
+    tenant_id TEXT NOT NULL,
     name TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'AVAILABLE'
         CHECK (status IN ('AVAILABLE', 'RESERVED', 'OCCUPIED')),
     opened_at DATETIME,
     waiter_id TEXT,
-    current_total INTEGER NOT NULL DEFAULT 0
+    current_total INTEGER NOT NULL DEFAULT 0,
+    -- Faz 13 · Kroki geometrisi. Varsayılanlar bilinçli: geçmiş masalar kroki
+    -- açıldığında sol üst köşede üst üste binmesin diye sonradan serpiştirilir.
+    x INTEGER NOT NULL DEFAULT 0,
+    y INTEGER NOT NULL DEFAULT 0,
+    rotation INTEGER NOT NULL DEFAULT 0,
+    seats INTEGER NOT NULL DEFAULT 4,
+    zone TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_tables_tenant_zone
+    ON tables(tenant_id, zone);
+
+-- Faz 13 · Salon bölümleri (Ana Salon, Teras, Bar).
+--
+-- Neden `tenant_id` üzerinde varsayılan YOK: bind edilmemiş bir bölüm
+-- sessizce ortak havuza düşmemeli, veritabanı hatası vermeli (AGENTS.md §3.3).
+CREATE TABLE IF NOT EXISTS floor_zones (
+    id          TEXT NOT NULL PRIMARY KEY,
+    tenant_id   TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    is_active   INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_floor_zones_tenant
+    ON floor_zones(tenant_id, sort_order);
+
+-- Faz 13 · Mimari objeler: kapı, bar, duvar, kolon.
+--
+-- `zone_id` boş olabilir; bölüm silinse de obje kaydı korunur çünkü salon
+-- yeniden düzenlenebilir ve objenin kaybolması krokiyi bozar.
+--
+-- `template_id` objenin hangi şablondan geldiğini işaretler: şablon yeniden
+-- uygulandığında yalnız kendi objeleri değişir, kullanıcının elle koyduğu
+-- kapı/bar kalır. NULL = kullanıcı kendisi yerleştirdi.
+CREATE TABLE IF NOT EXISTS floor_objects (
+    id          TEXT NOT NULL PRIMARY KEY,
+    tenant_id   TEXT NOT NULL,
+    zone_id     TEXT,
+    template_id TEXT,
+    kind        TEXT NOT NULL CHECK (kind IN ('DOOR','BAR','WALL','COLUMN')),
+    label       TEXT,
+    x           INTEGER NOT NULL DEFAULT 0,
+    y           INTEGER NOT NULL DEFAULT 0,
+    width       INTEGER NOT NULL DEFAULT 80,
+    height      INTEGER NOT NULL DEFAULT 80,
+    rotation    INTEGER NOT NULL DEFAULT 0,
+    is_active   INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_floor_objects_tenant_zone
+    ON floor_objects(tenant_id, zone_id);
+CREATE INDEX IF NOT EXISTS idx_floor_objects_template
+    ON floor_objects(tenant_id, template_id);
 
 -- Faz 8 — Rezervasyon kaydı.
 --
