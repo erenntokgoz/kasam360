@@ -321,7 +321,12 @@ fn gelis_tarihi_coz(metin: &str) -> Option<chrono::NaiveDate> {
     }
     chrono::NaiveDateTime::parse_from_str(metin, "%Y-%m-%d %H:%M:%S")
         .ok()
-        .map(|an| an.date())
+        .map(|an| {
+            // Şema varsayılanı `CURRENT_TIMESTAMP` **UTC** yazar. Bu değer
+            // yerel tarihe çevrilmezse, gece yarısından sonra gelen parti bir
+            // gün eski damgalanır ve son kullanma tarihi erken hesaplanır.
+            an.and_utc().with_timezone(&chrono::Local).date_naive()
+        })
 }
 
 /// Raf ömrü tanımlı ürünlerin yeni partilerine son kullanma tarihini yazar.

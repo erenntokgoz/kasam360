@@ -141,14 +141,21 @@ pub async fn bulk_update_prices(
 
         // Fiyat dondurması olan ürün toplu zamdan çıkarılır. Dondurma bir
         // taahhüttür; toplu güncelleme onu sessizce delmemelidir.
+        //
+        // `bugun` **yerel** tarihtir; SQL'de `date('now')` kullanmak yanlış
+        // olurdu, çünkü SQLite UTC yazar ve gece yarısından sonra dondurma
+        // penceresi yanlış günde aranırdı: dondurulmuş ürün zamlanır ve
+        // taahhüt sessizce delinirdi.
+        let bugun = chrono::Local::now().format("%Y-%m-%d").to_string();
         let dondurma: Option<String> = sqlx::query_scalar(
             "SELECT id FROM price_freezes
               WHERE tenant_id = ? AND product_id = ? AND is_active = 1
-                AND date('now') BETWEEN valid_from AND valid_to
+                AND ? BETWEEN valid_from AND valid_to
               LIMIT 1",
         )
         .bind(tenant_id)
         .bind(&id)
+        .bind(&bugun)
         .fetch_optional(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
