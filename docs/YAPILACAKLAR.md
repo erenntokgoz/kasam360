@@ -44,13 +44,14 @@ mod, Türkçe metin, emoji ve gradient yok, tutarlar `tabular-nums`.
   değişikliği üretir — Faz 14'ün konusu olmayan kalabalık bir diff. Bu
   biçimlendirme kasıtlı olarak **geri alındı**; Faz 14 dosyalarının kendisi
   biçimden temizdir.
-- `src/print_commands.rs:319` fiş tarihini `SELECT date('now')` ile alıyor.
-  SQLite UTC yazdığı için **gece yarısından sonra basılan fişe dünkü tarih**
-  basılır. Aynı sınıf hata Faz 14'te iki yerde bulundu ve düzeltildi
-  (`inventory360/pricing/bulk.rs`, `inventory360/shelf_life.rs`); buradaki
-  örnek **düzeltilmedi**, çünkü bu fazın konusu değil ve ilgili test yok.
-  Ayrıca UTC/yerel tarih ayrımı için tek bir yardımcı (`services::is_tarih`)
-  yok; her modül kendi çevrimini yapıyor.
+- ~~`src/print_commands.rs:319` fiş tarihi UTC alınıyordu~~ **Düzeltildi**
+  (`67154b1`). Aynı sınıf hata üç yerdeydi ve üçü de giderildi:
+  `inventory360/pricing/bulk.rs`, `inventory360/shelf_life.rs`,
+  `print_commands.rs`. Kalan borç: UTC/yerel çevrimi hâlâ her modülde ayrı
+  ayrı yazılıyor; tek bir yardımcı (`services::is_tarih` gibi) yok. Üçüncü
+  düzeltmede `created_at` değerleri artık fişte yerel zamana çevriliyor, ama
+  **rapor gruplama** sorgularında başka UTC gün sınırları aranabilir — tarama
+  yapılmadı, bilinçli kapsam dışı bırakıldı.
 
 ---
 
