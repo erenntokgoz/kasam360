@@ -1,6 +1,11 @@
 import { invoke, InvokeArgs } from '@tauri-apps/api/core';
 import { useAuthStore } from '../../presentation/store/useAuthStore';
 import {
+  isMockFloor360Command,
+  mockFloor360CommandNames,
+  mockFloor360Result,
+} from './floor360Mock';
+import {
   isMockInventory360Command,
   mockInventory360CommandNames,
   mockInventory360Result,
@@ -1302,6 +1307,19 @@ export {
  * "command not found" vermek demektir.
  */
 export const INVENTORY360_COMMAND_NAMES = mockInventory360CommandNames();
+
+export {
+  resetMockFloor360,
+  readMockFloor360State,
+} from './floor360Mock';
+
+/**
+ * Arayüzün bildiği Faz 13 komutları.
+ *
+ * Aynı gerekçe: mock'ta var olan ama handler'da olmayan komut, tarayıcıda
+ * çalışıp üretimde "command not found" vermek demektir.
+ */
+export const FLOOR360_COMMAND_NAMES = mockFloor360CommandNames();
 
 function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
   console.warn(`[Tarayıcı Modu] tauriInvoke mock: ${cmd}`, args);
@@ -4408,14 +4426,21 @@ function buildMockAnalytics(from: string, to: string): Record<string, unknown> {
     })) as unknown as T;
   }
 
-// ----- FAZ 12 · ENVENTER 360° -----
+// ----- FAZ 12 · ENVANTER 360° -----
   // Mock, backend ile **aynı** kapıları uygular: rol, tenant ve feature bayrağı.
   // Gevşek kalan mock, tarayıcıda çalışan uygulamayla gerçek uygulamanın farklı
   // davranmasına yol açar (fail-open). Bayrak kapalıyken 404 fırlatılır; boş
   // dizi değil, çünkü panel "özellik yok" yüzeyini hata sanar.
-
   if (isMockInventory360Command(cmd)) {
     return mockInventory360Result(cmd, args) as unknown as T;
+  }
+
+  // ----- FAZ 13 · KROKI CİZİM -----
+  // Aynı gerekçe: salon rol kapısı, kiracı kapısı ve geometri doğrulaması
+  // backend ile birebir aynıdır. Gevşek kalan mock, tarayıcıda geçersiz konum
+  // kaydedilebilir ve kullanıcı hatayı ancak gerçek uygulamada görür.
+  if (isMockFloor360Command(cmd)) {
+    return mockFloor360Result(cmd, args) as unknown as T;
   }
 
   // ----- GENEL: get_* / list_* → boş dizi fallback -----

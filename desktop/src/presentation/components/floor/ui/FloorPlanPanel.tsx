@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import { TableCard } from './TableCard';
+import { FloorPlanCanvas } from '../kroki/FloorPlanCanvas';
+import { ViewToggle, type FloorViewMode } from '../kroki/ViewToggle';
 
 /** Masa kartında gösterilen rezervasyon özeti. */
 export interface TableReservationSummary {
@@ -31,14 +33,23 @@ export interface FloorPlanPanelProps {
   onQuickReserve?: (tableId: string) => void;
   onEditTable?: (tableId: string, currentName: string) => void;
   onDeleteTable?: (tableId: string) => void;
+  /** Kroki çizim yetkisi. Yoksa kroki görünümü salt okunur açılır. */
+  canDraw?: boolean;
+  /** Kroki hangi bölümü gösteriyor? null = tüm salon. */
+  zoneId?: string | null;
 }
 
 type FilterStatus = 'all' | 'empty' | 'occupied' | 'reserved' | 'ready';
 
-export function FloorPlanPanel({ tables, onTableClick, onQuickReserve }: FloorPlanPanelProps) {
+export function FloorPlanPanel({
+  tables,
+  onTableClick,
+  onQuickReserve,
+  canDraw = false,
+  zoneId = null,
+}: FloorPlanPanelProps) {
   const [filter, setFilter] = useState<FilterStatus>('all');
-
-  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  const [viewMode, setViewMode] = useState<FloorViewMode>('grid');
 
   const counts = useMemo(() => {
     return {
@@ -129,35 +140,16 @@ export function FloorPlanPanel({ tables, onTableClick, onQuickReserve }: FloorPl
             </button>
           )}
         </div>
-        <div className="flex items-center bg-black/5 dark:bg-white/5 rounded-full p-1 border dark:border-white/10 border-black/[0.08]">
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            className={`px-4 py-1 rounded-full text-xs transition-all cursor-pointer ${
-              viewMode === 'grid'
-                ? 'bg-white dark:bg-white/20 text-zinc-900 dark:text-white shadow-sm font-semibold'
-                : 'text-zinc-600 dark:text-white/70 hover:text-zinc-900 dark:hover:text-white'
-            }`}
-          >
-            Kart
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('map')}
-            className={`px-4 py-1 rounded-full text-xs transition-all cursor-pointer ${
-              viewMode === 'map'
-                ? 'bg-white dark:bg-white/20 text-zinc-900 dark:text-white shadow-sm font-semibold'
-                : 'text-zinc-600 dark:text-white/70 hover:text-zinc-900 dark:hover:text-white'
-            }`}
-          >
-            Kroki
-          </button>
-        </div>
+        <ViewToggle mode={viewMode} onChange={setViewMode} mapAvailable />
       </div>
 
       {/* Masalar Izgarası (Grid Düzeni) veya Kroki Görünümü */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 no-scrollbar rounded-3xl dark:bg-white/[0.04] bg-white/80 backdrop-blur-xl border dark:border-white/10 border-black/[0.08] shadow-lg">
-        {filteredTables.length === 0 ? (
+        {viewMode === 'map' ? (
+          // Kroki kendi verisini kendi okur; kart filtresi burada geçerli değil,
+          // çünkü filtre bir liste kavramıdır ve krokide masa konumdur.
+          <FloorPlanCanvas canEdit={canDraw} zoneId={zoneId} />
+        ) : filteredTables.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <p className="dark:text-white/40 text-zinc-500 text-sm font-medium">Bu filtreye uygun masa bulunmuyor.</p>
             <button
@@ -167,11 +159,6 @@ export function FloorPlanPanel({ tables, onTableClick, onQuickReserve }: FloorPl
             >
               Tüm masaları göster
             </button>
-          </div>
-        ) : viewMode === 'map' ? (
-          <div className="relative w-full h-full min-h-[400px] border-2 border-dashed dark:border-white/20 border-black/10 rounded-2xl flex items-center justify-center">
-            <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-500 to-transparent"></div>
-            <p className="dark:text-white/50 text-zinc-500 font-medium">Kroki Görünümü (Sürükle & Bırak yakında eklenecek)</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-6 gap-4 sm:gap-5">
