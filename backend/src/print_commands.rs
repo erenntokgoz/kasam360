@@ -13,6 +13,55 @@ use sqlx::Row;
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
 
+/// Bugünün **yerel** tarihi (SQL ifadesi).
+///
+/// Neden `localtime`: SQLite `date('now')` **UTC** tarihini döner. Gece yarısını
+/// geçmiş bir işletmede "bugünün hesap defteri" dünkü tarihi basar.
+pub(crate) const BUGUN_SQL: &str = "date('now', 'localtime')";
+
+/// İş gününün **UTC karşılığı** olan yerel gün başı (SQL ifadesi).
+///
+/// Neden dört adım: `created_at` kolonları `CURRENT_TIMESTAMP` ile **UTC**
+/// yazılır, bu yüzden sınır da UTC olmalıdır — ama "bugünün cirosu" ifadesi
+/// **yerel** günü kasteder. Sıralama `now` (UTC) → `localtime` (yerel) →
+/// `start of day` (yerel gece yarısı) → `utc` (o anın UTC karşılığı) zincirini
+/// izler ve `created_at` ile aynı zaman diliminde karşılaştırılabilir bir tam
+/// zaman damgası verir.
+///
+/// Neden `date(...)` değil de `datetime(...)`: `date()` yalnız `GG.AA.YYYY`
+/// döner ve bir zaman damgasıyla sözlüksel karşılaştırıldığında UTC "dün"e
+/// düşen kayıtları dışarıda bırakır — yerel sabahın ilk saatleri bugünün
+/// cirosuna girmezdi.
+pub(crate) const GUN_BASI_SQL: &str = "datetime('now', 'localtime', 'start of day', 'utc')";
+
+/// Veritabanında UTC saklanan zaman damgasını yerel okunur biçime çevirir.
+///
+/// Neden çevrim şart: SQLite `CURRENT_TIMESTAMP` ve `datetime('now')`
+/// saat dilimi taşımayan `YYYY-MM-DD HH:MM:SS` yazar ve bu **UTC**'dir.
+/// Olduğu gibi basılırsa, 23:30 yerelde basılan fiş "20:30" gösterir ve
+/// gece yarısını geçen tarihte müşteriye **dünkü** tarihli fiş verilir.
+///
+/// Bilinmeyen biçim **uydurulmaz**, olduğu gibi basılır: boş bir tarih
+/// yerine kaynağın ne yazdığı görünür.
+pub(crate) fn utc_yerel_goster(metin: &str) -> String {
+    let ayrik = metin.trim();
+    // Saat dilimi yok: kaynak UTC'dir, öyle yorumlanır.
+    if let Ok(an) = chrono::NaiveDateTime::parse_from_str(ayrik, "%Y-%m-%d %H:%M:%S") {
+        return an
+            .and_utc()
+            .with_timezone(&chrono::Local)
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+    }
+    if let Ok(an) = chrono::DateTime::parse_from_rfc3339(ayrik) {
+        return an
+            .with_timezone(&chrono::Local)
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+    }
+    ayrik.to_string()
+}
+
 /// Kuruşu tam sayıdan biçimlendirir; float aritmetiği kullanılmaz.
 fn fmt_cents(cents: i64) -> String {
     let sign = if cents < 0 { "-" } else { "" };
@@ -196,7 +245,8 @@ pub async fn print_cash_slip(
     );
     println!("Hareket No : {}", movement_id);
     println!("Vardiya    : {}", shift_id);
-    println!("Tarih      : {}", created_at);
+    // Kayıt UTC saklar; fişte müşterinin gördüğü yerel zaman yazılır.
+    println!("Tarih      : {}", utc_yerel_goster(&created_at));
     println!("Kasiyer    : {}", actor_id);
     println!("Aciklama   : {}", reason);
     println!("------------------------------------------------");
@@ -272,12 +322,15 @@ pub async fn print_day_z_report(
     let tenant = require_tenant(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
-    let totals = sqlx::query(
+    // Gün sınırı yereldir: `GUN_BASI_SQL` UTC değil işyerinin gün başını
+    // verir. Sorgu metinleri `format!` ile kurulur ki dört yerde kural
+    // kopyalanmasın; kural değişirse dördü birden değişir.
+    let totals = sqlx::query(&format!(
         "SELECT COALESCE(SUM(total_cents), 0) AS total, COUNT(*) AS count
          FROM orders
          WHERE tenant_id = ? AND status IN ('PAID', 'CLOSED')
-           AND created_at >= date('now', 'start of day')",
-    )
+           AND created_at >= {GUN_BASI_SQL}"
+    ))
     .bind(&tenant)
     .fetch_one(&mut *conn)
     .await
@@ -286,37 +339,39 @@ pub async fn print_day_z_report(
     let revenue: i64 = totals.try_get("total").unwrap_or(0);
     let order_count: i64 = totals.try_get("count").unwrap_or(0);
 
-    let methods = sqlx::query(
+    let methods = sqlx::query(&format!(
         "SELECT json_extract(payload, '$.method') AS method,
                 COALESCE(SUM(json_extract(payload, '$.totalAmount')), 0) AS amount
          FROM audit_ledger
          WHERE tenant_id = ? AND action = 'payment:settled_fifo'
-           AND created_at >= date('now', 'start of day')
-         GROUP BY json_extract(payload, '$.method')",
-    )
+           AND created_at >= {GUN_BASI_SQL}
+         GROUP BY json_extract(payload, '$.method')"
+    ))
     .bind(&tenant)
     .fetch_all(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
-    let cash_in: i64 = sqlx::query_scalar(
+    let cash_in: i64 = sqlx::query_scalar(&format!(
         "SELECT COALESCE(SUM(amount_cents), 0) FROM cash_movements
-         WHERE tenant_id = ? AND movement_type = 'IN' AND created_at >= date('now', 'start of day')",
-    )
+         WHERE tenant_id = ? AND movement_type = 'IN' AND created_at >= {GUN_BASI_SQL}"
+    ))
     .bind(&tenant)
     .fetch_one(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
-    let cash_out: i64 = sqlx::query_scalar(
+    let cash_out: i64 = sqlx::query_scalar(&format!(
         "SELECT COALESCE(SUM(amount_cents), 0) FROM cash_movements
-         WHERE tenant_id = ? AND movement_type = 'OUT' AND created_at >= date('now', 'start of day')",
-    )
+         WHERE tenant_id = ? AND movement_type = 'OUT' AND created_at >= {GUN_BASI_SQL}"
+    ))
     .bind(&tenant)
     .fetch_one(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
-    let today: String = sqlx::query_scalar("SELECT date('now')")
+    // Başlıkta yazan tarih, satırların toplandığı günle **aynı** olmalıdır:
+    // yerel tarih yazılıp UTC gün toplanırsa rapor kendi kendisiyle çelişir.
+    let today: String = sqlx::query_scalar(&format!("SELECT {BUGUN_SQL}"))
         .fetch_one(&mut *conn)
         .await
         .unwrap_or_default();
@@ -385,7 +440,8 @@ async fn print_order_body(
     println!("Siparis No : {}", order_id);
     println!("Masa       : {}", if table_id.is_empty() { "-" } else { &table_id });
     println!("Durum      : {}", status);
-    println!("Tarih      : {}", created_at);
+    // Adisyon fişi müşteriye verilir: kayıt UTC, gösterilen yerel zaman.
+    println!("Tarih      : {}", utc_yerel_goster(&created_at));
     println!("------------------------------------------------");
     println!("{:<22} {:>4} {:>12}", "URUN", "ADET", "TUTAR");
     println!("------------------------------------------------");
