@@ -14,6 +14,9 @@ mod faz12;
 // (salon şemasının hizmet testi içinde kurulabilmesi için), bu yüzden
 // `pub(crate)`.
 pub(crate) mod faz13;
+// Faz 14 yalnız sistem kampanya şablonlarını tohumlar; şemanın kendisi
+// `schema.sql` içinde `CREATE TABLE IF NOT EXISTS` ile kurulur.
+mod faz14;
 mod seeds;
 mod tables_migration;
 
@@ -27,6 +30,7 @@ mod tests;
 pub type DbPool = Pool<Sqlite>;
 
 // Alt modüllerdeki yordamlar init_db ve testler tarafından kullanılır.
+pub(crate) use faz14::seed_campaign_templates;
 pub(crate) use seeds::{
     migrate_platform_admin_pins_to_argon2, migrate_user_pins_to_argon2, seed_default_users,
 };
@@ -313,6 +317,9 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     faz12::migrate_inventory_batches_for_shelf_life(&pool).await?;
     faz12::migrate_stock_movements_for_products(&pool).await?;
     faz13::migrate_floor_plan_layout(&pool).await?;
+    // Faz 14 — yasal takvim ve kampanya şablonları. Şema `schema.sql` içinde
+    // kurulur; burada yalnız on sistem şablonu tohumlanır (idempotent).
+    seed_campaign_templates(&pool).await?;
 
     // -------------------------------------------------------------------------
     // Tohum koruması (Seed guard) 1: Masalar, ürünler ve kategoriler — sadece ilk çalıştırmada.

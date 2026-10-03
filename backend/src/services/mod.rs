@@ -7,6 +7,7 @@ pub mod inventory360;
 pub mod inventory_service;
 pub mod ledger_service;
 pub mod ledger_statement;
+pub mod legal360;
 pub mod modifier_service;
 pub mod payment_approval;
 pub mod payment_service;
@@ -18,3 +19,5 @@ pub mod staff360;
 
 #[cfg(test)]
 mod inventory360_tests;
+#[cfg(test)]
+mod legal360_tests;

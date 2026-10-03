@@ -11,6 +11,7 @@ pub mod inventory360_commands;
 pub mod inventory_commands;
 pub mod kitchen_commands;
 pub mod ledger_commands;
+pub mod legal360_commands;
 pub mod management_commands;
 #[cfg(test)]
 mod menu_tenant_tests;
@@ -268,6 +269,38 @@ pub fn run() {
             inventory360_commands::waste_commands::close_stock_count_command,
             inventory360_commands::waste_commands::get_stock_count_command,
             inventory360_commands::waste_commands::list_stock_counts_command,
+            // Faz 14: Yasal & Özel Gün. İzin listelerinde MASTER yoktur:
+            // platform hesabı işletmenin ruhsat, poliçe veya vergi belgesine
+            // erişemez. Yazma yalnız OWNER'dır (prim, KDV ve indirim para
+            // etkisidir); kupon uygulama komutu MANAGER'a açıktır çünkü
+            // mevcut bir indirimi kasada geçirmek satış anı kararıdır.
+            // Yollar alt modüle göre yazılır: `#[tauri::command]` gizli
+            // `__cmd__` modülünü üretir ve bu modül `pub use` ile taşınamaz.
+            legal360_commands::legal_commands::list_documents_command,
+            legal360_commands::legal_commands::list_upcoming_reminders_command,
+            legal360_commands::legal_commands::get_expiring_documents_command,
+            legal360_commands::legal_commands::save_legal_document_command,
+            legal360_commands::special_day_commands::list_special_days_command,
+            legal360_commands::special_day_commands::list_upcoming_special_days_command,
+            legal360_commands::special_day_commands::save_special_day_command,
+            legal360_commands::campaign_commands::list_campaigns_command,
+            legal360_commands::campaign_commands::list_campaign_templates_command,
+            legal360_commands::campaign_commands::get_campaign_stats,
+            legal360_commands::campaign_commands::save_campaign_command,
+            legal360_commands::campaign_commands::apply_campaign_command,
+            legal360_commands::insurance_commands::list_policies_command,
+            legal360_commands::insurance_commands::get_expiring_policies_command,
+            legal360_commands::insurance_commands::save_policy_command,
+            legal360_commands::music_license_commands::list_music_licenses_command,
+            legal360_commands::music_license_commands::get_expiring_licenses_command,
+            legal360_commands::music_license_commands::save_music_license_command,
+            legal360_commands::e_invoice_commands::generate_e_invoice_command,
+            legal360_commands::e_invoice_commands::get_e_invoice_command,
+            legal360_commands::e_invoice_commands::list_e_invoices_command,
+            legal360_commands::e_invoice_commands::mark_e_invoice_sent_command,
+            legal360_commands::e_invoice_commands::mark_e_invoice_accepted_command,
+            legal360_commands::e_invoice_commands::mark_e_invoice_rejected_command,
+            legal360_commands::e_invoice_commands::cancel_e_invoice_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

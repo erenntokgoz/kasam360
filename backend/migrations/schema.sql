@@ -1317,3 +1317,189 @@ CREATE TABLE IF NOT EXISTS stock_count_lines (
 );
 CREATE INDEX IF NOT EXISTS idx_count_lines_count
     ON stock_count_lines(tenant_id, stock_count_id);
+
+-- ===========================================================================
+-- FAZ 14 · YASAL & ÖZEL GÜN
+-- ===========================================================================
+-- Kapsam: ruhsat/yangın/HACCP/vergi/SGK takvimi, özel günler, kampanya,
+-- kampanya şablonu, sigorta poliçesi, telif (MESAM/MSG), e-Arşiv KDV.
+--
+-- Tasarım kuralları (AGENTS.md):
+--   · Kiracıya ait tablolarda `tenant_id` NOT NULL ve her sorguda filtrelenir.
+--     Tek istisna `campaign_templates` sistem kataloğudur (kiracı verisi yok).
+--   · Tüm tutarlar `*_cents` INTEGER; float YASAK. KDV oranı da tam sayıdır
+--     (`kdv_rate_percent`), çünkü oranı float'ta tutmak kuruşta yuvarlama
+--     hatası üretir.
+--   · Tarihler `TEXT` ve `YYYY-AA-GG`: ISO metni sözlüksel sıralanır, saat
+--     dilimi karışıklığı yoktur.
+--   · Kimlikler prefixed ULID (id_generator), AUTOINCREMENT YASAK.
+--   · Silme yok: tüm tablolarda `is_active` ile soft-delete uygulanır, çünkü
+--     bu kayıtlar denetim izidir ve kaybolması uyum boşluğu doğurur.
+
+-- ---------------------------------------------------------------------------
+-- RUHSAT / YANGIN / HACCP / VERGİ / SGK
+-- ---------------------------------------------------------------------------
+-- Neden ayrı tablo: bu belgelerin ortak noktası "son kullanma tarihi +
+-- Hatırlatma". Farklı belge türleri farklı otorite ve numara taşır; bir
+-- `documents` tablosunda her tür için NULL dolgu yapmak okunability'i düşürür.
+CREATE TABLE IF NOT EXISTS legal_documents (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    doc_type TEXT NOT NULL
+        CHECK (doc_type IN ('RUHSAT','YANGIN','HACCP','VERGI','SGK','DIGER')),
+    title TEXT NOT NULL,
+    authority TEXT,
+    document_number TEXT,
+    issue_date TEXT,
+    expiry_date TEXT NOT NULL,
+    reminder_days INTEGER NOT NULL DEFAULT 30,
+    file_path TEXT,
+    notes TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_legal_docs_tenant ON legal_documents(tenant_id, doc_type);
+CREATE INDEX IF NOT EXISTS idx_legal_docs_expiry ON legal_documents(tenant_id, expiry_date);
+
+-- ---------------------------------------------------------------------------
+-- ÖZEL GÜNLER
+-- ---------------------------------------------------------------------------
+-- `recurring_yearly`: 29 Kasım (Kara Cuma) her yıl tekrarlar; `advance_days`
+-- indirimin başlamasından kaç gün önce başlayacağıdır.
+CREATE TABLE IF NOT EXISTS special_days (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    date TEXT NOT NULL,
+    recurring_yearly INTEGER NOT NULL DEFAULT 0,
+    advance_days INTEGER NOT NULL DEFAULT 7,
+    discount_percent INTEGER NOT NULL DEFAULT 0
+        CHECK (discount_percent >= 0 AND discount_percent <= 90),
+    description TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_special_days_tenant ON special_days(tenant_id, date);
+
+-- ---------------------------------------------------------------------------
+-- KAMPANYA
+-- ---------------------------------------------------------------------------
+-- `rule_json` bir kural tanımıdır (örneğin {"min_total_cents": 5000,
+-- "discount_percent": 10, "product_ids": [...]}). Sadece kupon kodu değil,
+-- satın alma toplamı, ürün kapsamı ve saat aralığı gibi kural da saklanır.
+-- Kural **tipli** okunur (services/legal360/campaigns.rs): geçersiz JSON veya
+-- alan dışı değer reddedilir, varsayılana sessizce dönülmez.
+-- `usage_count`: kupon kaç kez kullanıldı; `max_usage` NULL ise sınırsızdır.
+CREATE TABLE IF NOT EXISTS campaigns (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    rule_json TEXT NOT NULL CHECK (json_valid(rule_json)),
+    coupon_code TEXT,
+    usage_count INTEGER NOT NULL DEFAULT 0,
+    max_usage INTEGER,
+    valid_from TEXT,
+    valid_to TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_campaigns_tenant ON campaigns(tenant_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_campaigns_coupon ON campaigns(tenant_id, coupon_code);
+
+-- ---------------------------------------------------------------------------
+-- KAMPANYA ŞABLONU (10 hazır şablon, is_system=1)
+-- ---------------------------------------------------------------------------
+-- Sistem şablonları tenant'a kopyalanır; tenant kendi şablonlarını ekler.
+-- `is_system` kolonu bu ayrımı yapar. Şablonlar tenant_id taşmaz.
+CREATE TABLE IF NOT EXISTS campaign_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    rule_json TEXT NOT NULL CHECK (json_valid(rule_json)),
+    is_system INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ---------------------------------------------------------------------------
+-- SİGORTA POLİÇESİ
+-- ---------------------------------------------------------------------------
+-- İşyeri sorumluluk, kasko, SGK primi. `premium_cents` aylık prim (kuruş).
+CREATE TABLE IF NOT EXISTS insurance_policies (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    policy_type TEXT NOT NULL
+        CHECK (policy_type IN ('ISYERI','SORUMLULUK','SGK','KASKO','DIGER')),
+    insurance_company TEXT NOT NULL,
+    policy_number TEXT NOT NULL,
+    premium_cents INTEGER NOT NULL DEFAULT 0,
+    coverage_cents INTEGER,
+    issue_date TEXT NOT NULL,
+    expiry_date TEXT NOT NULL,
+    reminder_days INTEGER NOT NULL DEFAULT 30,
+    notes TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_insurance_tenant ON insurance_policies(tenant_id, expiry_date);
+
+-- ---------------------------------------------------------------------------
+-- MÜZİK LİSENSİ (MESAM / MSG / BİLGİ)
+-- ---------------------------------------------------------------------------
+-- Telif bedeli: MESAM (müzik hakları), MSG (sesli mesaj), Bilgi Sistemi.
+-- `amount_cents` yıl basisinde ödenen toplam telif (kuruş).
+CREATE TABLE IF NOT EXISTS music_licenses (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    license_type TEXT NOT NULL
+        CHECK (license_type IN ('MESAM','MSG','BILGI','DIGER')),
+    year INTEGER NOT NULL,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    expiry_date TEXT NOT NULL,
+    reminder_days INTEGER NOT NULL DEFAULT 30,
+    notes TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_music_licenses_tenant ON music_licenses(tenant_id, expiry_date);
+
+-- ---------------------------------------------------------------------------
+-- E-ARSİV / E-FATURA KUYRUK (KDV %1 / %10 / %20)
+-- ---------------------------------------------------------------------------
+-- Fatura kalem KDV oranları Türk vergi sistemine göre: %1 (indirimi),
+-- %10 (temel), %20 (yüksek). `status`: PENDING → SENT → ACCEPTED / REJECTED.
+--
+-- Neden oran float değil: oranı REAL tutmak, KDV'yi kuruşta değil ondalıkta
+-- yuvarlamaya yol açar. `kdv_rate_percent` tam sayıdır ve tek kabul edilen
+-- değerler 1 / 10 / 20'dir; `CHECK` bunu veritabanı seviyesinde dondurur.
+--
+-- `total_cents` KDV **dahil** toplamdır (orders.total_cents ile aynı anlam).
+-- KDV ve matrah toplamdan geri çözülür:
+--   kdv_cents    = total_cents * oran / (100 + oran)
+--   matrah_cents = total_cents - kdv_cents
+-- KDV gönderimde yeniden hesaplanmaz; gönderilen ile saklanan aynı olmalıdır.
+--
+-- `order_id` yabancı anahtar **değildir**: sipariş iptalinde kayıt silinmez,
+-- e-Arşiv izi korunur. Sahiplik sorgusu `tenant_id` filtresiyle yapılır.
+CREATE TABLE IF NOT EXISTS e_invoices (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    order_id TEXT,
+    invoice_number TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING','SENT','ACCEPTED','REJECTED','CANCELLED')),
+    kdv_rate_percent INTEGER NOT NULL
+        CHECK (kdv_rate_percent IN (1,10,20)),
+    total_cents INTEGER NOT NULL CHECK (total_cents >= 0),
+    kdv_cents INTEGER NOT NULL CHECK (kdv_cents >= 0),
+    matrah_cents INTEGER NOT NULL CHECK (matrah_cents >= 0),
+    payload TEXT,
+    sent_at DATETIME,
+    response TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_e_invoices_tenant ON e_invoices(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_e_invoices_order ON e_invoices(tenant_id, order_id);
