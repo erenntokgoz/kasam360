@@ -1648,3 +1648,243 @@ CREATE TABLE IF NOT EXISTS two_factor_verifications (
     verified_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (tenant_id, user_id)
 );
+
+-- ============================================================================
+-- FAZ 16 — DIŞ AKTÖRLER (dosya tabanlı takas)
+-- ============================================================================
+--
+-- ERİŞİM MODELİ KARARI (C-8): dış aktörler **ağa çıkmaz**.
+--
+-- Neden: uygulama local-first'tir — tek Tauri süreci, gömülü SQLite, sunucu
+-- yoktur. AGENTS.md §3.1 harici bulutu zaten yasaklıyor. Müşteri, tedarikçi veya
+-- mali müşavirin canlı bağlanabilmesi için dinleyen bir servis kurmak gerekirdi;
+-- bu hem saldırı yüzeyini genişletir hem de personel dışı aktörler için ikinci
+-- bir kimlik alanı (auth realm) açar. Bunun yerine takas **dosya üzerinden**
+-- yapılır: QR menü statik dosya, mali müşavir/tedarikçi imzalı dışa aktarım +
+-- içe aktarım, WhatsApp/e-posta kuyruk + sahte sağlayıcı.
+--
+-- SONUÇ: bu fazda **hiçbir yeni port açılmaz**.
+--
+-- Para ve bütünlük kuralları:
+--   * Tutarlar `*_cents INTEGER` (AGENTS.md §2). Dış aktör JSON'u **fiyat
+--     taşımaz**: `customer_orders.items` yalnız ürün kimliği + adet + not içerir,
+--     fiyat sunucuda `orders`/`menu` üzerinden çözülür. Aksi halde müşteri
+--     fiyatı kendisi belirler ve bu bir fiyat kayması açığı olurdu (P0-7).
+--   * Her tabloda `tenant_id` zorunludur; filtrelemesiz sorgu yazılmaz.
+--   * Dışa aktarılan her dosya HMAC ile imzalanır; imzasız dosya içe alınmaz.
+
+-- 0) Dış aktör imza anahtarı.
+--
+-- Neden ayrı tablo: dışa aktarılan dosyalar HMAC ile imzalanır, ama anahtar
+-- `tenants` içinde bir sütun değildir ve olmamalıdır — kimlik bilgisi ile
+-- imza anahtarı aynı satırda durursa, biri sızarsa diğeri de düşer.
+--
+-- Neden `key_id`: dosya, hangi anahtarla doğrulandığını bilmeden taşınamaz.
+-- `key_id`, anahtarın özetinin ilk yarısıdır; doğrulayıcı anahtarı bu bilgiyle
+-- seçer, anahtarın kendisi dosyada **bulunmaz**.
+--
+-- Neden tek satır (anahtar döndürme satırı tutulmaz): döndürme eski imzaları
+-- geçersiz kılar. Bu bilinçli bir seçimdir — müşavir elindeki dosyayı
+-- doğrulayamaz hale gelirse dosyayı yeniden ister; tersi durumda eski anahtar
+-- sonsuza kadar geçerli kalır ve imza güvenliği zamanla erir.
+CREATE TABLE IF NOT EXISTS external_signing_keys (
+    tenant_id TEXT PRIMARY KEY,
+    key_hex TEXT NOT NULL,
+    key_id TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 1) Müşteri oturumu (QR menü erişimi).
+--
+-- Neden ayrı tablo: müşteri bir personel değildir. `users` tablosuna yazılsaydı
+-- personel yetki matrisiyle karışır, şifre/PIN zorunluluğu yanlış yere biner.
+-- Müşterinin kimliği **jeton**dır; jeton tabloya yalnız HMAC olarak girer.
+--
+-- Neden `qr_token` düz metin değil: dosya kopyasını okuyan biri (yedek, ortak
+-- klasör) müşteri oturumunu doğrudan kullanmasın. `session.rs` ile aynı yaklaşım.
+CREATE TABLE IF NOT EXISTS customer_sessions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    qr_token_hash TEXT NOT NULL,
+    customer_label TEXT NOT NULL DEFAULT '',
+    -- Zaman damgaları saniye cinsinden epoch; `session.rs` ile aynı ölçek.
+    expires_at INTEGER NOT NULL,
+    revoked_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tenant_id, qr_token_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_customer_sessions_tenant
+    ON customer_sessions(tenant_id, expires_at);
+
+-- 2) Müşteri siparişi (QR menüden gelen talep).
+--
+-- Neden ayrı tablo, `orders` değil: dışarıdan gelen talep **onaylanmamış**dır.
+-- `orders` tablosu KDS/POS akışının sahibidir ve para hareketi üretir; müşterinin
+-- gönderdiği istek doğrudan oraya yazılırsa onaysız satış doğar. Buradaki satır
+-- personel tarafından onaylanınca `orders`'a taşınır.
+--
+-- `items` JSON yalnız talebi taşır: `[{ "product_id": "...", "qty": 2, "note": "..." }]`.
+-- Fiyat burada **bulunmaz**; fiyat onay anında ürün tablosundan okunur.
+CREATE TABLE IF NOT EXISTS customer_orders (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    items TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    -- Onaylandığında `orders` tablosuna yazılan gerçek sipariş kimliği.
+    order_id TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES customer_sessions(id) ON DELETE CASCADE,
+    CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED'))
+);
+CREATE INDEX IF NOT EXISTS idx_customer_orders_tenant_status
+    ON customer_orders(tenant_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_customer_orders_session
+    ON customer_orders(tenant_id, session_id);
+
+-- 3) Müşteri geri bildirimi.
+--
+-- Neden siparişe bağlanmaz: geri bildirim zorunlu olarak bir siparişe ait
+-- olmak zorunda değildir; bağlansaydı müşteri "değerlendirdim" diyemezdi.
+CREATE TABLE IF NOT EXISTS customer_feedback (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    session_id TEXT,
+    rating INTEGER NOT NULL,
+    comment TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- 1–5 aralığı DB'de sınırlanır: uygulama hatası 0 ya da 9 puan yazmasın.
+    CHECK (rating BETWEEN 1 AND 5)
+);
+CREATE INDEX IF NOT EXISTS idx_customer_feedback_tenant
+    ON customer_feedback(tenant_id, created_at);
+
+-- 4) Tedarikçiye gönderilen sipariş talebi (WhatsApp kuyruğuna bağlanır).
+--
+-- Neden `suppliers` tablosuna FK: dış aktör tanımı zaten `inventory360/suppliers`
+-- tarafından yönetiliyor; ikinci bir tedarikçi tablosu iki gerçek üretirdi.
+--
+-- `whatsapp_message_id` boşsa talep gönderilmemiş demektir; kuyruk kaydı
+-- ayrı tablodadır ve bu alan yalnız bağlantı noktasıdır.
+CREATE TABLE IF NOT EXISTS supplier_orders (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    supplier_id TEXT NOT NULL,
+    -- Aynı sözleşme: `[{ "product_id": "...", "qty": 10 }]`, fiyat yok.
+    items TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'DRAFT',
+    whatsapp_message_id TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    CHECK (status IN ('DRAFT', 'QUEUED', 'SENT', 'DELIVERED', 'CANCELLED'))
+);
+CREATE INDEX IF NOT EXISTS idx_supplier_orders_tenant_status
+    ON supplier_orders(tenant_id, status, created_at);
+
+-- 5) Mali müşavir raporu.
+--
+-- Neden `period`: dışa aktarım dönemseldir; raporun hangi dönemi kapsadığı
+-- dosya adından tahmin edilemez.
+--
+-- Neden `sent_at` ayrı: dosya üretildiği an ile müşavire **ulaştığı** an farklıdır.
+-- Teslim edilmediği halde "gönderildi" işaretlenmiş rapor, mali müşavirin
+-- eksik dosya farkına yol açar (sessiz hata).
+CREATE TABLE IF NOT EXISTS accountant_reports (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    file_sha256 TEXT NOT NULL,
+    -- Dosya kimin ürettiğini gösterir: aktarım yazılırken imzadaki etiket.
+    created_by TEXT NOT NULL,
+    sent_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (period_start <= period_end)
+);
+CREATE INDEX IF NOT EXISTS idx_accountant_reports_tenant_period
+    ON accountant_reports(tenant_id, period_start, period_end);
+
+-- 6) Teknik servis kaydı (yedek parça / arıza / bakım).
+--
+-- Neden `severity` ayrı alan: "bakım" ile "arıza" aynı akışta çözülemez;
+-- aciliyeti bilmeden önceliklendirme yapılamaz.
+CREATE TABLE IF NOT EXISTS service_tickets (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'OPEN',
+    -- Personel kimliği (`users.id`); yabancı teknisyen hesap değildir.
+    assigned_to TEXT,
+    resolved_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+    CHECK (status IN ('OPEN', 'IN_PROGRESS', 'WAITING_PARTS', 'RESOLVED', 'CLOSED'))
+);
+CREATE INDEX IF NOT EXISTS idx_service_tickets_tenant_status
+    ON service_tickets(tenant_id, status, severity, created_at);
+
+-- 7) WhatsApp gönderim kuyruğu.
+--
+-- Neden kuyruk ve neden sahte sağlayıcı: AGENTS.md §3.1 harici bulutu
+-- yasaklıyor; gerçek Meta API çağrısı bu fazda yapılamaz. Kuyruk + sahte
+-- sağlayıcı, gerçek entegrasyonun istediği durum makinesini (kuyruk → gönderim →
+-- teslim) şimdiden test edilebilir kılar; Faz 17'de sağlayıcı değişir, veri
+-- modeli değişmez.
+--
+-- Neden `provider_flag`: sahte sağlayıcı üzerinden gönderilen mesaj, gerçek
+-- gönderilmiş gibi görünmemeli. Kolon "bu bir simülasyondur" bilgisini
+-- saklar; müşteriye giden gerçek bir mesajın test kaydıyla karışmasını engeller.
+CREATE TABLE IF NOT EXISTS whatsapp_queue (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    message TEXT NOT NULL,
+    -- Bağlı olduğu talep (sağlamsa). Zorunlu değil: genel duyuru da kuyruğa girer.
+    supplier_order_id TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    provider_flag TEXT NOT NULL DEFAULT 'FAKE',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    sent_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (supplier_order_id) REFERENCES supplier_orders(id),
+    CHECK (status IN ('PENDING', 'SENDING', 'SENT', 'FAILED', 'CANCELLED')),
+    CHECK (provider_flag IN ('FAKE', 'REAL'))
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_queue_tenant_status
+    ON whatsapp_queue(tenant_id, status, created_at);
+
+-- 8) E-posta gönderim kuyruğu (SMTP).
+--
+-- Neden WhatsApp tablosuyla aynı: SMTP için ayrı bir kuyruk kuralı yazılsaydı,
+-- iki kuyruk farklı hatalarda ayrışır. Aynı durum makinesi, aynı yeniden
+-- deneme mantığı, tek fark taşıyıcı.
+CREATE TABLE IF NOT EXISTS email_queue (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    attachment_path TEXT,
+    accountant_report_id TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    provider_flag TEXT NOT NULL DEFAULT 'FAKE',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    sent_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (accountant_report_id) REFERENCES accountant_reports(id),
+    CHECK (status IN ('PENDING', 'SENDING', 'SENT', 'FAILED', 'CANCELLED')),
+    CHECK (provider_flag IN ('FAKE', 'REAL'))
+);
+CREATE INDEX IF NOT EXISTS idx_email_queue_tenant_status
+    ON email_queue(tenant_id, status, created_at);

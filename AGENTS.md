@@ -319,6 +319,13 @@ Override zinciri: tenant → branch (user override YOK). Kapalıysa route 404.
 - displayName + forwardRef her custom bileşende
 - Türkçe karakterler doğru kodlanacak (ı, ş, ğ, ü, ö, ç)
 - Yorum satırı "neden" der, "ne" demez.
+- **Dosya düzenleme SADECE Edit/Write tool ile.** PowerShell `Get-Content` /
+  `Set-Content` YASAK: shell varsayılan kodlaması cp1254'tür, dosyayı bu
+  kodlamayla okuyup UTF-8 olarak geri yazınca Türkçe karakterler bozulur
+  ("kaldırılmıyor" → "kaldýrýlmýyor") ve BOM eklenir (§10 UTF-8 kuralı çiğnenır).
+  PowerShell yalnız **ölçüm** komutları için kullanılabilir: `cargo test`,
+  `cargo check`, `cargo fmt --check`, `npx tsc --noEmit`, `npx vitest run`,
+  `git` komutları.
 
 ---
 

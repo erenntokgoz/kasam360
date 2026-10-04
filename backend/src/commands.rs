@@ -8,6 +8,7 @@ pub mod audit_commands;
 pub mod auth_commands;
 pub mod command_helpers;
 pub mod day_close_commands;
+pub mod external360_commands;
 pub mod floor_commands;
 pub mod floor_plan_commands;
 pub mod kds_commands;

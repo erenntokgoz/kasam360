@@ -51,6 +51,7 @@ files_to_translate.txt
 
 # QA / Local tooling
 .codedev-mcp/
+.playwright-mcp/
 test-results/
 playwright-report/
 blob-report/
