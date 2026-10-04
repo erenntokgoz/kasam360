@@ -1591,6 +1591,23 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(tenant_id, user_id);
 
+-- Oturum zorunluluğu anahtarı (D1).
+--
+-- Neden tablo: oturum doğrulaması yüksek riskli komutlara eklenir, ama arayüz
+-- henüz jeton göndermez (Faz 17). Kapıyı her komutta koşulsuz açmak mevcut
+-- çağrı sözleşmesini kırar ve kasayı durdurur; hiç açmamak ise güvenlik
+-- sağlamaz. Bu bayrak iki durumu da adıyla saklar: işletme sahibi jeton
+-- göndermeye başladığında `enforced = 1` yapar ve kapı **fail-closed** olarak
+-- çalışır (jeton yoksa hata).
+--
+-- Varsayılan `0`: arayüz Faz 17'de jeton gönderene kadar davranış değişmez.
+CREATE TABLE IF NOT EXISTS session_policies (
+    tenant_id TEXT PRIMARY KEY,
+    is_enforced INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (is_enforced IN (0, 1))
+);
+
 -- İki faktörlü doğrulama (D2: backend-only, kapalı).
 --
 -- `secret_hash` sırrın **özeti**dir, sır kalıcı olarak saklanmaz. Bu bilinçli bir

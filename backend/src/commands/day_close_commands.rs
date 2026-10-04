@@ -3,11 +3,10 @@
 //! Bu dosya commands.rs 500 satır tavanını aştığı için bölündü; içerik
 //! olduğu gibi taşındı, davranış değiştirilmedi.
 
+use crate::commands::command_helpers::audit_actor;
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use crate::commands::command_helpers::audit_actor;
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DailySummaryDto {
@@ -22,7 +21,14 @@ pub async fn get_daily_summary(
     tenant_id: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<DailySummaryDto, String> {
-    crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier])?;
+    crate::rbac::require_any(
+        &actor_role,
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
+    )?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
@@ -90,29 +96,47 @@ pub async fn close_day(
     actor_role: Option<String>,
     actor_id: Option<String>,
     tenant_id: Option<String>,
-    #[allow(non_snake_case)]
-    tenantId: Option<String>,
+    #[allow(non_snake_case)] tenantId: Option<String>,
     approval_token: Option<String>,
-    #[allow(non_snake_case)]
-    approvalToken: Option<String>,
+    #[allow(non_snake_case)] approvalToken: Option<String>,
+    session_token: Option<String>,
+    #[allow(non_snake_case)] sessionToken: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<CloseDayResultDto, String> {
-    let effective_tenant = tenant_id.or(tenantId).unwrap_or_else(|| "DEFAULT_TENANT".to_string());
+    let effective_tenant = tenant_id
+        .or(tenantId)
+        .unwrap_or_else(|| "DEFAULT_TENANT".to_string());
+
+    // D1: gün sonu yüksek riskli komutlardandır (kasa devri).
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let (bildirilen_id, bildirilen_rol) = audit_actor(actor_id, actor_role.clone());
+    let (user_id, role) = crate::services::security360::session::oturum_aktoru(
+        &mut tx,
+        session_token.as_deref(),
+        &effective_tenant,
+        &bildirilen_id,
+        &bildirilen_rol,
+    )
+    .await?;
 
     // Gün sonu kasayı devreder: vardiyalar kapanır, mutabakat farkı mühürlenir.
     // Önceden **hiç rol denetimi yoktu** — garson dahil herkes günü
     // kapatabiliyordu. Kasa devri yönetim işlemidir.
-    let (user_id, role) = audit_actor(actor_id, actor_role.clone());
+    //
+    // Rol denetimi oturumdan gelen kimlikle yapılır; oturum yoksa çağıranın
+    // bildirdiği rol geçerlidir (bkz. `oturum_aktoru`).
     crate::rbac::require_any(
         &role,
         &[crate::rbac::Role::Owner, crate::rbac::Role::Manager],
     )?;
 
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     let jeton = approval_token.or(approvalToken);
+    // İkili isim (snake_case + camelCase) yalnız **jeton** alanlarında kabul
+    // edilir; oturum jetonu tek isimle gelir çünkü hiçbir eski çağrı onu
+    // göndermiyordu.
+    let _ = sessionToken;
 
     let now_str = chrono::Utc::now().to_rfc3339();
 
@@ -148,11 +172,12 @@ pub async fn close_day(
     // Eşik aşımı onay gerektirir (D3). Gün sonu eşiği günün cirosudur: yüksek
     // ciro günü kapatma yetkisi müdürde olmalıdır. Kiracı eşik tanımlamamışsa
     // onay kapalıdır ve gün sonu mevcut davranışta kapanır.
-    let esik = crate::services::security360::threshold::esik_oku(&mut tx, &effective_tenant).await?;
-    if crate::services::security360::money_gate::gun_sonu_onay_gerekli_mi(total_revenue_cents, esik) {
-        let token = crate::services::security360::money_gate::onay_jetonunu_zorunlu_kil(
-            jeton.as_deref(),
-        )?;
+    let esik =
+        crate::services::security360::threshold::esik_oku(&mut tx, &effective_tenant).await?;
+    if crate::services::security360::money_gate::gun_sonu_onay_gerekli_mi(total_revenue_cents, esik)
+    {
+        let token =
+            crate::services::security360::money_gate::onay_jetonunu_zorunlu_kil(jeton.as_deref())?;
 
         let request = crate::approval_service::ApprovalRequest {
             tenant_id: effective_tenant.clone(),
@@ -199,10 +224,8 @@ pub async fn close_day(
         // Sayım girilmemişse fark **bilinmiyor**, sıfır değil. Kapatma yine
         // yapılır (vardiya sonsuza dek açık kalamaz) ama fark `NULL` yazılır;
         // sıfır yazmak "kasayı saydım, tutuyor" izlenimi verirdi.
-        let (actual, diff) = crate::services::security360::money_gate::kapanis_farki(
-            expected,
-            actual_opt,
-        );
+        let (actual, diff) =
+            crate::services::security360::money_gate::kapanis_farki(expected, actual_opt);
 
         sqlx::query(
             "UPDATE shifts SET status = 'CLOSED', closed_at = datetime('now'),
@@ -244,7 +267,10 @@ pub async fn close_day(
 
     Ok(CloseDayResultDto {
         success: true,
-        message: format!("Gün sonu başarıyla kapatıldı. {} adet açık vardiya sonlandırıldı.", closed_shifts_count),
+        message: format!(
+            "Gün sonu başarıyla kapatıldı. {} adet açık vardiya sonlandırıldı.",
+            closed_shifts_count
+        ),
         closed_shifts_count,
         total_revenue_cents,
         total_orders,

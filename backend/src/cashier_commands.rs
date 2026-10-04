@@ -54,10 +54,10 @@ pub async fn cash_in(
 
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-    
+
     let id = format!("cmin_{}", Uuid::new_v4());
     let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
-    
+
     sqlx::query(
         "INSERT INTO cash_movements (id, tenant_id, shift_id, movement_type, amount_cents, reason, actor_id, created_at)
          VALUES (?, ?, ?, 'IN', ?, ?, ?, datetime('now'))"
@@ -88,9 +88,9 @@ pub async fn cash_in(
         chrono::Utc::now().to_rfc3339(),
     )?;
     AuditService::append(&mut tx, &audit_lock, &ctx).await?;
-    
+
     tx.commit().await.map_err(|e| e.to_string())?;
-    
+
     Ok(CashMovementDto {
         id,
         shift_id,
@@ -103,7 +103,7 @@ pub async fn cash_in(
 }
 
 #[tauri::command]
-    #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub async fn cash_out(
     shift_id: String,
     amount_cents: i64,
@@ -112,8 +112,9 @@ pub async fn cash_out(
     actor_role: Option<String>,
     tenant_id: Option<String>,
     approval_token: Option<String>,
-    #[allow(non_snake_case)]
-    approvalToken: Option<String>,
+    #[allow(non_snake_case)] approvalToken: Option<String>,
+    session_token: Option<String>,
+    #[allow(non_snake_case)] sessionToken: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<CashMovementDto, String> {
@@ -121,11 +122,25 @@ pub async fn cash_out(
 
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let session_token = session_token.or(sessionToken);
 
     let id = format!("cmout_{}", Uuid::new_v4());
     let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
     let actor_role = actor_role.unwrap_or_else(|| "Cashier".to_string());
     let jeton = approval_token.or(approvalToken);
+
+    // D1: kasa çıkışı yüksek riskli komutlardandır. Oturum gönderildiyse
+    // doğrulanır ve **kimlik ile rol** oturumdan gelir; çağıran `actor_id`
+    // alanına istediğini yazamaz. Kiracı doğrulamayı zorunlu kıldıysa jetonsuz
+    // komut durur.
+    let (actor_id, actor_role) = crate::services::security360::session::oturum_aktoru(
+        &mut tx,
+        session_token.as_deref(),
+        &tenant_id,
+        &actor_id,
+        &actor_role,
+    )
+    .await?;
 
     // Kasa çıkışı para hareketidir: negatif veya sıfır tutar "çıkış" değildir.
     // Negatif bir tutar `IN` hareketi gibi toplamlara ters yönde işler ve
@@ -222,9 +237,9 @@ pub async fn cash_out(
         chrono::Utc::now().to_rfc3339(),
     )?;
     AuditService::append(&mut tx, &audit_lock, &ctx).await?;
-    
+
     tx.commit().await.map_err(|e| e.to_string())?;
-    
+
     Ok(CashMovementDto {
         id,
         shift_id,
@@ -244,7 +259,7 @@ pub async fn get_shift_summary(
 ) -> Result<ShiftSummaryDto, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
-    
+
     // Get shift details (opening balance, actual closing if any)
     let shift_row = sqlx::query("SELECT opened_at, expected_amount_cents, actual_amount_cents, closed_at, tenant_id FROM shifts WHERE id = ? AND tenant_id = ?")
         .bind(&shift_id)
@@ -252,8 +267,8 @@ pub async fn get_shift_summary(
         .fetch_optional(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
-        
-let Some(shift) = shift_row else {
+
+    let Some(shift) = shift_row else {
         return Err("NOT_FOUND: Vardiya bulunamadı.".into());
     };
     // Para ve sayaç okumaları `unwrap_or(0)` **olamaz** (AGENTS.md §3.4): SQL
@@ -276,7 +291,7 @@ let Some(shift) = shift_row else {
     let mut sales_query = String::from(
         "SELECT COALESCE(sum(json_extract(payload, '$.totalAmount')), 0) as total
          FROM audit_ledger 
-         WHERE tenant_id = ? AND action='payment:settled_fifo' AND created_at >= ?"
+         WHERE tenant_id = ? AND action='payment:settled_fifo' AND created_at >= ?",
     );
     // Yalnızca nakit satışlar (Kasa çekmecesine giren nakit)
     let mut cash_sales_query = String::from(
@@ -284,21 +299,43 @@ let Some(shift) = shift_row else {
          FROM audit_ledger 
          WHERE tenant_id = ? AND action='payment:settled_fifo' 
          AND UPPER(json_extract(payload, '$.method')) = 'CASH' 
-         AND created_at >= ?"
+         AND created_at >= ?",
     );
-    
+
     let (sales_row, cash_sales_row) = if let Some(ref closed) = closed_at {
         sales_query.push_str(" AND created_at <= ?");
         cash_sales_query.push_str(" AND created_at <= ?");
-        let s = sqlx::query(&sales_query).bind(&tenant_id).bind(&opened_at).bind(closed).fetch_one(&mut *conn).await.map_err(|e| e.to_string())?;
-        let cs = sqlx::query(&cash_sales_query).bind(&tenant_id).bind(&opened_at).bind(closed).fetch_one(&mut *conn).await.map_err(|e| e.to_string())?;
+        let s = sqlx::query(&sales_query)
+            .bind(&tenant_id)
+            .bind(&opened_at)
+            .bind(closed)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+        let cs = sqlx::query(&cash_sales_query)
+            .bind(&tenant_id)
+            .bind(&opened_at)
+            .bind(closed)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
         (s, cs)
     } else {
-        let s = sqlx::query(&sales_query).bind(&tenant_id).bind(&opened_at).fetch_one(&mut *conn).await.map_err(|e| e.to_string())?;
-        let cs = sqlx::query(&cash_sales_query).bind(&tenant_id).bind(&opened_at).fetch_one(&mut *conn).await.map_err(|e| e.to_string())?;
+        let s = sqlx::query(&sales_query)
+            .bind(&tenant_id)
+            .bind(&opened_at)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+        let cs = sqlx::query(&cash_sales_query)
+            .bind(&tenant_id)
+            .bind(&opened_at)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
         (s, cs)
     };
-    
+
     let total_sales: i64 = sales_row.try_get("total").map_err(|e| e.to_string())?;
     let cash_sales: i64 = cash_sales_row.try_get("total").map_err(|e| e.to_string())?;
 
@@ -336,7 +373,7 @@ let Some(shift) = shift_row else {
         Some(actual) => actual - expected_balance,
         None => 0,
     };
-    
+
     Ok(ShiftSummaryDto {
         shift_id,
         total_sales,
