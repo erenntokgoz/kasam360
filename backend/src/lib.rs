@@ -109,6 +109,12 @@ pub fn run() {
             commands::update_table_name,
             commands::get_daily_summary,
             commands::get_receipts,
+            // Faz 15 B3 (D3): çift onay eşiği kiracı bazında yönetilir.
+            // Eşiği değiştirmek yalnız işletme sahibine açıktır; okuma sahip ve
+            // müdüre açıktır. Arayüz Faz 17'de, komutlar şimdiden hazır.
+            commands::threshold_commands::get_approval_threshold,
+            commands::threshold_commands::set_approval_threshold,
+            commands::threshold_commands::reset_approval_threshold,
             commands::get_receipt_details,
             commands::void_order,
             commands::get_audit_logs,

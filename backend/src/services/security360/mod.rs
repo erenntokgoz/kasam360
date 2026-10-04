@@ -19,7 +19,9 @@ pub mod login_lockout;
 pub mod mask;
 pub mod money_gate;
 pub mod policy;
+pub mod session;
 pub mod threshold;
+pub mod two_factor;
 
 /// Üretilen parolaların harf dizisindeki karakterler.
 ///
@@ -68,11 +70,25 @@ pub fn rastgele_parola(uzunluk: usize) -> String {
     karakterler.into_iter().collect()
 }
 
+/// Kriptografik rastgele bayt (0-255).
+///
+/// Neden ayrı yordam: TOTP sırrı gibi "N bayt iste, sonra alfabele eşle"
+/// biçimindeki üreticiler `OsRng.next_u32()`'ı kendileri çağıramaz —
+/// `OsRng` `RngCore` implementasyonunu `Rng`'in üzerinden sunar. Tek kaynak
+/// burada toplanır.
+pub fn rastgele_bayt() -> u8 {
+    use argon2::password_hash::rand_core::{OsRng, RngCore};
+    OsRng.next_u32() as u8
+}
+
 /// Reddetme örneklemesiyle bir alfabenin `u32` çıktısından karakter seçer.
 ///
 /// Neden `u32`: `u8` tek çağrıda 8 bit verir ve her karakter için yeni `OsRng`
 /// çağrısı gerektirir; `u32` tek çağrıda 32 bit verir.
-fn harf_sec(uretilen: u32, alfabe: &[u8]) -> char {
+///
+/// Neden `pub(crate)`: 2FA sırı da harf seçer. İki ayrı örnekleyici
+/// kullanırsak biri unutulur ve diğeri sessizce yanlış dağılım üretir.
+pub(crate) fn harf_sec(uretilen: u32, alfabe: &[u8]) -> char {
     use argon2::password_hash::rand_core::{OsRng, RngCore};
 
     // 2^32, alfabe uzunluğunun katı olmayan en büyük değere kadar kırpılır.
@@ -99,4 +115,34 @@ pub const UYARI_ESIGI: i64 = 2;
 /// zaman kaynağı kullanırsa test bir gün, üretim başka bir gün kapanır.
 pub fn simdi_sn() -> i64 {
     chrono::Utc::now().timestamp()
+}
+
+/// Testler için bellek içi bağlantı + şema.
+///
+/// Neden tek yer: her test modülü kendi bağlantısını kurarsa şema N kez
+/// uygulanır ve her modülde `include_str` yolu ayrı ayrı bozulabilir. Yeni
+/// tablo eklendiğinde tek nokta güncellenir.
+#[cfg(test)]
+pub(crate) mod test_db {
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+    use sqlx::SqliteConnection;
+    use std::str::FromStr;
+
+    pub async fn bellek() -> SqliteConnection {
+        let secenek = SqliteConnectOptions::from_str("sqlite::memory:")
+            .expect("gecerli secenekler")
+            .create_if_missing(true);
+        let havuz = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(secenek)
+            .await
+            .expect("havuz acilir");
+
+        sqlx::raw_sql(include_str!("../../../migrations/schema.sql"))
+            .execute(&havuz)
+            .await
+            .expect("sema uygulanir");
+
+        havuz.acquire().await.expect("baglanti").detach()
+    }
 }

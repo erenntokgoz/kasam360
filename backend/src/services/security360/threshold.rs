@@ -2,33 +2,57 @@
 //!
 //! Neden DB'de: eşik `LARGE_DISCOUNT_CENTS` sabitiydi ve kod değiştirilmeden
 //! değiştirilemiyordu. "500 TL üzeri indirim yöneticiden onay ister" kuralı
-//! kafenin büyüklüğüne göre değişir; Hardcoded sabit ya çok sıkı ya çok gevşek
+//! kafenin büyüklüğüne göre değişir; hardcoded sabit ya çok sıkı ya çok gevşek
 //! olur. Eşik artık kiracı başına tek satırda tutulur.
 //!
-//! Neden satır yoksa **kapalı** sayılmıyor: mevcut davranış korunur. Varsayılan
-//! değer `approval_service::LARGE_DISCOUNT_CENTS`'tir; böylece hiçbir işletme
-//! eşiği kendiliğinden kaybetmez. Fail-closed bir varsayılan ("satır yoksa
-//! onay istenmez") mevcut güvenlik seviyesini düşürürdü.
+//! **Neden satır yoksa `None`:** D3'ün kapsamı üç yeni yüzey ekledi (ödeme
+//! toplamı, kasa çıkışı, gün sonu) ve bunların bugün onayı yoktur. Satır yoksa
+//! `None` dönmek bu yüzeyleri mevcut davranışta bırakır. `varsayilan_esik()`
+//! (500 TL) her işletmede zorlanırsa gün sonu ve kasa çıkışı onay jetonu
+//! ister; jeton üreten arayüz Faz 17'de olduğu için patron günü kapatamaz.
+//! Kullanılamayan bir güvenlik kapatması, hiç konmamış bir kapatmadan kötüdür.
+//!
+//! **Neden indirim farklı:** `DISCOUNT` yüzeyinde eşik zaten kod içindeydi ve
+//! mevcut güvenlik seviyesi düşmemelidir. `esik_oku_indirim_icin` satır yoksa
+//! sabite düşer.
 
 use sqlx::{Row, SqliteConnection};
 
-/// Eşiği okur. Satır yoksa `varsayilan_esik()`.
-pub async fn esik_oku(conn: &mut SqliteConnection, tenant_id: &str) -> Result<i64, String> {
+/// Eşiği okur. Satır yoksa `None` (onay kapalı).
+///
+/// Neden hata yükseliyor: satır okunamazsa `None` dönmek "eşik yok" demek
+/// olurdu; oysa eşiği **bilmiyoruz**. Eşiği bilmeden onay kararı vermek, eşiği
+/// yok saymaktan farksızdır (AGENTS.md §3.4).
+pub async fn esik_oku(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+) -> Result<Option<i64>, String> {
     let satir = sqlx::query("SELECT amount_cents FROM approval_thresholds WHERE tenant_id = ?")
         .bind(tenant_id)
         .fetch_optional(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
 
-    // Satır okunamadıysa hata yükselir, sıfır dönmez: AGENTS.md §3.4. Eşiği
-    // sıfır sanmak "her işlem onay ister" demektir; sessizce yükselen bir
-    // onay yükü patronun kasa önünde bekletir.
     let Some(satir) = satir else {
-        return Ok(varsayilan_esik());
+        return Ok(None);
     };
 
     let tutar: i64 = satir.try_get("amount_cents").map_err(|e| e.to_string())?;
-    Ok(tutar.max(1))
+    Ok(Some(tutar.max(1)))
+}
+
+/// İndirim yüzeyi için eşik: satır yoksa kod içindeki sabit kullanılır.
+///
+/// Neden ayrı yordam: D3 yalnız **yeni** yüzeyleri kapatıyor. `DISCOUNT`
+/// bugün `LARGE_DISCOUNT_CENTS` ile çalışıyor; aynı okuma yordamı kullanılsaydı
+/// indirim onayı sessizce kapanırdı.
+pub async fn esik_oku_indirim_icin(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+) -> Result<i64, String> {
+    Ok(esik_oku(conn, tenant_id)
+        .await?
+        .unwrap_or_else(varsayilan_esik))
 }
 
 /// Eşiği yazar (varsayılan: hatalı eşiği geri al).
@@ -75,30 +99,38 @@ pub fn varsayilan_esik() -> i64 {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_db::bellek;
     use super::*;
-    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-    use std::str::FromStr;
 
     async fn conn() -> SqliteConnection {
-        let secenek = SqliteConnectOptions::from_str("sqlite::memory:")
-            .expect("gecerli secenekler")
-            .create_if_missing(true);
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect_with(secenek)
-            .await
-            .expect("havuz acilir");
-        sqlx::raw_sql(include_str!("../../../migrations/schema.sql"))
-            .execute(&pool)
-            .await
-            .expect("sema uygulanir");
-        pool.acquire().await.expect("baglanti").detach()
+        bellek().await
     }
 
     #[tokio::test]
-    async fn kayit_yoksa_varsayilan_esik_geometrye_gelir() {
+    async fn kayit_yoksa_esik_yoktur() {
         let mut conn = conn().await;
-        assert_eq!(esik_oku(&mut conn, "tenant_yok").await.expect("okunur"), varsayilan_esik());
+        assert_eq!(
+            esik_oku(&mut conn, "tenant_yok").await.expect("okunur"),
+            None,
+            "kayit yoksa yeni yuzeyler kapali kalmali"
+        );
+    }
+
+    #[tokio::test]
+    async fn indirim_yuzeyi_kayit_yoksa_sabite_duser() {
+        let mut conn = conn().await;
+        assert_eq!(
+            esik_oku_indirim_icin(&mut conn, "tenant_yok").await.expect("okunur"),
+            varsayilan_esik(),
+            "mevcut indirim guvenligi dusmemeli"
+        );
+
+        esik_ayarla(&mut conn, "tenant_yok", 250_000).await.expect("yazilir");
+        assert_eq!(
+            esik_oku_indirim_icin(&mut conn, "tenant_yok").await.expect("okunur"),
+            250_000,
+            "kayit varsa db ustun gelir"
+        );
     }
 
     #[tokio::test]
@@ -107,8 +139,19 @@ mod tests {
         esik_ayarla(&mut conn, "tenant_a", 250_000).await.expect("yazilir");
         esik_ayarla(&mut conn, "tenant_b", 50_000).await.expect("yazilir");
 
-        assert_eq!(esik_oku(&mut conn, "tenant_a").await.expect("okunur"), 250_000);
-        assert_eq!(esik_oku(&mut conn, "tenant_b").await.expect("okunur"), 50_000);
+        assert_eq!(
+            esik_oku(&mut conn, "tenant_a").await.expect("okunur"),
+            Some(250_000)
+        );
+        assert_eq!(
+            esik_oku(&mut conn, "tenant_b").await.expect("okunur"),
+            Some(50_000)
+        );
+        assert_eq!(
+            esik_oku(&mut conn, "tenant_c").await.expect("okunur"),
+            None,
+            "kaydi olmayan kiralar etkilenmemeli"
+        );
     }
 
     #[tokio::test]
@@ -117,7 +160,10 @@ mod tests {
         esik_ayarla(&mut conn, "tenant_a", 100_000).await.expect("yazilir");
         esik_ayarla(&mut conn, "tenant_a", 900_000).await.expect("guncellenir");
 
-        assert_eq!(esik_oku(&mut conn, "tenant_a").await.expect("okunur"), 900_000);
+        assert_eq!(
+            esik_oku(&mut conn, "tenant_a").await.expect("okunur"),
+            Some(900_000)
+        );
 
         let satir_sayisi: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM approval_thresholds WHERE tenant_id = ?")
             .bind("tenant_a")
@@ -128,12 +174,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sifirlama_varsayilana_dondurur() {
+    async fn sifirlama_yuzeyleri_kapatir() {
         let mut conn = conn().await;
         esik_ayarla(&mut conn, "tenant_a", 1_000).await.expect("yazilir");
         esik_sifirla(&mut conn, "tenant_a").await.expect("silinir");
 
-        assert_eq!(esik_oku(&mut conn, "tenant_a").await.expect("okunur"), varsayilan_esik());
+        assert_eq!(esik_oku(&mut conn, "tenant_a").await.expect("okunur"), None);
     }
 
     #[tokio::test]
@@ -143,7 +189,13 @@ mod tests {
         assert_eq!(esik_ayarla(&mut conn, "tenant_a", 0).await.expect("yazilir"), 1);
         assert_eq!(esik_ayarla(&mut conn, "tenant_b", -50_000).await.expect("yazilir"), 1);
 
-        assert_eq!(esik_oku(&mut conn, "tenant_a").await.expect("okunur"), 1);
-        assert_eq!(esik_oku(&mut conn, "tenant_b").await.expect("okunur"), 1);
+        assert_eq!(
+            esik_oku(&mut conn, "tenant_a").await.expect("okunur"),
+            Some(1)
+        );
+        assert_eq!(
+            esik_oku(&mut conn, "tenant_b").await.expect("okunur"),
+            Some(1)
+        );
     }
 }

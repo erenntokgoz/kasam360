@@ -50,11 +50,17 @@ pub async fn get_daily_summary(
 
     let mut payment_methods = std::collections::HashMap::new();
     for r in methods_rows {
-        if let Ok(method) = r.try_get::<String, _>("method") {
-            // totalAmount in audit_ledger payload is stored as integer cents — read directly.
-            let amount_cents: i64 = r.try_get("amount").unwrap_or(0);
-            payment_methods.insert(method, amount_cents);
-        }
+        // Neden ayrı dal: `NULL` yöntem (kasa hareketi gibi payload'ı olmayan
+        // ödeme) atlanabilir, ama **decode hatası** yutulamaz — hata
+        // yutulursa o yöntemin cirosu raporda hiç görünmez ve eksik tablo
+        // "tamam" sanılır.
+        let method: Option<String> = r.try_get("method").map_err(|e| e.to_string())?;
+        let Some(method) = method else {
+            continue;
+        };
+        // totalAmount in audit_ledger payload is stored as integer cents — read directly.
+        let amount_cents: i64 = r.try_get("amount").map_err(|e| e.to_string())?;
+        payment_methods.insert(method, amount_cents);
     }
 
     Ok(DailySummaryDto {
@@ -75,7 +81,11 @@ pub struct CloseDayResultDto {
     pub closed_at: String,
 }
 
+// Neden `allow`: Tauri IPC sözleşmesi D1/D2 gereği değiştirilemez. Argüman
+// sayısının artmasının nedeni onay jetonunun ikili isimle (`approval_token` +
+// `approvalToken`) kabul edilmesi: eski IPC sözleşmesi kırılmasın diye.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn close_day(
     actor_role: Option<String>,
     actor_id: Option<String>,
@@ -136,7 +146,8 @@ pub async fn close_day(
     let total_orders: i64 = gunluk_satir.try_get("count").map_err(|e| e.to_string())?;
 
     // Eşik aşımı onay gerektirir (D3). Gün sonu eşiği günün cirosudur: yüksek
-    // ciro günü kapatma yetkisi müdürde olmalıdır.
+    // ciro günü kapatma yetkisi müdürde olmalıdır. Kiracı eşik tanımlamamışsa
+    // onay kapalıdır ve gün sonu mevcut davranışta kapanır.
     let esik = crate::services::security360::threshold::esik_oku(&mut tx, &effective_tenant).await?;
     if crate::services::security360::money_gate::gun_sonu_onay_gerekli_mi(total_revenue_cents, esik) {
         let token = crate::services::security360::money_gate::onay_jetonunu_zorunlu_kil(
@@ -146,7 +157,7 @@ pub async fn close_day(
         let request = crate::approval_service::ApprovalRequest {
             tenant_id: effective_tenant.clone(),
             operation: crate::approval_service::operation::CLOSE_DAY.to_string(),
-            resource_id: "DAILY_CLOSING".to_string(),
+            resource_id: crate::services::security360::money_gate::GUN_SONU_KAYNAK.to_string(),
             actor_id: user_id.clone(),
             actor_role: role.clone(),
             amount_cents: total_revenue_cents,
@@ -161,7 +172,7 @@ pub async fn close_day(
             approver.approver_role.as_str().to_string(),
             crate::services::audit_service::category::GUVENLIK,
             "approval:consumed",
-            "DAILY_CLOSING".to_string(),
+            crate::services::security360::money_gate::GUN_SONU_KAYNAK.to_string(),
             serde_json::json!({
                 "operation": crate::approval_service::operation::CLOSE_DAY,
                 "amountCents": total_revenue_cents,
@@ -172,7 +183,7 @@ pub async fn close_day(
             }),
             chrono::Utc::now().to_rfc3339(),
         )?;
-        crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+        crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
     }
 
     let closed_shifts_count = open_shifts.len() as i64;
@@ -181,7 +192,9 @@ pub async fn close_day(
         let expected: i64 = shift
             .try_get("expected_amount_cents")
             .map_err(|e| e.to_string())?;
-        let actual_opt: Option<i64> = shift.try_get("actual_amount_cents").ok();
+        let actual_opt: Option<i64> = shift
+            .try_get("actual_amount_cents")
+            .map_err(|e| e.to_string())?;
 
         // Sayım girilmemişse fark **bilinmiyor**, sıfır değil. Kapatma yine
         // yapılır (vardiya sonsuza dek açık kalamaz) ama fark `NULL` yazılır;
@@ -221,11 +234,11 @@ pub async fn close_day(
         role,
         crate::services::audit_service::category::FINANS,
         "day:closed",
-        "DAILY_CLOSING".to_string(),
+        crate::services::security360::money_gate::GUN_SONU_KAYNAK.to_string(),
         payload,
         now_str.clone(),
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 

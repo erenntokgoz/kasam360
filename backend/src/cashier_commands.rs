@@ -36,7 +36,10 @@ pub struct ShiftSummaryDto {
     pub actual_closing_balance: Option<i64>,
 }
 
+// Neden `allow`: Tauri IPC sözleşmesi D1/D2 gereği değiştirilemez; komut
+// imzası arayüzle sözleşmedir, argümanları DTO'ya toplamak IPC'yi kırar.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn cash_in(
     shift_id: String,
     amount_cents: i64,
@@ -84,7 +87,7 @@ pub async fn cash_in(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
     
     tx.commit().await.map_err(|e| e.to_string())?;
     
@@ -100,6 +103,7 @@ pub async fn cash_in(
 }
 
 #[tauri::command]
+    #[allow(clippy::too_many_arguments)]
 pub async fn cash_out(
     shift_id: String,
     amount_cents: i64,
@@ -146,15 +150,21 @@ pub async fn cash_out(
     };
     gate::vardiya_kabul_eder_mi(durum.as_deref())?;
 
-    // Eşik aşımı onay gerektirir (D3). Eşik kiracının DB kaydından okunur.
+    // Eşik aşımı onay gerektirir (D3). Eşik kiracının DB kaydından okunur;
+    // kayıt yoksa bu yüzey mevcut davranışta kalır (onay istenmez).
     let esik = crate::services::security360::threshold::esik_oku(&mut tx, &tenant_id).await?;
     if gate::onay_gerekli_mi(amount_cents, esik) {
         let token = gate::onay_jetonunu_zorunlu_kil(jeton.as_deref())?;
 
+        // Kaynak kimliği vardiya + tutardan türetilir: onay jetonu işlemden
+        // önce üretildiği için komutun içindeki rastgele haremet `id`si
+        // onaylayana bildirilemezdi.
+        let kaynak = gate::kasa_cikis_kaynagi(&shift_id, amount_cents);
+
         let request = crate::approval_service::ApprovalRequest {
             tenant_id: tenant_id.clone(),
             operation: crate::approval_service::operation::CASH_OUT.to_string(),
-            resource_id: id.clone(),
+            resource_id: kaynak,
             actor_id: actor_id.trim().to_string(),
             actor_role: actor_role.clone(),
             amount_cents,
@@ -211,7 +221,7 @@ pub async fn cash_out(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
     
     tx.commit().await.map_err(|e| e.to_string())?;
     
@@ -243,21 +253,22 @@ pub async fn get_shift_summary(
         .await
         .map_err(|e| e.to_string())?;
         
-    if shift_row.is_none() {
-        return Err("Shift not found".into());
-    }
-    
-    let shift = shift_row.unwrap();
+let Some(shift) = shift_row else {
+        return Err("NOT_FOUND: Vardiya bulunamadı.".into());
+    };
     // Para ve sayaç okumaları `unwrap_or(0)` **olamaz** (AGENTS.md §3.4): SQL
     // hatası sıfıra dönüşünce vardiya farkı "sıfır" görünür ve kasa açığı
     // hatasız raporlanır. Yanlış rapor, hata mesajından daha tehlikelidir.
     let opening_balance: i64 = shift
         .try_get("expected_amount_cents")
         .map_err(|e| e.to_string())?;
-    let actual_closing_balance: Option<i64> = shift.try_get("actual_amount_cents").ok();
-
-    let opened_at: String = shift.try_get("opened_at").unwrap_or_default();
-    let closed_at: Option<String> = shift.try_get("closed_at").ok();
+    // `Option` okuması da `?` ile yükselir: `NULL` sütunu ile bozulan sütun
+    // arasındaki fark, "sayım girilmedi" ile "okuma başarısız" ayrımıdır.
+    let actual_closing_balance: Option<i64> = shift
+        .try_get("actual_amount_cents")
+        .map_err(|e| e.to_string())?;
+    let opened_at: String = shift.try_get("opened_at").map_err(|e| e.to_string())?;
+    let closed_at: Option<String> = shift.try_get("closed_at").map_err(|e| e.to_string())?;
 
     // Vardiya sırasındaki toplam satışlar
     // Vardiya satışları tek bir defterde tutulduğu için tenant filtresi

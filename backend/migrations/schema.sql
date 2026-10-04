@@ -1566,3 +1566,68 @@ CREATE TABLE IF NOT EXISTS approval_thresholds (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (amount_cents > 0)
 );
+
+-- Oturumlar (D1).
+--
+-- `token_hash` jetonun **özeti**dir; jetonun kendisi hiçbir yere yazılmaz.
+-- Veritabanını okuyan bir saldırgan (yedekleme, kopyalanan dosya) doğrudan
+-- oturum çalma yapamaz.
+--
+-- `expires_at` Unix saniyesi: oturum kayıp bir cihazda sonsuza dek geçerli
+-- kalmamalıdır. Vardiya günü aşmaz.
+--
+-- `revoked_at` satır silmek yerine işaretleme: "kim, ne zaman, hangi cihazdan
+-- çıkış yaptı" denetim izi kalsın. `audit_ledger` de silmeye kapalıdır;
+-- burada aynı fikir oturum kaydına da uygulanır.
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    device_label TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at INTEGER NOT NULL,
+    revoked_at DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(tenant_id, user_id);
+
+-- İki faktörlü doğrulama (D2: backend-only, kapalı).
+--
+-- `secret_hash` sırrın **özeti**dir, sır kalıcı olarak saklanmaz. Bu bilinçli bir
+-- sınırdır: doğrulama kodu yalnız kayıt anında elde edilen sırla üretilebilir,
+-- geri yükleme mümkün değildir. 2FA girişe zorunlu olmadığı için (arayüz Faz
+-- 17'de) bu kabul edilebilir.
+--
+-- `pending_secret` bu sınırı **kayıt anında** çözer: sır yalnız ilk doğrulama
+-- yapılana kadar düz metin tutulur, sonra `NULL`'lanır. Kalıcı tablo hâlinde
+-- sır bulunmaz, ama kullanıcı "sırrı kaydettim" dediğinde gerçekten kod
+-- girebildiği kanıtlanır. `pending_secret` dolu bir satır, 2FA'nın henüz
+-- kullanıma hazır **olmadığı** anlamına gelir.
+--
+-- `failed_attempts`/`locked_until` 2FA'yı kaba kuvvet hedefi olmaktan
+-- çıkarır: 6 haneli kod tek başına çok zayıftır, sınırsız deneme yeter.
+-- Eşikler giriş kilidiyle aynı (5 deneme / 300 saniye).
+CREATE TABLE IF NOT EXISTS two_factor_secrets (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    secret_hash TEXT NOT NULL,
+    pending_secret TEXT,
+    label TEXT NOT NULL DEFAULT '',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until INTEGER,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tenant_id, user_id)
+);
+
+-- 2FA'nın gerçekten kullanılabilir olduğunun kanıtı: kullanıcı ilk kodu
+-- girdikten sonra bir satır yazılır. Kayıt tek başına yeterli değildir;
+-- yanlış sırla kayıt açılabilir.
+CREATE TABLE IF NOT EXISTS two_factor_verifications (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    verified_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tenant_id, user_id)
+);

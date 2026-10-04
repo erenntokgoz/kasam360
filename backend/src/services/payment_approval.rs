@@ -49,6 +49,10 @@ fn discount_percent(server_truth: &ServerTruth) -> i64 {
 /// döner; indirim yoksa onay da yoktur. Sıfırdan büyükse jeton **zorunludur**:
 /// eksik jeton işlemi durdurur (fail-closed), yanlış jeton ayrım gözetimi,
 /// eşik ve kapsam denetimlerinden geçemez.
+// Neden `allow`: kardeş yordamla (`consume_discount_approval`) aynı imzayı
+// paylaşır. İki para kapısının farklı görünmesi, "ikisi de aynı kuralı uygular
+// ama farklı kural uygular" yanılgısı üretir.
+#[allow(clippy::too_many_arguments)]
 pub async fn consume_discount_approval(
     conn: &mut SqliteConnection,
     audit_lock: &AuditLock<'_>,
@@ -110,6 +114,88 @@ pub async fn consume_discount_approval(
         approver_role,
         operation: operation.to_string(),
         amount_cents: server_truth.discount_cents,
+    }))
+}
+
+/// Ödeme **toplamı** için onay jetonunu tüketir (D3).
+///
+/// Kural: kiracı eşik tanımlamışsa ve toplam eşiğe eşit veya üstündeyse onay
+/// zorunludur. Eşik yoksa `Ok(None)` — yüzey mevcut davranışta kalır.
+///
+/// **Neden indirim onayı varsa bu yüzey atlanır:** tek bir jeton tek bir
+/// işleme bağlıdır (`operation` kapsam denetiminde yer alır). İndirimli ve
+/// yüksek tutarlı bir ödemede iki ayrı onay gerekir; arayüz Faz 17'de iki
+/// jeton alanı olmadan ikisini aynı anda göndermek mümkün değildir. İndirim
+/// onayı zaten müdür/sahip tarafından verilmiş olduğundan ikinci kez onay
+/// istemek patronu kasada bekletirdi. Tek jetonla iki onayı birleştirmek
+/// kapsam denetimini anlamsızlaştırırdı. Bilinen sınır, Faz 17'de iki alanlı
+/// akışla kapatılacak.
+#[allow(clippy::too_many_arguments)]
+pub async fn consume_total_approval(
+    conn: &mut SqliteConnection,
+    audit_lock: &AuditLock<'_>,
+    tenant_id: &str,
+    actor_id: &str,
+    actor_role: &str,
+    resource_id: &str,
+    total_cents: i64,
+    approval_token: Option<&str>,
+    discount_already_approved: bool,
+) -> Result<Option<ConsumedApproval>, String> {
+    if discount_already_approved {
+        return Ok(None);
+    }
+
+    let esik =
+        crate::services::security360::threshold::esik_oku(conn, tenant_id).await?;
+    if !crate::services::security360::money_gate::onay_gerekli_mi(total_cents, esik) {
+        return Ok(None);
+    }
+
+    let request = ApprovalRequest {
+        tenant_id: tenant_id.to_string(),
+        operation: operation::PAYMENT.to_string(),
+        resource_id: resource_id.to_string(),
+        actor_id: actor_id.trim().to_string(),
+        actor_role: actor_role.trim().to_string(),
+        amount_cents: total_cents,
+        // Yüzde kolu yalnız indirimde anlamlıdır; toplam yüzeyinde 0 kalır.
+        approved_percent_hint: 0,
+        terminal_id: "terminal_payment".to_string(),
+    };
+
+    let token = approval_token
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| approval_service::error::TOKEN_REQUIRED.to_string())?;
+
+    let approver = approval_service::consume_token(conn, token, &request).await?;
+    let approver_role = approver.approver_role.as_str().to_string();
+
+    let ctx = AuditContext::new(
+        tenant_id.to_string(),
+        approver.approver_id.clone(),
+        approver_role.clone(),
+        category::GUVENLIK,
+        "approval:consumed",
+        resource_id.to_string(),
+        serde_json::json!({
+            "operation": operation::PAYMENT,
+            "amountCents": total_cents,
+            "thresholdCents": esik,
+            "actorId": request.actor_id,
+            "approverId": approver.approver_id,
+            "approverRole": approver_role,
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(conn, audit_lock, &ctx).await?;
+
+    Ok(Some(ConsumedApproval {
+        approver_id: approver.approver_id,
+        approver_role,
+        operation: operation::PAYMENT.to_string(),
+        amount_cents: total_cents,
     }))
 }
 

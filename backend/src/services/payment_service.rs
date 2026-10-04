@@ -65,6 +65,25 @@ impl PaymentService {
             )
             .await?;
 
+        // 5.6 D3: kiracı eşiği tanımladıysa ve ödeme toplamı eşiğe eşit veya
+        // üstündeyse ikinci bir onay gerekir. İndirim onayı tüketildiyse bu
+        // yüzey atlanır (tek jeton iki işleme bağlanamaz) — gerekçesi
+        // `consume_total_approval` dokümanında.
+        let consumed_total_approval =
+            crate::services::payment_approval::consume_total_approval(
+                conn,
+                audit_lock,
+                tenant_id,
+                actor_id,
+                actor_role,
+                &payload.transaction_id,
+                server_total_cents,
+                payload.approval_token.as_deref(),
+                consumed_approval.is_some(),
+            )
+            .await?;
+        let consumed_approval = consumed_approval.or(consumed_total_approval);
+
         // 6. Değiştirilemez (immutable) Satış Olayı (Sale Event) + Outbox kaydı ekle.
         PaymentRepository::insert_sale_event(conn, payload, tenant_id).await?;
 

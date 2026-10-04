@@ -41,6 +41,71 @@ const HASSAS_ANAHTARLAR: &[&str] = &[
     "taxno", "vkn", "vergino",
 ];
 
+/// Bu parçalar başka kelimelerin **içinde** geçtiği için tek başına
+/// maskeleme gerekçesi sayılmaz.
+///
+/// Neden: `shippingCost` içinde `pin` geçer. Kargo ücreti `***` olursa defter
+/// finansal kanıtını kaybeder — para alanlarının maskelenmemesi kuralı, bu
+/// yüzden sızan veriden daha güçlüdür. `accept` içinde `cep`, `company`
+/// içinde `pan` geçer.
+const KISA_PARCA: &[&str] = &["pin", "pan", "cep", "card"];
+
+/// Yukarıdaki çakışmaları taşıyan gerçek kelimeler.
+///
+/// Bunlar maskelenmez **yalnız** başka bir hassas parça isabet etmiyorsa:
+/// `shippingAddress` yine maskelenir (`address`), `shippingCost` maskelenmez.
+const KACIS_KELIMELERI: &[&str] = &[
+    "shipping", "spin", "spinning", "accept", "concept", "company", "companion", "expansion",
+    "panel", "pano", "discard",
+];
+
+/// Verilen konum, bir kaçış kelimesinin **içinde** mi?
+///
+/// Neden konum denetleniyor: `shippingPanelPin` içinde `pin` gerçek bir PIN
+/// alanıdır ama `shipping` kelimesi de geçiyor. Yalnız kelime varlığına
+/// bakarsak gerçek PIN'i kaçırırız. Eşleşme kaçış kelimesinin içinde değilse
+/// o eşleşme kendi başına bir alandır.
+fn konum_kacis_kelimesi_icinde(metin: &str, konum: usize, parca_uzunlugu: usize) -> bool {
+    KACIS_KELIMELERI.iter().any(|kelime| {
+        metin
+            .match_indices(kelime)
+            .any(|(bas, _)| konum >= bas && konum + parca_uzunlugu <= bas + kelime.len())
+    })
+}
+
+/// Anahtar hassas mı?
+///
+/// Neden sıra önemli: önce uzun ve tartışmasız parçalar denenir. Bir parça
+/// isabet ederse kısa parçaların çakışma denetimi hiç çalışmaz — bu yüzden
+/// `shippingAddress` maskelenirken `shippingCost` maskelenmez.
+fn hassas_anahtar_mi(anahtar: &str) -> bool {
+    let normalize = |s: &str| s.to_lowercase().replace(['_', '-'], "");
+    let normalize_anahtar = normalize(anahtar);
+
+    let uzun_isabet = HASSAS_ANAHTARLAR
+        .iter()
+        .any(|parca| !KISA_PARCA.contains(parca) && normalize_anahtar.contains(&normalize(parca)));
+    if uzun_isabet {
+        return true;
+    }
+
+    // Kısa parçaların **her** eşleşme konumu için kaçış denetimi yapılır.
+    let kacirilan: Vec<bool> = KISA_PARCA
+        .iter()
+        .flat_map(|parca| {
+            normalize_anahtar
+                .match_indices(parca)
+                .map(move |(konum, _)| (konum, parca.len()))
+        })
+        .map(|(konum, uzunluk)| konum_kacis_kelimesi_icinde(&normalize_anahtar, konum, uzunluk))
+        .collect();
+
+    // En az bir eşleşme kaçış kelimesinin dışındaysa alan hassastır. Hiç kısa
+    // parça geçmiyorsa vektör boştur; boş listede `all` `true` döndüğü için
+    // sonuç `false` olur — yani alan hassas değildir.
+    !kacirilan.iter().all(|kacirildi| *kacirildi)
+}
+
 /// Örüntü tabanlı maskeleme için TCKN uzunluğu (11 hane).
 const TCKN_UZUNLUK: usize = 11;
 
@@ -59,10 +124,15 @@ fn maske_uygula_metin(deger: &str) -> Option<String> {
     // E-posta: yerel kısımın başı korunur, alan adı gizlenir.
     // Neden korunur: "ayse@..." ile "mehmet@..." ayrımı denetimde işe yarar,
     // adresin kendisi ise kişisel veridir.
+    //
+    // Neden `chars().take(2)`: `&yerel[..2]` **bayt** dilimler ve `áy@...`
+    // gibi bir yerel kısımda 2. baytı `á`nın ortasından keser. Denetim
+    // yazma yolunda panic üretir — sessiz hatadan çok daha kötü.
     if let Some((yerel, alan)) = kirp.split_once('@') {
-        if alan.contains('.') && !alan.starts_with('@') {
+        if alan.contains('.') {
             let son = alan.rsplit('.').next().unwrap_or(MASKE);
-            return Some(format!("{}@{}", &yerel[..yerel.len().min(2)], son));
+            let bas: String = yerel.chars().take(2).collect();
+            return Some(format!("{}@{}", bas, son));
         }
     }
 
@@ -72,6 +142,38 @@ fn maske_uygula_metin(deger: &str) -> Option<String> {
         && kirp.to_uppercase().starts_with("TR")
     {
         return Some(MASKE.to_string());
+    }
+
+    // Türkiye telefonu: alan adı tanınmayan anahtarda `+90`/`0090` önekiyle
+    // de yazılır. Önek atılmadan 11 haneli kontrolü tutmaz; sistemde
+    // `+905321234567` biçimi yaygın olduğu için ayrı ele alınır.
+    //
+    // Neden yalnız rakam/ayraç kontrolü: metnin rakamları süzülürse
+    // "Fatura 12345678901" gibi bir açıklama TCKN sanılır. Ayraç dışındaki
+    // her karakter telefon ihtimalini düşürür.
+    let telefon_bicimi = kirp
+        .chars()
+        .all(|c| c.is_ascii_digit() || matches!(c, '+' | ' ' | '-' | '(' | ')'));
+    if telefon_bicimi {
+        let rakam: String = kirp.chars().filter(|c| c.is_ascii_digit()).collect();
+        let govde = if let Some(kalan) = rakam.strip_prefix("0090") {
+            kalan
+        } else if let Some(kalan) = rakam.strip_prefix("90") {
+            kalan
+        } else {
+            rakam.as_str()
+        };
+        // Ülke öneki atılınca trunk `0` kaybolur: `+90 532...` -> `532...`.
+        // 10 haneyi 11 haneye getirmek bu yüzden zorunlu.
+        let govde = if govde.len() == 10 && !govde.starts_with('0') {
+            format!("0{govde}")
+        } else {
+            govde.to_string()
+        };
+
+        if govde.len() == 11 && govde.starts_with('0') && govde.as_bytes()[1] == b'5' {
+            return Some(MASKE.to_string());
+        }
     }
 
     // TCKN: 11 rakam, ilk rakam sıfır değil. Metin değerlerde taranır; JSON
@@ -105,11 +207,7 @@ pub fn maskele(deger: &mut serde_json::Value) {
             // derleyici hatası verir.
             let anahtarlar: Vec<String> = harita.keys().cloned().collect();
             for anahtar in anahtarlar {
-                let normalize = |s: &str| s.to_lowercase().replace(['_', '-'], "");
-                let normalize_anahtar = normalize(&anahtar);
-                let hassas = HASSAS_ANAHTARLAR
-                    .iter()
-                    .any(|parca| normalize_anahtar.contains(&normalize(parca)));
+                let hassas = hassas_anahtar_mi(&anahtar);
 
                 let Some(d) = harita.get_mut(&anahtar) else {
                     continue;
@@ -279,5 +377,117 @@ mod tests {
         let mut veri = json!({ "siparisNo": "01234567890" });
         maskele(&mut veri);
         assert_eq!(veri["siparisNo"], json!("01234567890"));
+    }
+
+    #[test]
+    fn unicode_eposta_yerel_kismi_panic_uretmez() {
+        // Regresyon: eski yazım `&yerel[..yerel.len().min(2)]` idi ve `áy`
+        // yerel ksminda karakter sınırından kesilerek panic üretiyordu.
+        let mut veri = json!({ "not": "áyşenur.kaya@kasam360.com" });
+        maskele(&mut veri);
+        // `áyşenur.kaya` yerel kısmında 2 **karakter** `á` ve `y`.
+        assert_eq!(veri["not"], json!("áy@com"));
+    }
+
+    #[test]
+    fn tek_karakterli_ve_bos_yerel_kisimli_eposta_guvenli() {
+        for adres in ["a@b.co", "1@b.co", "@b.co", "ç@b.co"] {
+            let mut veri = json!({ "not": adres });
+            maskele(&mut veri);
+            // Önemli olan: panic olmaması ve çıktının geçerli metin olması.
+            assert!(veri["not"].is_string(), "{adres} metin kalmali");
+        }
+    }
+
+    #[test]
+    fn kargo_ucreti_maskelenmez_kargo_adresi_maskelenir() {
+        // Regresyon: `shippingCost` içinde `pin` geçtiği için tutar `***`
+        // oluyordu. Para alanının kaybı, sızan veriden daha kötüdür.
+        let mut veri = json!({
+            "shippingCost": 4500,
+            "shippingAddress": "Bağdat Caddesi No: 12",
+        });
+        maskele(&mut veri);
+        assert_eq!(veri["shippingCost"], json!(4500), "kargo tutari korunmali");
+        assert_eq!(veri["shippingAddress"], json!("***"), "adres yine maskeli");
+    }
+
+    #[test]
+    fn kisaparca_cakismalari_maskelenmez() {
+        // `accept` -> cep, `company` -> pan, `panel` -> pan.
+        let mut veri = json!({
+            "acceptLanguage": "tr-TR",
+            "companyName": "Kahve Dünyası",
+            "panelWidth": 1280,
+            "spinCount": 3,
+        });
+        maskele(&mut veri);
+        assert_eq!(veri["acceptLanguage"], json!("tr-TR"));
+        assert_eq!(veri["companyName"], json!("Kahve Dünyası"));
+        assert_eq!(veri["panelWidth"], json!(1280));
+        assert_eq!(veri["spinCount"], json!(3));
+    }
+
+    #[test]
+    fn kisaparcalar_yine_hassas_alanlari_maskeler() {
+        // Kaçış kelimesi yalnız kısa parçayı tetikliyorsa istisnadır; gerçek
+        // PIN/CEP/kart alanları maskelenmeye devam eder.
+        let mut veri = json!({
+            "userPin": "1234",
+            "musteriCep": "05321234567",
+            "mustericep": "05321234567",
+            "cardNumber": "4111111111111111",
+            "kartNo": "1234567890123456",
+            "creditcard": "4111111111111111",
+            "shippingPanelPin": "1234",
+        });
+        maskele(&mut veri);
+        for anahtar in [
+            "userPin",
+            "musteriCep",
+            "mustericep",
+            "cardNumber",
+            "kartNo",
+            "creditcard",
+            "shippingPanelPin",
+        ] {
+            assert_eq!(veri[anahtar], json!("***"), "{anahtar} maskelenmeli");
+        }
+    }
+
+    #[test]
+    fn onnine_kosulu_ve_ayracli_telefon_maskelenir() {
+        let mut veri = json!({
+            "a": "+905321234567",
+            "b": "00905321234567",
+            "c": "+90 532 123 45 67",
+            "d": "0532 123 45 67",
+        });
+        maskele(&mut veri);
+        for anahtar in ["a", "b", "c", "d"] {
+            assert_eq!(veri[anahtar], json!("***"), "{anahtar} maskelenmeli");
+        }
+    }
+
+    #[test]
+    fn sabit_hat_ve_yurt_disi_numara_maskelenmez() {
+        // Alan adı bilinmediği için örüntü katmanı çalışır; sabit hat (0 5XX
+        // değil) ve yurt dışı numara TCKN sanılmamalı.
+        let mut veri = json!({
+            "iletisim": "02125550123",
+            "uluslararasi": "+14155552671",
+        });
+        maskele(&mut veri);
+        assert_eq!(veri["iletisim"], json!("02125550123"));
+        assert_eq!(veri["uluslararasi"], json!("+14155552671"));
+    }
+
+    #[test]
+    fn aciklamadaki_tckn_bicimi_telefon_kaniti_olmaz() {
+        // Metin rakamları süzülürse "Fatura 12345678901" TCKN sanılır ve
+        // açıklama kaybolur. Ayraç dışı karakter varsa telefon sayılmaz.
+        let mut veri = json!({ "aciklama": "Fatura 11111111111" });
+        maskele(&mut veri);
+        assert_eq!(veri["aciklama"], json!("Fatura 11111111111"));
     }
 }

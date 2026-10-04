@@ -16,6 +16,7 @@ pub mod pos_commands;
 pub mod receipt_commands;
 pub mod shift_commands;
 pub mod staff_commands;
+pub mod threshold_commands;
 pub mod void_commands;
 
 pub use audit_commands::*;

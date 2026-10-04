@@ -532,3 +532,9 @@ async fn sunucu_hesabindaki_indirim_kapiyi_acitir() {
         .expect_err("gerçek indirim jetonsuz geçmemeli");
     assert_eq!(err, approval_service::error::TOKEN_REQUIRED);
 }
+
+// D3 ödeme toplamı eşiği testleri ayrı dosyada: aynı havuz ve seed
+// yardımcıları kullanır, #[path] ile bu modülün alt modülü olarak içeri alınır.
+#[cfg(test)]
+#[path = "payment_total_tests.rs"]
+mod payment_total;

@@ -298,41 +298,57 @@ fn mint_token(material: &str) -> String {
 /// indirimde onaylayan yalnız OWNER veya MANAGER olabilir. İkram, %100 indirim
 /// olduğu için daima bu yüksek eşiğe girer; kasa ikram onaylayamaz.
 pub fn requires_privileged_approver(request: &ApprovalRequest) -> bool {
-    requires_privileged_approver_with(request, LARGE_DISCOUNT_CENTS)
+    requires_privileged_approver_with(request, Some(LARGE_DISCOUNT_CENTS))
 }
 
 /// Kiracının **DB'deki** eşiğiyle aynı soruyu yanıtlar (D3).
 ///
-/// Saf sürüm (`requires_privileged_approver`) testlerin ve saf hesapların
-/// kullanabilmesi için korunur; üretim yolu bu yordamı çağırır. Eşik okunamadıysa
-/// hata yükselir ve işlem durur: eşiği bilmeden onay kararı vermek, eşiği
-/// yok saymaktan farksızdır.
+/// Saf sürüm (`requires_privileged_approver`) testler içindir; üretim yolu bu
+/// yordamı çağırır. Eşik okunamazsa hata yükselir: eşiği bilmeden onay kararı
+/// vermek, eşiği yok saymaktan farksızdır.
 pub async fn requires_privileged_approver_db(
     conn: &mut sqlx::SqliteConnection,
     request: &ApprovalRequest,
 ) -> Result<bool, String> {
     let esik = crate::services::security360::threshold::esik_oku(conn, &request.tenant_id).await?;
+
+    // Neden `DISCOUNT` ayrı: bu yüzeyde eşik kod içindeydi ve DB satırı yoksa
+    // sabite düşmelidir. Yeni yüzeylerde (ödeme, kasa çıkışı, gün sonu) satır
+    // yoksa onay zaten kapalıdır, `None` kalır.
+    let esik = if request.operation == operation::DISCOUNT {
+        Some(
+            esik.unwrap_or_else(crate::services::security360::threshold::varsayilan_esik),
+        )
+    } else {
+        esik
+    };
+
     Ok(requires_privileged_approver_with(request, esik))
 }
 
-/// Eşik değerini dışarıdan alan çekirdek kural.
+/// Eşik değerini dışarıdan alan çekirdek kural (K2 + D3).
 ///
-/// Kural (K2 + D3): her tutarda indirim onay ister; eşiği aşan her para
-/// çıkışında onaylayan yalnız OWNER veya MANAGER olabilir. İkram, %100 indirim
-/// olduğu için daima yüksek eşiğe girer; kasa ikram onaylayamaz.
-pub fn requires_privileged_approver_with(request: &ApprovalRequest, esik_cents: i64) -> bool {
+/// `esik_cents` `None` ise kiracı bu yüzeye eşik tanımlamamıştır: eşik
+/// tabanlı hiçbir şey tetiklenmez, yüzeyin kendi kuralı (varsa) geçerlidir.
+pub fn requires_privileged_approver_with(
+    request: &ApprovalRequest,
+    esik_cents: Option<i64>,
+) -> bool {
     match request.operation.as_str() {
-        // Eşiğe bağlı yüzeyler: indirim, ödeme, kasa çıkışı, gün sonu.
-        operation::DISCOUNT
-        | operation::PAYMENT
-        | operation::CASH_OUT
-        | operation::CLOSE_DAY => {
-            // Yüzde kolu yalnız indirimde anlamlıdır; diğerlerinde 0 gelir.
+        // Yüzde kolu yalnız indirimde anlamlıdır: ödeme, kasa çıkışı ve gün
+        // sonunda `approved_percent_hint` her zaman 0'dır. Orada yüzdeyi
+        // denetlemek, eşiğin altındaki bir işlemi ayrıcalıklı onaylayıcıya
+        // zorlardı.
+        operation::DISCOUNT => {
             request.approved_percent_hint >= LARGE_DISCOUNT_PERCENT
-                || request.amount_cents >= esik_cents
+                || esik_cents.is_some_and(|esik| request.amount_cents >= esik)
+        }
+        // Eşiğe bağlı para çıkışları: onaylayanın rolleri aynı daralır.
+        operation::PAYMENT | operation::CASH_OUT | operation::CLOSE_DAY => {
+            esik_cents.is_some_and(|esik| request.amount_cents >= esik)
         }
         operation::COMPLIMENTARY => true,
-        // VOID_ORDER eşik tablosunda değildir; onaylayan herhangi bir onay
+        // VOID_ORDER eşik tablosunda değil; onaylayan herhangi bir onay
         // rolü olabilir (bugünkü davranış).
         _ => false,
     }
