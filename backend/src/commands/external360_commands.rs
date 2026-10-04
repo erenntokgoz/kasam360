@@ -54,6 +54,56 @@ async fn denetle(
     AuditService::append(conn, kilit, &ctx).await.map(|_| ())
 }
 
+/// `feat_qr_menu` bayrağı KAPALI iken QR menü komutları 404 döner.
+///
+/// Neden bu kapı sonradan eklendi: komutlar yazıldığında bayrak kontrolü
+/// unutulmuştu. Sonuç, `feat_qr_menu` KAPALI olan bir işletmede menü dosyası
+/// yine üretilebiliyor, müşteri oturumu yine açılabiliyor ve bayrak
+/// AGENTS.md §3.3'ün yasakladığı anlamda "var ama kapı yok" durumuna
+/// düşüyordu. Diğer üç bayrak (`inventory360_commands::require_*`) bu kalıbı
+/// zaten uyguluyor; burada da aynı sözleşme geçerli.
+///
+/// Neden 404 ve 403 değil: bayrak kapalıyken özellik **yoktur**. 403 "var ama
+/// yetkin yok" der ve arayüzde yanlış bir boş ekran gösterir.
+pub(crate) fn require_qr_menu(active_modules: Option<&Vec<String>>) -> Result<(), String> {
+    match active_modules {
+        Some(moduller) if moduller.iter().any(|m| m == "feat_qr_menu") => Ok(()),
+        _ => Err("NOT_FOUND: QR menü bu işletmede etkin değil".into()),
+    }
+}
+
+/// QR menü bayrağı kapalıyken 404 döndüğünü ve açıkken geçtiğini doğrular.
+#[cfg(test)]
+mod qr_menu_flag_tests {
+    use super::require_qr_menu;
+
+    fn moduller(aktif: &[&str]) -> Vec<String> {
+        aktif.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn bayrak_yoksa_qr_menu_komutlari_404_doner() {
+        for moduller in [None, Some(Vec::new()), Some(moduller(&["core"]))] {
+            let hata = require_qr_menu(moduller.as_ref())
+                .expect_err("bayrak yoksa komut 404 dönmeli");
+            assert!(hata.starts_with("NOT_FOUND"), "{}", hata);
+        }
+    }
+
+    #[test]
+    fn bayrak_aciksa_qr_menu_komutlari_gecer() {
+        assert!(require_qr_menu(Some(&moduller(&["core", "feat_qr_menu"]))).is_ok());
+    }
+
+    #[test]
+    fn komsu_bayrak_qr_menu_acmaz() {
+        // Yanlış bayrak adı (`feat_qr_menu` ≠ `feat_qr_menus`) kapıyı geçmemeli.
+        assert!(require_qr_menu(Some(&moduller(&["feat_qr_menus"]))).is_err());
+        // Başka bir bayrağın açık olması bu özelliği açmaz.
+        assert!(require_qr_menu(Some(&moduller(&["feat_kds", "feat_delivery"]))).is_err());
+    }
+}
+
 // ---- müşteri / QR menü ----
 
 /// Müşteri oturumu açar (masa başından QR menü bağlantısı basılır).
@@ -62,9 +112,11 @@ pub async fn qr_customer_session_open(
     actor_id: Option<String>,
     actor_role: Option<String>,
     tenant_id: Option<String>,
+    active_modules: Option<Vec<String>>,
     customer_label: Option<String>,
     pool: State<'_, DbPool>,
 ) -> Result<qr_menu::MusteriOturumu, String> {
+    require_qr_menu(active_modules.as_ref())?;
     let actor = audit_actor(actor_id, actor_role);
     require_any(&actor.1, &[Role::Owner, Role::Manager, Role::Waiter])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
@@ -84,9 +136,11 @@ pub async fn qr_customer_session_revoke(
     actor_id: Option<String>,
     actor_role: Option<String>,
     tenant_id: Option<String>,
+    active_modules: Option<Vec<String>>,
     session_token: String,
     pool: State<'_, DbPool>,
 ) -> Result<bool, String> {
+    require_qr_menu(active_modules.as_ref())?;
     let actor = audit_actor(actor_id, actor_role);
     require_any(&actor.1, &[Role::Owner, Role::Manager])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
@@ -101,9 +155,11 @@ pub async fn qr_menu_build(
     actor_id: Option<String>,
     actor_role: Option<String>,
     tenant_id: Option<String>,
+    active_modules: Option<Vec<String>>,
     pool: State<'_, DbPool>,
     state: State<'_, crate::AppState>,
 ) -> Result<menu_file::ImzaliMenuCiktisi, String> {
+    require_qr_menu(active_modules.as_ref())?;
     let actor = audit_actor(actor_id, actor_role);
     require_any(&actor.1, &[Role::Owner, Role::Manager])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
@@ -136,8 +192,10 @@ pub async fn qr_pending_requests(
     actor_id: Option<String>,
     actor_role: Option<String>,
     tenant_id: Option<String>,
+    active_modules: Option<Vec<String>>,
     pool: State<'_, DbPool>,
 ) -> Result<Vec<(String, String, String)>, String> {
+    require_qr_menu(active_modules.as_ref())?;
     let actor = audit_actor(actor_id, actor_role);
     require_any(&actor.1, &[Role::Owner, Role::Manager, Role::Cashier])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
@@ -155,10 +213,12 @@ pub async fn qr_request_accept(
     actor_id: Option<String>,
     actor_role: Option<String>,
     tenant_id: Option<String>,
+    active_modules: Option<Vec<String>>,
     request_id: String,
     order_id: String,
     pool: State<'_, DbPool>,
 ) -> Result<(), String> {
+    require_qr_menu(active_modules.as_ref())?;
     let actor = audit_actor(actor_id, actor_role);
     require_any(&actor.1, &[Role::Owner, Role::Manager])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
@@ -173,9 +233,11 @@ pub async fn qr_request_reject(
     actor_id: Option<String>,
     actor_role: Option<String>,
     tenant_id: Option<String>,
+    active_modules: Option<Vec<String>>,
     request_id: String,
     pool: State<'_, DbPool>,
 ) -> Result<(), String> {
+    require_qr_menu(active_modules.as_ref())?;
     let actor = audit_actor(actor_id, actor_role);
     require_any(&actor.1, &[Role::Owner, Role::Manager])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
@@ -188,11 +250,13 @@ pub async fn qr_request_reject(
 #[tauri::command]
 pub async fn qr_feedback_create(
     tenant_id: Option<String>,
+    active_modules: Option<Vec<String>>,
     session_token: String,
     rating: i64,
     comment: Option<String>,
     pool: State<'_, DbPool>,
 ) -> Result<String, String> {
+    require_qr_menu(active_modules.as_ref())?;
     // Rol denetimi **yok**: bu komut müşterinin kendi çağrısıdır, personelin
     // değil. Yetki, doğrulanmış müşteri oturumudur; rol matrisi personelin
     // yetkilerini tanımlar ve müşterinin hiçbir rolü yoktur.

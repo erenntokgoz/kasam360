@@ -289,3 +289,64 @@ async fn bilinmeyen_kimlik_ayni_mesaji_dondurur() {
     assert!(yok.contains("1 hakkınız kaldı"), "{yok}");
     assert!(var.contains("1 hakkınız kaldı"), "{var}");
 }
+
+// ---------------------------------------------------------------------------
+// MASTER bayrak listesi — kod tabanında olmayan bayrak açılmaz
+// ---------------------------------------------------------------------------
+
+/// `feat_seat_split` dahil kodu olmayan bayraklar MASTER oturumunda açılmaz.
+///
+/// Gerekçe: koltuk bazlı sipariş (`seat_number`) kod tabanında hiç yok
+/// (`rg "seat_number" backend/src desktop/src` → 0 eşleşme). Bayrak AÇIK
+/// ilan edildiği hâlde arkasında komut bulunmaması, arayüzde hiçbir şey
+/// yapmayan bir özellik demektir. Aynı gerekçeyle `feat_delivery`,
+/// `feat_caller_id` ve `feat_dynamic_pricing` de kapalıdır.
+#[test]
+fn kodu_olmayan_bayraklar_master_oturumunda_acilmaz() {
+    let moduller = master_modules();
+
+    for bayrak in [
+        "feat_seat_split",
+        "feat_delivery",
+        "feat_caller_id",
+        "feat_dynamic_pricing",
+    ] {
+        assert!(
+            !moduller.iter().any(|m| m == bayrak),
+            "{} kod tabanında yok; açılmamalı",
+            bayrak
+        );
+    }
+}
+
+/// Uygulanmış bayraklar MASTER oturumunda açıktır: listeye yanlışlıkla
+/// düşülmemeli, çünkü platform konsolundaki ilgili yüzeyler bu listeye bakar.
+#[test]
+fn uygulanmis_bayraklar_master_oturumunda_acik() {
+    let moduller = master_modules();
+
+    for bayrak in [
+        "feat_kds",
+        "feat_qr_menu",
+        "feat_table_order",
+        "feat_recipe_bom",
+        "feat_ledger_cari",
+        "feat_loss_radar",
+    ] {
+        assert!(
+            moduller.iter().any(|m| m == bayrak),
+            "{} uygulanmış; açık olmalı",
+            bayrak
+        );
+    }
+}
+
+/// İki giriş yolu aynı listeyi döndürür. Ayrışırsa PIN ile giren MASTER ile
+/// e-posta ile giren MASTER farklı yetkilere sahip olur.
+#[test]
+fn master_modul_listesi_tektir() {
+    let ilk = master_modules();
+    let ikinci = master_modules();
+    assert_eq!(ilk, ikinci);
+    assert!(!ilk.is_empty(), "liste boş olamaz");
+}

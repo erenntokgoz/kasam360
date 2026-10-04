@@ -21,7 +21,12 @@ import { PlatformBranchesPanel } from '../../src/presentation/components/platfor
 import { FeatureDisabledNotice } from '../../src/presentation/components/platform/ui/FeatureDisabledNotice';
 import { buildOwnerNavItems } from '../../src/presentation/components/owner/OwnerDashboardContainer';
 import { hasCapability } from '../../src/core/security/navigationMatrix';
-import { isMultiBranchEnabledForModules } from '../../src/presentation/hooks/useFeatureFlags';
+import {
+  DEFAULT_OPEN_FEATURE_FLAGS,
+  isFeatureEnabledForModules,
+  isMultiBranchEnabledForModules,
+  type FeatureFlagKey,
+} from '../../src/presentation/hooks/useFeatureFlags';
 
 interface BranchRow {
   id: string;
@@ -231,5 +236,89 @@ describe('Faz 6 — Özellik bayrağı kapalıyken 404', () => {
     });
     expect(element).toBeDefined();
     expect(element.type).toBe(FeatureDisabledNotice);
+  });
+});
+
+describe('Faz 17 — Bayrak tablosu tek kaynaktan (AGENTS.md §8)', () => {
+  it('14. Kodu olmayan bayrak varsayılan olarak kapalıdır', () => {
+    // Koltuk bazlı sipariş kod tabanında yok: `seat_number` hiçbir dosyada
+    // geçmiyor. Bayrak AÇIK ilan edilirse arayüz hiçbir komuta karşılığı
+    // olmayan bir özellik gösterir ve kullanıcı çalışmayan bir düğme görür.
+    for (const bayrak of ['feat_seat_split', 'feat_delivery', 'feat_caller_id', 'feat_dynamic_pricing']) {
+      expect(DEFAULT_OPEN_FEATURE_FLAGS).not.toContain(bayrak);
+    }
+  });
+
+  it('15. Uygulanmış bayrak varsayılan olarak açıktır', () => {
+    for (const bayrak of ['feat_kds', 'feat_qr_menu', 'feat_table_order', 'feat_recipe_bom', 'feat_ledger_cari', 'feat_loss_radar']) {
+      expect(DEFAULT_OPEN_FEATURE_FLAGS).toContain(bayrak);
+    }
+  });
+
+  it('16. Varsayılan liste bayrak sayısını azaltmaz: 11 bayrağın hepsi tanımlı', () => {
+    // Liste elle yazılan ikinci bir kopyaya dönüşürse iki liste ayrışır ve
+    // sessizce bayrak kaybolur. Bu yüzden toplam sayı sabitlenir.
+    const tumBayraklar: readonly FeatureFlagKey[] = [
+      'feat_kds',
+      'feat_qr_menu',
+      'feat_delivery',
+      'feat_caller_id',
+      'feat_table_order',
+      'feat_seat_split',
+      'feat_recipe_bom',
+      'feat_dynamic_pricing',
+      'feat_ledger_cari',
+      'feat_multi_branch',
+      'feat_loss_radar',
+    ];
+    expect(tumBayraklar).toHaveLength(11);
+    for (const bayrak of DEFAULT_OPEN_FEATURE_FLAGS) {
+      expect(tumBayraklar).toContain(bayrak);
+    }
+  });
+
+  it('17. MASTER rolü tüm bayrakları otomatik açmaz', () => {
+    // AGENTS.md §3.3: bayrak kapalıyken route 404 vermeli. MASTER'a "hepsi açık"
+    // muafiyeti bu kuralı her bayrakta delerdi; tek kaynak oturumun modül
+    // listesidir (backend `auth_commands::master_modules()`).
+    const masterModulleri = ['feat_kds', 'feat_qr_menu', 'feat_table_order'];
+
+    expect(isFeatureEnabledForModules('feat_seat_split', masterModulleri, 'MASTER')).toBe(false);
+    expect(isFeatureEnabledForModules('feat_delivery', masterModulleri, 'MASTER')).toBe(false);
+    expect(isFeatureEnabledForModules('feat_caller_id', masterModulleri, 'MASTER')).toBe(false);
+    expect(isFeatureEnabledForModules('feat_dynamic_pricing', masterModulleri, 'MASTER')).toBe(false);
+
+    // Oturumda bulunan bayraklar açıktır — MASTER da aynı listeye tabidir.
+    expect(isFeatureEnabledForModules('feat_kds', masterModulleri, 'MASTER')).toBe(true);
+    expect(isFeatureEnabledForModules('feat_qr_menu', masterModulleri, 'MASTER')).toBe(true);
+  });
+
+  it('18. Modül listesi yoksa varsayılan tablo okunur, kodu olmayan bayrak yine kapalıdır', () => {
+    expect(isFeatureEnabledForModules('feat_kds', undefined, 'MASTER')).toBe(true);
+    expect(isFeatureEnabledForModules('feat_seat_split', undefined, 'MASTER')).toBe(false);
+    expect(isFeatureEnabledForModules('feat_multi_branch', undefined, 'OWNER')).toBe(false);
+  });
+
+  it('19. MASTER rolü çok şubeli modülü kendi rolüyle açamaz', () => {
+    // Bayrağın sahibi işletmedir; rol bayrağı açmaz (bkz. 12. test).
+    expect(isFeatureEnabledForModules('feat_multi_branch', ['feat_multi_branch'], 'MASTER')).toBe(true);
+    expect(isFeatureEnabledForModules('feat_multi_branch', ['feat_kds'], 'MASTER')).toBe(false);
+  });
+
+  it('20. tauriInvoke rol alanını oturumdan enjekte eder, bayrağı bileşen taşımaz', async () => {
+    // Gerekçe: mutfak/kasa/QR kapıları rol ve bayrak alanlarını **çağırandan**
+    // bekler; bileşen kendi kafasında taşımamalı, tek kaynak oturumdur.
+    // `get_stations` bu kanalın gözlenebilir kanıtıdır.
+    const { tauriInvoke } = await import('../../src/data/ipc/tauriInvoke');
+
+    useAuthStore.setState({
+      user: { ...sessionUser('KITCHEN', 'DEFAULT_TENANT'), activeModules: ['feat_kds'] } as never,
+    });
+    const istasyonlar = await tauriInvoke<unknown[]>('get_stations');
+    expect(Array.isArray(istasyonlar)).toBe(true);
+
+    // Oturum yokken alan enjekte edilmez; kapı fail-closed reddeder.
+    useAuthStore.setState({ user: null, branchId: '', branchName: '', terminalSession: null });
+    await expect(tauriInvoke('get_stations')).rejects.toThrow(/UNAUTHORIZED/);
   });
 });

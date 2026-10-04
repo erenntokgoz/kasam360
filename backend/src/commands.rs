@@ -46,6 +46,13 @@ mod approval_tests;
 #[path = "price_integrity_tests.rs"]
 mod price_integrity_tests;
 
+/// Kapısız komut regresyon testleri (`get_shift_summary`, `get_stations`,
+/// `create_station`, `update_kds_item_status`, `get_product_modifiers`,
+/// `get_table_ready_status`, `get_all_table_statuses`).
+#[cfg(test)]
+#[path = "unguarded_commands_tests.rs"]
+mod unguarded_commands_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;

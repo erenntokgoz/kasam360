@@ -280,7 +280,7 @@ feat_qr_menu          AÇIK
 feat_delivery         KAPALI
 feat_caller_id        KAPALI
 feat_table_order      AÇIK
-feat_seat_split       AÇIK
+feat_seat_split       KAPALI  (kod yok: `seat_number` hiçbir dosyada geçmiyor)
 feat_recipe_bom       AÇIK
 feat_dynamic_pricing  KAPALI
 feat_ledger_cari      AÇIK
@@ -288,6 +288,11 @@ feat_multi_branch     KAPALI
 feat_loss_radar       AÇIK
 
 Override zinciri: tenant → branch (user override YOK). Kapalıysa route 404.
+
+Kural: bir bayrak **yalnız arkasında komut varsa** AÇIK olabilir. Kodu olmayan
+bayrak AÇık ilan edilirse arayüz hiçbir işe yaramayan bir yüzey gösterir ve
+kullanıcı çalışmayan bir düğmeyle karşılaşır. MASTER rolü muaf değildir;
+oturumun modül listesi tek kaynak, platform hesabının kendi işletmesi yoktur.
 
 ---
 

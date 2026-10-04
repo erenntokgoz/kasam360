@@ -251,14 +251,49 @@ pub async fn cash_out(
     })
 }
 
+/// Vardiya özeti kapısını fail-closed geçirir ve kiracıyı çözer.
+///
+/// Neden ayrı fonksiyon: `tauri::State` içeren komut doğrudan test edilemez.
+/// Kapı saf fonksiyona taşınırsa sözleşmesi testle kanıtlanabilir.
+pub(crate) fn vardiya_oku_kapisi(
+    actor_role: Option<&str>,
+    tenant_id: Option<&str>,
+) -> Result<String, String> {
+    crate::rbac::require_any_present(
+        actor_role,
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
+    )?;
+    crate::commands::command_helpers::require_tenant_id(tenant_id)
+}
+
+/// Vardiya özeti: satış, kasa giriş/çıkış, beklenen bakiye ve fark.
+///
+/// Neden kapı eklendi: komut imzasında **hiç** rol alanı yoktu ve
+/// `tenant_id` verilmezse `"DEFAULT_TENANT"`'a düşüyordu. Bu bir para
+/// özetidir: beklenen bakiye ve fark, kasa açığını gösteren tek sayı. Rol
+/// denetimi olmadan garson ya da mutfak vardiya özetini okuyabiliyordu;
+/// kiracı alanını hiç göndermeyen bir çağrı da kabul ediliyordu (fail-closed
+/// değil). SPEC §34: `shiftManage` satırı OWNER/MANAGER/CASHIER'a FULL,
+/// `ledgerAccess` satırı CASHIER'a PARTIAL veriyor; garson ve mutfak hiçbir
+/// satırda vardiya özetine sahip değil.
+///
+/// Kasa hareketleri **mutlaka** kiracı filtresiyle okunur. Önceden filtre
+/// yoktu: `shift_id` çapraz tenant'ta benzersiz olmadığı için başka bir
+/// işletmenin kasa çıkışları bu vardiyanın toplamına giriyor ve fark
+/// yapay olarak büyüyordu.
 #[tauri::command]
 pub async fn get_shift_summary(
     shift_id: String,
     tenant_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<ShiftSummaryDto, String> {
+    let tenant_id = vardiya_oku_kapisi(actor_role.as_deref(), tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
 
     // Get shift details (opening balance, actual closing if any)
     let shift_row = sqlx::query("SELECT opened_at, expected_amount_cents, actual_amount_cents, closed_at, tenant_id FROM shifts WHERE id = ? AND tenant_id = ?")

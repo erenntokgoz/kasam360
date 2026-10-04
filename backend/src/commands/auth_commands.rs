@@ -22,6 +22,39 @@ mod tests;
 /// okuma ve yazma farklı değerlerle çalışır ve kilit sessizce kaçardı.
 const GIRIS_KIRACISI: &str = "PLATFORM_GIRIS";
 
+/// MASTER oturumunun taşıdığı bayrakların **gerçek** listesi.
+///
+/// Neden bu liste: 11 bayrağın tamamı iki giriş yolunda (PIN ve e-posta)
+/// elle yazılıydı ve kod tabanında karşılığı olmayan bayraklar da açıktı.
+/// `feat_seat_split`, `feat_delivery`, `feat_caller_id` ve
+/// `feat_dynamic_pricing` henüz uygulanmadığı için **açılmaz**: açık bir
+/// bayrak, arayüzde hiçbir komuta karşılığı olmayan bir özellik gösterir ve
+/// kullanıcı çalışmayan bir düğmeyle karşılaşır.
+///
+/// Kapanan listede bugün uygulanmış olan bayraklar vardır; yenisi eklenirken
+/// bu tablo güncellenmelidir. `feat_multi_branch` burada **açıktır** çünkü
+/// şube komutları (`branch_commands.rs`) uygulanmıştır; ancak arayüz bu bayrağı
+/// MASTER'ın **kendi** listesiyle değil, yönettiği kiracının modül listesiyle
+/// çözer (`PlatformBranchesPanel.tsx`) — platform hesabının bir işletmesi
+/// yoktur.
+const MASTER_MODULES: [&str; 7] = [
+    "feat_kds",
+    "feat_qr_menu",
+    "feat_table_order",
+    "feat_recipe_bom",
+    "feat_ledger_cari",
+    "feat_loss_radar",
+    "feat_multi_branch",
+];
+
+/// MASTER oturumunun bayrak listesini üretir.
+///
+/// Neden fonksiyon: liste iki giriş yolunda da kullanılıyor; iki ayrı el yazımı
+/// yeniden ayrışma riski taşır.
+pub(crate) fn master_modules() -> Vec<String> {
+    MASTER_MODULES.iter().map(|m| m.to_string()).collect()
+}
+
 /// Kilit veya uyarı mesajını döndürür.
 fn kilit_mesaji(durum: &KilitDurumu) -> String {
     durum.mesaj.clone()
@@ -113,12 +146,7 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
                 role: "MASTER".to_string(),
                 name: row.try_get("name").unwrap_or_default(),
                 tenant_id: "DEFAULT_TENANT".to_string(),
-                active_modules: Some(vec![
-                    "feat_kds".into(), "feat_qr_menu".into(), "feat_delivery".into(),
-                    "feat_caller_id".into(), "feat_table_order".into(), "feat_seat_split".into(),
-                    "feat_recipe_bom".into(), "feat_dynamic_pricing".into(), "feat_ledger_cari".into(),
-                    "feat_multi_branch".into(), "feat_loss_radar".into(),
-                ]),
+                active_modules: Some(master_modules()),
             });
         }
     }
@@ -214,12 +242,7 @@ pub async fn authenticate_by_pin(pool: &DbPool, pin: &str, target_tenant_id: Opt
                 role: "MASTER".to_string(),
                 name: row.try_get("name").unwrap_or_default(),
                 tenant_id: effective_tenant.to_string(),
-                active_modules: Some(vec![
-                    "feat_kds".into(), "feat_qr_menu".into(), "feat_delivery".into(),
-                    "feat_caller_id".into(), "feat_table_order".into(), "feat_seat_split".into(),
-                    "feat_recipe_bom".into(), "feat_dynamic_pricing".into(), "feat_ledger_cari".into(),
-                    "feat_multi_branch".into(), "feat_loss_radar".into(),
-                ]),
+                active_modules: Some(master_modules()),
             });
         }
     }

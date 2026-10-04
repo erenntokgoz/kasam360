@@ -3,21 +3,79 @@ use serde::{Deserialize, Serialize};
 
 pub use crate::services::modifier_service::{ModifierGroupDto, ModifierOptionDto};
 
+/// Sipariş akışını gören roller: masa açar, ürün seçer, sepeti doldurur.
+///
+/// Neden kasa ve mutfak dışlanıyor: bu modülün komutları salon ve POS
+/// yüzeylerini besler. Kasa tahsilat alır, mutfak hazırlık yapar; ikisi de
+/// menü ve masa hazırlığı okumaz. Kapı burada kapatılmazsa, salon ekranı
+/// görmemesi gereken bir rol menüyü ve masa durumunu yine de okuyabilir.
+const SIPARIS_ROLES: [crate::rbac::Role; 4] = [
+    crate::rbac::Role::Owner,
+    crate::rbac::Role::Manager,
+    crate::rbac::Role::Waiter,
+    crate::rbac::Role::Cashier,
+];
+
+/// Masa hazırlık durumunu okuyan roller: mutfak bileti günceller, salon ekranı
+/// gösterir. Kasa bu durumu okumaz (tahsilatla ilgisi yoktur).
+const MASA_OKUMA_ROLES: [crate::rbac::Role; 4] = [
+    crate::rbac::Role::Owner,
+    crate::rbac::Role::Manager,
+    crate::rbac::Role::Waiter,
+    crate::rbac::Role::Kitchen,
+];
+
+/// SIPARIS_ROLES kapısını fail-closed geçirir ve kiracıyı çözer.
+///
+/// Neden ayrı fonksiyon: `tauri::State` içeren komutlar doğrudan test
+/// edilemez. Kapı ile kiracı çözümü saf bir fonksiyona taşınırsa, komutun
+/// "rol alanı hiç gönderilmemişse reddedilir" sözleşmesi testle kanıtlanır.
+pub(crate) fn siparis_kapisi(
+    actor_role: Option<&str>,
+    tenant_id: Option<&str>,
+) -> Result<String, String> {
+    crate::rbac::require_any_present(actor_role, &SIPARIS_ROLES)?;
+    kiraci_coz(tenant_id)
+}
+
+/// MASA_OKUMA_ROLES kapısını fail-closed geçirir ve kiracıyı çözer.
+pub(crate) fn masa_okuma_kapisi(
+    actor_role: Option<&str>,
+    tenant_id: Option<&str>,
+) -> Result<String, String> {
+    crate::rbac::require_any_present(actor_role, &MASA_OKUMA_ROLES)?;
+    kiraci_coz(tenant_id)
+}
+
+/// Kiracıyı fail-closed çözer. Boş veya eksik değer reddedilir; varsayılan
+/// kiracıya düşmek, rol alanını hiç göndermeyen çağrıyı geçerli sayardı.
+fn kiraci_coz(tenant_id: Option<&str>) -> Result<String, String> {
+    tenant_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())
+}
+
 /// Ürüne bağlı modifier grupları ve seçenekleri (POS seçim penceresi).
 ///
 /// Faz 4 düzeltmesi: komut `tenant_id` ile sınırlandı. Önceden ürün `id`'si tek
 /// başına yeterliydi, dolayısıyla başka işletmenin ürününe bağlı gruplar
 /// okunabiliyordu; ayrıca seçenekler grup başına ayrı sorguyla (N+1) alınıyordu.
+///
+/// Rol kapısı: ürün fiyatını ve seçenek fiyat farklarını okuyan bu komut,
+/// sipariş kalemi oluşturan her rolü görmelidir. Kasa ve mutfak POS'ta
+/// sipariş açmaz; yine de kapıyı hepsine değil yalnız sipariş girebilen
+/// rollere açmak, ileride bu komut fiyat listesi gibi bir hassas okumaya
+/// dönüşürse kazara açık kalmasını önler.
 #[tauri::command]
 pub async fn get_product_modifiers(
     product_id: String,
     tenant_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<ModifierGroupDto>, String> {
-    let tid = tenant_id
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty())
-        .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())?;
+    let tid = siparis_kapisi(actor_role.as_deref(), tenant_id.as_deref())?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     crate::services::modifier_service::product_groups(&mut conn, &tid, &product_id).await
@@ -153,25 +211,39 @@ pub async fn waiter_clock_in(
     Ok(event_id)
 }
 
+/// Tek masa için KDS hazır durumu.
+///
+/// Neden kapı eklendi: komut imzasında ne `tenant_id` ne `actor_role` vardı ve
+/// sorgu masayı `WHERE o.table_id = ?` ile, kiracı filtresi olmadan okuyordu.
+/// Yani başka bir işletmenin masa kimliği bilinen herhangi bir oturum bu
+/// komutu çağırarak o masanın mutfak durumunu okuyabiliyordu (çapraz kiracı
+/// sızıntısı, AGENTS.md §3.3).
 #[tauri::command]
 pub async fn get_table_ready_status(
     table_id: String,
+    tenant_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<String, String> {
+    let tenant = masa_okuma_kapisi(actor_role.as_deref(), tenant_id.as_deref())?;
+
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let row = sqlx::query("
         SELECT e.payload FROM events e
         JOIN orders o ON e.aggregate_id = o.id
-        WHERE o.table_id = ? AND o.status = 'IN_PROGRESS'
+        WHERE o.table_id = ? AND o.tenant_id = ? AND o.status = 'IN_PROGRESS'
         AND e.event_type = 'TICKET_STATUS_UPDATED'
         ORDER BY e.created_at DESC LIMIT 1
     ")
-    .bind(&table_id)
+    .bind(table_id.trim())
+    .bind(&tenant)
     .fetch_optional(&mut *conn).await.map_err(|e| e.to_string())?;
 
     if let Some(r) = row {
         use sqlx::Row;
-        let payload_str: String = r.try_get("payload").unwrap_or_default();
+        // Durum metni okunacaksa hata yükselir: boş string "hazır değil" ile
+        // "okunamadı" ayrımını siler ve mutfak bileti sessizce kaybolur.
+        let payload_str: String = r.try_get("payload").map_err(|e| e.to_string())?;
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload_str) {
             return Ok(v.get("toStatus").and_then(|s| s.as_str()).unwrap_or("Unknown").to_string());
         }
@@ -187,12 +259,17 @@ pub struct TableReadyStatusDto {
 }
 
 /// N+1 sorgu darboğazını engelleyen toplu masa KDS hazır durumu sorgusu.
+///
+/// Neden kapı eklendi: komut `tenant_id` alıyordu ama rol denetlemiyordu ve
+/// kiracı yoksa `"DEFAULT_TENANT"`'a düşüyordu. Yani rol alanını hiç
+/// göndermeyen bir çağrı geçerli kabul ediliyordu (fail-closed değil).
 #[tauri::command]
 pub async fn get_all_table_statuses(
     tenant_id: Option<String>,
+    actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<TableReadyStatusDto>, String> {
-    let tid = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
+    let tid = masa_okuma_kapisi(actor_role.as_deref(), tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     let rows = sqlx::query(
@@ -210,8 +287,8 @@ pub async fn get_all_table_statuses(
     let mut map = std::collections::HashMap::new();
     for r in rows {
         use sqlx::Row;
-        let table_id: String = r.try_get("table_id").unwrap_or_default();
-        let payload_str: String = r.try_get("payload").unwrap_or_default();
+        let table_id: String = r.try_get("table_id").map_err(|e| e.to_string())?;
+        let payload_str: String = r.try_get("payload").map_err(|e| e.to_string())?;
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload_str) {
             let status = v.get("toStatus").and_then(|s| s.as_str()).unwrap_or("Unknown").to_string();
             map.insert(table_id, status);

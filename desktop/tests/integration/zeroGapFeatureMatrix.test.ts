@@ -52,6 +52,8 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
 
       const summary = await tauriInvoke<any>('get_shift_summary', {
         shiftId: openRes.id || 'shift_zerogap',
+        tenantId,
+        actorRole: 'CASHIER',
       });
       expect(summary).toBeDefined();
       expect(summary.expectedBalance).toBeGreaterThanOrEqual(0);
@@ -215,7 +217,11 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
       });
       expect(clockInRes).toBeDefined();
 
-      const readyStatus = await tauriInvoke<any>('get_table_ready_status', { tableId: tableA });
+      const readyStatus = await tauriInvoke<any>('get_table_ready_status', {
+        tableId: tableA,
+        actorRole: 'WAITER',
+        tenantId: 'DEFAULT_TENANT',
+      });
       expect(readyStatus).toBeDefined();
     });
 
@@ -241,10 +247,17 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
         name: 'Ocak & Izgara',
         description: 'Sıcak yemekler',
         tenantId,
+        actorRole: 'KITCHEN',
       });
 
-      const stations = await tauriInvoke<any[]>('get_stations', { tenantId });
+      const stations = await tauriInvoke<any[]>('get_stations', { tenantId, actorRole: 'KITCHEN' });
       expect(Array.isArray(stations)).toBe(true);
+
+      // Mutfak kapısı fail-closed: rol ve kiracı zorunludur.
+      await expect(tauriInvoke('get_stations', { tenantId })).rejects.toThrow(/UNAUTHORIZED/);
+      await expect(
+        tauriInvoke('get_stations', { tenantId, actorRole: 'CASHIER' }),
+      ).rejects.toThrow(/UNAUTHORIZED/);
     });
 
     it('K2: get_active_tickets, kds_update_ticket_status & update_kds_item_status bump tickets', async () => {
@@ -261,6 +274,8 @@ describe('KASAM360 — ZERO-GAP FEATURE MATRIX VALIDATION', () => {
       expect(bumpRes.success).toBe(true);
 
       const itemBumpRes = await tauriInvoke<any>('update_kds_item_status', {
+        tenantId,
+        actorRole: 'KITCHEN',
         payload: {
           itemId: 'item_sample_01',
           status: 'Ready',

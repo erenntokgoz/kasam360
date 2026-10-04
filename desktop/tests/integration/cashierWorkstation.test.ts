@@ -46,6 +46,9 @@ describe('Cashier Workstation Integration Tests', () => {
     const summary = await tauriInvoke<any>('get_shift_summary', {
       shiftId: 'shift_browser_001',
       shift_id: 'shift_browser_001',
+      // Vardiya özeti para özetidir: rol ve kiracı kapısı arkasında.
+      actorRole: 'CASHIER',
+      tenantId: 'DEFAULT_TENANT',
     });
     expect(summary).toBeDefined();
     expect(summary.totalSales).toBeGreaterThanOrEqual(0);

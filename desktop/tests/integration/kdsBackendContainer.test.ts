@@ -51,7 +51,10 @@ describe('KDS Backend Integrations & Operational Lifecycle Suite', () => {
   });
 
   it('1. get_stations: mutfak istasyonlarını (Sıcak, Soğuk, İçecek, Izgara, Tatlı vb.) eksiksiz çeker', async () => {
-    const stations = await tauriInvoke<KdsStationDto[]>('get_stations');
+    const stations = await tauriInvoke<KdsStationDto[]>('get_stations', {
+      tenantId: 'DEFAULT_TENANT',
+      actorRole: 'KITCHEN',
+    });
     expect(Array.isArray(stations)).toBe(true);
     expect(stations.length).toBeGreaterThanOrEqual(4);
 
@@ -135,6 +138,8 @@ describe('KDS Backend Integrations & Operational Lifecycle Suite', () => {
     // İlk kalemi Ready yap
     const firstItem = orderWithMultipleItems.items[0];
     await tauriInvoke('update_kds_item_status', {
+      tenantId: 'DEFAULT_TENANT',
+      actorRole: 'KITCHEN',
       payload: { itemId: firstItem.id, status: 'Ready' },
     });
 
@@ -145,6 +150,8 @@ describe('KDS Backend Integrations & Operational Lifecycle Suite', () => {
     // Kalan tüm kalemleri Ready yap
     for (const item of orderWithMultipleItems.items) {
       await tauriInvoke('update_kds_item_status', {
+        tenantId: 'DEFAULT_TENANT',
+        actorRole: 'KITCHEN',
         payload: { itemId: item.id, status: 'Ready' },
       });
     }
@@ -207,7 +214,11 @@ describe('KDS Backend Integrations & Operational Lifecycle Suite', () => {
       },
     });
 
-    const readyStatus = await tauriInvoke<string>('get_table_ready_status', { tableId: 'tbl-001' });
+    const readyStatus = await tauriInvoke<string>('get_table_ready_status', {
+      tableId: 'tbl-001',
+      tenantId: 'DEFAULT_TENANT',
+      actorRole: 'KITCHEN',
+    });
     expect(readyStatus).toBeDefined();
   });
 });

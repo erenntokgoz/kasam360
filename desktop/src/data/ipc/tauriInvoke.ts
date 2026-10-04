@@ -1138,9 +1138,68 @@ function requireReportGate(args: Record<string, unknown>): { tenantId: string; r
 }
 
 /**
+ * Sipariş kapısı: backend `waiter_commands::siparis_kapisi` ile birebir.
+ * Ürün modifier'larını okuyan komut yalnız sipariş girebilen rollere açıktır
+ * (OWNER/MANAGER/WAITER/CASHIER) ve kiracı zorunludur.
+ */
+function requireOrderGate(args: Record<string, unknown>): { tenantId: string; role: string } {
+  const role = ((args.actor_role || args.actorRole || args.callerRole || args.caller_role || '') as string)
+    .trim()
+    .toUpperCase();
+  if (!['OWNER', 'MANAGER', 'WAITER', 'CASHIER'].includes(role)) {
+    throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, WAITER, CASHIER).');
+  }
+  const tenantId = ((args.tenant_id || args.tenantId || '') as string).trim();
+  if (!tenantId) {
+    throw new Error('UNAUTHORIZED: tenant_id is required');
+  }
+  return { tenantId, role };
+}
+
+/**
+ * Masa hazır durumu kapısı: backend `waiter_commands::masa_okuma_kapisi` ile
+ * birebir. Kasa bu durumu okumaz (tahsilatla ilgisi yoktur).
+ */
+function requireTableReadGate(args: Record<string, unknown>): { tenantId: string; role: string } {
+  const role = ((args.actor_role || args.actorRole || args.callerRole || args.caller_role || '') as string)
+    .trim()
+    .toUpperCase();
+  if (!['OWNER', 'MANAGER', 'WAITER', 'KITCHEN'].includes(role)) {
+    throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, WAITER, KITCHEN).');
+  }
+  const tenantId = ((args.tenant_id || args.tenantId || '') as string).trim();
+  if (!tenantId) {
+    throw new Error('UNAUTHORIZED: tenant_id is required');
+  }
+  return { tenantId, role };
+}
+
+/**
+ * Mutfak kapısı: istasyon okuma ve kalem durumu yalnız OWNER/MANAGER/KITCHEN.
+ *
+ * Backend `kitchen_commands` içindeki `istasyon_okuma_kapisi`,
+ * `istasyon_yazma_kapisi` ve `kds_durum_kapisi` ile birebir aynıdır. Gevşek
+ * kalan mock, tarayıcıda garson/kasa mutfak ekranını görür ve test gerçek
+ * davranışı yıltır; bu yüzden kapı burada da fail-closed'tır.
+ */
+function requireKitchenGate(args: Record<string, unknown>): { tenantId: string; role: string } {
+  const role = ((args.actor_role || args.actorRole || args.callerRole || args.caller_role || '') as string)
+    .trim()
+    .toUpperCase();
+  if (role !== 'OWNER' && role !== 'MANAGER' && role !== 'KITCHEN') {
+    throw new Error('UNAUTHORIZED: Bu işlem için yetki yok (izin: OWNER, MANAGER, KITCHEN).');
+  }
+  const tenantId = ((args.tenant_id || args.tenantId || '') as string).trim();
+  if (!tenantId) {
+    throw new Error('UNAUTHORIZED: tenant_id is required');
+  }
+  return { tenantId, role };
+}
+
+/**
  * Vardiya kapısı: rapor kapısından farklı olarak CASHIER da kendi vardiyasını
  * görebilir. Backend `shift_commands` içinde `[Owner, Manager, Cashier]` kabul
- * ediyor; mock farklı davranırsa tarayıcı testi masaüstünü yıltar.
+ * ediyor; mock farklı davranırsa tarayıcı testi masaüstünü yıltır.
  */
 function requireShiftGate(args: Record<string, unknown>): { tenantId: string; role: string } {
   const role = ((args.actor_role || args.actorRole || args.callerRole || args.caller_role || '') as string)
@@ -1771,6 +1830,8 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return { success: true } as unknown as T;
   }
   if (cmd === 'get_table_ready_status') {
+    // Backend `masa_okuma_kapisi`: OWNER/MANAGER/WAITER/KITCHEN + kiracı zorunlu.
+    requireTableReadGate(args);
     return 'Ready' as unknown as T;
   }
   if (cmd === 'waiter_clock_in') {
@@ -1793,6 +1854,8 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return mockProducts.filter((p) => matchesTenant(p.tenant_id)) as unknown as T;
   }
   if (cmd === 'get_product_modifiers') {
+    // Backend `siparis_kapisi`: sipariş girebilen roller + kiracı zorunlu.
+    requireOrderGate(args);
     // Faz 4 düzeltmesi: mock her üründe TÜM grupları döndürüyordu; ürün
     // filtrelenmediği için seçim penceresi hiçbir ürüne özel değildi.
     const productId = (args.productId || args.product_id) as string | undefined;
@@ -2712,6 +2775,10 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     return { success: true } as unknown as T;
   }
   if (cmd === 'get_shift_summary') {
+    // Backend ile aynı kapı: `vardiya_oku_kapisi` yalnız OWNER/MANAGER/CASHIER
+    // kabul eder ve kiracıyı zorunlu kılar. Garson ve mutfak vardiya parasını
+    // göremez; rol alanı hiç gönderilmemişse istek reddedilir.
+    requireShiftGate(args);
     const targetShiftId = (args.shiftId || args.shift_id) as string | undefined;
     const shift = mockShifts.find((s) => s.id === targetShiftId) || mockShifts.find((s) => s.status === 'OPEN');
     const openingBalance = shift ? shift.expectedAmountCents : 10000;
@@ -4173,6 +4240,7 @@ function buildMockAnalytics(from: string, to: string): Record<string, unknown> {
 
   // ----- KDS (Mutfak Ekranı) -----
   if (cmd === 'get_stations') {
+    requireKitchenGate(args);
     return mockKdsStations as unknown as T;
   }
   if (cmd === 'get_active_tickets') {
@@ -4205,6 +4273,7 @@ function buildMockAnalytics(from: string, to: string): Record<string, unknown> {
     return { success: true } as unknown as T;
   }
   if (cmd === 'update_kds_item_status') {
+    requireKitchenGate(args);
     const payload = (args.payload || {}) as Record<string, unknown>;
     const itemId = payload.itemId as string;
     const status = (payload.status as string) || 'Ready';
@@ -4420,6 +4489,8 @@ function buildMockAnalytics(from: string, to: string): Record<string, unknown> {
   }
 
   if (cmd === 'get_all_table_statuses') {
+    // Backend `masa_okuma_kapisi` ile aynı kapı.
+    requireTableReadGate(args);
     return mockTables.map((t) => ({
       tableId: t.id,
       status: t.status === 'OCCUPIED' ? 'Ready' : 'Unknown',
@@ -4480,6 +4551,16 @@ export async function tauriInvoke<T>(cmd: string, args?: InvokeArgs): Promise<T>
     if (finalArgs.callerTenantId === undefined) finalArgs.callerTenantId = user.tenantId;
     if (finalArgs.branchId === undefined && user.branchId) finalArgs.branchId = user.branchId;
     if (finalArgs.branch_id === undefined && user.branchId) finalArgs.branch_id = user.branchId;
+    // Özellik bayrağı kapıları `active_modules` bekler ve bayrak yoksa fail-closed
+    // reddeder. Değer oturumdan gelir: bayrağı bileşen kafasında taşımak, kapalı
+    // bir özelliğin ekranda görünüp çağrı hatası vermesine yol açar. Arayüz
+    // `useFeatureFlags` ile gizler, backend ise son sözü kendi verir.
+    if (finalArgs.active_modules === undefined && user.activeModules) {
+      finalArgs.active_modules = user.activeModules;
+    }
+    if (finalArgs.activeModules === undefined && user.activeModules) {
+      finalArgs.activeModules = user.activeModules;
+    }
   } else {
     if (finalArgs.tenant_id === undefined) finalArgs.tenant_id = '';
   }

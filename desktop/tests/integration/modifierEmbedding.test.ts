@@ -218,6 +218,8 @@ describe('Faz 4 — Ürüne bağlı modifier grupları', () => {
     const before = await tauriInvoke<unknown[]>('get_product_modifiers', {
       productId: product.id,
       product_id: product.id,
+      actorRole: 'OWNER',
+      actor_role: 'OWNER',
       tenantId: TENANT,
       tenant_id: TENANT,
     });
@@ -242,6 +244,8 @@ describe('Faz 4 — Ürüne bağlı modifier grupları', () => {
     const after = await tauriInvoke<{ id: string; options: unknown[] }[]>('get_product_modifiers', {
       productId: product.id,
       product_id: product.id,
+      actorRole: 'OWNER',
+      actor_role: 'OWNER',
       tenantId: TENANT,
       tenant_id: TENANT,
     });

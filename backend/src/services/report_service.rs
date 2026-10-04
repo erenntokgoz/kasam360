@@ -145,8 +145,17 @@ pub async fn sales_report(
     .await
     .map_err(|e| e.to_string())?;
 
-    let total_revenue_cents: i64 = row.try_get("revenue").unwrap_or(0);
-    let total_orders: i64 = row.try_get("order_count").unwrap_or(0);
+    // Para ve sayaç okumaları `unwrap_or(0)` **olamaz** (AGENTS.md §3.4): SQL
+    // hatası sıfıra dönüşünce ciro "0" görünür ve rapor "satış yok" der —
+    // hatasız, sessiz ve yanlış. Yanlış rapor, hata mesajından daha tehlikelidir.
+    let total_revenue_cents: i64 = row
+        .try_get::<Option<i64>, _>("revenue")
+        .map_err(|e| e.to_string())?
+        .unwrap_or(0);
+    let total_orders: i64 = row
+        .try_get::<Option<i64>, _>("order_count")
+        .map_err(|e| e.to_string())?
+        .unwrap_or(0);
     let average_order_value_cents = if total_orders > 0 {
         total_revenue_cents / total_orders
     } else {
@@ -202,16 +211,28 @@ async fn payment_method_shares(
     .await
     .map_err(|e| e.to_string())?;
 
-    let sum: i64 = rows
-        .iter()
-        .map(|r| r.try_get::<i64, _>("amount").unwrap_or(0))
-        .sum();
+    // Ödeme yöntemi tutarları para cinsinden toplamdır: hata sıfıra dönmez
+    // (AGENTS.md §3.4), yoksa ciro "hiç ödeme alınmamış" gibi görünür.
+    let mut sum: i64 = 0;
+    for row in rows.iter() {
+        let amount: i64 = row
+            .try_get::<Option<i64>, _>("amount")
+            .map_err(|e| e.to_string())?
+            .unwrap_or(0);
+        sum += amount;
+    }
 
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
-        let amount: i64 = row.try_get("amount").unwrap_or(0);
+        let amount: i64 = row
+            .try_get::<Option<i64>, _>("amount")
+            .map_err(|e| e.to_string())?
+            .unwrap_or(0);
         out.push(PaymentMethodShareDto {
-            method: row.try_get::<String, _>("method").unwrap_or_default(),
+            method: row
+                .try_get::<Option<String>, _>("method")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
             amount_cents: amount,
             share_percent: if sum > 0 {
                 (amount * 100) / sum
@@ -249,14 +270,26 @@ async fn category_volumes(
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok(rows
-        .iter()
-        .map(|r| CategoryVolumeDto {
-            name: r.try_get::<String, _>("category_name").unwrap_or_default(),
-            quantity: r.try_get::<i64, _>("qty").unwrap_or(0),
-            total_cents: r.try_get::<i64, _>("total").unwrap_or(0),
-        })
-        .collect())
+    // Kategori adı, miktar ve tutar: satır bozulursa hata yükselir.
+    // Sessiz sıfır, "bu kategoride satış yok" ile "okuma başarısız" ayrımını
+    // yok eder (AGENTS.md §3.4).
+    let mut out = Vec::with_capacity(rows.len());
+    for r in rows.iter() {
+        out.push(CategoryVolumeDto {
+            name: r.try_get::<Option<String>, _>("category_name")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            quantity: r
+                .try_get::<Option<i64>, _>("qty")
+                .map_err(|e| e.to_string())?
+                .unwrap_or(0),
+            total_cents: r
+                .try_get::<Option<i64>, _>("total")
+                .map_err(|e| e.to_string())?
+                .unwrap_or(0),
+        });
+    }
+    Ok(out)
 }
 
 /// Vardiya geçmişi. Kasiyer adı `users` ile birleşimle gelir (N+1 yok).
@@ -284,20 +317,47 @@ pub async fn shift_report(
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok(rows
-        .iter()
-        .map(|r| ShiftReportRowDto {
-            id: r.try_get::<String, _>("id").unwrap_or_default(),
-            cashier_id: r.try_get::<String, _>("cashier_id").unwrap_or_default(),
-            cashier_name: r.try_get::<String, _>("cashier_name").unwrap_or_default(),
-            status: r.try_get::<String, _>("status").unwrap_or_default(),
-            opened_at: r.try_get::<String, _>("opened_at").unwrap_or_default(),
-            closed_at: r.try_get::<Option<String>, _>("closed_at").unwrap_or(None),
-            expected_amount_cents: r.try_get::<i64, _>("expected_amount_cents").unwrap_or(0),
-            actual_amount_cents: r.try_get::<Option<i64>, _>("actual_amount_cents").unwrap_or(None),
-            difference_cents: r.try_get::<Option<i64>, _>("difference_cents").unwrap_or(None),
-        })
-        .collect())
+    // Vardiya satırları para alanı içerir: `expected_amount_cents` zorunlu,
+    // `actual_amount_cents` ve `difference_cents` sayım girmeden `NULL` olabilir.
+    // Üçü de hata yükseltir; `NULL` yalnız kolon adı doğruysa meşru (AGENTS.md §3.4).
+    let mut out = Vec::with_capacity(rows.len());
+    for r in rows.iter() {
+        out.push(ShiftReportRowDto {
+            id: r.try_get::<Option<String>, _>("id")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            cashier_id: r
+                .try_get::<Option<String>, _>("cashier_id")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            cashier_name: r
+                .try_get::<Option<String>, _>("cashier_name")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            status: r
+                .try_get::<Option<String>, _>("status")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            opened_at: r
+                .try_get::<Option<String>, _>("opened_at")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            closed_at: r
+                .try_get::<Option<String>, _>("closed_at")
+                .map_err(|e| e.to_string())?,
+            expected_amount_cents: r
+                .try_get::<Option<i64>, _>("expected_amount_cents")
+                .map_err(|e| e.to_string())?
+                .unwrap_or(0),
+            actual_amount_cents: r
+                .try_get::<Option<i64>, _>("actual_amount_cents")
+                .map_err(|e| e.to_string())?,
+            difference_cents: r
+                .try_get::<Option<i64>, _>("difference_cents")
+                .map_err(|e| e.to_string())?,
+        });
+    }
+    Ok(out)
 }
 
 /// Fiş geçmişi. Kalem sayısı ve kalem toplamı **tek** sorguda gelir; eski
@@ -325,19 +385,45 @@ pub async fn receipts_report(
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok(rows
-        .iter()
-        .map(|r| ReceiptReportRowDto {
-            id: r.try_get::<String, _>("id").unwrap_or_default(),
-            table_id: r.try_get::<String, _>("table_id").unwrap_or_default(),
-            total_cents: r.try_get::<i64, _>("total_cents").unwrap_or(0),
-            created_at: r.try_get::<String, _>("created_at").unwrap_or_default(),
-            cashier_id: r.try_get::<Option<String>, _>("cashier_id").unwrap_or(None),
-            status: r.try_get::<String, _>("status").unwrap_or_default(),
-            item_count: r.try_get::<i64, _>("item_count").unwrap_or(0),
-            items_total_cents: r.try_get::<i64, _>("items_total_cents").unwrap_or(0),
-        })
-        .collect())
+    // Fiş satırları tutar ve sayaç taşır: ikisi de hata yükseltir
+    // (AGENTS.md §3.4). Sessiz sıfır, "fişte kalem yok" ile "okuma
+    // başarısız" durumlarını birbirine karıştırır.
+    let mut out = Vec::with_capacity(rows.len());
+    for r in rows.iter() {
+        out.push(ReceiptReportRowDto {
+            id: r.try_get::<Option<String>, _>("id")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            table_id: r
+                .try_get::<Option<String>, _>("table_id")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            total_cents: r
+                .try_get::<Option<i64>, _>("total_cents")
+                .map_err(|e| e.to_string())?
+                .unwrap_or(0),
+            created_at: r
+                .try_get::<Option<String>, _>("created_at")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            cashier_id: r
+                .try_get::<Option<String>, _>("cashier_id")
+                .map_err(|e| e.to_string())?,
+            status: r
+                .try_get::<Option<String>, _>("status")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
+            item_count: r
+                .try_get::<Option<i64>, _>("item_count")
+                .map_err(|e| e.to_string())?
+                .unwrap_or(0),
+            items_total_cents: r
+                .try_get::<Option<i64>, _>("items_total_cents")
+                .map_err(|e| e.to_string())?
+                .unwrap_or(0),
+        });
+    }
+    Ok(out)
 }
 
 /// İptal / iade / zayi hareketleri ve **kim onayladı** bilgisi.
@@ -370,8 +456,14 @@ pub async fn adjustments_report(
     let mut seen_waste = false;
 
     for row in rows {
-        let action: String = row.try_get::<String, _>("action").unwrap_or_default();
-        let payload_text: String = row.try_get::<String, _>("payload").unwrap_or_default();
+        let action: String = row
+            .try_get::<Option<String>, _>("action")
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default();
+        let payload_text: String = row
+            .try_get::<Option<String>, _>("payload")
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default();
         let payload: serde_json::Value =
             serde_json::from_str(&payload_text).unwrap_or(serde_json::Value::Null);
 
@@ -390,20 +482,30 @@ pub async fn adjustments_report(
             }
         };
 
+        // Tutar payload içinden gelir. Anahtar eksikse hata yükselir: `0`
+        // yazmak "bu hareket 0 tutarındı" uydurması olurdu. `refund` ve
+        // `waste` yazma yolları henüz olmadığı için payload anahtarı yoksa
+        // rapor hata döner; ekran "bu hareket için kayıt yok" gösterir.
         let amount_cents = payload
             .get(amount_key)
             .and_then(|v| v.as_i64())
-            .unwrap_or(0);
+            .ok_or_else(|| format!("{} kaydında '{}' tutarı okunamadı.", kind, amount_key))?;
         let approver_id = payload
             .get("approverId")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .unwrap_or_default();
-        let actor_id: String = row.try_get::<String, _>("actor_id").unwrap_or_default();
+        let actor_id: String = row
+            .try_get::<Option<String>, _>("actor_id")
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default();
 
         out.push(AdjustmentRowDto {
             kind: kind.to_string(),
-            resource_id: row.try_get::<String, _>("resource_id").unwrap_or_default(),
+            resource_id: row
+                .try_get::<Option<String>, _>("resource_id")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
             amount_cents,
             reason: payload
                 .get("reason")
@@ -421,7 +523,10 @@ pub async fn adjustments_report(
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string(),
-            occurred_at: row.try_get::<String, _>("timestamp").unwrap_or_default(),
+            occurred_at: row
+                .try_get::<Option<String>, _>("timestamp")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default(),
         });
     }
 
