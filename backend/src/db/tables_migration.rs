@@ -9,12 +9,12 @@ use sqlx::{Acquire, Row};
 /// when present, assigns the historical default only to schemas that predate
 /// tenancy, and recreates explicit indexes/triggers from sqlite_master.
 ///
-/// `tenant_id` hedef tanımında varsayılan **taşımaz**. Neden: `DEFAULT
-/// 'DEFAULT_TENANT'` bir kolon tanımında kalmaya devam ederse, `tenant_id`
-/// bind etmeyen bir `INSERT` sessizce ortak havuza düşer ve kiracı izolasyonu
-/// sessizce delinir (AGENTS.md §3.3). Eski satırlar için `DEFAULT_TENANT`
-/// yalnız **tek seferlik veri dönüşümünde** kullanılır; hedef şemada bir kolon
-/// varsayılanı olarak yaşamaz.
+/// `tenant_id` hedef tanımında varsayılan **taşımaz**. Neden: bir kolon
+/// tanımında varsayılan kalmaya devam ederse, `tenant_id` bind etmeyen
+/// bir `INSERT` sessizce ortak havuza düşer ve kiracı izolasyonu
+/// sessizce delinir (AGENTS.md §3.3). Eski satırlar için tarihsel
+/// kiracı kimliği yalnız **tek seferlik veri dönüşümünde** kullanılır;
+/// hedef şemada bir kolon varsayılanı olarak yaşamaz.
 pub(crate) async fn migrate_tables_current_total_to_integer(
     pool: &DbPool,
 ) -> Result<(), sqlx::Error> {
@@ -56,8 +56,8 @@ pub(crate) async fn migrate_tables_current_total_to_integer(
         .and_then(|column| column.try_get::<String, _>("type").ok());
 
     // `tenant_id` üzerinde bir kolon varsayılanı varsa şema kiracı izolasyonu
-    // açısından gevşektir: bind edilmemiş bir INSERT sessizce `DEFAULT_TENANT`
-    // olur. Bu da rebuild tetikleyicisidir.
+    // açısından gevşektir: bind edilmemiş bir INSERT sessizce şema
+    // varsayılanına düşer. Bu da rebuild tetikleyicisidir.
     let tenant_has_default = columns.iter().any(|column| {
         column
             .try_get::<String, _>("name")
@@ -67,7 +67,7 @@ pub(crate) async fn migrate_tables_current_total_to_integer(
                 .try_get::<Option<String>, _>("dflt_value")
                 .ok()
                 .flatten()
-                .is_some_and(|value| value.contains("DEFAULT_TENANT"))
+                .is_some()
     });
 
     // A missing tenant_id is also an upgrade condition: an INTEGER-only legacy
@@ -182,13 +182,19 @@ pub(crate) async fn migrate_tables_current_total_to_integer(
 
         // Tek seferlik veri dönüşümü: tenancy öncesi şemada `tenant_id`
         // kolonu yoktur veya NULL olabilir; mevcut satırlar kaybolmasın diye
-        // burada tarihsel değer atanır. Bu ifade **hedef şemada değil**,
-        // yalnız kopyada yaşar: sonraki her `INSERT` `tenant_id` bind
-        // etmek zorundadır.
+        // burada tarihsel değer atanır. Değer, merkez işletmenin kiracı
+        // kimliğidir ve `tenants` tablosundan okunur (tek kaynak); kaynak
+        // kodta sözlü olarak yaşamaz. Kiracı çözülemezse (yeni kurulumda
+        // masalar boştur, dönüşüm hiçbir satıra etkiz) rezerv kimlik
+        // kullanılır — bu kimlik hiçbir işletmeye ait değildir, yani
+        // satırlar sessizce ortak havuzuna düşmez (fail-closed).
+        let merkez = super::merkez_tenant_id(pool)
+            .await
+            .unwrap_or_else(|_| super::BILINMEYEN_KIRACI.to_string());
         let tenant_expression = if has_column("tenant_id") {
-            "COALESCE(tenant_id, 'DEFAULT_TENANT')"
+            format!("COALESCE(tenant_id, '{merkez}')")
         } else {
-            "'DEFAULT_TENANT'"
+            format!("'{merkez}'")
         };
         let copy_sql = format!(
             "INSERT INTO tables_new (id, tenant_id, name, status, opened_at, waiter_id, current_total{geometry_names})

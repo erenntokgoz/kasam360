@@ -6,6 +6,7 @@ pub mod branch_commands;
 pub mod cashier_commands;
 pub mod commands;
 pub mod db;
+pub mod domain;
 pub mod id_generator;
 pub mod inventory360_commands;
 pub mod inventory_commands;
@@ -52,6 +53,10 @@ pub fn run() {
             .await
             .expect("Failed to initialize database")
     });
+
+    // G2 · P0: outbox dispatcher worker'ı (30 sn aralıkla
+    // PENDING olayları teslim eder, retry/dead_letter yönetir).
+    crate::services::outbox_dispatcher::spawn_outbox_worker(pool.clone());
 
     tauri::Builder::default()
         .manage(pool)
@@ -166,6 +171,11 @@ pub fn run() {
             platform_commands::devices::get_devices,
             platform_commands::devices::record_device_heartbeat,
             platform_commands::devices::register_device,
+            // Master vault komutları da ayrı modüldedir;
+            // `generate_handler!` tam modül yolunu ister.
+            platform_commands::master_vault_commands::master_vault_configure,
+            platform_commands::master_vault_commands::master_vault_unlock,
+            platform_commands::master_vault_commands::master_vault_status,
             platform_commands::get_global_users,
             platform_commands::get_platform_audit_logs,
             management_commands::staff::get_staff,

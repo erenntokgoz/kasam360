@@ -290,7 +290,7 @@ async fn load_items(
 
     let rows = sqlx::query(
         "SELECT oi.id, oi.product_id, COALESCE(p.name, oi.product_id) AS product_name, \
-                oi.quantity, oi.unit_price_cents, oi.tax_rate, oi.subtotal_cents, \
+                oi.quantity, oi.unit_price_cents, oi.tax_rate_bp, oi.subtotal_cents, \
                 oi.tax_amount_cents, oi.total_cents, oi.modifiers, oi.notes \
          FROM order_items oi \
          LEFT JOIN products p ON p.tenant_id = ? AND p.id = oi.product_id \
@@ -315,7 +315,7 @@ async fn load_items(
             product_name: row.try_get("product_name").unwrap_or_default(),
             quantity: row.try_get("quantity").unwrap_or(1),
             unit_price_cents: row.try_get("unit_price_cents").unwrap_or(0),
-            tax_rate: row.try_get("tax_rate").unwrap_or(0.0),
+            tax_rate_bp: row.try_get("tax_rate_bp").unwrap_or(0),
             subtotal_cents: row.try_get("subtotal_cents").unwrap_or(0),
             tax_amount_cents: row.try_get("tax_amount_cents").unwrap_or(0),
             total_cents: row.try_get("total_cents").unwrap_or(0),

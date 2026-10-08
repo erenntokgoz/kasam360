@@ -90,10 +90,10 @@ async fn seed_product(pool: &sqlx::SqlitePool, tenant: &str, id: &str) {
         .bind("Kategori")
         .execute(pool)
         .await
-        .expect("kategori eklenir");
+        .expect("ategori eklenir");
     sqlx::query(
-        "INSERT OR IGNORE INTO products (id, tenant_id, name, price_cents, tax_rate, category_id, is_active) \
-         VALUES (?, ?, ?, 1000, 20.0, ?, 1)",
+        "INSERT OR IGNORE INTO products (id, tenant_id, name, price_cents, tax_rate_bp, category_id, is_active) \
+         VALUES (?, ?, ?, 1000, 2000, ?, 1)",
     )
     .bind(id)
     .bind(tenant)
@@ -117,8 +117,8 @@ async fn seed_order_item(
     seed_product(pool, tenant, product_id).await;
     sqlx::query(
         "INSERT OR REPLACE INTO order_items \
-         (id, order_id, product_id, quantity, unit_price_cents, tax_rate, subtotal_cents, tax_amount_cents, total_cents, status) \
-         VALUES (?, ?, ?, ?, 1000, 20.0, ?, ?, ?, 'Sent')",
+         (id, order_id, product_id, quantity, unit_price_cents, tax_rate_bp, subtotal_cents, tax_amount_cents, total_cents, status) \
+         VALUES (?, ?, ?, ?, 1000, 2000, ?, ?, ?, 'Sent')",
     )
     .bind(item_id)
     .bind(order_id)

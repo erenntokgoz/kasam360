@@ -14,9 +14,12 @@ desktop/dist/
 
 # Env
 .env
+.env.local
 .env.*
 !.env.example
+.env.local
 desktop/.env
+desktop/.env.local
 desktop/.env.*
 !desktop/.env.example
 

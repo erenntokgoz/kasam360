@@ -76,8 +76,8 @@ async fn seed_product(
     price_cents: i64,
 ) {
     sqlx::query(
-        "INSERT OR IGNORE INTO products (id, tenant_id, name, price_cents, tax_rate, category_id, is_active) \
-         VALUES (?, ?, ?, ?, 20.0, ?, 1)",
+        "INSERT OR IGNORE INTO products (id, tenant_id, name, price_cents, tax_rate_bp, category_id, is_active) \
+         VALUES (?, ?, ?, ?, 2000, ?, 1)",
     )
     .bind(id)
     .bind(tenant)
@@ -500,7 +500,7 @@ async fn donmus_fiyat_uzerine_modifier_eklenmez() {
     let price = resolve_unit_price(
         &mut conn,
         TENANT_A,
-        (30000, 20.0),
+        (30000, 2000),
         Some(&modifiers),
         Some(34000),
     )
@@ -526,7 +526,7 @@ async fn donmus_fiyat_yoksa_urun_fiyatina_modifier_eklenir() {
     let price = resolve_unit_price(
         &mut conn,
         TENANT_A,
-        (30000, 20.0),
+        (30000, 2000),
         Some(&options_json(&[&option_id])),
         None,
     )

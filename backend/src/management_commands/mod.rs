@@ -67,7 +67,7 @@ pub(crate) fn audit_actor(actor_id: Option<String>, actor_role: &str) -> (String
 pub(crate) fn require_tenant(tenant_id: Option<&str>) -> Result<String, String> {
     let tenant = tenant_id.unwrap_or("").trim();
     if tenant.is_empty() {
-        // Oturumsuz çağrı sessizce "DEFAULT_TENANT"e düşerse tüm işletmeler
+        // Oturumsuz çağrı sessizce varsayılan kiracıya düşerse tüm işletmeler
         // aynı havuzda birleşir. Oturum yoksa işlem yapılamaz.
         return Err("UNAUTHORIZED: oturum işletmesi yok, işlem reddedildi".into());
     }

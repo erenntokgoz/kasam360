@@ -61,8 +61,8 @@ pub(crate) fn kds_durum_kapisi(
     kiraci_coz(tenant_id)
 }
 
-/// Kiracıyı fail-closed çözer. Boş veya eksik değer reddedilir; `"DEFAULT_TENANT"`
-/// varsayılanına düşmek, rol alanını hiç göndermeyen çağrıyı geçerli sayardı.
+/// Kiracıyı fail-closed çözer. Boş veya eksik değer reddedilir; varsayılan
+/// kiracıya düşmek, rol alanını hiç göndermeyen çağrıyı geçerli sayardı.
 fn kiraci_coz(tenant_id: Option<&str>) -> Result<String, String> {
     tenant_id
         .map(str::trim)
@@ -82,7 +82,8 @@ pub struct StationDto {
 ///
 /// Neden zorunlu: `stations` tablosunda `tenant_id` kolonu var ama bu komut
 /// filtrelemeden tüm istasyonları okuyordu. Varsayılan tohumlama da
-/// `DEFAULT_TENANT`'a yazıyordu; yani her işletme aynı beş varsayılan
+/// kiracıya özel istasyon başkasının listesine karışıyordu. Varsayılan
+/// kiracıya tohumlama yapıldığında her işletme aynı beş varsayılan
 /// istasyonu görüyor ve kiracıya özel istasyon başkasının listesine karışıyordu.
 #[tauri::command]
 pub async fn get_stations(
@@ -158,7 +159,7 @@ pub struct CreateStationPayload {
 /// İstasyon ekler.
 ///
 /// Neden kapı eklendi: komut imzasında rol veya kiracı yoktu; boş bir oturumla
-/// çağrılabiliyor ve kayıt `DEFAULT_TENANT`'a düşüyordu. Yani herhangi bir
+/// çağrılabiliyor ve kayıt varsayılan kiracıya düşüyordu. Yani herhangi bir
 /// rol mutfağın üretim hattını değiştirebiliyordu (AGENTS.md §3.3).
 #[tauri::command]
 pub async fn create_station(

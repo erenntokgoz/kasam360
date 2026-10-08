@@ -151,7 +151,7 @@ impl InventoryService {
         let fifo_json_str = serde_json::to_string(&fifo_payload).map_err(|e| e.to_string())?;
 
         // `events.tenant_id` NOT NULL DEFAULT'tur; kolon yazılmazsa olay
-        // "DEFAULT_TENANT"e düşer ve kiracı defteri tutarsızlaşır.
+        // varsayılan kiracıya düşer ve kiracı defteri tutarsızlaşır.
         sqlx::query(
             "INSERT INTO events (event_id, tenant_id, aggregate_id, aggregate_type, event_type, payload, created_at) \
              VALUES (?, ?, ?, 'INVENTORY_ALLOCATION', 'FIFO_STOCK_DEDUCTED', ?, datetime('now'))",

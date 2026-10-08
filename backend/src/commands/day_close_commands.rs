@@ -104,9 +104,14 @@ pub async fn close_day(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<CloseDayResultDto, String> {
+    // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
+    // düşerse gün sonu başka bir işletmenin kasanızı devrederdi
+    // (AGENTS.md §3.3).
     let effective_tenant = tenant_id
         .or(tenantId)
-        .unwrap_or_else(|| "DEFAULT_TENANT".to_string());
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())?;
 
     // D1: gün sonu yüksek riskli komutlardandır (kasa devri).
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
@@ -142,7 +147,7 @@ pub async fn close_day(
 
     // 1. Yalnızca bu işletmeye ait açık vardiyaları kapat ve dürüst mutabakat farkını mühürle.
     //
-    // `OR tenant_id = 'DEFAULT_TENANT'` **kaldırıldı**: ifade herhangi bir
+    // Varsayılan kiracıya genişletme **kaldırıldı**: ifade herhangi bir
     // kiracı çağırdığında DEFAULT_TENANT'ın vardiyalarını da kapatıyordu, yani
     // bir işletmenin gün sonu komutu başka bir işletmenin kasasını devrederdi.
     let open_shifts = sqlx::query(

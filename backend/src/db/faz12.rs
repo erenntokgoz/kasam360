@@ -181,12 +181,12 @@ pub(crate) async fn migrate_products_for_86d(pool: &DbPool) -> Result<(), sqlx::
 ///
 /// Neden tablo yeniden kurma gerekiyor: SQLite bir kolonun `NOT NULL` ya da
 /// `DEFAULT` niteliğini düşüremez. `inventory_batches.tenant_id` kolonunda
-/// `DEFAULT 'DEFAULT_TENANT'` duruyordu; bu, `tenant_id` bind edilmeden yazılan
+/// bir kolon varsayılanı duruyordu; bu, `tenant_id` bind edilmeden yazılan
 /// her partiyi sessizce ortak havuza indiriyordu (AGENTS.md §3.3). Varsayılan
 /// kaldırılınca eksik `tenant_id` artık veritabanı hatası verir.
 ///
-/// Veri kaybı olmaz: `tenant_id` NULL olan eski satırlar tarihsel olarak ortak
-/// havuzda olduğu için `DEFAULT_TENANT` değeriyle korunur.
+/// Veri kaybı olmaz: `tenant_id` NULL olan eski satırlar tarihsel olarak
+/// merkez işletmenin kiracısına atanarak korunur.
 pub(crate) async fn migrate_inventory_batches_for_shelf_life(
     pool: &DbPool,
 ) -> Result<(), sqlx::Error> {
@@ -308,12 +308,22 @@ pub(crate) async fn migrate_inventory_batches_for_shelf_life(
         .execute(&mut *tx)
         .await?;
 
+        // Tek seferlik veri dönüşümünde atanan tarihsel kiracı,
+        // merkez işletmenin kimliğidir ve `tenants` tablosundan
+        // okunur (tek kaynak; kaynak kodta sözlü olarak yaşamaz).
+        // Kiracı çözülemezse rezerv kimlik kullanılır — bu kimlik
+        // hiçbir işletmeye ait değildir, yani partiler sessizce
+        // ortak havuzuna düşmez (fail-closed).
+        let merkez = super::merkez_tenant_id(pool)
+            .await
+            .unwrap_or_else(|_| super::BILINMEYEN_KIRACI.to_string());
+
         let copy_sql = format!(
             "INSERT INTO inventory_batches_new
                  (id, tenant_id, inventory_item_id, product_id, batch_code,
                   received_at, expiry_date, received_by, initial_quantity,
                   remaining_quantity, unit_cost_cents, created_at)
-             SELECT id, COALESCE(tenant_id, 'DEFAULT_TENANT'), inventory_item_id,
+             SELECT id, COALESCE(tenant_id, '{merkez}'), inventory_item_id,
                     product_id, batch_code, received_at, {expiry_expression},
                     {received_by_expression}, initial_quantity, remaining_quantity,
                     unit_cost_cents, created_at

@@ -29,6 +29,28 @@ mod tests;
 
 pub type DbPool = Pool<Sqlite>;
 
+/// Merkez işletmenin (tek kiracılı kurulum) tenant kimliği.
+///
+/// Neden şemadan okunur: kiracı kimliği tek kaynaklıdır —
+/// `migrations/seed.sql` içindeki merkez işletme satırıyla
+/// aynıdır ve kaynak kodta sözlü olarak yaşamaz. Böylece
+/// eski kurulumlarda bu kimlikle yazılmış satırlar yeni
+/// bir tohum değeriyle asla karışmaz ve kiracı kimliği
+/// şema ile senkron kalır.
+pub(crate) async fn merkez_tenant_id(pool: &DbPool) -> Result<String, sqlx::Error> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT id FROM tenants WHERE name = 'Kasam360 Merkez İşletme'",
+    )
+    .fetch_one(pool)
+    .await
+}
+
+/// Kiracı çözülemediğinde veri dönüşümünde kullanılan rezerv
+/// kimlik. Hiçbir işletmeye ait olmadığı için bu kimlikle
+/// yazılmış satır hiçbir kiracı sorgusuyla görünmez —
+/// sessizce ortak havuza düşmez (fail-closed, AGENTS.md §3.3).
+const BILINMEYEN_KIRACI: &str = "tnt_unknown";
+
 // Alt modüllerdeki yordamlar init_db ve testler tarafından kullanılır.
 pub(crate) use faz14::seed_campaign_templates;
 pub(crate) use seeds::{
@@ -49,52 +71,41 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
         .connect_with(options)
         .await?;
 
-    // Eski veritabanlarında tenant_id eksikse schema.sql indekslerinden önce güvenle ekle (idempotent)
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE users ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE orders ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE products ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE categories ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE tables ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE events ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE outbox ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE snapshots ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE order_items ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT';",
-    )
-    .execute(&pool)
-    .await;
+    // Master vault tablosu platform seviyesindedir (kiracı
+    // verisi taşımaz) ve komutlardan önce hazır durmalıdır.
+    {
+        let mut conn = pool.acquire().await?;
+        crate::services::master_vault::ensure_table(&mut conn).await?;
+    }
+
+    // Eski kurulumlarda tenant_id eksikse schema.sql indekslerinden
+    // önce güvenle ekle (idempotent). Geri doldurma değeri merkez
+    // işletmenin kiracı kimliğidir ve `tenants` tablosundan
+    // okunur — kaynak kodta sözlü olarak yaşamaz. Kiracı
+    // çözülemezse (kurulum bozuğu) sütun eklenmez: kiracısız
+    // bir varsayım, tüm eski satırları kimliği belirsiz bir
+    // ortak havuzuna düşürür ve bu sessiz kabul edilmez
+    // (fail-closed, AGENTS.md §3.3).
+    let merkez = merkez_tenant_id(&pool).await.ok();
+    if let Some(merkez) = merkez {
+        for tablo in [
+            "users",
+            "orders",
+            "products",
+            "categories",
+            "tables",
+            "events",
+            "outbox",
+            "snapshots",
+            "order_items",
+        ] {
+            let _ = sqlx::raw_sql(&format!(
+                "ALTER TABLE {tablo} ADD COLUMN tenant_id TEXT NOT NULL DEFAULT '{merkez}';",
+            ))
+            .execute(&pool)
+            .await;
+        }
+    }
     // Faz 11: garson karnesi kalem bazlı kırılım okur. Mevcut kurulumlarda
     // `order_items` tablosu bu kolon olmadan oluşmuş olabilir; CREATE TABLE IF
     // NOT EXISTS var olan tabloyu değiştirmediği için ALTER gerekir.
@@ -124,9 +135,9 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
             "PRAGMA foreign_keys = OFF;
              BEGIN;
              CREATE TABLE staff_profiles_new (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
-                user_id TEXT NOT NULL,
+                 id TEXT PRIMARY KEY,
+                 tenant_id TEXT NOT NULL,
+                 user_id TEXT NOT NULL,
                 full_name TEXT NOT NULL,
                 base_salary_cents INTEGER,
                 commission_percent INTEGER,
@@ -162,15 +173,18 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     sqlx::raw_sql(schema).execute(&pool).await?;
 
     // Eğer yoksa order_items tablosunu oluştur
+    // `tenant_id` üzerinde varsayılan YOK: bind edilmemiş
+    // bir yazı hata verir, ortak havuzuna düşmez
+    // (AGENTS.md §3.3; tables_migration ile aynı kural).
     sqlx::raw_sql(
         "CREATE TABLE IF NOT EXISTS order_items (
             id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+            tenant_id TEXT NOT NULL,
             order_id TEXT NOT NULL,
             product_id TEXT NOT NULL,
             quantity INTEGER NOT NULL,
             unit_price_cents INTEGER NOT NULL,
-            tax_rate REAL NOT NULL,
+            tax_rate_bp INTEGER NOT NULL,
             subtotal_cents INTEGER NOT NULL,
             tax_amount_cents INTEGER NOT NULL,
             total_cents INTEGER NOT NULL,
@@ -207,6 +221,26 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
         .execute(&pool)
         .await;
     let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN email TEXT;")
+        .execute(&pool)
+        .await;
+    // G2 · P0: fabrika öntanımlı PIN'lerle ilk giriş değişimi zorunlu.
+    // Mevcut kurulumlarda kolon yoksa eklenir; satırlar 0 kalır
+    // (tohumlama `seed_default_users` içinde fabrika PIN'i saptar).
+    let _ = sqlx::raw_sql(
+        "ALTER TABLE users ADD COLUMN must_change_pin INTEGER NOT NULL DEFAULT 0;",
+    )
+    .execute(&pool)
+    .await;
+
+    // G2 · P0: outbox dispatcher sütunları. `CREATE TABLE IF NOT EXISTS`
+    // mevcut tabloyu yükseltemediği için ALTER ile eklenir.
+    let _ = sqlx::raw_sql("ALTER TABLE outbox ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0;")
+        .execute(&pool)
+        .await;
+    let _ = sqlx::raw_sql("ALTER TABLE outbox ADD COLUMN last_error TEXT;")
+        .execute(&pool)
+        .await;
+    let _ = sqlx::raw_sql("ALTER TABLE outbox ADD COLUMN dispatched_at DATETIME;")
         .execute(&pool)
         .await;
 
@@ -311,7 +345,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
 
     // Faz 12 — 86'd ve raf ömrü. `products` sütunları eklenebilir (mevcut
     // satırlar etkilenmez), ancak `inventory_batches.tenant_id` üzerindeki
-    // `DEFAULT 'DEFAULT_TENANT'` sessiz havuz birleşmesi ürettiği için tablo
+    // kolon varsayılanı sessiz havuz birleşmesi ürettiği için tablo
     // yeniden kurulur.
     faz12::migrate_products_for_86d(&pool).await?;
     faz12::migrate_inventory_batches_for_shelf_life(&pool).await?;
@@ -335,19 +369,24 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
         // -------------------------------------------------------------------------
         // Tohum koruması (Seed guard) 3: Cari rehber kayıtları (Directories) — eksikse ekle
         // -------------------------------------------------------------------------
-        sqlx::raw_sql(
-            "INSERT OR IGNORE INTO directories (id, tenant_id, name, type, phone, credit_limit_cents) VALUES
-                ('dir_001', 'DEFAULT_TENANT', 'Öz Gıda Toptan A.Ş.', 'SUPPLIER', '0212 555 1010', 5000000),
-                ('dir_002', 'DEFAULT_TENANT', 'Ahmet Yılmaz (Masa 4 Veresiye)', 'CUSTOMER', '0532 111 2233', 100000),
-                ('dir_003', 'DEFAULT_TENANT', 'Mehmet Usta (Aşçıbaşı)', 'STAFF', '0544 333 4455', 200000),
-                ('dir_004', 'DEFAULT_TENANT', 'Dükkan Sahibi (Mülk Sahibi)', 'FIXED_EXPENSE', '0533 777 8899', 0),
-                ('dir_005', 'DEFAULT_TENANT', 'Eren Bey (Patron Şahsi)', 'OWNER_PERSONAL', '0530 000 0001', 0);",
-        )
-        .execute(&pool)
-        .await?;
-        tracing_fallback_log("db::seed", "Cari rehber kayıtları tohumlandı/doğrulandı");
+        // Kiracı kimliği merkez işletmeden okunur (tek kaynak).
+        // Kiracı çözülemezse (kurulum bozuğu) tohumlanmaz:
+        // yanlış kiracıya yazmak, eksik kalmaktan kötüdür
+        // (fail-closed, AGENTS.md §3.3).
+        if let Ok(merkez) = merkez_tenant_id(&pool).await {
+            sqlx::raw_sql(&format!(
+                "INSERT OR IGNORE INTO directories (id, tenant_id, name, type, phone, credit_limit_cents) VALUES
+                    ('dir_001', '{merkez}', 'Öz Gıda Toptan A.Ş.', 'SUPPLIER', '0212 555 1010', 5000000),
+                    ('dir_002', '{merkez}', 'Ahmet Yılmaz (Masa 4 Veresiye)', 'CUSTOMER', '0532 111 2233', 100000),
+                    ('dir_003', '{merkez}', 'Mehmet Usta (Aşçıbaşı)', 'STAFF', '0544 333 4455', 200000),
+                    ('dir_004', '{merkez}', 'Dükkan Sahibi (Mülk Sahibi)', 'FIXED_EXPENSE', '0533 777 8899', 0),
+                    ('dir_005', '{merkez}', 'Eren Bey (Patron Şahsi)', 'OWNER_PERSONAL', '0530 000 0001', 0);",
+            ))
+            .execute(&pool)
+            .await?;
+            tracing_fallback_log("db::seed", "Cari rehber kayıtları tohumlandı/doğrulandı");
+        }
     }
-
     // Tohum koruması (Seed guard) 2: Kullanıcılar — her başlatmada, iki dalın da
     // dışında çalışır. Argon2 SQL içinde üretilemediği için seed.sql'den çıkarıldı.
     seed_default_users(&pool).await?;

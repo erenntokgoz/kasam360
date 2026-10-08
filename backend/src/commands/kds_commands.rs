@@ -9,6 +9,53 @@ use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
 
+/// KDS biletini okuyan ve yazan roller.
+///
+/// Neden garson ve kasa dışlanıyor: bilet geçişi mutfağın üretim
+/// hattıdır. Garson sipariş alır, kasa tahsilat yapar; ikisi de
+/// mutfak biletini ilerletemez. SPEC §34 `kitchenPrepare`/
+/// `kitchenManage` satırları OWNER/MANAGER/KITCHEN'e FULL verir.
+const KDS_ROLES: [crate::rbac::Role; 3] = [
+    crate::rbac::Role::Owner,
+    crate::rbac::Role::Manager,
+    crate::rbac::Role::Kitchen,
+];
+
+/// KDS kapısını fail-closed geçirir.
+///
+/// Neden ayrı fonksiyon: `tauri::State` içeren komutlar doğrudan
+/// test edilemez. Kapı saf bir fonksiyona taşınırsa "rol alanı
+/// hiç gönderilmemişse reddedilir" sözleşmesi testle kanıtlanır
+/// (bkz. `unguarded_commands_tests.rs`).
+pub(crate) fn kds_kapisi(actor_role: Option<&str>) -> Result<crate::rbac::Role, String> {
+    crate::rbac::require_any_present(actor_role, &KDS_ROLES)
+}
+
+/// Siparişin kiracısını fail-closed çözer.
+///
+/// Neden hata döner: sipariş yokken veya `tenant_id` boşken
+/// varsayılan kiracıya düşmek, kimliği belirsiz
+/// bir olayı başka bir işletmenin defterine yazmaktır. Kiracı
+/// çözülemezse olay yazılmaz (fail-closed).
+async fn siparis_kiracisi(
+    tx: &mut sqlx::SqliteConnection,
+    order_id: &str,
+) -> Result<String, String> {
+    let row = sqlx::query("SELECT tenant_id FROM orders WHERE id = ?")
+        .bind(order_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    let Some(row) = row else {
+        return Err(format!("NOT_FOUND: sipariş bulunamadı ({order_id})"));
+    };
+    let tenant: Option<String> = row.try_get("tenant_id").map_err(|e| e.to_string())?;
+    tenant
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())
+}
+
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TicketStatusTransitionDto {
@@ -33,6 +80,11 @@ pub async fn kds_update_ticket_status(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, AppState>,
 ) -> Result<bool, String> {
+    // Rol kapısı: bilet geçişi yalnız mutfak hattıdır. Kapı
+    // komut başında durur; olay ve outbox yazılmadan önce
+    // yetkisiz çağrı durur (fail-closed).
+    kds_kapisi(Some(payload.actor_role.as_str()))?;
+
     let audit_lock =
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
@@ -40,15 +92,10 @@ pub async fn kds_update_ticket_status(
     let event_id = format!("evt_kds_{}", Uuid::new_v4());
     let payload_json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
 
-    let order_info = sqlx::query("SELECT tenant_id, table_id FROM orders WHERE id = ?")
-        .bind(&payload.order_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let tenant_id = order_info.as_ref()
-        .and_then(|r| r.try_get::<String, _>("tenant_id").ok())
-        .unwrap_or_else(|| "DEFAULT_TENANT".to_string());
+    // Kiracı, siparişin kendi satırından çözülür. Varsayılan
+    // kiracıya düşüş yok: sipariş kayıtlı değilse veya kiracı
+    // boşsa olay yazılmaz.
+    let tenant_id = siparis_kiracisi(&mut tx, &payload.order_id).await?;
 
     sqlx::query(
         "INSERT INTO events (event_id, tenant_id, aggregate_id, aggregate_type, event_type, payload, created_at) VALUES (?, ?, ?, 'KDS_TICKET', 'TICKET_STATUS_UPDATED', ?, datetime('now'))"
@@ -139,15 +186,33 @@ pub struct KdsOrderDto {
     pub notes: Option<String>,
 }
 
+/// KDS aktif biletlerini listeler.
+///
+/// Neden kapı eklendi: komut imzasında rol alanı yoktu ve
+/// sorgu kiracı filtresiyle genişletilmişti (`OR` ile
+/// varsayılan kiracı). İkisi de kapıyı açar durumdaydı: rolü
+/// olmayan bir çağrı bilet listesini okuyabiliyordu ve
+/// kiracı filtresi başka bir işletmenin biletlerini de
+/// getiriyordu (çapraz kiracı sızıntısı, AGENTS.md §3.3).
 #[tauri::command]
-pub async fn get_active_tickets(tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<KdsOrderDto>, String> {
+pub async fn get_active_tickets(
+    tenant_id: String,
+    actor_role: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<KdsOrderDto>, String> {
+    kds_kapisi(actor_role.as_deref())?;
+    let tenant_id = tenant_id.trim().to_string();
+    if tenant_id.is_empty() {
+        return Err("UNAUTHORIZED: tenant_id is required".to_string());
+    }
+
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     let rows = sqlx::query("
         SELECT o.id, t.name as table_name, o.created_at, o.notes
         FROM orders o
         LEFT JOIN tables t ON o.table_id = t.id
-        WHERE o.status = 'IN_PROGRESS' AND (o.tenant_id = ? OR o.tenant_id = 'DEFAULT_TENANT')
+        WHERE o.status = 'IN_PROGRESS' AND o.tenant_id = ?
         ORDER BY o.created_at ASC
     ")
     .bind(&tenant_id)

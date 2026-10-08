@@ -6,10 +6,14 @@
 //! `crate::platform_commands::*` kullanan çağıranlar değişmez.
 
 pub mod devices;
+pub mod master_vault_commands;
 
 pub use devices::{
     delete_device, get_devices, record_device_heartbeat, register_device, toggle_device_status,
     DeviceDto,
+};
+pub use master_vault_commands::{
+    master_vault_configure, master_vault_status, master_vault_unlock, VaultUnlockResultDto,
 };
 
 use crate::db::DbPool;
@@ -18,9 +22,11 @@ use sqlx::{Acquire, Row};
 use uuid::Uuid;
 use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
 
-/// Platform seviyesindeki (çapraz tenant) denetim kayıtlarının taşındığı tenant
-/// kimliği. MASTER'ın kendi işletmesi yoktur; şema varsayılanı kullanılır.
-const PLATFORM_AUDIT_TENANT: &str = "DEFAULT_TENANT";
+/// Platform seviyesindeki (çapraz tenant) denetim kayıtlarının taşındığı
+/// ayrılmış platform ad alanı. MASTER'ın kendi işletmesi yoktur; platform
+/// kayıtları işletme kiracılarıyla aynı ad alanını paylaşırsa bir
+/// işletmenin denetim defterine karışırdı (AGENTS.md §3.3).
+const PLATFORM_AUDIT_TENANT: &str = "PLATFORM";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TenantDto {
@@ -792,6 +798,14 @@ pub async fn change_user_pin(
         .await
         .map_err(|e| e.to_string())?;
 
+    // G2 · P0: MASTER'ın atadığı PIN'i personel de bilir; ilk
+    // girişte kendi PIN'ini değiştirmek zorundadır.
+    sqlx::query("UPDATE users SET must_change_pin = 1 WHERE id = ?")
+        .bind(&user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
     crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &new_pin, &user_id).await?;
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -824,12 +838,16 @@ pub async fn regenerate_license_key(
     let new_key = format!("LIC-{}", uuid::Uuid::new_v4().to_string().to_uppercase());
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let tenant_id: String = sqlx::query_scalar("SELECT tenant_id FROM users WHERE id = ?")
+    // Hedef kullanıcı bu kiracının mı? Kiracı çözülemezse
+    // varsayılan kiracıya düşmek, lisansı kimliği belirsiz
+    // bir işletmeye yazmaktır (fail-closed, AGENTS.md §3.3).
+    let tenant_id: String = sqlx::query_scalar::<_, String>("SELECT tenant_id FROM users WHERE id = ?")
         .bind(&user_id)
         .fetch_optional(&mut *conn)
         .await
         .map_err(|e| e.to_string())?
-        .unwrap_or_else(|| "DEFAULT_TENANT".to_string());
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| format!("NOT_FOUND: kullanıcı bulunamadı ({user_id})"))?;
 
     sqlx::query(
         "INSERT INTO licenses (id, tenant_id, license_key, status) VALUES (?, ?, ?, 'ACTIVE')

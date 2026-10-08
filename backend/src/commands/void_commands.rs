@@ -76,6 +76,14 @@ pub async fn void_order(
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
+    // Kiracı zorunlu ve boş olamaz: boş kiracı ile `tenant_id = ''`
+    // sorgusu hiçbir satır eşleştirmez ve iptal sessizce
+    // başarısız olur (AGENTS.md §3.3).
+    let tenant_id = tenant_id.trim().to_string();
+    if tenant_id.is_empty() {
+        return Err("UNAUTHORIZED: tenant_id is required".to_string());
+    }
+
     // Yetki (SPEC §34 "Void Onaylama"): kapı yasaklı rolleri sayan değil, yetkili
     // rolleri kabul eden bir eşleşmedir. MASTER ve mutfak sipariş iptali
     // yapamaz; geri kalan roller **onay jetonu olmadan** iptal edemez.
@@ -93,7 +101,10 @@ pub async fn void_order(
     }
 
     // Ödenmiş veya kapatılmış siparişlerin iptal edilmesini kesinlikle engelle (P0 Güvenlik Kilidi)
-    let current_order = sqlx::query("SELECT status, total_cents FROM orders WHERE id = ? AND (tenant_id = ? OR tenant_id = 'DEFAULT_TENANT')")
+    // Kiracı filtresi tek taraftır: `OR` ile varsayılan kiracı
+    // eklemek, başka bir işletmenin siparişini iptal
+    // edilebilir hâle getirirdi (AGENTS.md §3.3).
+    let current_order = sqlx::query("SELECT status, total_cents FROM orders WHERE id = ? AND tenant_id = ?")
         .bind(&payload.order_id)
         .bind(&tenant_id)
         .fetch_optional(&mut *tx)
@@ -129,7 +140,7 @@ pub async fn void_order(
     let approver = require_void_approval(&mut tx, &approval_request, payload.approval_token.as_deref()).await?;
 
     sqlx::query(
-        "UPDATE orders SET status = 'VOID', notes = COALESCE(notes || ' | Void reason: ' || ?, 'Void reason: ' || ?), updated_at = datetime('now') WHERE ((id = ? AND status NOT IN ('PAID', 'CLOSED', 'VOID')) OR (table_id = ? AND status IN ('OPEN', 'IN_PROGRESS'))) AND (tenant_id = ? OR tenant_id = 'DEFAULT_TENANT')"
+        "UPDATE orders SET status = 'VOID', notes = COALESCE(notes || ' | Void reason: ' || ?, 'Void reason: ' || ?), updated_at = datetime('now') WHERE ((id = ? AND status NOT IN ('PAID', 'CLOSED', 'VOID')) OR (table_id = ? AND status IN ('OPEN', 'IN_PROGRESS'))) AND tenant_id = ?"
     )
     .bind(&payload.reason)
     .bind(&payload.reason)

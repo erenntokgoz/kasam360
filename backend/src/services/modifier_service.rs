@@ -432,14 +432,14 @@ pub async fn sum_selected_option_prices(
 pub async fn resolve_unit_price(
     conn: &mut SqliteConnection,
     tenant_id: &str,
-    product_row: (i64, f64),
+    product_row: (i64, i64),
     modifiers: Option<&serde_json::Value>,
     frozen_unit_price_cents: Option<i64>,
 ) -> Result<i64, String> {
     if let Some(frozen) = frozen_unit_price_cents {
         return Ok(frozen);
     }
-    let (product_price_cents, _) = product_row;
+    let (product_price_cents, _tax_rate_bp) = product_row;
     let extras = sum_selected_option_prices(conn, tenant_id, modifiers).await?;
     Ok(product_price_cents + extras)
 }

@@ -14,7 +14,8 @@
 //! yüzden her komutun kapısı saf bir fonksiyona (`*_kapisi`) taşınmıştır ve
 //! testler o sözleşmeyi denetler.
 
-use crate::cashier_commands::vardiya_oku_kapisi;
+use crate::cashier_commands::{cash_hareket_kapisi, vardiya_oku_kapisi};
+use crate::commands::kds_commands::kds_kapisi;
 use crate::kitchen_commands::{istasyon_okuma_kapisi, istasyon_yazma_kapisi, kds_durum_kapisi};
 use crate::waiter_commands::{masa_okuma_kapisi, siparis_kapisi};
 
@@ -51,6 +52,17 @@ fn rol_alani_bos_kapilar_reddeder() {
         masa_okuma_kapisi(None, Some(TENANT_A)).is_err(),
         "masa hazır durumu komutları rol alanı olmadan geçmemeli"
     );
+    // KDS komutları (bilet geçişi + aktif bilet listesi)
+    // hiç rol denetlemiyordu.
+    assert!(
+        kds_kapisi(None).is_err(),
+        "KDS komutları rol alanı olmadan geçmemeli"
+    );
+    // Kasa giriş/çıkışı (para hareketi) hiç rol denetlemiyordu.
+    assert!(
+        cash_hareket_kapisi(None).is_err(),
+        "kasa hareketi komutları rol alanı olmadan geçmemeli"
+    );
 }
 
 #[test]
@@ -59,6 +71,16 @@ fn bos_ve_bilinmeyen_rol_yetki_vermez() {
         assert!(
             vardiya_oku_kapisi(Some(role), Some(TENANT_A)).is_err(),
             "'{}' vardiya özetini okuyabilmemeli",
+            role
+        );
+        assert!(
+            kds_kapisi(Some(role)).is_err(),
+            "'{}' KDS biletini geçememeli",
+            role
+        );
+        assert!(
+            cash_hareket_kapisi(Some(role)).is_err(),
+            "'{}' kasa hareketi yazamamalı",
             role
         );
     }
@@ -253,4 +275,56 @@ fn kiraci_bosluklari_temizlenir_ve_korunur() {
     let kiraci = vardiya_oku_kapisi(Some("OWNER"), Some("  tenant_bosluklu  "))
         .expect("duzenli kiraci gecer");
     assert_eq!(kiraci, "tenant_bosluklu", "kiraci kirpilmali");
+}
+
+// ============================================================================
+// 7. KDS KAPISI — bilet geçişi yalnız mutfak hattındadır
+// ============================================================================
+
+#[test]
+fn kds_kapisi_yalniz_mutfak_hattina_acik() {
+    // KDS bilet geçişi ve aktif bilet listesi:
+    // mutfak hattıdır (SPEC §34 kitchenPrepare).
+    for role in ["OWNER", "MANAGER", "KITCHEN"] {
+        assert!(
+            kds_kapisi(Some(role)).is_ok(),
+            "{} KDS biletini okuyup geçebilmeli",
+            role
+        );
+    }
+    // Garson bilet ilerleyemez, kasa tahsilattan
+    // sorumludur, MASTER platform hesabıdır.
+    for role in ["WAITER", "CASHIER", "Master Admin"] {
+        assert!(
+            kds_kapisi(Some(role)).is_err(),
+            "{} KDS biletini geçememeli",
+            role
+        );
+    }
+}
+
+// ============================================================================
+// 8. KASA HAREKETİ KAPISI — para yazarak yalnız sahip ve kasiyer
+// ============================================================================
+
+#[test]
+fn kasa_hareketi_kapisi_yalniz_sahip_ve_kasier() {
+    // Kasa giriş/çıkışı para hareketidir: yalnız
+    // işletme sahibi ve kasiyer (SPEC §34).
+    for role in ["OWNER", "CASHIER"] {
+        assert!(
+            cash_hareket_kapisi(Some(role)).is_ok(),
+            "{} kasa hareketi yazabilmeli",
+            role
+        );
+    }
+    // Müdür onay jetonuyla onaylar, hareketi kendi
+    // adına yazmaz; garson ve mutfak kasa tutmaz.
+    for role in ["MANAGER", "WAITER", "KITCHEN", "Master Admin"] {
+        assert!(
+            cash_hareket_kapisi(Some(role)).is_err(),
+            "{} kasa hareketi yazamamalı",
+            role
+        );
+    }
 }

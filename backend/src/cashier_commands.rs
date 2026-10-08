@@ -3,6 +3,30 @@ use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
 
+/// Kasa hareketi yazan roller.
+///
+/// Neden garson, müdür ve mutfak dışlanıyor: kasa giriş/çıkışı
+/// para hareketidir. Garson sipariş alır, müdür onaylar (onay
+/// jetonuyla, hareketi kendi adına yazmaz), mutfak üretir.
+/// Kasa çekmecesi yalnız işletme sahibi ve kasiyerin
+/// sorumluluğundadır (SPEC §34 `shiftManage` satırı).
+const CASH_MOVEMENT_ROLES: [crate::rbac::Role; 2] = [
+    crate::rbac::Role::Owner,
+    crate::rbac::Role::Cashier,
+];
+
+/// Kasa hareketi kapısını fail-closed geçirir.
+///
+/// Neden ayrı fonksiyon: `tauri::State` içeren komutlar
+/// doğrudan test edilemez. Kapı saf bir fonksiyona
+/// taşınırsa "rol alanı hiç gönderilmemişse reddedilir"
+/// sözleşmesi testle kanıtlanır (bkz. `unguarded_commands_tests.rs`).
+pub(crate) fn cash_hareket_kapisi(
+    actor_role: Option<&str>,
+) -> Result<crate::rbac::Role, String> {
+    crate::rbac::require_any_present(actor_role, &CASH_MOVEMENT_ROLES)
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CashMovementDto {
     pub id: String,
@@ -52,11 +76,20 @@ pub async fn cash_in(
 ) -> Result<CashMovementDto, String> {
     use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 
+    // Rol kapısı: kasa girişi para hareketidir. Kapı komut
+    // başında durur; hareket ve denetim kaydı yazılmadan
+    // önce yetkisiz çağrı durur (fail-closed).
+    let role = cash_hareket_kapisi(actor_role.as_deref())?;
+    // Kiracı zorunludur: eksik gelen kiracı varsayılan
+    // kiracıya düşerse hareket kimliğine sahip olmayan
+    // bir defter yazılır (AGENTS.md §3.3).
+    let tenant_id =
+        crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
+
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let id = format!("cmin_{}", Uuid::new_v4());
-    let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
 
     sqlx::query(
         "INSERT INTO cash_movements (id, tenant_id, shift_id, movement_type, amount_cents, reason, actor_id, created_at)
@@ -76,7 +109,7 @@ pub async fn cash_in(
     let ctx = AuditContext::new(
         tenant_id,
         actor_id.clone(),
-        actor_role.unwrap_or_else(|| "Cashier".to_string()),
+        role.as_str().to_string(),
         category::FINANS,
         "cash:movement_in",
         id.clone(),
@@ -120,13 +153,25 @@ pub async fn cash_out(
 ) -> Result<CashMovementDto, String> {
     use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 
+    // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
+    // düşerse para başka bir işletmenin kasanına yazılır
+    // (AGENTS.md §3.3).
+    let tenant_id =
+        crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
+
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     let session_token = session_token.or(sessionToken);
 
     let id = format!("cmout_{}", Uuid::new_v4());
-    let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
-    let actor_role = actor_role.unwrap_or_else(|| "Cashier".to_string());
+    // Oturumsuz çağrının bildirdiği rol zorunludur: sessiz
+    // "Cashier" varsayımı, rol alanını hiç göndermeyen
+    // çağıranı kasa hareketi yazabilen bir konuma getirirdi.
+    let bildirilen_rol = actor_role
+        .as_deref()
+        .map(str::trim)
+        .filter(|deger| !deger.is_empty())
+        .ok_or_else(|| "UNAUTHORIZED: caller_role is required".to_string())?;
     let jeton = approval_token.or(approvalToken);
 
     // D1: kasa çıkışı yüksek riskli komutlardandır. Oturum gönderildiyse
@@ -138,9 +183,15 @@ pub async fn cash_out(
         session_token.as_deref(),
         &tenant_id,
         &actor_id,
-        &actor_role,
+        bildirilen_rol,
     )
     .await?;
+
+    // Rol kapısı: çözünülen kimliğin rolü kasa hareketi
+    // yazabilir bir rol olmalıdır. Oturum geldiyse rol
+    // oturumdan gelir ve bildirilen rol geçersiz sayılır;
+    // oturum yoksa bildirilen rol denetlenir (fail-closed).
+    crate::rbac::require_any(&actor_role, &CASH_MOVEMENT_ROLES)?;
 
     // Kasa çıkışı para hareketidir: negatif veya sıfır tutar "çıkış" değildir.
     // Negatif bir tutar `IN` hareketi gibi toplamlara ters yönde işler ve
@@ -273,7 +324,7 @@ pub(crate) fn vardiya_oku_kapisi(
 /// Vardiya özeti: satış, kasa giriş/çıkış, beklenen bakiye ve fark.
 ///
 /// Neden kapı eklendi: komut imzasında **hiç** rol alanı yoktu ve
-/// `tenant_id` verilmezse `"DEFAULT_TENANT"`'a düşüyordu. Bu bir para
+/// `tenant_id` verilmezse varsayılan kiracıya düşüyordu. Bu bir para
 /// özetidir: beklenen bakiye ve fark, kasa açığını gösteren tek sayı. Rol
 /// denetimi olmadan garson ya da mutfak vardiya özetini okuyabiliyordu;
 /// kiracı alanını hiç göndermeyen bir çağrı da kabul ediliyordu (fail-closed

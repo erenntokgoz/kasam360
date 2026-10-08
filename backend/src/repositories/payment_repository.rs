@@ -63,7 +63,7 @@ impl PaymentRepository {
             // `order_items` kendi `tenant_id` taşımaz; sahiplik `orders` üzerinden
             // doğrulanır, böylece başka işletmenin kalemi fiyat kaynağı olamaz.
             let frozen_order_item = sqlx::query(
-                "SELECT oi.unit_price_cents, oi.tax_rate FROM order_items oi \
+                "SELECT oi.unit_price_cents, oi.tax_rate_bp FROM order_items oi \
                  JOIN orders o ON o.id = oi.order_id \
                  WHERE oi.id = ? AND o.tenant_id = ?",
             )
@@ -73,14 +73,14 @@ impl PaymentRepository {
                 .await
                 .map_err(|e| e.to_string())?;
 
-            let (db_price_cents, db_tax_rate, frozen): (i64, f64, bool) = if let Some(r) = frozen_order_item {
+let (db_price_cents, db_tax_rate_bp, frozen): (i64, i64, bool) = if let Some(r) = frozen_order_item {
                 (
-                    r.try_get("unit_price_cents").unwrap_or(0),
-                    r.try_get("tax_rate").unwrap_or(0.0),
+                    r.try_get("unit_price_cents").map_err(|e| e.to_string())?,
+                    r.try_get("tax_rate_bp").map_err(|e| e.to_string())?,
                     true,
                 )
             } else {
-                let row = sqlx::query("SELECT price_cents, tax_rate FROM products WHERE id = ? AND tenant_id = ?")
+                let row = sqlx::query("SELECT price_cents, tax_rate_bp FROM products WHERE id = ? AND tenant_id = ?")
                     .bind(product_id)
                     .bind(tenant_id)
                     .fetch_optional(&mut *conn)
@@ -89,22 +89,22 @@ impl PaymentRepository {
 
                 match row {
                     Some(r) => (
-                        r.try_get("price_cents").unwrap_or(0),
-                        r.try_get("tax_rate").unwrap_or(0.0),
+                        r.try_get("price_cents").map_err(|e| e.to_string())?,
+                        r.try_get("tax_rate_bp").map_err(|e| e.to_string())?,
                         false,
                     ),
                     None => return Err(format!("Product not found in database: {}", product_id)),
                 }
             };
 
-            // Fiyat tek yerden türetilir (faz 4): donmuş fiyat modifier'ı zaten
+            // Fiyat tek yerden türetilir (faz 4): donmuş pricing modifier'ı zaten
             // içerir, üzerine eklenmez — eklenirse aynı ekstra iki kez ücretlenir.
-            // Donmuş fiyat yoksa seçeneklerin **veritabanı** fiyatı eklenir;
+            // Donmuş pricing yoksa seçeneklerin **veritabanı** pricing eklenir;
             // istemcinin bildirdiği `priceCents` değeri kullanılmaz.
             let item_unit_price = crate::services::modifier_service::resolve_unit_price(
                 conn,
                 tenant_id,
-                (db_price_cents, db_tax_rate),
+                (db_price_cents, db_tax_rate_bp),
                 item.modifiers.as_ref(),
                 if frozen { Some(db_price_cents) } else { None },
             )
@@ -129,8 +129,8 @@ impl PaymentRepository {
             }
 
             let subtotal_cents = (gross_cents - discount_amount_cents).max(0);
-            let tax_rate_int = db_tax_rate.round() as i64;
-            let tax_amount_cents = (subtotal_cents * tax_rate_int) / 100;
+            // KDV: basis-point (binde) cinsinden. %10 = 1000 bp, payda 10_000.
+            let tax_amount_cents = (subtotal_cents * db_tax_rate_bp) / 10_000;
 
             subtotal_all_cents += subtotal_cents;
             tax_all_cents += tax_amount_cents;
@@ -279,10 +279,10 @@ mod tests {
         // Faz 4: fiyat ve donmuş kalem okumaları tenant'a göre filtrelenir;
         // `order_items` → `orders` zinciri de kurulmalı.
         sqlx::raw_sql(
-            "CREATE TABLE products (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, price_cents INTEGER NOT NULL, tax_rate REAL NOT NULL);
+            "CREATE TABLE products (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, price_cents INTEGER NOT NULL, tax_rate_bp INTEGER NOT NULL);
              CREATE TABLE orders (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL);
-             CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, unit_price_cents INTEGER NOT NULL, tax_rate REAL NOT NULL);
-             INSERT INTO products VALUES ('prod_1', 'tenant_test', 10000, 20.0);",
+             CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, unit_price_cents INTEGER NOT NULL, tax_rate_bp INTEGER NOT NULL);
+             INSERT INTO products VALUES ('prod_1', 'tenant_test', 10000, 2000);",
         )
         .execute(&pool)
         .await

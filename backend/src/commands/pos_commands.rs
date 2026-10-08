@@ -26,15 +26,15 @@ pub struct PosProductDto {
     pub barcode: Option<String>,
     pub name: String,
     #[serde(rename = "priceCents", alias = "price_cents")]
-    pub price_cents: i32,
-    #[serde(rename = "taxRate", alias = "tax_rate")]
-    pub tax_rate: f64,
+    pub price_cents: i64,
+    #[serde(rename = "taxRateBp", alias = "tax_rate_bp")]
+    pub tax_rate_bp: i64,
     pub category: String,
     pub description: Option<String>,
     #[serde(rename = "inStock", alias = "in_stock")]
     pub in_stock: bool,
     #[serde(rename = "stockQuantity", alias = "stock_quantity")]
-    pub stock_quantity: Option<i32>,
+    pub stock_quantity: Option<i64>,
     pub color: Option<String>,
     #[serde(rename = "imageUrl", alias = "image_url")]
     pub image_url: Option<String>,
@@ -52,8 +52,8 @@ pub async fn pos_get_categories(tenant_id: String, pool: tauri::State<'_, DbPool
     let mut res = Vec::new();
     for row in rows {
         res.push(PosCategoryDto {
-            id: row.try_get("id").unwrap_or_default(),
-            name: row.try_get("name").unwrap_or_default(),
+            id: row.try_get("id").map_err(|e| e.to_string())?,
+            name: row.try_get("name").map_err(|e| e.to_string())?,
             icon: row.try_get("icon").ok(),
         });
     }
@@ -65,7 +65,7 @@ pub async fn pos_get_products(tenant_id: String, pool: tauri::State<'_, DbPool>)
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     // Akıllı Sipariş Motoru: En sık sipariş edilen ürünler en başta yer alır
     let rows = sqlx::query(
-        "SELECT p.id, p.sku, p.barcode, p.name, p.price_cents, p.tax_rate, p.category_id, p.description, p.is_active, p.stock_quantity, p.color, p.image_url,
+        "SELECT p.id, p.sku, p.barcode, p.name, p.price_cents, p.tax_rate_bp, p.category_id, p.description, p.is_active, p.stock_quantity, p.color, p.image_url,
                 COALESCE((SELECT SUM(oi.quantity) FROM order_items oi WHERE oi.product_id = p.id), 0) as frequency
          FROM products p
          WHERE p.is_active = 1 AND p.tenant_id = ?
@@ -78,17 +78,18 @@ pub async fn pos_get_products(tenant_id: String, pool: tauri::State<'_, DbPool>)
         
     let mut res = Vec::new();
     for row in rows {
-        let price_cents: i32 = row.try_get("price_cents").unwrap_or(0);
+        let price_cents: i64 = row.try_get("price_cents").map_err(|e| e.to_string())?;
+        let tax_rate_bp: i64 = row.try_get("tax_rate_bp").map_err(|e| e.to_string())?;
         res.push(PosProductDto {
-            id: row.try_get("id").unwrap_or_default(),
-            sku: row.try_get("sku").unwrap_or_default(),
+            id: row.try_get("id").map_err(|e| e.to_string())?,
+            sku: row.try_get("sku").map_err(|e| e.to_string())?,
             barcode: row.try_get("barcode").ok(),
-            name: row.try_get("name").unwrap_or_default(),
+            name: row.try_get("name").map_err(|e| e.to_string())?,
             price_cents,
-            tax_rate: row.try_get::<f64, _>("tax_rate").unwrap_or(10.0),
-            category: row.try_get("category_id").unwrap_or_default(),
+            tax_rate_bp,
+            category: row.try_get("category_id").map_err(|e| e.to_string())?,
             description: row.try_get("description").ok(),
-            in_stock: row.try_get::<bool, _>("is_active").unwrap_or(true),
+            in_stock: row.try_get::<bool, _>("is_active").map_err(|e| e.to_string())?,
             stock_quantity: row.try_get("stock_quantity").ok(),
             color: row.try_get("color").ok(),
             image_url: row.try_get("image_url").ok(),
@@ -156,7 +157,8 @@ pub(crate) async fn authoritative_modifier_snapshot(
 }
 
 #[tauri::command]
-pub async fn submit_order(    payload: SubmitOrderPayloadDto,
+pub async fn submit_order(
+    payload: SubmitOrderPayloadDto,
     tenant_id: String,
     actor_id: Option<String>,
     actor_role: Option<String>,
@@ -173,7 +175,7 @@ pub async fn submit_order(    payload: SubmitOrderPayloadDto,
         product_id: String,
         quantity: i64,
         unit_price_cents: i64,
-        tax_rate: f64,
+        tax_rate_bp: i64,
         subtotal_cents: i64,
         tax_amount_cents: i64,
         total_cents: i64,
@@ -188,30 +190,30 @@ pub async fn submit_order(    payload: SubmitOrderPayloadDto,
             .and_then(|v| v.as_str())
             .unwrap_or("");
             
-        let row = sqlx::query("SELECT price_cents, tax_rate FROM products WHERE id=? AND tenant_id=?")
+let row = sqlx::query("SELECT price_cents, tax_rate_bp FROM products WHERE id=? AND tenant_id=?")
             .bind(product_id)
             .bind(&tenant_id)
             .fetch_one(&mut *tx)
             .await
             .map_err(|e| format!("Product not found: {}", e))?;
 
-            let price_cents: i32 = row.try_get("price_cents").unwrap_or(0);
-            let db_tax_rate: f64 = row.try_get::<f64, _>("tax_rate").unwrap_or(0.0);
-            let qty = item.quantity;
-            // Fiyat farkı istemciden değil `modifier_options`'tan okunur: ekstre
-            // ücreti `0` gönderilerek ödenemez. Donmuş fiyat bu aşamada henüz
-            // yoktur (kayıt aşağıda yazılıyor), dolayısıyla hep ürün + DB ekstre.
-            let item_unit_price = crate::services::modifier_service::resolve_unit_price(
-                &mut tx,
-                &tenant_id,
-                (price_cents as i64, db_tax_rate),
-                item.modifiers.as_ref(),
-                None,
-            )
-            .await?;
-            let item_subtotal = item_unit_price * qty;
-        let tax_rate_int = db_tax_rate.round() as i64;
-        let item_tax = (item_subtotal * tax_rate_int) / 100;
+        let price_cents: i64 = row.try_get("price_cents").map_err(|e| e.to_string())?;
+        let db_tax_rate_bp: i64 = row.try_get("tax_rate_bp").map_err(|e| e.to_string())?;
+        let qty = item.quantity;
+        // Fiyat farkı istemciden değil modifier_options'tan okunur: ekstre
+        // ücreti sıfır gönderilmek zorundadır. Donmuş pricing bu aşamada Translation
+        // yoktur (kayıt aşağıda yazılıyor), dolayısıyla hep ürün + DB ekstre.
+        let item_unit_price = crate::services::modifier_service::resolve_unit_price(
+            &mut tx,
+            &tenant_id,
+            (price_cents, db_tax_rate_bp),
+            item.modifiers.as_ref(),
+            None,
+        )
+        .await?;
+        let item_subtotal = item_unit_price * qty;
+        // KDV: basis-point (binde) cinsinden. %10 = 1000 bp, payda 10_000.
+        let item_tax = (item_subtotal * db_tax_rate_bp) / 10_000;
         let item_total = item_subtotal + item_tax;
         total_cents += item_total;
 
@@ -228,7 +230,7 @@ pub async fn submit_order(    payload: SubmitOrderPayloadDto,
             product_id: product_id.to_string(),
             quantity: qty,
             unit_price_cents: item_unit_price,
-            tax_rate: db_tax_rate,
+            tax_rate_bp: db_tax_rate_bp,
             subtotal_cents: item_subtotal,
             tax_amount_cents: item_tax,
             total_cents: item_total,
@@ -266,13 +268,13 @@ pub async fn submit_order(    payload: SubmitOrderPayloadDto,
 
 // 3. Insert child order_items with valid FK reference
     for p_item in prepared_items {
-        sqlx::query("INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_cents, tax_rate, subtotal_cents, tax_amount_cents, total_cents, modifiers, waiter_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_cents, tax_rate_bp, subtotal_cents, tax_amount_cents, total_cents, modifiers, waiter_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&p_item.id)
             .bind(&payload.order_id)
             .bind(&p_item.product_id)
             .bind(p_item.quantity)
             .bind(p_item.unit_price_cents)
-            .bind(p_item.tax_rate)
+            .bind(p_item.tax_rate_bp)
             .bind(p_item.subtotal_cents)
             .bind(p_item.tax_amount_cents)
             .bind(p_item.total_cents)
@@ -420,25 +422,25 @@ pub async fn get_order_items(
         let modifiers_val: Option<serde_json::Value> = modifiers_str.and_then(|m| serde_json::from_str(&m).ok());
 
         let product_json = serde_json::json!({
-            "id": row.try_get::<String, _>("product_id").unwrap_or_default(),
-            "name": row.try_get::<String, _>("product_name").unwrap_or_default(),
-            "category": row.try_get::<String, _>("product_category_id").unwrap_or_default(),
-            "categoryId": row.try_get::<String, _>("product_category_id").unwrap_or_default(),
-            "price": row.try_get::<i32, _>("unit_price_cents").unwrap_or(0) as i64,
-            "taxRate": row.try_get::<f64, _>("tax_rate").unwrap_or(10.0),
-            "barcode": row.try_get::<Option<String>, _>("product_barcode").unwrap_or_default(),
+            "id": row.try_get::<String, _>("product_id").map_err(|e| e.to_string())?,
+            "name": row.try_get::<String, _>("product_name").map_err(|e| e.to_string())?,
+            "category": row.try_get::<String, _>("product_category_id").map_err(|e| e.to_string())?,
+            "categoryId": row.try_get::<String, _>("product_category_id").map_err(|e| e.to_string())?,
+            "price": row.try_get::<i64, _>("unit_price_cents").map_err(|e| e.to_string())?,
+            "taxRateBp": row.try_get::<i64, _>("tax_rate_bp").map_err(|e| e.to_string())?,
+            "barcode": row.try_get::<Option<String>, _>("product_barcode").ok(),
             "inStock": true,
         });
 
         result.push(CartItemDto {
-            id: row.try_get("id").unwrap_or_default(),
+            id: row.try_get("id").map_err(|e| e.to_string())?,
             product: product_json,
-            quantity: row.try_get::<i32, _>("quantity").unwrap_or(0) as i64,
-            unit_price: row.try_get::<i32, _>("unit_price_cents").unwrap_or(0) as i64,
-            tax_rate: Some(row.try_get::<f64, _>("tax_rate").unwrap_or(0.0) as i64),
-            subtotal: Some(row.try_get::<i32, _>("subtotal_cents").unwrap_or(0) as i64),
-            tax_amount: Some(row.try_get::<i32, _>("tax_amount_cents").unwrap_or(0) as i64),
-            total: Some(row.try_get::<i32, _>("total_cents").unwrap_or(0) as i64),
+            quantity: row.try_get::<i64, _>("quantity").map_err(|e| e.to_string())?,
+            unit_price: row.try_get::<i64, _>("unit_price_cents").map_err(|e| e.to_string())?,
+            tax_rate: Some(row.try_get::<i64, _>("tax_rate_bp").map_err(|e| e.to_string())?),
+            subtotal: Some(row.try_get::<i64, _>("subtotal_cents").map_err(|e| e.to_string())?),
+            tax_amount: Some(row.try_get::<i64, _>("tax_amount_cents").map_err(|e| e.to_string())?),
+            total: Some(row.try_get::<i64, _>("total_cents").map_err(|e| e.to_string())?),
             modifiers: modifiers_val,
             note: row.try_get("notes").ok(),
             discount: None,

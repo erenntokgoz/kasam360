@@ -15,6 +15,8 @@ pub struct CartItemDto {
     pub quantity: i64,
     #[serde(rename = "unitPrice", alias = "unit_price", alias = "priceCents", alias = "price_cents", default)]
     pub unit_price: i64,
+    /// Deprecated: Faz 17'de kaldırılacak, yerine `tax_rate_bp` gelecek.
+    /// Hesap backend'deneldiği için client'tan okunmaz; geriye uyumluluk için kalır.
     #[serde(rename = "taxRate", alias = "tax_rate", default)]
     pub tax_rate: Option<i64>,
     #[serde(default)]
@@ -93,15 +95,21 @@ pub struct PaymentResultDto {
     pub cogs_total: Option<i64>,
 }
 
-/// Ödemenin ait olduğu tenant'ı veritabanından çözer.
+/// Ödemenin ait olduğu tenant'ı veritabanından fail-closed çözer.
 ///
-/// Ödeme payload'ı tenant taşımaz; sahiplik siparişin ya da masanın satırında
-/// durur. Denetim kaydı bu değerle yazılır; ayrıca `check_idempotency` ve
-/// satış olayı da aynı tenant'ı kullanır.
+/// Ödeme payload'ı tenant taşımaz; sahiplik siparişin ya da
+/// masanın satırında durur. Denetim kaydı bu değerle yazılır;
+/// ayrıca `check_idempotency` ve satış olayı da aynı tenant'ı
+/// kullanır.
+///
+/// Neden hata döner: ne sipariş ne masa kiracısını çözerse
+/// varsayılan kiracıya düşmek, ödemeyi kimliği belirsiz bir
+/// işletmenin defterine yazmaktır. Kiracı çözülemezse
+/// tahsilat yazılmaz (fail-closed, AGENTS.md §3.3).
 async fn resolve_payment_tenant(
     conn: &mut sqlx::SqliteConnection,
     payload: &PaymentPayloadDto,
-) -> String {
+) -> Result<String, String> {
     if let Some(order_id) = payload.order_id.as_deref() {
         if let Ok(Some(tenant)) = sqlx::query_scalar::<_, String>(
             "SELECT tenant_id FROM orders WHERE id = ?",
@@ -110,7 +118,7 @@ async fn resolve_payment_tenant(
         .fetch_optional(&mut *conn)
         .await
         {
-            return tenant;
+            return Ok(tenant);
         }
     }
     if let Some(table_id) = payload.customer_ref.as_deref() {
@@ -121,10 +129,10 @@ async fn resolve_payment_tenant(
         .fetch_optional(&mut *conn)
         .await
         {
-            return tenant;
+            return Ok(tenant);
         }
     }
-    "DEFAULT_TENANT".to_string()
+    Err("UNAUTHORIZED: tenant_id is required".to_string())
 }
 
 #[tauri::command]
@@ -148,7 +156,7 @@ pub async fn process_payment(
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    let tenant_id = resolve_payment_tenant(&mut tx, &payload).await;
+    let tenant_id = resolve_payment_tenant(&mut tx, &payload).await?;
 
     let (total_cogs_cents, now_iso) = crate::services::payment_service::PaymentService::process_transaction(
         &payload,
@@ -290,7 +298,7 @@ pub async fn process_split_payment(
         .unwrap_or("SYSTEM_POS")
         .to_string();
     let actor_id = actor_id.as_str();
-    let tenant_id = resolve_payment_tenant(&mut tx, &payload).await;
+    let tenant_id = resolve_payment_tenant(&mut tx, &payload).await?;
 
     // 1. Etki eşitsizliği (Idempotency) kontrolü
     if crate::repositories::payment_repository::PaymentRepository::check_idempotency(&mut tx, &payload.transaction_id, &tenant_id).await? {

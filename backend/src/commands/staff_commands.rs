@@ -19,7 +19,7 @@ use crate::services::staff360::staff_types::{
 use crate::services::staff360::{kpi_service, payroll_service, staff_service, suspicious_service, tip_service};
 use crate::DbPool;
 
-/// Tenant zorunluluğu. Eksik gelirse hata verir; `DEFAULT_TENANT`'a düşmez —
+/// Tenant zorunluluğu. Eksik gelirse hata verir; varsayılan kiracıya düşmez —
 /// düşseydi yanlış işletmenin verisi okunurdu.
 fn require_tenant_scope(tenant_id: Option<&str>) -> Result<String, String> {
     let t = tenant_id

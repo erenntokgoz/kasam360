@@ -44,7 +44,10 @@ pub async fn open_shift(
     let audit_lock =
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-    let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
+    // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
+    // düşerse vardiya kimliğine sahip olmayan bir defter
+    // yazılır (AGENTS.md §3.3).
+    let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
     
     // Check if open shift exists
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
@@ -119,7 +122,10 @@ pub async fn close_shift(
     let audit_lock =
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-    let tenant_id = tenant_id.unwrap_or_else(|| "DEFAULT_TENANT".to_string());
+    // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
+    // düşerse vardiya kapanışı başka işletmenin kasanın
+    // devresini yazabilir (AGENTS.md §3.3).
+    let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
     
     // Find open shift
     let row = sqlx::query("SELECT id, expected_amount_cents, tenant_id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")

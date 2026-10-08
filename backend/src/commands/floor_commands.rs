@@ -180,7 +180,7 @@ pub async fn remove_table(
         crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    let tenant_id = table_tenant(&mut tx, &id).await;
+    let tenant_id = table_tenant(&mut tx, &id).await?;
 
     sqlx::query("DELETE FROM tables WHERE id = ?")
         .bind(&id)

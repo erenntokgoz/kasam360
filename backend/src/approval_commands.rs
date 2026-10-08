@@ -73,13 +73,13 @@ pub async fn verify_manager_pin(
     crate::rbac::canonical_role(&payload.actor_role)
         .ok_or_else(|| "UNAUTHORIZED: Bilinmeyen rol.".to_string())?;
 
-    let tenant_id = payload
-        .tenant_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("DEFAULT_TENANT")
-        .to_string();
+    // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
+    // düşerse onay jetonu yanlış işletmenin defterinde
+    // sorgulanır ve PIN kapsamı kiracılara karışırdı
+    // (AGENTS.md §3.3).
+    let tenant_id = crate::commands::command_helpers::require_tenant_id(
+        payload.tenant_id.as_deref(),
+    )?;
 
     let request = crate::approval_service::ApprovalRequest {
         tenant_id: tenant_id.clone(),

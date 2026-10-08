@@ -17,6 +17,13 @@ pub(crate) async fn seed_default_users(pool: &DbPool) -> Result<(), sqlx::Error>
         ("usr_cook", "6666", "KITCHEN", "Kitchen (Aşçı)"),
     ];
 
+    // Kiracı kimliği merkez işletmeden okunur (tek kaynak):
+    // tohum kullanıcıları, seed.sql'deki merkez işletme
+    // satırıyla aynı kiracıya yazılır. Kimlik kaynak kodta
+    // sözlü olarak yaşamaz; kiracı çözülemezse tohumlanmaz
+    // (fail-closed, AGENTS.md §3.3).
+    let merkez = super::merkez_tenant_id(pool).await?;
+
     let mut inserted = 0usize;
     for (id, pin, role, name) in DEFAULT_USERS {
         let existing: Option<i64> = sqlx::query_scalar("SELECT 1 FROM users WHERE id = ?")
@@ -24,15 +31,37 @@ pub(crate) async fn seed_default_users(pool: &DbPool) -> Result<(), sqlx::Error>
             .fetch_optional(pool)
             .await?;
         if existing.is_some() {
+            // Mevcut hesap: PIN'i hâlâ fabrika öntanımlısıysa ilk
+            // giriş değişimi zorunludur. Doğrulama Argon2 hash
+            // üzerinden yapılır; kullanıcı PIN'ini değiştirdiyse
+            // bayrak dokunulmaz (idempotent, sessiz sıfırlama yok).
+            let hash: Option<String> = sqlx::query_scalar("SELECT pin_hash FROM users WHERE id = ?")
+                .bind(id)
+                .fetch_optional(pool)
+                .await?
+                .flatten();
+            if let Some(hash) = hash {
+                if crate::user_credentials::is_argon2_hash(&hash)
+                    && crate::auth::verify_credential(pin, &hash)
+                {
+                    sqlx::query("UPDATE users SET must_change_pin = 1 WHERE id = ?")
+                        .bind(id)
+                        .execute(pool)
+                        .await?;
+                }
+            }
             continue;
         }
 
         let hash = crate::user_credentials::hash_pin(pin).map_err(sqlx::Error::Protocol)?;
+        // `must_change_pin = 1`: fabrika PIN'leriyle kurulan hesaplar
+        // ilk girişte PIN değiştirmek zorundadır (G2 · P0 güvenlik).
         sqlx::query(
-            "INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active)
-             VALUES (?, 'DEFAULT_TENANT', ?, ?, ?, 1)",
+            "INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active, must_change_pin)
+             VALUES (?, ?, ?, ?, ?, 1, 1)",
         )
         .bind(id)
+        .bind(&merkez)
         .bind(role)
         .bind(name)
         .bind(&hash)
@@ -131,7 +160,7 @@ pub(crate) async fn migrate_user_pins_to_argon2(pool: &DbPool) -> Result<(), sql
     sqlx::raw_sql(
         "CREATE TABLE users_migrated (
             id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
+            tenant_id TEXT NOT NULL,
             role TEXT NOT NULL,
             name TEXT NOT NULL,
             credential_hash TEXT,

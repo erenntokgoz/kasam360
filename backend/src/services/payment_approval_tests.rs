@@ -498,8 +498,8 @@ async fn sunucu_hesabindaki_indirim_kapiyi_acitir() {
     .await
     .expect("kategori eklenir");
     sqlx::query(
-        "INSERT INTO products (id, tenant_id, name, price_cents, tax_rate, category_id)
-         VALUES ('prd_1', ?, 'Test Ürün', 10000, 10.0, 'cat_1')",
+        "INSERT INTO products (id, tenant_id, name, price_cents, tax_rate_bp, category_id)
+         VALUES ('prd_1', ?, 'Test Ürün', 10000, 1000, 'cat_1')",
     )
     .bind(TENANT)
     .execute(&mut *conn)
@@ -511,7 +511,7 @@ async fn sunucu_hesabindaki_indirim_kapiyi_acitir() {
         product: serde_json::json!({ "id": "prd_1" }),
         quantity: 1,
         unit_price: 10_000,
-        tax_rate: Some(10),
+        tax_rate: Some(1000),
         subtotal: None,
         tax_amount: None,
         total: None,

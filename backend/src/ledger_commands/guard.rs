@@ -37,8 +37,8 @@ pub fn require_ledger_write(caller_role: Option<&str>) -> Result<Role, String> {
 
 /// Kiracı kimliğini fail-closed çözer.
 ///
-/// Neden: `tenant_id` gelmezse ya da boşsa önceki davranış `DEFAULT_TENANT`
-/// yazıyordu. Bu, oturumsuz bir çağıranın tek bir işletmenin verisini
+/// Neden: `tenant_id` gelmezse ya da boşsa önceki davranış varsayılan
+/// kiracıya yazıyordu. Bu, oturumsuz bir çağıranın tek bir işletmenin verisini
 /// okumasına veya kiracısız satır oluşturmasına yol açıyordu. Boş kabul
 /// edilirse `tenant_id = ''` sorguları hiç eşleşmez ve yazma sessizce başarısız
 /// olur; bu yüzden hata fırlatılır.

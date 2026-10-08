@@ -19,7 +19,14 @@ CREATE TABLE IF NOT EXISTS outbox (
     event_id TEXT NOT NULL,
     status TEXT DEFAULT 'PENDING' NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
+    -- Faz 18 · outbox dispatcher. `retry_count` başarısız deneme
+    -- sayısıdır; `MAX_RETRY` üstünde `DEAD_LETTER` durumu kurulur.
+    -- `last_error` son teslimat hatasının özeti, `dispatched_at`
+    -- başarı zamanıdır. Kolonlar hash kanonik formunun parçası
+    -- değildir; mevcut satırlar PENDING olarak kalır.
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    dispatched_at DATETIME
 );
 
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox (status);
@@ -147,10 +154,14 @@ CREATE TABLE IF NOT EXISTS products (
     barcode TEXT,
     name TEXT NOT NULL,
     price_cents INTEGER NOT NULL DEFAULT 0,
-    tax_rate REAL NOT NULL DEFAULT 10.0,
+    -- KDV oranı basis-point (binde) cinsinden: %10 = 1000, %20 = 2000.
+    -- Eski `tax_rate REAL` kolonu kaldırıldı; migrasyon ile taşınır.
+    tax_rate_bp INTEGER NOT NULL DEFAULT 1000 CHECK (tax_rate_bp >= 0),
     category_id TEXT NOT NULL,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT 1,
+    -- Legacy: `stock_quantity` kullanımdan kaldırıldı. Tek kaynak `inventory_batches`.
+    -- Kolon veri taşıması için bırakıldı, yeni kod yazmaz.
     stock_quantity INTEGER,
     color TEXT,
     image_url TEXT,
@@ -291,7 +302,7 @@ CREATE TABLE IF NOT EXISTS orders (
     table_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'OPEN'
         CHECK (status IN ('OPEN', 'IN_PROGRESS', 'PAID', 'CANCELLED', 'VOID')),
-    total_cents INTEGER NOT NULL DEFAULT 0,
+    total_cents INTEGER NOT NULL DEFAULT 0 CHECK (total_cents >= 0),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     cashier_id TEXT,
@@ -313,6 +324,9 @@ CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 -- (kurulum ekranı) hem de POS PIN'iyle (çalışma istasyonu) girebilmelidir.
 -- Tek sütunda tutulsaydı biri yazıldığında diğeri ezilirdi.
 -- `is_active`: personel silinmez, pasife alınır (AGENTS.md §6).
+-- `must_change_pin`: fabrika öntanımlı PIN ile tohumlanan hesaplar ilk
+-- girişte PIN değiştirmek zorundadır (G2 · P0 güvenlik). Kullanıcı
+-- PIN'ini değiştirdiğinde bayrak sıfırlanır.
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
@@ -322,7 +336,8 @@ CREATE TABLE IF NOT EXISTS users (
     pin_hash TEXT,
     login_identifier TEXT,
     email TEXT,
-    is_active INTEGER NOT NULL DEFAULT 1
+    is_active INTEGER NOT NULL DEFAULT 1,
+    must_change_pin INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_users_tenant_active ON users(tenant_id, is_active);
 
@@ -333,8 +348,8 @@ CREATE TABLE IF NOT EXISTS shifts (
     status TEXT NOT NULL DEFAULT 'OPEN',
     opened_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     closed_at DATETIME,
-    expected_amount_cents INTEGER NOT NULL DEFAULT 0,
-    actual_amount_cents INTEGER,
+    expected_amount_cents INTEGER NOT NULL DEFAULT 0 CHECK (expected_amount_cents >= 0),
+    actual_amount_cents INTEGER CHECK (actual_amount_cents >= 0),
     difference_cents INTEGER
 );
 
@@ -560,10 +575,10 @@ CREATE TABLE IF NOT EXISTS order_items (
     product_id TEXT NOT NULL,
     quantity INTEGER NOT NULL DEFAULT 1,
     unit_price_cents INTEGER NOT NULL DEFAULT 0,
-    tax_rate REAL NOT NULL DEFAULT 0,
-    subtotal_cents INTEGER NOT NULL DEFAULT 0,
-    tax_amount_cents INTEGER NOT NULL DEFAULT 0,
-    total_cents INTEGER NOT NULL DEFAULT 0,
+    tax_rate_bp INTEGER NOT NULL DEFAULT 0 CHECK (tax_rate_bp >= 0),
+    subtotal_cents INTEGER NOT NULL DEFAULT 0 CHECK (subtotal_cents >= 0),
+    tax_amount_cents INTEGER NOT NULL DEFAULT 0 CHECK (tax_amount_cents >= 0),
+    total_cents INTEGER NOT NULL DEFAULT 0 CHECK (total_cents >= 0),
     modifiers TEXT,
     notes TEXT,
     station TEXT,

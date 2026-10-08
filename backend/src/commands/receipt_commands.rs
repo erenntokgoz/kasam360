@@ -17,8 +17,8 @@ pub struct ReceiptItemDto {
     pub quantity: i64,
     #[serde(rename = "unitPriceCents", alias = "unit_price_cents")]
     pub unit_price_cents: i64,
-    #[serde(rename = "taxRate", alias = "tax_rate")]
-    pub tax_rate: f64,
+    #[serde(rename = "taxRateBp", alias = "tax_rate_bp")]
+    pub tax_rate_bp: i64,
     #[serde(rename = "subtotalCents", alias = "subtotal_cents")]
     pub subtotal_cents: i64,
     #[serde(rename = "taxAmountCents", alias = "tax_amount_cents")]

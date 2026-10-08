@@ -165,7 +165,7 @@ pub async fn update_table_status(
 ///
 /// Neden yetki + tenant eklendi (AGENTS.md §3.3 ve §6): komut ne RBAC çağırıyordu
 /// ne de `tenant_id` bağlıyordu. `events` tablosundaki `tenant_id` sütunu varsayılan
-/// `DEFAULT_TENANT` olduğu için tüm garson girişleri tek bir işletmenin altında
+/// ortak kiracılarda olduğu için tüm garson girişleri tek bir işletmenin altında
 /// birikmişti; işletme büyüdükçe "bu garson hangi şubede çalıştı" sorusu cevaplanamaz
 /// hale geliyordu. Personelin vardiya süresi KPI'ya girdiği için bu kayıt artık
 /// kiracıya bağlı olmak zorundadır.
@@ -261,7 +261,7 @@ pub struct TableReadyStatusDto {
 /// N+1 sorgu darboğazını engelleyen toplu masa KDS hazır durumu sorgusu.
 ///
 /// Neden kapı eklendi: komut `tenant_id` alıyordu ama rol denetlemiyordu ve
-/// kiracı yoksa `"DEFAULT_TENANT"`'a düşüyordu. Yani rol alanını hiç
+/// kiracı yoksa varsayılan kiracıya düşüyordu. Yani rol alanını hiç
 /// göndermeyen bir çağrı geçerli kabul ediliyordu (fail-closed değil).
 #[tauri::command]
 pub async fn get_all_table_statuses(

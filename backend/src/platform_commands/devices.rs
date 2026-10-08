@@ -21,9 +21,11 @@ use crate::db::DbPool;
 use crate::id_generator::generate_id;
 use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 
-/// Platform seviyesindeki (çapraz tenant) denetim kayıtlarının taşındığı tenant
-/// kimliği. MASTER'ın kendi işletmesi yoktur; şema varsayılanı kullanılır.
-const PLATFORM_AUDIT_TENANT: &str = "DEFAULT_TENANT";
+/// Platform seviyesindeki (çapraz tenant) denetim kayıtlarının taşındığı
+/// ayrılmış platform ad alanı. MASTER'ın kendi işletmesi yoktur; platform
+/// kayıtları işletme kiracılarıyla aynı ad alanını paylaşırsa bir
+/// işletmenin denetim defterine karışırdı (AGENTS.md §3.3).
+const PLATFORM_AUDIT_TENANT: &str = "PLATFORM";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DeviceDto {
