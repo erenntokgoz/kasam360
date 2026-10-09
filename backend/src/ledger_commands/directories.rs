@@ -111,9 +111,8 @@ fn row_to_directory(r: &sqlx::sqlite::SqliteRow) -> Result<DirectoryDto, String>
         tax_office: r.try_get("tax_office").map_err(|e| e.to_string())?,
         address: r.try_get("address").map_err(|e| e.to_string())?,
         credit_limit_cents: r
-            .try_get::<Option<i64>, _>("credit_limit_cents")
-            .map_err(|e| e.to_string())?
-            .unwrap_or(0),
+            .try_get::<i64, _>("credit_limit_cents")
+            .map_err(|e| e.to_string())?,
         notes: r.try_get("notes").map_err(|e| e.to_string())?,
         created_at: r.try_get("created_at").map_err(|e| e.to_string())?,
         balance_cents: r.try_get("balance_cents").map_err(|e| e.to_string())?,

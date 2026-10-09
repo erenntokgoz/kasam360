@@ -361,7 +361,7 @@ pub async fn process_split_payment(
         .await
         .map_err(|e| e.to_string())?;
 
-        paid_so_far = paid_row.try_get("total_paid").unwrap_or(0);
+        paid_so_far = paid_row.try_get("total_paid").map_err(|e| e.to_string())?;
     }
 
     // Yetkili kalan bakiye (orijinal sipariş toplamından ödenenlerin düşülmesi)

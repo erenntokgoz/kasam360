@@ -116,7 +116,7 @@ pub async fn get_audit_logs(
     for r in rows {
         logs.push(AuditLogDto {
             id: r.try_get("id").unwrap_or_default(),
-            sequence: r.try_get("sequence").unwrap_or(0),
+            sequence: r.try_get("sequence").map_err(|e| e.to_string())?,
             timestamp: r.try_get("timestamp").unwrap_or_default(),
             actor_id: r.try_get("actor_id").unwrap_or_default(),
             actor_role: r.try_get("actor_role").unwrap_or_default(),

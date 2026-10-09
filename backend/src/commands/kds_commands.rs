@@ -247,7 +247,7 @@ pub async fn get_active_tickets(
 
         for ir in item_rows {
             let product_name: String = ir.try_get("product_name").unwrap_or_default();
-            let quantity: i64 = ir.try_get("quantity").unwrap_or(0);
+            let quantity: i64 = ir.try_get("quantity").map_err(|e| e.to_string())?;
             let station: Option<String> = ir.try_get("station").ok();
             let resolved_station = station.unwrap_or_else(|| "Sıcak".to_string());
             let modifiers_str: Option<String> = ir.try_get("modifiers").ok();

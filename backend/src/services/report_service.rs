@@ -149,13 +149,11 @@ pub async fn sales_report(
     // hatası sıfıra dönüşünce ciro "0" görünür ve rapor "satış yok" der —
     // hatasız, sessiz ve yanlış. Yanlış rapor, hata mesajından daha tehlikelidir.
     let total_revenue_cents: i64 = row
-        .try_get::<Option<i64>, _>("revenue")
-        .map_err(|e| e.to_string())?
-        .unwrap_or(0);
+        .try_get::<i64, _>("revenue")
+        .map_err(|e| e.to_string())?;
     let total_orders: i64 = row
-        .try_get::<Option<i64>, _>("order_count")
-        .map_err(|e| e.to_string())?
-        .unwrap_or(0);
+        .try_get::<i64, _>("order_count")
+        .map_err(|e| e.to_string())?;
     let average_order_value_cents = if total_orders > 0 {
         total_revenue_cents / total_orders
     } else {
@@ -216,18 +214,16 @@ async fn payment_method_shares(
     let mut sum: i64 = 0;
     for row in rows.iter() {
         let amount: i64 = row
-            .try_get::<Option<i64>, _>("amount")
-            .map_err(|e| e.to_string())?
-            .unwrap_or(0);
+            .try_get::<i64, _>("amount")
+            .map_err(|e| e.to_string())?;
         sum += amount;
     }
 
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
         let amount: i64 = row
-            .try_get::<Option<i64>, _>("amount")
-            .map_err(|e| e.to_string())?
-            .unwrap_or(0);
+            .try_get::<i64, _>("amount")
+            .map_err(|e| e.to_string())?;
         out.push(PaymentMethodShareDto {
             method: row
                 .try_get::<Option<String>, _>("method")
@@ -276,17 +272,14 @@ async fn category_volumes(
     let mut out = Vec::with_capacity(rows.len());
     for r in rows.iter() {
         out.push(CategoryVolumeDto {
-            name: r.try_get::<Option<String>, _>("category_name")
-                .map_err(|e| e.to_string())?
-                .unwrap_or_default(),
+            name: r.try_get::<String, _>("category_name")
+                .map_err(|e| e.to_string())?,
             quantity: r
-                .try_get::<Option<i64>, _>("qty")
-                .map_err(|e| e.to_string())?
-                .unwrap_or(0),
+                .try_get::<i64, _>("qty")
+                .map_err(|e| e.to_string())?,
             total_cents: r
-                .try_get::<Option<i64>, _>("total")
-                .map_err(|e| e.to_string())?
-                .unwrap_or(0),
+                .try_get::<i64, _>("total")
+                .map_err(|e| e.to_string())?,
         });
     }
     Ok(out)
@@ -346,9 +339,8 @@ pub async fn shift_report(
                 .try_get::<Option<String>, _>("closed_at")
                 .map_err(|e| e.to_string())?,
             expected_amount_cents: r
-                .try_get::<Option<i64>, _>("expected_amount_cents")
-                .map_err(|e| e.to_string())?
-                .unwrap_or(0),
+                .try_get::<i64, _>("expected_amount_cents")
+                .map_err(|e| e.to_string())?,
             actual_amount_cents: r
                 .try_get::<Option<i64>, _>("actual_amount_cents")
                 .map_err(|e| e.to_string())?,
@@ -399,9 +391,8 @@ pub async fn receipts_report(
                 .map_err(|e| e.to_string())?
                 .unwrap_or_default(),
             total_cents: r
-                .try_get::<Option<i64>, _>("total_cents")
-                .map_err(|e| e.to_string())?
-                .unwrap_or(0),
+                .try_get::<i64, _>("total_cents")
+                .map_err(|e| e.to_string())?,
             created_at: r
                 .try_get::<Option<String>, _>("created_at")
                 .map_err(|e| e.to_string())?
@@ -414,13 +405,11 @@ pub async fn receipts_report(
                 .map_err(|e| e.to_string())?
                 .unwrap_or_default(),
             item_count: r
-                .try_get::<Option<i64>, _>("item_count")
-                .map_err(|e| e.to_string())?
-                .unwrap_or(0),
+                .try_get::<i64, _>("item_count")
+                .map_err(|e| e.to_string())?,
             items_total_cents: r
-                .try_get::<Option<i64>, _>("items_total_cents")
-                .map_err(|e| e.to_string())?
-                .unwrap_or(0),
+                .try_get::<i64, _>("items_total_cents")
+                .map_err(|e| e.to_string())?,
         });
     }
     Ok(out)

@@ -1,6 +1,9 @@
 //! Prefixed K-sortable ID Generator (Stripe / ULID Standard)
 //! Kasam360 Kurumsal Kimlik Anatomisi
 //! Format: <prefix>_<12_hex_timestamp_ms><12_hex_entropy>
+//!
+//! Terminal kimliği: `dev_` prefix'li cihaz kimliklerinin tek kaynak budur.
+//! AGENTS.md §2: Prefixed ULID, AUTOINCREMENT YASAK.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -19,6 +22,15 @@ pub fn generate_id(prefix: &str) -> String {
 
     // 12 karakter zaman damgası + 4 karakter sıra + 8 karakter rastgele entropi = 24 karakter
     format!("{}_{:012x}{:04x}{}", prefix, now_ms, seq, &rand_part[..8])
+}
+
+/// Terminal (cihaz) kimliği üretir — `dev_` prefix'li.
+///
+/// Neden ayrı fonksiyon: `platform_commands::devices` modülü bu kimlikleri
+/// oluşturur. Tek kaynak burasıdır; elsewhere `Uuid::new_v4()` doğrudan
+/// kullanılmaz (AGENTS.md §2: prefixed ULID zorunlu).
+pub fn generate_terminal_id() -> String {
+    generate_id("dev")
 }
 
 #[cfg(test)]

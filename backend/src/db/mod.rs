@@ -10,13 +10,14 @@ use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
 
 mod faz12;
-// Faz 13 migration'ı servis testleri tarafından da doğrudan çağrılır
+// Faz 13 migration'ı servis testleri tarafından da doğrudanagrılır
 // (salon şemasının hizmet testi içinde kurulabilmesi için), bu yüzden
 // `pub(crate)`.
 pub(crate) mod faz13;
-// Faz 14 yalnız sistem kampanya şablonlarını tohumlar; şemanın kendisi
+// Faz 14 yalnız sistem kampanya şablonlarını tohorlar; şemanın kendisi
 // `schema.sql` içinde `CREATE TABLE IF NOT EXISTS` ile kurulur.
 mod faz14;
+mod migrate;
 mod seeds;
 mod tables_migration;
 
@@ -171,6 +172,11 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // DDL şemasını uygula (etki eşitsiz - tüm ifadeler CREATE TABLE IF NOT EXISTS kullanır)
     let schema = include_str!("../../migrations/schema.sql");
     sqlx::raw_sql(schema).execute(&pool).await?;
+
+    // Sürümlü migration'lar (0001_*.sql, 0002_*.sql, ...). Idempotent:
+    // `_migrations` tablosunda version takibi yapar, calistirilmis
+    // migration'ları tekrar calistirmez.
+    migrate::run_migrations(&pool).await?;
 
     // Eğer yoksa order_items tablosunu oluştur
     // `tenant_id` üzerinde varsayılan YOK: bind edilmemiş

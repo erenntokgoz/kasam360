@@ -197,7 +197,8 @@ async fn build_receipt(
     created_at: &str,
 ) -> Result<ReceiptDto, String> {
     let order_id = payload_string(payload, "orderId");
-    let total_cents = payload_i64(payload, "totalAmount").unwrap_or(0);
+    let total_cents = payload_i64(payload, "totalAmount")
+        .ok_or_else(|| "tahsilat tutarı (totalAmount) payload'da eksik".to_string())?;
 
     let mut table_display = order_id.clone().unwrap_or_default();
     let mut cashier_id = payload_string(payload, "cashierId");
@@ -313,12 +314,12 @@ async fn load_items(
             id: row.try_get("id").unwrap_or_default(),
             product_id: row.try_get("product_id").unwrap_or_default(),
             product_name: row.try_get("product_name").unwrap_or_default(),
-            quantity: row.try_get("quantity").unwrap_or(1),
-            unit_price_cents: row.try_get("unit_price_cents").unwrap_or(0),
-            tax_rate_bp: row.try_get("tax_rate_bp").unwrap_or(0),
-            subtotal_cents: row.try_get("subtotal_cents").unwrap_or(0),
-            tax_amount_cents: row.try_get("tax_amount_cents").unwrap_or(0),
-            total_cents: row.try_get("total_cents").unwrap_or(0),
+            quantity: row.try_get("quantity").map_err(|e| e.to_string())?,
+            unit_price_cents: row.try_get("unit_price_cents").map_err(|e| e.to_string())?,
+            tax_rate_bp: row.try_get("tax_rate_bp").map_err(|e| e.to_string())?,
+            subtotal_cents: row.try_get("subtotal_cents").map_err(|e| e.to_string())?,
+            tax_amount_cents: row.try_get("tax_amount_cents").map_err(|e| e.to_string())?,
+            total_cents: row.try_get("total_cents").map_err(|e| e.to_string())?,
             modifiers,
             notes: row.try_get("notes").ok().flatten(),
         });
@@ -397,7 +398,8 @@ pub async fn list_financial_movements(
             movement_id: movement_id.clone(),
             tenant_id: tenant_id.to_string(),
             movement_type: MOVEMENT_SALE_PAYMENT.to_string(),
-            amount_cents: payload_i64(&payload, "totalAmount").unwrap_or(0),
+            amount_cents: payload_i64(&payload, "totalAmount")
+            .ok_or_else(|| "tahsilat tutarı (totalAmount) payload'da eksik".to_string())?,
             payment_method: payment_method_label(payload.get("method").and_then(|m| m.as_str())),
             description: payload_string(&payload, "customerRef"),
             created_at,
@@ -415,11 +417,12 @@ pub async fn list_financial_movements(
         } else {
             1
         };
+        let amount: i64 = row.try_get("amount_cents").map_err(|e| e.to_string())?;
         movements.push(FinancialMovement {
             movement_id: row.try_get("id").unwrap_or_default(),
             tenant_id: tenant_id.to_string(),
             movement_type: MOVEMENT_CASH_MOVEMENT.to_string(),
-            amount_cents: sign * row.try_get("amount_cents").unwrap_or(0),
+            amount_cents: sign * amount,
             payment_method: "Nakit".to_string(),
             description: Some(row.try_get("reason").unwrap_or_default()),
             created_at: row.try_get("created_at").unwrap_or_default(),
@@ -429,11 +432,12 @@ pub async fn list_financial_movements(
     }
 
     for row in &debt {
+        let amount: i64 = row.try_get("amount_cents").map_err(|e| e.to_string())?;
         movements.push(FinancialMovement {
             movement_id: row.try_get("id").unwrap_or_default(),
             tenant_id: tenant_id.to_string(),
             movement_type: MOVEMENT_DEBT_PAYMENT.to_string(),
-            amount_cents: row.try_get("amount_cents").unwrap_or(0),
+            amount_cents: amount,
             payment_method: payment_method_label(
                 row.try_get::<String, _>("payment_method").ok().as_deref(),
             ),

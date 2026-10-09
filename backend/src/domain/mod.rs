@@ -5,4 +5,8 @@
 //! kavramları (para, oran) bağımsız modüllerde
 //! yaşar; `db` ve `commands` onları kullanır.
 
+pub mod error;
 pub mod money;
+
+/// Domain hata tipini dışa aktar.
+pub use error::DomainError;

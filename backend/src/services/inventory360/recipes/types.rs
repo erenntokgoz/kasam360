@@ -231,7 +231,7 @@ pub async fn create_recipe(
         return Err("VALIDATION: reçete en az bir malzeme içermeli".into());
     }
 
-    let aktif: Option<i64> = sqlx::query_scalar(
+    let aktif: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM recipes WHERE tenant_id = ? AND product_id = ? AND is_active = 1",
     )
     .bind(tenant_id)
@@ -239,7 +239,7 @@ pub async fn create_recipe(
     .fetch_one(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
-    if aktif.unwrap_or(0) > 0 {
+    if aktif > 0 {
         return Err(format!(
             "CONFLICT: bu ürün için aktif reçete zaten var, önce mevcut reçeteyi pasife al"
         ));

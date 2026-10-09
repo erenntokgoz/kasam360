@@ -40,7 +40,7 @@ pub async fn get_floor_plan(tenant_id: String, pool: tauri::State<'_, DbPool>) -
             status: row.try_get("status").unwrap_or_else(|_| "AVAILABLE".to_string()),
             opened_at: row.try_get("opened_at").ok(),
             waiter_id: row.try_get("waiter_id").ok(),
-            current_total: row.try_get::<i64, _>("current_total").unwrap_or(0),
+            current_total: row.try_get::<i64, _>("current_total").map_err(|e| e.to_string())?,
         });
     }
     Ok(res)

@@ -121,10 +121,10 @@ pub async fn void_order(
 
     // Jeton kapsamındaki tutar, istemciden değil veritabanındaki sipariş
     // satırından okunur: istemci kendi gönderdiği tutarla onay almış olamaz.
-    let order_total_cents: i64 = current_order
-        .as_ref()
-        .and_then(|r| r.try_get::<i64, _>("total_cents").ok())
-        .unwrap_or(0);
+    let order_total_cents: i64 = match &current_order {
+        Some(r) => r.try_get("total_cents").map_err(|e| e.to_string())?,
+        None => 0,
+    };
 
     let approval_request = void_approval_request(
         &tenant_id,
@@ -160,7 +160,7 @@ pub async fn void_order(
     .await
     .map_err(|e| e.to_string())?;
 
-    let remaining: i64 = count_row.try_get("count").unwrap_or(0);
+    let remaining: i64 = count_row.try_get("count").map_err(|e| e.to_string())?;
 
     if remaining == 0 {
         // Faz 8: iptal masayı boşaltıyorsa açık rezervasyon kaydı da kapanır.

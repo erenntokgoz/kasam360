@@ -473,13 +473,18 @@ pub async fn get_live_orders(actor_role: String, pool: tauri::State<'_, DbPool>)
         ORDER BY o.created_at ASC
     ").fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
     
-    let orders = rows.into_iter().map(|r| LiveOrderDto {
-        id: r.try_get("id").unwrap_or_default(),
-        table_name: r.try_get("table_name").unwrap_or_default(),
-        status: r.try_get("status").unwrap_or_default(),
-        total_cents: r.try_get("total_cents").unwrap_or(0),
-        created_at: r.try_get("created_at").unwrap_or_default(),
-        item_count: r.try_get("item_count").unwrap_or(0),
-    }).collect();
+    let orders = rows
+        .into_iter()
+        .map(|r| -> Result<LiveOrderDto, String> {
+            Ok(LiveOrderDto {
+                id: r.try_get("id").map_err(|e| e.to_string())?,
+                table_name: r.try_get("table_name").map_err(|e| e.to_string())?,
+                status: r.try_get("status").map_err(|e| e.to_string())?,
+                total_cents: r.try_get("total_cents").map_err(|e| e.to_string())?,
+                created_at: r.try_get("created_at").map_err(|e| e.to_string())?,
+                item_count: r.try_get("item_count").map_err(|e| e.to_string())?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
     Ok(orders)
 }

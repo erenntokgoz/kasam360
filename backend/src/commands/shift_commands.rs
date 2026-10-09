@@ -327,16 +327,21 @@ pub async fn get_shift_history(
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?
     };
 
-    let shifts = rows.into_iter().map(|r| ShiftDto {
-        id: r.try_get("id").unwrap_or_default(),
-        tenant_id: r.try_get("tenant_id").unwrap_or_default(),
-        cashier_id: r.try_get("cashier_id").unwrap_or_default(),
-        status: r.try_get("status").unwrap_or_default(),
-        opened_at: r.try_get("opened_at").unwrap_or_default(),
-        closed_at: r.try_get("closed_at").ok().flatten(),
-        expected_amount_cents: r.try_get("expected_amount_cents").unwrap_or(0),
-        actual_amount_cents: r.try_get("actual_amount_cents").ok().flatten(),
-        difference_cents: r.try_get("difference_cents").ok().flatten(),
-    }).collect();
+    let shifts = rows
+        .into_iter()
+        .map(|r| -> Result<ShiftDto, String> {
+            Ok(ShiftDto {
+                id: r.try_get("id").map_err(|e| e.to_string())?,
+                tenant_id: r.try_get("tenant_id").map_err(|e| e.to_string())?,
+                cashier_id: r.try_get("cashier_id").map_err(|e| e.to_string())?,
+                status: r.try_get("status").map_err(|e| e.to_string())?,
+                opened_at: r.try_get("opened_at").map_err(|e| e.to_string())?,
+                closed_at: r.try_get::<Option<String>, _>("closed_at").map_err(|e| e.to_string())?,
+                expected_amount_cents: r.try_get("expected_amount_cents").map_err(|e| e.to_string())?,
+                actual_amount_cents: r.try_get::<Option<i32>, _>("actual_amount_cents").map_err(|e| e.to_string())?,
+                difference_cents: r.try_get::<Option<i32>, _>("difference_cents").map_err(|e| e.to_string())?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
     Ok(shifts)
 }

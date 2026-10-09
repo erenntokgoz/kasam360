@@ -78,8 +78,8 @@ pub async fn get_analytics_dashboard_data(
     .await
     .map_err(|e| e.to_string())?;
 
-    let total_sales_cents: i64 = row.try_get("total").unwrap_or(0);
-    let transaction_count: i64 = row.try_get("count").unwrap_or(0);
+    let total_sales_cents: i64 = row.try_get("total").map_err(|e| e.to_string())?;
+    let transaction_count: i64 = row.try_get("count").map_err(|e| e.to_string())?;
     let average_order_value_cents = if transaction_count > 0 {
         total_sales_cents / transaction_count
     } else {
@@ -110,8 +110,8 @@ pub async fn get_analytics_dashboard_data(
 
     let mut popular_categories = std::collections::HashMap::new();
     for row in category_rows {
-        let name: String = row.try_get::<String, _>("category_name").unwrap_or_default();
-        let qty: i64 = row.try_get("qty").unwrap_or(0);
+        let name: String = row.try_get::<String, _>("category_name").map_err(|e| e.to_string())?;
+        let qty: i64 = row.try_get("qty").map_err(|e| e.to_string())?;
         if !name.is_empty() {
             popular_categories.insert(name, qty);
         }

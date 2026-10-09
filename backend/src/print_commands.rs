@@ -135,7 +135,7 @@ pub async fn print_z_report(
 
     let opened_at: String = row.try_get("opened_at").map_err(|e| e.to_string())?;
     let closed_at: Option<String> = row.try_get("closed_at").map_err(|e| e.to_string())?;
-    let expected: i64 = row.try_get("expected_amount_cents").unwrap_or(0);
+    let expected: i64 = row.try_get("expected_amount_cents").map_err(|e| e.to_string())?;
     let actual: Option<i64> = row.try_get("actual_amount_cents").ok();
     let difference: Option<i64> = row.try_get("difference_cents").ok();
     let status: String = row.try_get("status").unwrap_or_default();
@@ -232,7 +232,7 @@ pub async fn print_cash_slip(
     .ok_or_else(|| "NOT_FOUND: bu işletmeye ait kasa hareketi bulunamadı".to_string())?;
 
     let movement_type: String = row.try_get("movement_type").unwrap_or_default();
-    let amount: i64 = row.try_get("amount_cents").unwrap_or(0);
+    let amount: i64 = row.try_get("amount_cents").map_err(|e| e.to_string())?;
     let reason: String = row.try_get("reason").unwrap_or_default();
     let actor_id: String = row.try_get("actor_id").unwrap_or_default();
     let shift_id: String = row.try_get("shift_id").unwrap_or_default();
@@ -336,8 +336,8 @@ pub async fn print_day_z_report(
     .await
     .map_err(|e| e.to_string())?;
 
-    let revenue: i64 = totals.try_get("total").unwrap_or(0);
-    let order_count: i64 = totals.try_get("count").unwrap_or(0);
+    let revenue: i64 = totals.try_get("total").map_err(|e| e.to_string())?;
+    let order_count: i64 = totals.try_get("count").map_err(|e| e.to_string())?;
 
     let methods = sqlx::query(&format!(
         "SELECT json_extract(payload, '$.method') AS method,
@@ -383,7 +383,7 @@ pub async fn print_day_z_report(
     println!("------------------------------------------------");
     for row in &methods {
         let method: Option<String> = row.try_get("method").ok();
-        let amount: i64 = row.try_get("amount").unwrap_or(0);
+        let amount: i64 = row.try_get("amount").map_err(|e| e.to_string())?;
         println!(
             "{:<34} {:>12}",
             method.as_deref().unwrap_or("BILINMIYEN"),
@@ -421,7 +421,7 @@ async fn print_order_body(
 
     let table_id: String = order.try_get("table_id").unwrap_or_default();
     let status: String = order.try_get("status").unwrap_or_default();
-    let total: i64 = order.try_get("total_cents").unwrap_or(0);
+    let total: i64 = order.try_get("total_cents").map_err(|e| e.to_string())?;
     let created_at: String = order.try_get("created_at").unwrap_or_default();
     let notes: Option<String> = order.try_get("notes").ok();
 
@@ -448,8 +448,8 @@ async fn print_order_body(
     for item in &items {
         let name: String = item.try_get("product_name").unwrap_or_default();
         let short: String = name.chars().take(22).collect();
-        let quantity: i64 = item.try_get("quantity").unwrap_or(0);
-        let line_total: i64 = item.try_get("total_cents").unwrap_or(0);
+        let quantity: i64 = item.try_get("quantity").map_err(|e| e.to_string())?;
+        let line_total: i64 = item.try_get("total_cents").map_err(|e| e.to_string())?;
         let modifiers: Option<String> = item.try_get("modifiers").ok();
         println!("{:<22} {:>4} {:>12}", short, quantity, fmt_cents(line_total));
         if let Some(list) = modifiers {

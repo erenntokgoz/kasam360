@@ -8,6 +8,7 @@ pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod id_generator;
+pub mod log;
 pub mod inventory360_commands;
 pub mod inventory_commands;
 pub mod kitchen_commands;
@@ -45,6 +46,10 @@ pub struct AppState {
 }
 
 pub fn run() {
+    // G4 · Item 16: Structured logging (tracing + rolling file).
+    // Loglama asla uygulamayı durdurmaz; hata olursa konsola fallback.
+    crate::log::init();
+
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let pool = rt.block_on(async {
         let database_url =
