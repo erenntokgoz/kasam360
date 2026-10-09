@@ -10,10 +10,8 @@ use uuid::Uuid;
 /// jetonuyla, hareketi kendi adına yazmaz), mutfak üretir.
 /// Kasa çekmecesi yalnız işletme sahibi ve kasiyerin
 /// sorumluluğundadır (SPEC §34 `shiftManage` satırı).
-const CASH_MOVEMENT_ROLES: [crate::rbac::Role; 2] = [
-    crate::rbac::Role::Owner,
-    crate::rbac::Role::Cashier,
-];
+const CASH_MOVEMENT_ROLES: [crate::rbac::Role; 2] =
+    [crate::rbac::Role::Owner, crate::rbac::Role::Cashier];
 
 /// Kasa hareketi kapısını fail-closed geçirir.
 ///
@@ -21,9 +19,7 @@ const CASH_MOVEMENT_ROLES: [crate::rbac::Role; 2] = [
 /// doğrudan test edilemez. Kapı saf bir fonksiyona
 /// taşınırsa "rol alanı hiç gönderilmemişse reddedilir"
 /// sözleşmesi testle kanıtlanır (bkz. `unguarded_commands_tests.rs`).
-pub(crate) fn cash_hareket_kapisi(
-    actor_role: Option<&str>,
-) -> Result<crate::rbac::Role, String> {
+pub(crate) fn cash_hareket_kapisi(actor_role: Option<&str>) -> Result<crate::rbac::Role, String> {
     crate::rbac::require_any_present(actor_role, &CASH_MOVEMENT_ROLES)
 }
 
@@ -83,8 +79,7 @@ pub async fn cash_in(
     // Kiracı zorunludur: eksik gelen kiracı varsayılan
     // kiracıya düşerse hareket kimliğine sahip olmayan
     // bir defter yazılır (AGENTS.md §3.3).
-    let tenant_id =
-        crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
+    let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
 
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
@@ -156,8 +151,7 @@ pub async fn cash_out(
     // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
     // düşerse para başka bir işletmenin kasanına yazılır
     // (AGENTS.md §3.3).
-    let tenant_id =
-        crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
+    let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
 
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;

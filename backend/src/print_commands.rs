@@ -80,10 +80,7 @@ fn require_tenant(tenant_id: Option<&str>) -> Result<String, String> {
 /// Fiş basımı yapabilecek roller. Kasa ve müdür tahsilat fişi basabilir; mutfak
 /// ve garson basamaz.
 fn require_receipt_printer(role: Option<&str>) -> Result<(), String> {
-    rbac::require_any_present(
-        role,
-        &[Role::Owner, Role::Manager, Role::Cashier],
-    )?;
+    rbac::require_any_present(role, &[Role::Owner, Role::Manager, Role::Cashier])?;
     Ok(())
 }
 
@@ -135,7 +132,9 @@ pub async fn print_z_report(
 
     let opened_at: String = row.try_get("opened_at").map_err(|e| e.to_string())?;
     let closed_at: Option<String> = row.try_get("closed_at").map_err(|e| e.to_string())?;
-    let expected: i64 = row.try_get("expected_amount_cents").map_err(|e| e.to_string())?;
+    let expected: i64 = row
+        .try_get("expected_amount_cents")
+        .map_err(|e| e.to_string())?;
     let actual: Option<i64> = row.try_get("actual_amount_cents").ok();
     let difference: Option<i64> = row.try_get("difference_cents").ok();
     let status: String = row.try_get("status").unwrap_or_default();
@@ -152,23 +151,19 @@ pub async fn print_z_report(
                         WHERE tenant_id = ? AND shift_id = ? AND movement_type = 'OUT'";
 
     let total_sales = match closed_at.as_ref() {
-        Some(closed) => {
-            sqlx::query_scalar(&format!("{} AND created_at <= ?", sales_sql))
-                .bind(&tenant)
-                .bind(&opened_at)
-                .bind(closed)
-                .fetch_one(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?
-        }
-        None => {
-            sqlx::query_scalar(sales_sql)
-                .bind(&tenant)
-                .bind(&opened_at)
-                .fetch_one(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?
-        }
+        Some(closed) => sqlx::query_scalar(&format!("{} AND created_at <= ?", sales_sql))
+            .bind(&tenant)
+            .bind(&opened_at)
+            .bind(closed)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?,
+        None => sqlx::query_scalar(sales_sql)
+            .bind(&tenant)
+            .bind(&opened_at)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?,
     };
 
     let cash_in: i64 = sqlx::query_scalar(cash_in_sql)
@@ -185,14 +180,21 @@ pub async fn print_z_report(
         .map_err(|e| e.to_string())?;
 
     print_header(
-        if closed_at.is_some() { "Z-RAPORU (GÜN SONU MUTABAKATI)" } else { "X-RAPORU (GÜN İÇİ ARA MUTABAKAT)" },
+        if closed_at.is_some() {
+            "Z-RAPORU (GÜN SONU MUTABAKATI)"
+        } else {
+            "X-RAPORU (GÜN İÇİ ARA MUTABAKAT)"
+        },
         "KASAM360 HESAP DEFTERI",
     );
     println!("Vardiya No : {}", shift_id);
     println!("Kasiyer    : {}", cashier_id);
     println!("Durum      : {}", status);
     println!("Acilis     : {}", opened_at);
-    println!("Kapanis    : {}", closed_at.clone().unwrap_or_else(|| "-".to_string()));
+    println!(
+        "Kapanis    : {}",
+        closed_at.clone().unwrap_or_else(|| "-".to_string())
+    );
     println!("------------------------------------------------");
     println!("Acilis Bakiyesi : {}", fmt_cents(expected));
     println!("Toplam Satis    : {}", fmt_cents(total_sales));
@@ -240,7 +242,11 @@ pub async fn print_cash_slip(
 
     let is_in = movement_type.eq_ignore_ascii_case("IN");
     print_header(
-        if is_in { "KASA GIRIS FISI" } else { "KASA CIKIS FISI" },
+        if is_in {
+            "KASA GIRIS FISI"
+        } else {
+            "KASA CIKIS FISI"
+        },
         "KASAM360 HESAP DEFTERI",
     );
     println!("Hareket No : {}", movement_id);
@@ -438,7 +444,10 @@ async fn print_order_body(
 
     print_header(title, "KASAM360 ADISYON");
     println!("Siparis No : {}", order_id);
-    println!("Masa       : {}", if table_id.is_empty() { "-" } else { &table_id });
+    println!(
+        "Masa       : {}",
+        if table_id.is_empty() { "-" } else { &table_id }
+    );
     println!("Durum      : {}", status);
     // Adisyon fişi müşteriye verilir: kayıt UTC, gösterilen yerel zaman.
     println!("Tarih      : {}", utc_yerel_goster(&created_at));
@@ -451,7 +460,12 @@ async fn print_order_body(
         let quantity: i64 = item.try_get("quantity").map_err(|e| e.to_string())?;
         let line_total: i64 = item.try_get("total_cents").map_err(|e| e.to_string())?;
         let modifiers: Option<String> = item.try_get("modifiers").ok();
-        println!("{:<22} {:>4} {:>12}", short, quantity, fmt_cents(line_total));
+        println!(
+            "{:<22} {:>4} {:>12}",
+            short,
+            quantity,
+            fmt_cents(line_total)
+        );
         if let Some(list) = modifiers {
             let clean = list.replace(['[', ']', '"'], "");
             if !clean.trim().is_empty() {

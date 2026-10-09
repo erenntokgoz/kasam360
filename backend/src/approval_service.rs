@@ -1,4 +1,4 @@
-﻿//! Anlık PIN onayı çekirdeği (Faz 3).
+//! Anlık PIN onayı çekirdeği (Faz 3).
 //!
 //! Kural: void / indirim / ikram işlemleri MASTER hariç **her** işlem sahibi
 //! için anlık PIN onayına tabidir. Onay iki adımdan oluşur:
@@ -31,6 +31,7 @@ pub mod operation {
     pub const VOID: &str = "VOID_ORDER";
     pub const DISCOUNT: &str = "DISCOUNT";
     pub const COMPLIMENTARY: &str = "COMPLIMENTARY";
+    pub const REFUND: &str = "REFUND";
     /// Kasa çıkışı (D3): kasadan para çıkarmak. Bugün onaysızdı.
     pub const CASH_OUT: &str = "CASH_OUT";
     /// Gün sonu (D3): vardiyayı kapatmak ve kasayı devretmek.
@@ -95,12 +96,10 @@ pub mod error {
     pub const LOCKED: &str = "APPROVAL_LOCKED";
     pub const TOKEN_INVALID: &str = "APPROVAL_TOKEN_INVALID: Onay jetonu geçersiz.";
     pub const TOKEN_USED: &str = "APPROVAL_TOKEN_USED: Onay jetonu zaten kullanılmış.";
-    pub const TOKEN_SCOPE: &str =
-        "APPROVAL_TOKEN_SCOPE_MISMATCH: Onay jetonu bu işleme ait değil.";
+    pub const TOKEN_SCOPE: &str = "APPROVAL_TOKEN_SCOPE_MISMATCH: Onay jetonu bu işleme ait değil.";
     pub const TOKEN_EXPIRED: &str = "APPROVAL_TOKEN_EXPIRED: Onay jetonunun süresi doldu.";
     /// Jetonsuz işlem denemesi. Bu bir reddedilmedir: işlem yürütülmez.
-    pub const TOKEN_REQUIRED: &str =
-        "APPROVAL_REQUIRED: Bu işlem için onay PIN'i gerekli.";
+    pub const TOKEN_REQUIRED: &str = "APPROVAL_REQUIRED: Bu işlem için onay PIN'i gerekli.";
     /// Jetonun onaylayanı, tüketim anındaki eşik kuralını karşılamıyor.
     pub const APPROVER_NOT_ALLOWED: &str =
         "UNAUTHORIZED: Bu işlem için onaylayan rol yetkili değil.";
@@ -316,9 +315,7 @@ pub async fn requires_privileged_approver_db(
     // sabite düşmelidir. Yeni yüzeylerde (ödeme, kasa çıkışı, gün sonu) satır
     // yoksa onay zaten kapalıdır, `None` kalır.
     let esik = if request.operation == operation::DISCOUNT {
-        Some(
-            esik.unwrap_or_else(crate::services::security360::threshold::varsayilan_esik),
-        )
+        Some(esik.unwrap_or_else(crate::services::security360::threshold::varsayilan_esik))
     } else {
         esik
     };
@@ -375,8 +372,7 @@ pub async fn verify_and_issue(
     }
 
     // Tenant zorunlu: çapraz tenant PIN'iyle onay verilemez.
-    let matched =
-        user_credentials::find_user_by_pin(conn, pin, Some(&request.tenant_id)).await?;
+    let matched = user_credentials::find_user_by_pin(conn, pin, Some(&request.tenant_id)).await?;
     let Some(found) = matched else {
         record_failure(conn, request).await?;
         return Err(error::INVALID_PIN.to_string());
@@ -476,9 +472,7 @@ pub async fn consume_token(
     let stored_amount: i64 = row.try_get("amount_cents").map_err(|e| e.to_string())?;
     let stored_requester: String = row.try_get("requester_id").map_err(|e| e.to_string())?;
     let approver_id: String = row.try_get("approver_id").map_err(|e| e.to_string())?;
-    let approver_role_raw: String = row
-        .try_get("approved_by_role")
-        .map_err(|e| e.to_string())?;
+    let approver_role_raw: String = row.try_get("approved_by_role").map_err(|e| e.to_string())?;
     let expires_at: Option<String> = row.try_get("expires_at").map_err(|e| e.to_string())?;
 
     // Kapsam denetimi: jeton başka bir işleme taşınamaz. `requester_id` de

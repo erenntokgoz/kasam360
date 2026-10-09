@@ -1,4 +1,4 @@
-﻿//! İzin servisi — talep, listeleme ve onay.
+//! İzin servisi — talep, listeleme ve onay.
 
 use sqlx::{Row, SqlitePool};
 
@@ -110,14 +110,13 @@ pub async fn decide_leave(
     leave_id: &str,
     approve: bool,
 ) -> Result<(), String> {
-    let row = sqlx::query(
-        "SELECT user_id, status FROM leave_requests WHERE tenant_id = ?1 AND id = ?2",
-    )
-    .bind(tenant_id)
-    .bind(leave_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let row =
+        sqlx::query("SELECT user_id, status FROM leave_requests WHERE tenant_id = ?1 AND id = ?2")
+            .bind(tenant_id)
+            .bind(leave_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
     let Some(row) = row else {
         return Err("izin talebi bulunamadi".to_string());
     };
@@ -144,4 +143,3 @@ pub async fn decide_leave(
     .map_err(|e| e.to_string())?;
     Ok(())
 }
-

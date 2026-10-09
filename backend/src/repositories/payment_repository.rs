@@ -55,7 +55,9 @@ impl PaymentRepository {
         let mut item_discount_all_cents: i64 = 0;
 
         for item in items {
-            let product_id = item.product.get("id")
+            let product_id = item
+                .product
+                .get("id")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| "Missing product.id in cart item".to_string())?;
 
@@ -67,25 +69,29 @@ impl PaymentRepository {
                  JOIN orders o ON o.id = oi.order_id \
                  WHERE oi.id = ? AND o.tenant_id = ?",
             )
-                .bind(&item.id)
-                .bind(tenant_id)
-                .fetch_optional(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
+            .bind(&item.id)
+            .bind(tenant_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
 
-let (db_price_cents, db_tax_rate_bp, frozen): (i64, i64, bool) = if let Some(r) = frozen_order_item {
+            let (db_price_cents, db_tax_rate_bp, frozen): (i64, i64, bool) = if let Some(r) =
+                frozen_order_item
+            {
                 (
                     r.try_get("unit_price_cents").map_err(|e| e.to_string())?,
                     r.try_get("tax_rate_bp").map_err(|e| e.to_string())?,
                     true,
                 )
             } else {
-                let row = sqlx::query("SELECT price_cents, tax_rate_bp FROM products WHERE id = ? AND tenant_id = ?")
-                    .bind(product_id)
-                    .bind(tenant_id)
-                    .fetch_optional(&mut *conn)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let row = sqlx::query(
+                    "SELECT price_cents, tax_rate_bp FROM products WHERE id = ? AND tenant_id = ?",
+                )
+                .bind(product_id)
+                .bind(tenant_id)
+                .fetch_optional(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
 
                 match row {
                     Some(r) => (
@@ -121,7 +127,8 @@ let (db_price_cents, db_tax_rate_bp, frozen): (i64, i64, bool) = if let Some(r) 
                 if disc_val > 0.0 {
                     if disc_type == "PERCENTAGE" {
                         let pct = disc_val.min(100.0);
-                        discount_amount_cents = ((gross_cents as f64) * (pct / 100.0)).round() as i64;
+                        discount_amount_cents =
+                            ((gross_cents as f64) * (pct / 100.0)).round() as i64;
                     } else if disc_type == "FIXED_AMOUNT" {
                         discount_amount_cents = (disc_val.round() as i64).min(gross_cents);
                     }
@@ -219,11 +226,11 @@ let (db_price_cents, db_tax_rate_bp, frozen): (i64, i64, bool) = if let Some(r) 
             let order_row = sqlx::query(
                 "SELECT table_id FROM orders WHERE id = ? AND status = 'OPEN' AND tenant_id = ?",
             )
-                .bind(o_id)
-                .bind(tenant_id)
-                .fetch_optional(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
+            .bind(o_id)
+            .bind(tenant_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
 
             if let Some(row) = order_row {
                 let table_id: String = row.try_get("table_id").unwrap_or_default();
@@ -242,11 +249,7 @@ let (db_price_cents, db_tax_rate_bp, frozen): (i64, i64, bool) = if let Some(r) 
                 // `orders.status = 'OPEN'` filtresi `IN_PROGRESS` siparişleri
                 // atlıyordu.
                 let _ = crate::services::reservation_service::close_open_for_table(
-                    &mut *conn,
-                    tenant_id,
-                    &table_id,
-                    "TAHSILAT",
-                    "TAHSILAT",
+                    &mut *conn, tenant_id, &table_id, "TAHSILAT", "TAHSILAT",
                 )
                 .await?;
 
@@ -342,18 +345,28 @@ mod tests {
             Some(serde_json::json!({ "type": "FIXED_AMOUNT", "value": 2000.0 })),
         )];
         let global = serde_json::json!({ "type": "PERCENTAGE", "value": 10.0 });
-        let truth = PaymentRepository::calculate_server_truth(&mut conn, TEST_TENANT, &items, Some(&global))
-            .await
-            .expect("hesaplanır");
+        let truth = PaymentRepository::calculate_server_truth(
+            &mut conn,
+            TEST_TENANT,
+            &items,
+            Some(&global),
+        )
+        .await
+        .expect("hesaplanır");
 
         // 10000 brüt - 2000 kalem = 8000, +%20 KDV = 9600, -%10 sepet geneli = 8640.
         assert_eq!(truth.discount_cents, 2000 + 960);
         assert_eq!(truth.total_cents, 8640);
 
         // Eski tek alanlı yardımcı da aynı sonucu vermeli (ikinci gerçek yok).
-        let total = PaymentRepository::calculate_server_truth_total(&mut conn, TEST_TENANT, &items, Some(&global))
-            .await
-            .expect("hesaplanır");
+        let total = PaymentRepository::calculate_server_truth_total(
+            &mut conn,
+            TEST_TENANT,
+            &items,
+            Some(&global),
+        )
+        .await
+        .expect("hesaplanır");
         assert_eq!(total, truth.total_cents);
     }
 

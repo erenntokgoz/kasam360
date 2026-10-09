@@ -53,7 +53,9 @@ fn gecerli_tenant_korunur() {
 // ---------------------------------------------------------------------------
 
 async fn pool() -> SqlitePool {
-    let p = SqlitePool::connect("sqlite::memory:").await.expect("hafiza");
+    let p = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("hafiza");
     sqlx::raw_sql(include_str!("../migrations/schema.sql"))
         .execute(&p)
         .await
@@ -109,15 +111,9 @@ const MENU_KAYNAKLARI: [(&str, &str); 4] = [
         "category.rs",
         include_str!("management_commands/category.rs"),
     ),
-    (
-        "product.rs",
-        include_str!("management_commands/product.rs"),
-    ),
+    ("product.rs", include_str!("management_commands/product.rs")),
     ("staff.rs", include_str!("management_commands/staff.rs")),
-    (
-        "mod.rs",
-        include_str!("management_commands/mod.rs"),
-    ),
+    ("mod.rs", include_str!("management_commands/mod.rs")),
 ];
 
 /// SQL kaçışlı dizeleri: `sqlx::query("...")` ve `query_scalar("...")` kalıpları.

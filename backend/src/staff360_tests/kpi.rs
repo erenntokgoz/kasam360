@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 // ---------------------------------------------------------------------------
 // KPI
 // ---------------------------------------------------------------------------
@@ -10,8 +10,28 @@ async fn kpi_garson_kalemlerinden_dogru_hesaplanir() {
     urun(&p, "tenant_a", "a").await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
     kullanici(&p, "tenant_a", "usr_k", "Kasiyer", "CASHIER").await;
-    siparis(&p, "tenant_a", "ord_1", "usr_k", "usr_1", 20_000, "PAID", "2026-03-10 12:00:00").await;
-    siparis(&p, "tenant_a", "ord_2", "usr_k", "usr_1", 10_000, "PAID", "2026-03-11 12:00:00").await;
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_1",
+        "usr_k",
+        "usr_1",
+        20_000,
+        "PAID",
+        "2026-03-10 12:00:00",
+    )
+    .await;
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_2",
+        "usr_k",
+        "usr_1",
+        10_000,
+        "PAID",
+        "2026-03-11 12:00:00",
+    )
+    .await;
 
     let kpi = kpi_service::kpi(&p, "tenant_a", "2000-01-01", "2100-01-01", Some("usr_1"))
         .await
@@ -34,14 +54,37 @@ async fn kpi_baska_kiraciyi_gormez() {
     kullanici(&p, "tenant_a", "usr_a", "Ayşe A", "WAITER").await;
     kullanici(&p, "tenant_b", "usr_b", "Ayşe B", "WAITER").await;
     kullanici(&p, "tenant_b", "usr_k", "Kasiyer", "CASHIER").await;
-    siparis(&p, "tenant_a", "ord_a1", "usr_k", "usr_a", 20_000, "PAID", "2026-03-10 12:00:00").await;
-    siparis(&p, "tenant_b", "ord_b1", "usr_k", "usr_b", 99_000, "PAID", "2026-03-10 12:00:00").await;
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_a1",
+        "usr_k",
+        "usr_a",
+        20_000,
+        "PAID",
+        "2026-03-10 12:00:00",
+    )
+    .await;
+    siparis(
+        &p,
+        "tenant_b",
+        "ord_b1",
+        "usr_k",
+        "usr_b",
+        99_000,
+        "PAID",
+        "2026-03-10 12:00:00",
+    )
+    .await;
 
     let kpi = kpi_service::kpi(&p, "tenant_a", "2000-01-01", "2100-01-01", None)
         .await
         .expect("KPI");
     assert_eq!(kpi.len(), 1, "kiraci A yalnız kendi personelini görmeli");
-    assert_eq!(kpi[0].gross_sales_cents, 20_000, "başka işletmenin cirosu sızdı");
+    assert_eq!(
+        kpi[0].gross_sales_cents, 20_000,
+        "başka işletmenin cirosu sızdı"
+    );
 }
 
 #[tokio::test]
@@ -50,4 +93,3 @@ async fn kpi_ters_tarih_araligini_reddeder() {
     let sonuc = kpi_service::kpi(&p, "tenant_a", "2026-03-31", "2026-03-01", None).await;
     assert!(sonuc.is_err(), "ters aralık \"0 satış\" gibi görünmemeli");
 }
-

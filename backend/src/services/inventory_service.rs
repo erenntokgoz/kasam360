@@ -68,15 +68,9 @@ impl InventoryService {
                 }
                 // Kolon okumaları sessizce varsayılana düşürülmez: `unit_cost_cents`
                 // NULL ise maliyet 0 olur ve kâr olduğundan çok görünür.
-                let b_id: String = b
-                    .try_get("id")
-                    .map_err(|e| e.to_string())?;
-                let b_rem: f64 = b
-                    .try_get("remaining_quantity")
-                    .map_err(|e| e.to_string())?;
-                let b_cost: i64 = b
-                    .try_get("unit_cost_cents")
-                    .map_err(|e| e.to_string())?;
+                let b_id: String = b.try_get("id").map_err(|e| e.to_string())?;
+                let b_rem: f64 = b.try_get("remaining_quantity").map_err(|e| e.to_string())?;
+                let b_cost: i64 = b.try_get("unit_cost_cents").map_err(|e| e.to_string())?;
 
                 let take = remaining_demand.min(b_rem);
                 let cost = (take * b_cost as f64).round() as i64;

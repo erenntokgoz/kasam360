@@ -16,7 +16,9 @@ use crate::services::staff360::staff_types::{
     CustodyRecord, Incident, IncidentInput, LeaveInput, LeaveRequest, ShiftPlan, ShiftPlanInput,
     StaffProfile, StaffProfileInput,
 };
-use crate::services::staff360::{kpi_service, payroll_service, staff_service, suspicious_service, tip_service};
+use crate::services::staff360::{
+    kpi_service, payroll_service, staff_service, suspicious_service, tip_service,
+};
 use crate::DbPool;
 
 /// Tenant zorunluluğu. Eksik gelirse hata verir; varsayılan kiracıya düşmez —
@@ -64,7 +66,14 @@ pub async fn save_staff_profile(
 ) -> Result<(), String> {
     crate::rbac::require_staff_admin(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
-    staff_service::upsert_profile(&pool, &tenant, &actor_id, can_see_amounts(&actor_role), &input).await
+    staff_service::upsert_profile(
+        &pool,
+        &tenant,
+        &actor_id,
+        can_see_amounts(&actor_role),
+        &input,
+    )
+    .await
 }
 
 /// Doğum günü yaklaşan personel. `days_ahead` 0-365 ile sınırlandırılır.
@@ -188,8 +197,15 @@ pub async fn add_custody_record(
 ) -> Result<String, String> {
     crate::rbac::require_staff_admin(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
-    staff_service::add_custody(&pool, &tenant, &user_id, &item_name, quantity, notes.as_deref())
-        .await
+    staff_service::add_custody(
+        &pool,
+        &tenant,
+        &user_id,
+        &item_name,
+        quantity,
+        notes.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]

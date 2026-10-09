@@ -52,7 +52,9 @@ pub fn hash_pin(pin: &str) -> Result<String, String> {
 }
 
 pub fn is_argon2_hash(value: &str) -> bool {
-    ARGON2_PREFIXES.iter().any(|prefix| value.starts_with(prefix))
+    ARGON2_PREFIXES
+        .iter()
+        .any(|prefix| value.starts_with(prefix))
 }
 
 /// Saklanan değer gerçekten Argon2 ise doğrular.
@@ -72,9 +74,7 @@ async fn scan_credentials(
     // Gerekçe: pasif alınmış personel giriş yapamaz, bu yüzden oturum açma
     // taraması yalnızca aktif kayıtlara bakar. PIN benzersizliği taraması ise
     // pasifleri de kapsar — emekli bir personelin PIN'i başkasına verilmemelidir.
-    let mut sql = String::from(
-        "SELECT id, role, name, tenant_id, pin_hash FROM users WHERE 1 = 1",
-    );
+    let mut sql = String::from("SELECT id, role, name, tenant_id, pin_hash FROM users WHERE 1 = 1");
     if active_only {
         sql.push_str(" AND is_active = 1");
     }
@@ -87,7 +87,10 @@ async fn scan_credentials(
         query = query.bind(tenant);
     }
 
-    let rows = query.fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
+    let rows = query
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(rows
         .into_iter()
         .map(|row| CredentialRow {
@@ -132,13 +135,12 @@ pub async fn verify_user_pin(
     user_id: &str,
     pin: &str,
 ) -> Result<bool, String> {
-    let hash: Option<String> =
-        sqlx::query_scalar("SELECT pin_hash FROM users WHERE id = ?")
-            .bind(user_id)
-            .fetch_optional(&mut *conn)
-            .await
-            .map_err(|e| e.to_string())?
-            .flatten();
+    let hash: Option<String> = sqlx::query_scalar("SELECT pin_hash FROM users WHERE id = ?")
+        .bind(user_id)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?
+        .flatten();
 
     match hash.as_deref() {
         Some(hash) if is_argon2_hash(hash) => Ok(crate::auth::verify_credential(pin, hash)),
@@ -238,7 +240,13 @@ mod tests {
         pool
     }
 
-    async fn insert_user(pool: &sqlx::Pool<sqlx::Sqlite>, id: &str, tenant: &str, pin: &str, active: i64) {
+    async fn insert_user(
+        pool: &sqlx::Pool<sqlx::Sqlite>,
+        id: &str,
+        tenant: &str,
+        pin: &str,
+        active: i64,
+    ) {
         sqlx::query(
             "INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active) VALUES (?, ?, 'CASHIER', ?, ?, ?)",
         )
@@ -288,8 +296,14 @@ mod tests {
                 .unwrap();
         }
         let mut conn = pool.acquire().await.unwrap();
-        assert!(find_user_by_pin(&mut conn, "1111", None).await.unwrap().is_some());
-        assert!(find_user_by_pin(&mut conn, "9999", None).await.unwrap().is_none());
+        assert!(find_user_by_pin(&mut conn, "1111", None)
+            .await
+            .unwrap()
+            .is_some());
+        assert!(find_user_by_pin(&mut conn, "9999", None)
+            .await
+            .unwrap()
+            .is_none());
     }
 
     #[tokio::test]
@@ -298,10 +312,17 @@ mod tests {
         insert_user(&pool, "usr_passive", "tenant-a", "5555", 0).await;
         let mut conn = pool.acquire().await.unwrap();
 
-        assert!(find_user_by_pin(&mut conn, "5555", None).await.unwrap().is_none());
-        assert!(verify_user_pin(&mut conn, "usr_passive", "5555").await.unwrap());
+        assert!(find_user_by_pin(&mut conn, "5555", None)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(verify_user_pin(&mut conn, "usr_passive", "5555")
+            .await
+            .unwrap());
         // Pasif personelin PIN'i yeniden verilemez.
-        assert!(ensure_pin_available(&mut conn, "tenant-a", "5555", None).await.is_err());
+        assert!(ensure_pin_available(&mut conn, "tenant-a", "5555", None)
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -311,13 +332,23 @@ mod tests {
         insert_user(&pool, "usr_b", "tenant-b", "7777", 1).await;
         let mut conn = pool.acquire().await.unwrap();
 
-        assert!(find_user_by_pin(&mut conn, "7777", Some("tenant-a")).await.unwrap().is_some());
+        assert!(find_user_by_pin(&mut conn, "7777", Some("tenant-a"))
+            .await
+            .unwrap()
+            .is_some());
         assert_eq!(
-            find_user_by_pin(&mut conn, "7777", Some("tenant-a")).await.unwrap().unwrap().id,
+            find_user_by_pin(&mut conn, "7777", Some("tenant-a"))
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
             "usr_a"
         );
         // tenant-c'de 7777 yok: başka kiracıya düşülmez.
-        assert!(find_user_by_pin(&mut conn, "7777", Some("tenant-c")).await.unwrap().is_none());
+        assert!(find_user_by_pin(&mut conn, "7777", Some("tenant-c"))
+            .await
+            .unwrap()
+            .is_none());
     }
 
     #[tokio::test]
@@ -327,11 +358,21 @@ mod tests {
         insert_user(&pool, "usr_b", "tenant-a", "5678", 1).await;
         let mut conn = pool.acquire().await.unwrap();
 
-        assert!(ensure_pin_available(&mut conn, "tenant-a", "1234", None).await.is_err());
-        assert!(ensure_pin_available(&mut conn, "tenant-a", "5678", None).await.is_err());
-        assert!(ensure_pin_available(&mut conn, "tenant-a", "2468", None).await.is_ok());
+        assert!(ensure_pin_available(&mut conn, "tenant-a", "1234", None)
+            .await
+            .is_err());
+        assert!(ensure_pin_available(&mut conn, "tenant-a", "5678", None)
+            .await
+            .is_err());
+        assert!(ensure_pin_available(&mut conn, "tenant-a", "2468", None)
+            .await
+            .is_ok());
         // Kullanıcı kendi PIN'ini değiştirirken muaf tutulur.
-        assert!(ensure_pin_available(&mut conn, "tenant-a", "1234", Some("usr_a")).await.is_ok());
+        assert!(
+            ensure_pin_available(&mut conn, "tenant-a", "1234", Some("usr_a"))
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]
@@ -339,7 +380,9 @@ mod tests {
         let pool = test_pool().await;
         insert_user(&pool, "usr_a", "tenant-a", "1234", 1).await;
         let mut conn = pool.acquire().await.unwrap();
-        assert!(ensure_pin_available(&mut conn, "tenant-b", "1234", None).await.is_ok());
+        assert!(ensure_pin_available(&mut conn, "tenant-b", "1234", None)
+            .await
+            .is_ok());
     }
 
     #[tokio::test]
@@ -350,7 +393,9 @@ mod tests {
         //    (Havuz tek bağlantılı olduğu için her adımda bağlantı bırakılır.)
         {
             let mut conn = pool.acquire().await.unwrap();
-            assert!(ensure_pin_available(&mut conn, "tenant-a", "2468", None).await.is_ok());
+            assert!(ensure_pin_available(&mut conn, "tenant-a", "2468", None)
+                .await
+                .is_ok());
         }
 
         // 2. Eşzamanlı istek, bizim yazmamızdan hemen önce aynı PIN'i kaydeder.
@@ -367,12 +412,16 @@ mod tests {
         //    denetim çakışmayı görmeli ve çağıran işlemi geri almalı.
         {
             let mut conn = pool.acquire().await.unwrap();
-            assert!(ensure_pin_unique_after_write(&mut conn, "tenant-a", "2468", "usr_late")
-                .await
-                .is_err());
-            assert!(ensure_pin_unique_after_write(&mut conn, "tenant-a", "2468", "usr_race")
-                .await
-                .is_err());
+            assert!(
+                ensure_pin_unique_after_write(&mut conn, "tenant-a", "2468", "usr_late")
+                    .await
+                    .is_err()
+            );
+            assert!(
+                ensure_pin_unique_after_write(&mut conn, "tenant-a", "2468", "usr_race")
+                    .await
+                    .is_err()
+            );
         }
     }
 
@@ -383,13 +432,17 @@ mod tests {
         let mut conn = pool.acquire().await.unwrap();
 
         // Kendi kaydı sayılmaz; başka eşleşme yoktur.
-        assert!(ensure_pin_unique_after_write(&mut conn, "tenant-a", "1357", "usr_only")
-            .await
-            .is_ok());
+        assert!(
+            ensure_pin_unique_after_write(&mut conn, "tenant-a", "1357", "usr_only")
+                .await
+                .is_ok()
+        );
         // Hiçbir kayıt bu PIN'i tutmuyorsa da geçerlidir.
-        assert!(ensure_pin_unique_after_write(&mut conn, "tenant-a", "9753", "usr_only")
-            .await
-            .is_ok());
+        assert!(
+            ensure_pin_unique_after_write(&mut conn, "tenant-a", "9753", "usr_only")
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]
@@ -400,7 +453,12 @@ mod tests {
             .await
             .unwrap();
         let mut conn = pool.acquire().await.unwrap();
-        assert!(find_user_by_pin(&mut conn, "4444", None).await.unwrap().is_none());
-        assert!(!verify_user_pin(&mut conn, "usr_legacy", "4444").await.unwrap());
+        assert!(find_user_by_pin(&mut conn, "4444", None)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(!verify_user_pin(&mut conn, "usr_legacy", "4444")
+            .await
+            .unwrap());
     }
 }

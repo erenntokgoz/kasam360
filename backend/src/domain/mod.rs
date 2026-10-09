@@ -10,3 +10,6 @@ pub mod money;
 
 /// Domain hata tipini dışa aktar.
 pub use error::DomainError;
+
+#[cfg(test)]
+mod proptest_tests;

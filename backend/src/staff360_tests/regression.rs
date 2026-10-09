@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 // ---------------------------------------------------------------------------
 // P0 regresyon: maaş gizliliği ve dönem sonu sınırı
 // ---------------------------------------------------------------------------
@@ -35,8 +35,14 @@ async fn mudur_maas_tutarini_gormez_gizli_doner() {
     assert_eq!(mudur.len(), 1);
     // Kritik nokta: `Some(0)` değil `None`. 0 da bir maaş olabilir; sıfır
     // göstermek "maaşsız çalışıyor" yanlış yorumu yaratır.
-    assert_eq!(mudur[0].base_salary_cents, None, "müdür maaş tutarını görmemeli");
-    assert_eq!(mudur[0].commission_percent, None, "müdür komisyon görmemeli");
+    assert_eq!(
+        mudur[0].base_salary_cents, None,
+        "müdür maaş tutarını görmemeli"
+    );
+    assert_eq!(
+        mudur[0].commission_percent, None,
+        "müdür komisyon görmemeli"
+    );
     // Kimlik bilgileri yine görünür: gizlilik tutarı gizler, kaydı değil.
     assert_eq!(mudur[0].full_name, "Ayşe");
 
@@ -51,8 +57,8 @@ async fn mudur_maas_tutarini_gormez_gizli_doner() {
 async fn mudur_maas_tutarini_yazamaz_kayit_korunur() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
-    let profil = |maas: i64, komisyon: i64| {
-        crate::services::staff360::staff_types::StaffProfileInput {
+    let profil =
+        |maas: i64, komisyon: i64| crate::services::staff360::staff_types::StaffProfileInput {
             user_id: "usr_1".into(),
             full_name: "Ayşe".into(),
             base_salary_cents: Some(maas),
@@ -64,8 +70,7 @@ async fn mudur_maas_tutarini_yazamaz_kayit_korunur() {
             address: None,
             emergency_contact: None,
             notes: None,
-        }
-    };
+        };
     // Patron mevcut maaşı belirler.
     let _ = staff_service::upsert_profile(&p, "tenant_a", "usr_boss", true, &profil(45_000, 0))
         .await
@@ -158,11 +163,11 @@ fn aralik_donem_siniri_31_araliktir() {
 
 #[test]
 fn subat_donem_siniri_artik_yilda29_dur() {
-    let (_, artik) = crate::services::staff360::payroll_service::period_range("2024-02")
-        .expect("artik yil");
+    let (_, artik) =
+        crate::services::staff360::payroll_service::period_range("2024-02").expect("artik yil");
     assert_eq!(artik, "2024-02-29T23:59:59");
-    let (_, normal) = crate::services::staff360::payroll_service::period_range("2026-02")
-        .expect("normal yil");
+    let (_, normal) =
+        crate::services::staff360::payroll_service::period_range("2026-02").expect("normal yil");
     assert_eq!(normal, "2026-02-28T23:59:59");
 }
 
@@ -237,12 +242,11 @@ async fn fifo_basi_kiracinin_partisini_tuketmez() {
     .expect("sayim");
     assert_eq!(a_sayi, 1);
     // Kiraci filtresi olsaydi bu sorgu 2 donerdi.
-    let sizak: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM inventory_batches WHERE product_id = 'prd_a'",
-    )
-    .fetch_one(&p)
-    .await
-    .expect("sayim");
+    let sizak: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM inventory_batches WHERE product_id = 'prd_a'")
+            .fetch_one(&p)
+            .await
+            .expect("sayim");
     assert_eq!(sizak, 1, "ürün kimliği zaten kiraciye özgü olmalı");
 }
 
@@ -268,9 +272,10 @@ async fn stok_dusum_olayi_gercek_kiraciya_yazilir() {
 
     // `events.tenant_id` NOT NULL DEFAULT'tur: kolon yazilmazsa olay
     // "DEFAULT_TENANT"e duser ve kiraci defteri tutarsizlasir.
-    let olay_sahibi: String = sqlx::query_scalar("SELECT tenant_id FROM events WHERE event_id = 'evt_1'")
-        .fetch_one(&p)
-        .await
-        .expect("olay tenant");
+    let olay_sahibi: String =
+        sqlx::query_scalar("SELECT tenant_id FROM events WHERE event_id = 'evt_1'")
+            .fetch_one(&p)
+            .await
+            .expect("olay tenant");
     assert_eq!(olay_sahibi, "tenant_a");
 }

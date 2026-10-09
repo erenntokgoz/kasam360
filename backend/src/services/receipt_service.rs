@@ -32,8 +32,7 @@ use sqlx::Row;
 use crate::commands::{ReceiptDto, ReceiptItemDto};
 
 /// Bir fişin sahibi olabileceği tek hareket: tahsilat kaydı.
-const SALE_EVENT_FILTER: &str =
-    "aggregate_type = 'SALE' AND event_type = 'SALE_SETTLED'";
+const SALE_EVENT_FILTER: &str = "aggregate_type = 'SALE' AND event_type = 'SALE_SETTLED'";
 
 /// Ödeme yöntemini rapor/ekran diliyle döndürür.
 ///
@@ -104,14 +103,7 @@ pub async fn list(
         let created_at: String = row.try_get("created_at").unwrap_or_default();
         let payload: serde_json::Value =
             serde_json::from_str(&payload_raw).unwrap_or(serde_json::Value::Null);
-        receipts.push(build_receipt(
-            conn,
-            tenant_id,
-            &aggregate_id,
-            &payload,
-            &created_at,
-        )
-        .await?);
+        receipts.push(build_receipt(conn, tenant_id, &aggregate_id, &payload, &created_at).await?);
     }
     Ok(receipts)
 }
@@ -215,14 +207,15 @@ async fn build_receipt(
         .map_err(|e| e.to_string())?
         {
             let raw_table_id: String = row.try_get("table_id").unwrap_or_default();
-            let table_name: Option<String> =
-                sqlx::query_scalar("SELECT name FROM tables WHERE tenant_id = ? AND id = ? LIMIT 1")
-                    .bind(tenant_id)
-                    .bind(&raw_table_id)
-                    .fetch_optional(&mut *conn)
-                    .await
-                    .map_err(|e| e.to_string())?
-                    .flatten();
+            let table_name: Option<String> = sqlx::query_scalar(
+                "SELECT name FROM tables WHERE tenant_id = ? AND id = ? LIMIT 1",
+            )
+            .bind(tenant_id)
+            .bind(&raw_table_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?
+            .flatten();
             table_display = table_name.unwrap_or(raw_table_id);
             if cashier_id.is_none() {
                 cashier_id = row.try_get("cashier_id").ok().flatten();
@@ -372,7 +365,8 @@ pub async fn list_financial_movements(
         .await
         .map_err(|e| e.to_string())?;
 
-    let debt_sql = "SELECT dp.id, dp.amount_cents, dp.payment_method, d.description, dp.created_at \
+    let debt_sql =
+        "SELECT dp.id, dp.amount_cents, dp.payment_method, d.description, dp.created_at \
          FROM debt_payments dp \
          JOIN debts d ON d.id = dp.debt_id AND d.tenant_id = dp.tenant_id \
          WHERE dp.tenant_id = ? AND dp.created_at >= ? AND dp.created_at <= ? \
@@ -399,7 +393,7 @@ pub async fn list_financial_movements(
             tenant_id: tenant_id.to_string(),
             movement_type: MOVEMENT_SALE_PAYMENT.to_string(),
             amount_cents: payload_i64(&payload, "totalAmount")
-            .ok_or_else(|| "tahsilat tutarı (totalAmount) payload'da eksik".to_string())?,
+                .ok_or_else(|| "tahsilat tutarı (totalAmount) payload'da eksik".to_string())?,
             payment_method: payment_method_label(payload.get("method").and_then(|m| m.as_str())),
             description: payload_string(&payload, "customerRef"),
             created_at,

@@ -42,79 +42,80 @@ fn context(sequence_hint: i64) -> AuditContext {
 /// hiç girmiyor.
 #[tokio::test]
 async fn kisisel_veri_deftere_maskeli_yazilir() {
-let pool = ledger_pool().await;
-let mutex = tokio::sync::Mutex::new(());
-let audit_lock = AuditLock::new(mutex.lock().await);
-let mut conn = pool.acquire().await.expect("bağlantı");
+    let pool = ledger_pool().await;
+    let mutex = tokio::sync::Mutex::new(());
+    let audit_lock = AuditLock::new(mutex.lock().await);
+    let mut conn = pool.acquire().await.expect("bağlantı");
 
-let ctx = AuditContext::new(
-    "tenant_a".to_string(),
-    "usr_1".to_string(),
-    "Owner".to_string(),
-    category::GUVENLIK,
-    "security:test",
-    "res_1".to_string(),
-    serde_json::json!({
-        "phone": "05321234567",
-        "tcNo": "12345678901",
-        "email": "ayse@ornek.com",
-        "amountCents": 250_050,
-        "shiftId": "shf_1",
-    }),
-    "2026-10-03T10:00:00+00:00".to_string(),
-)
-.expect("geçerli kategori");
+    let ctx = AuditContext::new(
+        "tenant_a".to_string(),
+        "usr_1".to_string(),
+        "Owner".to_string(),
+        category::GUVENLIK,
+        "security:test",
+        "res_1".to_string(),
+        serde_json::json!({
+            "phone": "05321234567",
+            "tcNo": "12345678901",
+            "email": "ayse@ornek.com",
+            "amountCents": 250_050,
+            "shiftId": "shf_1",
+        }),
+        "2026-10-03T10:00:00+00:00".to_string(),
+    )
+    .expect("geçerli kategori");
 
-AuditService::append(&mut conn, &audit_lock, &ctx)
-    .await
-    .expect("kayıt yazılır");
+    AuditService::append(&mut conn, &audit_lock, &ctx)
+        .await
+        .expect("kayıt yazılır");
 
-// Ham veri **hiçbir yerde** bulunmamalı: ne payload'da ne de dosyada.
-let satir: String = sqlx::query_scalar("SELECT payload FROM audit_ledger WHERE action = 'security:test'")
-    .fetch_one(&mut *conn)
-    .await
-    .expect("satır okunur");
+    // Ham veri **hiçbir yerde** bulunmamalı: ne payload'da ne de dosyada.
+    let satir: String =
+        sqlx::query_scalar("SELECT payload FROM audit_ledger WHERE action = 'security:test'")
+            .fetch_one(&mut *conn)
+            .await
+            .expect("satır okunur");
 
-assert!(!satir.contains("05321234567"), "telefon sızdı: {satir}");
-assert!(!satir.contains("12345678901"), "TCKN sızdı: {satir}");
-assert!(!satir.contains("ayse@ornek.com"), "e-posta sızdı: {satir}");
+    assert!(!satir.contains("05321234567"), "telefon sızdı: {satir}");
+    assert!(!satir.contains("12345678901"), "TCKN sızdı: {satir}");
+    assert!(!satir.contains("ayse@ornek.com"), "e-posta sızdı: {satir}");
 
-// Finansal kanıt korunmalı: maske katmanı parayı silmemeli.
-assert!(satir.contains("250050"), "tutar kayboldu: {satir}");
-assert!(satir.contains("shf_1"), "vardiya kimliği kayboldu: {satir}");
+    // Finansal kanıt korunmalı: maske katmanı parayı silmemeli.
+    assert!(satir.contains("250050"), "tutar kayboldu: {satir}");
+    assert!(satir.contains("shf_1"), "vardiya kimliği kayboldu: {satir}");
 }
 
 /// Maskeleme hash girdisi **değil**; `payload_json` maskelenmiş haliyle
 /// serileştirilir. Bu yüzden zincir doğrulaması bozulmaz.
 #[tokio::test]
 async fn maskeleme_zinir_dogrulamasini_bozmaz() {
-let pool = ledger_pool().await;
-let mutex = tokio::sync::Mutex::new(());
-let audit_lock = AuditLock::new(mutex.lock().await);
-let mut conn = pool.acquire().await.expect("bağlantı");
+    let pool = ledger_pool().await;
+    let mutex = tokio::sync::Mutex::new(());
+    let audit_lock = AuditLock::new(mutex.lock().await);
+    let mut conn = pool.acquire().await.expect("bağlantı");
 
-for sira in 1..=3 {
-    let ctx = AuditContext::new(
-        "tenant_a".to_string(),
-        format!("usr_{sira}"),
-        "Owner".to_string(),
-        category::GUVENLIK,
-        "security:zincir",
-        format!("res_{sira}"),
-        serde_json::json!({ "phone": "05321234567", "totalCents": 100 * sira }),
-        format!("2026-10-03T10:00:0{sira}+00:00"),
-    )
-    .expect("geçerli kategori");
-    AuditService::append(&mut conn, &audit_lock, &ctx)
+    for sira in 1..=3 {
+        let ctx = AuditContext::new(
+            "tenant_a".to_string(),
+            format!("usr_{sira}"),
+            "Owner".to_string(),
+            category::GUVENLIK,
+            "security:zincir",
+            format!("res_{sira}"),
+            serde_json::json!({ "phone": "05321234567", "totalCents": 100 * sira }),
+            format!("2026-10-03T10:00:0{sira}+00:00"),
+        )
+        .expect("geçerli kategori");
+        AuditService::append(&mut conn, &audit_lock, &ctx)
+            .await
+            .expect("kayıt yazılır");
+    }
+
+    let sonuc = AuditService::verify_chain(&mut conn)
         .await
-        .expect("kayıt yazılır");
-}
-
-let sonuc = AuditService::verify_chain(&mut conn)
-    .await
-    .expect("zincir doğrulanır");
-assert!(sonuc.is_valid, "zincir bozuldu: {:?}", sonuc.failure_reason);
-assert_eq!(sonuc.verified_count, 3);
+        .expect("zincir doğrulanır");
+    assert!(sonuc.is_valid, "zincir bozuldu: {:?}", sonuc.failure_reason);
+    assert_eq!(sonuc.verified_count, 3);
 }
 
 #[test]
@@ -129,7 +130,14 @@ fn test_compute_audit_hash() {
     let previous_hash = GENESIS_HASH;
 
     let hash = AuditService::compute_audit_hash(
-        sequence, timestamp, actor_id, actor_role, action, resource_id, payload_json, previous_hash,
+        sequence,
+        timestamp,
+        actor_id,
+        actor_role,
+        action,
+        resource_id,
+        payload_json,
+        previous_hash,
     );
 
     assert_eq!(hash.len(), 64);
@@ -142,7 +150,8 @@ fn test_compute_audit_hash_karbonik_form_degismez() {
     let second = AuditService::compute_audit_hash(7, "t", "a", "r", "x", "res", "{}", GENESIS_HASH);
     assert_eq!(first, second);
 
-    let different = AuditService::compute_audit_hash(8, "t", "a", "r", "x", "res", "{}", GENESIS_HASH);
+    let different =
+        AuditService::compute_audit_hash(8, "t", "a", "r", "x", "res", "{}", GENESIS_HASH);
     assert_ne!(first, different);
 }
 
@@ -174,10 +183,12 @@ async fn zincir_kayitlari_birbirine_baglanir() {
         .await
         .expect("üçüncü kayıt eklenir");
 
-    let rows = sqlx::query("SELECT sequence, previous_hash, current_hash FROM audit_ledger ORDER BY sequence ASC")
-        .fetch_all(&mut *conn)
-        .await
-        .expect("kayıtlar okunur");
+    let rows = sqlx::query(
+        "SELECT sequence, previous_hash, current_hash FROM audit_ledger ORDER BY sequence ASC",
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .expect("kayıtlar okunur");
     assert_eq!(rows.len(), 3);
     assert_eq!(rows[0].get::<String, _>("previous_hash"), GENESIS_HASH);
     assert_eq!(
@@ -212,16 +223,18 @@ async fn kayit_tenant_kimligini_tasir() {
         .await
         .expect("kayıt eklenir");
 
-    let tenant: String = sqlx::query_scalar("SELECT tenant_id FROM audit_ledger WHERE sequence = 1")
-        .fetch_one(&mut *conn)
-        .await
-        .expect("tenant okunur");
+    let tenant: String =
+        sqlx::query_scalar("SELECT tenant_id FROM audit_ledger WHERE sequence = 1")
+            .fetch_one(&mut *conn)
+            .await
+            .expect("tenant okunur");
     assert_eq!(tenant, "tenant_a");
 
-    let category_value: String = sqlx::query_scalar("SELECT category FROM audit_ledger WHERE sequence = 1")
-        .fetch_one(&mut *conn)
-        .await
-        .expect("kategori okunur");
+    let category_value: String =
+        sqlx::query_scalar("SELECT category FROM audit_ledger WHERE sequence = 1")
+            .fetch_one(&mut *conn)
+            .await
+            .expect("kategori okunur");
     assert_eq!(category_value, category::SIPARIS_MASA);
 }
 
@@ -257,9 +270,10 @@ async fn tetikleyici_guncelleme_ve_silme_islemini_reddeder() {
     drop(lock);
     drop(conn);
 
-    let update = sqlx::query("UPDATE audit_ledger SET actor_id = 'usr_saldirgan' WHERE sequence = 1")
-        .execute(&pool)
-        .await;
+    let update =
+        sqlx::query("UPDATE audit_ledger SET actor_id = 'usr_saldirgan' WHERE sequence = 1")
+            .execute(&pool)
+            .await;
     assert!(update.is_err(), "UPDATE reddedilmeliydi");
 
     let delete = sqlx::query("DELETE FROM audit_ledger WHERE sequence = 1")
@@ -311,10 +325,11 @@ async fn dogrulayici_icerikle_eslesmeyen_hashi_yakalar() {
     drop(lock);
     drop(conn);
 
-    let tip_hash: String = sqlx::query_scalar("SELECT current_hash FROM audit_ledger WHERE sequence = 1")
-        .fetch_one(&pool)
-        .await
-        .expect("uç hash okunur");
+    let tip_hash: String =
+        sqlx::query_scalar("SELECT current_hash FROM audit_ledger WHERE sequence = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("uç hash okunur");
 
     // Zincir bağı doğru, biçimler geçerli; ama current_hash içeriğin
     // hash'i değil. Tetikleyici bunu geçirir, doğrulayıcı yakalamalıdır.
@@ -353,10 +368,11 @@ async fn es_zamanli_yazici_ayni_sequence_i_alamaz() {
     drop(lock);
     drop(conn);
 
-    let tip_hash: String = sqlx::query_scalar("SELECT current_hash FROM audit_ledger WHERE sequence = 1")
-        .fetch_one(&pool)
-        .await
-        .expect("uç hash okunur");
+    let tip_hash: String =
+        sqlx::query_scalar("SELECT current_hash FROM audit_ledger WHERE sequence = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("uç hash okunur");
 
     // İkinci yazıcı aynı sequence'i ve aynı previous_hash'i kullanmayı dener.
     let insert = sqlx::query(
@@ -369,10 +385,11 @@ async fn es_zamanli_yazici_ayni_sequence_i_alamaz() {
     .await;
     assert!(insert.is_ok(), "ilk rakip yazıcı kazanmalı");
 
-    let second_tip: String = sqlx::query_scalar("SELECT current_hash FROM audit_ledger WHERE sequence = 2")
-        .fetch_one(&pool)
-        .await
-        .expect("yeni uç okunur");
+    let second_tip: String =
+        sqlx::query_scalar("SELECT current_hash FROM audit_ledger WHERE sequence = 2")
+            .fetch_one(&pool)
+            .await
+            .expect("yeni uç okunur");
 
     let insert = sqlx::query(
         "INSERT INTO audit_ledger (id, tenant_id, sequence, timestamp, actor_id, actor_role, category, action, resource_id, payload, previous_hash, current_hash, hash_version) \
@@ -427,18 +444,20 @@ async fn hash_surumu_kanonik_formu_etkilemez() {
     drop(lock);
     drop(conn);
 
-    let stored: i64 = sqlx::query_scalar("SELECT hash_version FROM audit_ledger WHERE sequence = 1")
-        .fetch_one(&pool)
-        .await
-        .expect("sürüm okunur");
+    let stored: i64 =
+        sqlx::query_scalar("SELECT hash_version FROM audit_ledger WHERE sequence = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("sürüm okunur");
     assert_eq!(stored, HASH_VERSION);
 
     // Yeni sürümlü bir kayıt yazılsa bile zincir kendi içinde tutarlı kalır:
     // sürüm alanı hash girdisi değildir.
-    let tip_hash: String = sqlx::query_scalar("SELECT current_hash FROM audit_ledger WHERE sequence = 1")
-        .fetch_one(&pool)
-        .await
-        .expect("uç hash okunur");
+    let tip_hash: String =
+        sqlx::query_scalar("SELECT current_hash FROM audit_ledger WHERE sequence = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("uç hash okunur");
     let insert = sqlx::query(
         "INSERT INTO audit_ledger (id, tenant_id, sequence, timestamp, actor_id, actor_role, category, action, resource_id, payload, previous_hash, current_hash, hash_version) \
          VALUES ('ledger_v2', 'tenant_a', 2, '2026-10-02T10:00:00+00:00', 'usr_v2', 'Owner', 'SISTEM', 'system:test', 'x', '{}', ?, ?, 2)",
@@ -463,7 +482,10 @@ async fn tetikleyici_liste_disi_kategoriyi_reddeder() {
     .bind("a".repeat(64))
     .execute(&pool)
     .await;
-    assert!(insert.is_err(), "liste dışı kategori tetikleyici tarafından reddedilmeliydi");
+    assert!(
+        insert.is_err(),
+        "liste dışı kategori tetikleyici tarafından reddedilmeliydi"
+    );
 }
 
 /// Mutfak fişi ilerletme kaydı "Sipariş & Masa" kategorisinde ve aktörün
@@ -498,12 +520,11 @@ async fn kds_fis_ilerletme_kaydi_dongusel_olarak_kaydedilir() {
         .expect("KDS kaydı eklenir");
     drop(lock);
 
-    let row: (String, String, String) = sqlx::query_as(
-        "SELECT category, actor_role, action FROM audit_ledger WHERE sequence = 1",
-    )
-    .fetch_one(&mut *conn)
-    .await
-    .expect("KDS kaydı okunur");
+    let row: (String, String, String) =
+        sqlx::query_as("SELECT category, actor_role, action FROM audit_ledger WHERE sequence = 1")
+            .fetch_one(&mut *conn)
+            .await
+            .expect("KDS kaydı okunur");
     assert_eq!(row.0, category::SIPARIS_MASA);
     assert_eq!(row.1, "KITCHEN");
     assert_eq!(row.2, "kds:ticket_status_advanced");

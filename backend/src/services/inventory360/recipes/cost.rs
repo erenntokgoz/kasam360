@@ -233,9 +233,7 @@ pub async fn calculate_recipe_cost_inner(
     // üretimin maliyetidir, "birim maliyet" diye okunup çarpılırsa maliyet
     // `output_quantity` katı şişer.
     let unit_cost_cents = match (standard_cost_cents, output_quantity) {
-        (Some(tam), miktar) if miktar > 0.0 => {
-            Some(((tam as f64) / miktar).round() as i64)
-        }
+        (Some(tam), miktar) if miktar > 0.0 => Some(((tam as f64) / miktar).round() as i64),
         // Çıktı miktarı sıfırsa birim maliyet tanımsızdır: sıfır yazmak maliyeti
         // yok eder.
         _ => None,

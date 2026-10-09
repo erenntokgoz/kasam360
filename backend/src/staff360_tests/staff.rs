@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 // ---------------------------------------------------------------------------
 // Personel servisi
 // ---------------------------------------------------------------------------
@@ -36,7 +36,9 @@ async fn profil_listesi_yalniz_aktif_personeli_gosterir() {
         .await;
     }
 
-    let liste = staff_service::list_profiles(&p, "tenant_a", true).await.expect("liste");
+    let liste = staff_service::list_profiles(&p, "tenant_a", true)
+        .await
+        .expect("liste");
     assert_eq!(liste.len(), 1, "pasif personel raporda görünmemeli");
     assert_eq!(liste[0].full_name, "Ayşe Y");
 }
@@ -113,7 +115,10 @@ async fn vardiya_plani_bitmesi_baslamadan_once_olamaz() {
         },
     )
     .await;
-    assert!(sonuc.is_err(), "gece vardiyası negatif saat olarak kaydedilmemeli");
+    assert!(
+        sonuc.is_err(),
+        "gece vardiyası negatif saat olarak kaydedilmemeli"
+    );
 }
 
 #[tokio::test]
@@ -127,9 +132,14 @@ async fn izin_cakismasi_reddedilir() {
         end_date: "2026-03-15".into(),
         reason: None,
     };
-    staff_service::request_leave(&p, "tenant_a", &talep).await.expect("ilk talep");
+    staff_service::request_leave(&p, "tenant_a", &talep)
+        .await
+        .expect("ilk talep");
     let cakisma = staff_service::request_leave(&p, "tenant_a", &talep).await;
-    assert!(cakisma.is_err(), "çakışan ikinci izin talebi kabul edilmemeli");
+    assert!(
+        cakisma.is_err(),
+        "çakışan ikinci izin talebi kabul edilmemeli"
+    );
 }
 
 #[tokio::test]
@@ -163,12 +173,19 @@ async fn zimmet_iki_kez_kapatilamaz() {
     let id = staff_service::add_custody(&p, "tenant_a", "usr_1", "Tepsi", 4, None)
         .await
         .expect("zimmet");
-    staff_service::return_custody(&p, "tenant_a", &id, false).await.expect("iade");
+    staff_service::return_custody(&p, "tenant_a", &id, false)
+        .await
+        .expect("iade");
     let sonuc = staff_service::return_custody(&p, "tenant_a", &id, false).await;
     assert!(sonuc.is_err(), "kapalı zimmet tekrar iade edilemez");
 
-    let acik = staff_service::list_custody(&p, "tenant_a", true).await.expect("liste");
-    assert!(acik.is_empty(), "iade edilen kayıt açık listede görünmemeli");
+    let acik = staff_service::list_custody(&p, "tenant_a", true)
+        .await
+        .expect("liste");
+    assert!(
+        acik.is_empty(),
+        "iade edilen kayıt açık listede görünmemeli"
+    );
 }
 
 #[tokio::test]
@@ -279,7 +296,9 @@ async fn dogum_tarihi_bilinmeyen_personel_listelenmez() {
         },
     )
     .await;
-    let liste = staff_service::upcoming_birthdays(&p, "tenant_a", 30).await.expect("liste");
+    let liste = staff_service::upcoming_birthdays(&p, "tenant_a", 30)
+        .await
+        .expect("liste");
     assert!(
         liste.is_empty(),
         "tarihi bilinmeyen kişi için \"doğum günü var\" uydurulmamalı"
@@ -314,12 +333,13 @@ async fn dogum_gunu_ufes_yil_dahil_yalniz_bir_kez_listelenir() {
     let liste = staff_service::upcoming_birthdays(&p, "tenant_a", 400)
         .await
         .expect("liste");
-    assert_eq!(liste.len(), 1, "aynı doğum günü birden fazla kez listelenmemeli");
-    let (_, _, tarih) = &liste[0];
-    assert!(
-        tarih.ends_with("-01-01"),
-        "ay/gün korunmalı: {tarih}"
+    assert_eq!(
+        liste.len(),
+        1,
+        "aynı doğum günü birden fazla kez listelenmemeli"
     );
+    let (_, _, tarih) = &liste[0];
+    assert!(tarih.ends_with("-01-01"), "ay/gün korunmalı: {tarih}");
     // Yıl, bugünün yılı ya da bir sonraki yıl olmalı (geçmişe düşmez).
     let su_an = chrono::Utc::now().date_naive();
     let dogum = chrono::NaiveDate::parse_from_str(tarih, "%Y-%m-%d").expect("tarih");
@@ -329,4 +349,3 @@ async fn dogum_gunu_ufes_yil_dahil_yalniz_bir_kez_listelenir() {
         "beklenmeyen yıl: {tarih}"
     );
 }
-

@@ -35,11 +35,12 @@ pub(crate) async fn seed_default_users(pool: &DbPool) -> Result<(), sqlx::Error>
             // giriş değişimi zorunludur. Doğrulama Argon2 hash
             // üzerinden yapılır; kullanıcı PIN'ini değiştirdiyse
             // bayrak dokunulmaz (idempotent, sessiz sıfırlama yok).
-            let hash: Option<String> = sqlx::query_scalar("SELECT pin_hash FROM users WHERE id = ?")
-                .bind(id)
-                .fetch_optional(pool)
-                .await?
-                .flatten();
+            let hash: Option<String> =
+                sqlx::query_scalar("SELECT pin_hash FROM users WHERE id = ?")
+                    .bind(id)
+                    .fetch_optional(pool)
+                    .await?
+                    .flatten();
             if let Some(hash) = hash {
                 if crate::user_credentials::is_argon2_hash(&hash)
                     && crate::auth::verify_credential(pin, &hash)

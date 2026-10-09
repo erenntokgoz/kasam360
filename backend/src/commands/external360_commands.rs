@@ -84,8 +84,8 @@ mod qr_menu_flag_tests {
     #[test]
     fn bayrak_yoksa_qr_menu_komutlari_404_doner() {
         for moduller in [None, Some(Vec::new()), Some(moduller(&["core"]))] {
-            let hata = require_qr_menu(moduller.as_ref())
-                .expect_err("bayrak yoksa komut 404 dönmeli");
+            let hata =
+                require_qr_menu(moduller.as_ref()).expect_err("bayrak yoksa komut 404 dönmeli");
             assert!(hata.starts_with("NOT_FOUND"), "{}", hata);
         }
     }

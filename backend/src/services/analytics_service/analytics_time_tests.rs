@@ -47,7 +47,14 @@ fn mart() -> super::analytics_types::AnalyticsRange {
     Some(("2026-03-01".to_string(), "2026-03-31".to_string()))
 }
 
-async fn product(pool: &SqlitePool, tenant: &str, id: &str, name: &str, category: &str, price: i64) {
+async fn product(
+    pool: &SqlitePool,
+    tenant: &str,
+    id: &str,
+    name: &str,
+    category: &str,
+    price: i64,
+) {
     sqlx::query(
         "INSERT INTO products (id, tenant_id, name, category_id, price_cents)
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -140,7 +147,9 @@ async fn yogun_saat_her_zaman_yirmi_dort_kova_dondurur() {
     let buckets = peak_hours(&pool, "t1", &mart()).await.expect("okunmali");
     // Veri yoksa bile grafik eksik kova göstermemeli.
     assert_eq!(buckets.len(), 24);
-    assert!(buckets.iter().all(|b| b.revenue_cents == 0 && b.orders == 0));
+    assert!(buckets
+        .iter()
+        .all(|b| b.revenue_cents == 0 && b.orders == 0));
 }
 
 #[tokio::test]
@@ -362,7 +371,9 @@ async fn void_orani_iptal_tutarini_ciroya_oranlar() {
     order(&pool, "t1", "o2", "VOID", "2026-03-10T11:00:00Z").await;
     line(&pool, "t1", "o2", "p1", 1, 20_000).await;
 
-    let v = void_loss_rate(&pool, "t1", &mart()).await.expect("okunmali");
+    let v = void_loss_rate(&pool, "t1", &mart())
+        .await
+        .expect("okunmali");
     assert_eq!(v.total_cents, 100_000);
     assert_eq!(v.voided_cents, 20_000);
     assert_eq!(v.void_rate_percent, Some(20));
@@ -373,7 +384,9 @@ async fn void_orani_iptal_tutarini_ciroya_oranlar() {
 #[tokio::test]
 async fn void_orani_ciro_yoksa_null_dondurur() {
     let pool = test_pool().await;
-    let v = void_loss_rate(&pool, "t1", &mart()).await.expect("okunmali");
+    let v = void_loss_rate(&pool, "t1", &mart())
+        .await
+        .expect("okunmali");
     // "Sıfır kayıp" değil, hesaplanamaz.
     assert_eq!(v.void_rate_percent, None);
     assert_eq!(v.total_cents, 0);
@@ -389,7 +402,9 @@ async fn void_orani_sayaci_ciroyla_ayni_evreni_kullanir() {
     order(&pool, "t1", "o2", "PAID", "2026-03-10T11:00:00Z").await;
     line(&pool, "t1", "o2", "p1", 1, 100_000).await;
 
-    let v = void_loss_rate(&pool, "t1", &mart()).await.expect("okunmali");
+    let v = void_loss_rate(&pool, "t1", &mart())
+        .await
+        .expect("okunmali");
     assert_eq!(v.total_cents, 100_000);
     assert_eq!(v.total_orders, 1);
 }
@@ -401,7 +416,9 @@ async fn void_orani_tenant_yalitimi_yapar() {
     order(&pool, "t2", "o1", "VOID", "2026-03-10T10:00:00Z").await;
     line(&pool, "t2", "o1", "p1", 1, 50_000).await;
 
-    let v = void_loss_rate(&pool, "t1", &mart()).await.expect("okunmali");
+    let v = void_loss_rate(&pool, "t1", &mart())
+        .await
+        .expect("okunmali");
     assert_eq!(v.total_cents, 0);
     assert_eq!(v.void_rate_percent, None);
 }

@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 // ---------------------------------------------------------------------------
 // Maaş
 // ---------------------------------------------------------------------------
@@ -41,8 +41,28 @@ async fn komisyon_kendi_satisindan_hesaplanir() {
     urun(&p, "tenant_a", "a").await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
     kullanici(&p, "tenant_a", "usr_k", "Kasiyer", "CASHIER").await;
-    siparis(&p, "tenant_a", "ord_1", "usr_k", "usr_1", 20_000, "PAID", "2026-03-10 12:00:00").await;
-    siparis(&p, "tenant_a", "ord_2", "usr_k", "usr_1", 10_000, "PAID", "2026-03-11 12:00:00").await;
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_1",
+        "usr_k",
+        "usr_1",
+        20_000,
+        "PAID",
+        "2026-03-10 12:00:00",
+    )
+    .await;
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_2",
+        "usr_k",
+        "usr_1",
+        10_000,
+        "PAID",
+        "2026-03-11 12:00:00",
+    )
+    .await;
 
     payroll_service::set_rule(
         &p,
@@ -65,7 +85,10 @@ async fn komisyon_kendi_satisindan_hesaplanir() {
         .expect("bordro");
     let a = runs[0].amounts.as_ref().expect("tutar");
     // 30.000 kuruş satışın %10'u = 3.000 kuruş.
-    assert_eq!(a.commission_cents, 3_000, "komisyon yanlış tabandan hesaplandı");
+    assert_eq!(
+        a.commission_cents, 3_000,
+        "komisyon yanlış tabandan hesaplandı"
+    );
     assert_eq!(a.gross_cents, 3_000);
 }
 
@@ -159,9 +182,14 @@ async fn müdür_maas_tutarini_gormez() {
     .expect("kural");
 
     // Müdür görünümü: kural ve model görünür, tutar `None`.
-    let kurallar = payroll_service::list_rules(&p, "tenant_a", false).await.expect("kurallar");
+    let kurallar = payroll_service::list_rules(&p, "tenant_a", false)
+        .await
+        .expect("kurallar");
     assert_eq!(kurallar.len(), 1, "müdür kural listesini görebilmeli");
-    assert_eq!(kurallar[0].base_salary_cents, 0, "gizli görünümde tutar sıfırlanır");
+    assert_eq!(
+        kurallar[0].base_salary_cents, 0,
+        "gizli görünümde tutar sıfırlanır"
+    );
     assert!(kurallar[0].base_salary_cents == 0);
 
     let bordro = payroll_service::run_payroll(&p, "tenant_a", "2026-03", false)
@@ -244,7 +272,9 @@ async fn ayni_donem_bordro_yeniden_hesaplanabilir() {
     )
     .await
     .expect("kural");
-    payroll_service::run_payroll(&p, "tenant_a", "2026-03", true).await.expect("bordro");
+    payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+        .await
+        .expect("bordro");
     // Maaş değişti: yeniden hesapta tek satır kalmalı, ikiye katlanmamalı.
     payroll_service::set_rule(
         &p,
@@ -261,7 +291,9 @@ async fn ayni_donem_bordro_yeniden_hesaplanabilir() {
     )
     .await
     .expect("kural");
-    payroll_service::run_payroll(&p, "tenant_a", "2026-03", true).await.expect("bordro");
+    payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+        .await
+        .expect("bordro");
 
     let satir: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM payroll_runs WHERE tenant_id = 'tenant_a' AND user_id = 'usr_1' AND period = '2026-03'",
@@ -278,4 +310,3 @@ async fn ayni_donem_bordro_yeniden_hesaplanabilir() {
     .expect("brüt");
     assert_eq!(brut, 30_000, "güncel maaş uygulanmamış");
 }
-

@@ -3,7 +3,10 @@
 //! The database stores only an Argon2 PHC string.  Raw PINs/passwords must
 //! never be selected from, or returned by, an IPC command.
 
-use argon2::{password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString}, Argon2};
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
 
 pub fn hash_credential(credential: &str) -> Result<String, String> {
     if credential.trim().is_empty() {
@@ -24,7 +27,11 @@ pub fn verify_credential(credential: &str, encoded_hash: &str) -> bool {
 
     PasswordHash::new(encoded_hash)
         .ok()
-        .and_then(|parsed| Argon2::default().verify_password(credential.as_bytes(), &parsed).ok())
+        .and_then(|parsed| {
+            Argon2::default()
+                .verify_password(credential.as_bytes(), &parsed)
+                .ok()
+        })
         .is_some()
 }
 

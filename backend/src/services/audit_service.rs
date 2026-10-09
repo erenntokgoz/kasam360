@@ -27,7 +27,14 @@ pub mod category {
     pub const GUVENLIK: &str = "GUVENLIK";
 
     pub const ALL: [&str; 8] = [
-        SIPARIS_MASA, ODEME, FINANS, PERSONEL, MENU, YETKI, SISTEM, GUVENLIK,
+        SIPARIS_MASA,
+        ODEME,
+        FINANS,
+        PERSONEL,
+        MENU,
+        YETKI,
+        SISTEM,
+        GUVENLIK,
     ];
 
     pub fn is_valid(value: &str) -> bool {
@@ -131,7 +138,14 @@ impl AuditService {
     ) -> String {
         let canonical = format!(
             "{}:{}:{}:{}:{}:{}:{}:{}",
-            sequence, timestamp, actor_id, actor_role, action, resource_id, payload_json, previous_hash
+            sequence,
+            timestamp,
+            actor_id,
+            actor_role,
+            action,
+            resource_id,
+            payload_json,
+            previous_hash
         );
         let mut hasher = Sha256::new();
         hasher.update(canonical.as_bytes());
@@ -170,8 +184,7 @@ impl AuditService {
             None => (1, GENESIS_HASH.to_string()),
         };
 
-        let payload_json =
-            serde_json::to_string(&ctx.payload).map_err(|e| e.to_string())?;
+        let payload_json = serde_json::to_string(&ctx.payload).map_err(|e| e.to_string())?;
 
         let current_hash = Self::compute_audit_hash(
             next_seq,
@@ -214,7 +227,9 @@ impl AuditService {
 
     /// Tüm zinciri doğrular. Sadece `sequence` ilerlemesiyle toplu okuma yapar,
     /// böylece defter ne kadar büyük olursa olsun bellek sabit kalır.
-    pub async fn verify_chain(conn: &mut sqlx::SqliteConnection) -> Result<ChainVerification, String> {
+    pub async fn verify_chain(
+        conn: &mut sqlx::SqliteConnection,
+    ) -> Result<ChainVerification, String> {
         let mut previous = GENESIS_HASH.to_string();
         let mut cursor: i64 = 0;
         let mut verified_count: i64 = 0;
@@ -301,7 +316,6 @@ impl AuditService {
         })
     }
 }
-
 
 #[cfg(test)]
 #[path = "audit_service_tests.rs"]

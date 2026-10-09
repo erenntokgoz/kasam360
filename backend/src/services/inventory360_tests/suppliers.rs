@@ -1,4 +1,4 @@
-﻿//! Faz 12 · Tedarikçi ve satın alma testleri.
+//! Faz 12 · Tedarikçi ve satın alma testleri.
 //!
 //! Kapsam: tedarikçi fiyat karşılaştırmasının en ucuzu işaretlemesi, negatif
 //! alış fiyatının reddi, teslim almanın FIFO partisi açması, fiyatı girilmemiş
@@ -77,9 +77,13 @@ async fn fiyat_karsilastirmasi_en_ucuzu_isaretler_ve_farki_hesaplar() {
         .await
         .expect("tedarikci olusmali");
 
-    set_supplier_product(&mut conn, T, fiyat_girdisi(&pahali.id, "prd_1", 4200, false))
-        .await
-        .expect("fiyat yazilmali");
+    set_supplier_product(
+        &mut conn,
+        T,
+        fiyat_girdisi(&pahali.id, "prd_1", 4200, false),
+    )
+    .await
+    .expect("fiyat yazilmali");
     set_supplier_product(&mut conn, T, fiyat_girdisi(&ucuz.id, "prd_1", 3800, false))
         .await
         .expect("fiyat yazilmali");
@@ -89,7 +93,10 @@ async fn fiyat_karsilastirmasi_en_ucuzu_isaretler_ve_farki_hesaplar() {
         .expect("karsilastirma calismali");
 
     assert_eq!(karsilastirma.compared_count, 2);
-    assert_eq!(karsilastirma.cheapest_supplier_id.as_deref(), Some(ucuz.id.as_str()));
+    assert_eq!(
+        karsilastirma.cheapest_supplier_id.as_deref(),
+        Some(ucuz.id.as_str())
+    );
     assert_eq!(karsilastirma.cheapest_unit_cost_cents, Some(3800));
     assert_eq!(karsilastirma.rows.len(), 2, "fiyata gore siralanmali");
     assert_eq!(karsilastirma.rows[0].supplier_name, "Ucuz");
@@ -116,9 +123,13 @@ async fn fiyati_girilmemis_tedarikci_karsilastirmaya_girmez() {
     upsert_supplier(&mut conn, T, AKTOR, tedarikci_girdisi("Fiyatsiz"))
         .await
         .expect("tedarikci olusmali");
-    set_supplier_product(&mut conn, T, fiyat_girdisi(&fiyatlı.id, "prd_1", 3800, false))
-        .await
-        .expect("fiyat yazilmali");
+    set_supplier_product(
+        &mut conn,
+        T,
+        fiyat_girdisi(&fiyatlı.id, "prd_1", 3800, false),
+    )
+    .await
+    .expect("fiyat yazilmali");
 
     let karsilastirma = compare_supplier_prices(&mut conn, T, "prd_1", None)
         .await
@@ -148,7 +159,11 @@ async fn fiyati_girilmemis_tedarikci_karsilastirmaya_girmez() {
         .expect("karsilastirma calismali");
     assert_eq!(boses.compared_count, 0);
     assert_eq!(boses.cheapest_unit_cost_cents, None);
-    assert_ne!(boses.cheapest_unit_cost_cents, Some(0), "sifir fiyat uydurulmamali");
+    assert_ne!(
+        boses.cheapest_unit_cost_cents,
+        Some(0),
+        "sifir fiyat uydurulmamali"
+    );
     assert_eq!(boses.cheapest_supplier_id, None);
 }
 
@@ -161,9 +176,13 @@ async fn negatif_alis_fiyati_reddedilir() {
         .await
         .expect("tedarikci olusmali");
 
-    let negatif = set_supplier_product(&mut conn, T, fiyat_girdisi(&tedarikci.id, "prd_1", -100, false))
-        .await
-        .expect_err("negatif alis fiyati reddedilmeli");
+    let negatif = set_supplier_product(
+        &mut conn,
+        T,
+        fiyat_girdisi(&tedarikci.id, "prd_1", -100, false),
+    )
+    .await
+    .expect_err("negatif alis fiyati reddedilmeli");
     assert!(negatif.contains("negatif"), "neden belirtilmeli: {negatif}");
 
     let sifir_miktar = set_supplier_product(
@@ -176,7 +195,10 @@ async fn negatif_alis_fiyati_reddedilir() {
     )
     .await
     .expect_err("sifir minimum siparis miktari reddedilmeli");
-    assert!(sifir_miktar.contains("büyük"), "neden belirtilmeli: {sifir_miktar}");
+    assert!(
+        sifir_miktar.contains("büyük"),
+        "neden belirtilmeli: {sifir_miktar}"
+    );
 
     let negatif_vade = upsert_supplier(
         &mut conn,
@@ -189,7 +211,10 @@ async fn negatif_alis_fiyati_reddedilir() {
     )
     .await
     .expect_err("negatif vade reddedilmeli");
-    assert!(negatif_vade.contains("negatif"), "neden belirtilmeli: {negatif_vade}");
+    assert!(
+        negatif_vade.contains("negatif"),
+        "neden belirtilmeli: {negatif_vade}"
+    );
 
     let sayi: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM supplier_products")
         .fetch_one(&mut conn)
@@ -199,12 +224,21 @@ async fn negatif_alis_fiyati_reddedilir() {
 
     // Sipariş kalemindeki negatif fiyat da reddedilir: sipariş anındaki fiyat
     // güvenilir kabul edilir.
-    set_supplier_product(&mut conn, T, fiyat_girdisi(&tedarikci.id, "prd_1", 3800, false))
-        .await
-        .expect("fiyat yazilmali");
-    let siparis = create_purchase_order(&mut conn, T, AKTOR, siparis_girdisi(&tedarikci.id, "prd_1", 5.0, Some(-50)))
-        .await
-        .expect_err("siparis kaleminde negatif fiyat reddedilmeli");
+    set_supplier_product(
+        &mut conn,
+        T,
+        fiyat_girdisi(&tedarikci.id, "prd_1", 3800, false),
+    )
+    .await
+    .expect("fiyat yazilmali");
+    let siparis = create_purchase_order(
+        &mut conn,
+        T,
+        AKTOR,
+        siparis_girdisi(&tedarikci.id, "prd_1", 5.0, Some(-50)),
+    )
+    .await
+    .expect_err("siparis kaleminde negatif fiyat reddedilmeli");
     assert!(siparis.contains("negatif"), "neden belirtilmeli: {siparis}");
 }
 
@@ -257,9 +291,14 @@ async fn siparisi_teslim_almak_fifo_partisi_acar_ve_stogu_gunceller() {
         .await
         .expect("tedarikci olusmali");
 
-    let siparis = create_purchase_order(&mut conn, T, AKTOR, siparis_girdisi(&tedarikci.id, "prd_1", 10.0, Some(3800)))
-        .await
-        .expect("siparis acilmali");
+    let siparis = create_purchase_order(
+        &mut conn,
+        T,
+        AKTOR,
+        siparis_girdisi(&tedarikci.id, "prd_1", 10.0, Some(3800)),
+    )
+    .await
+    .expect("siparis acilmali");
     assert_eq!(siparis.status, "TASI");
     assert_eq!(siparis.total_cents, 38_000);
 
@@ -276,7 +315,9 @@ async fn siparisi_teslim_almak_fifo_partisi_acar_ve_stogu_gunceller() {
     .fetch_one(&mut conn)
     .await
     .expect("parti acilmali");
-    let miktar: f64 = parti.try_get("remaining_quantity").expect("miktar okunmali");
+    let miktar: f64 = parti
+        .try_get("remaining_quantity")
+        .expect("miktar okunmali");
     let birim: i64 = parti.try_get("unit_cost_cents").expect("maliyet okunmali");
     assert_eq!(miktar, 10.0);
     assert_eq!(birim, 3800);
@@ -319,15 +360,27 @@ async fn fiyati_girilmemis_kalemli_siparis_reddedilir() {
     let tedarikci = upsert_supplier(&mut conn, T, AKTOR, tedarikci_girdisi("Tedarikci"))
         .await
         .expect("tedarikci olusmali");
-    set_supplier_product(&mut conn, T, fiyat_girdisi(&tedarikci.id, "prd_1", 3800, false))
-        .await
-        .expect("fiyat yazilmali");
+    set_supplier_product(
+        &mut conn,
+        T,
+        fiyat_girdisi(&tedarikci.id, "prd_1", 3800, false),
+    )
+    .await
+    .expect("fiyat yazilmali");
 
     // Çay için tedarikçi fiyatı girilmemiş: toplam sıfır çıkmasın diye reddedilir.
-    let belirsiz = create_purchase_order(&mut conn, T, AKTOR, siparis_girdisi(&tedarikci.id, "prd_2", 10.0, None))
-        .await
-        .expect_err("fiyati girilmemis kalem reddedilmeli");
-    assert!(belirsiz.contains("girilmemiş"), "neden belirtilmeli: {belirsiz}");
+    let belirsiz = create_purchase_order(
+        &mut conn,
+        T,
+        AKTOR,
+        siparis_girdisi(&tedarikci.id, "prd_2", 10.0, None),
+    )
+    .await
+    .expect_err("fiyati girilmemis kalem reddedilmeli");
+    assert!(
+        belirsiz.contains("girilmemiş"),
+        "neden belirtilmeli: {belirsiz}"
+    );
 
     let baslik_sayisi: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM purchase_orders")
         .fetch_one(&mut conn)
@@ -349,7 +402,10 @@ async fn fiyati_girilmemis_kalemli_siparis_reddedilir() {
     )
     .await
     .expect_err("kalemsiz siparis reddedilmeli");
-    assert!(bos_kalem.contains("kalem"), "neden belirtilmeli: {bos_kalem}");
+    assert!(
+        bos_kalem.contains("kalem"),
+        "neden belirtilmeli: {bos_kalem}"
+    );
 
     let sifir_miktar = create_purchase_order(
         &mut conn,
@@ -359,7 +415,10 @@ async fn fiyati_girilmemis_kalemli_siparis_reddedilir() {
     )
     .await
     .expect_err("sifir miktarli siparis reddedilmeli");
-    assert!(sifir_miktar.contains("büyük"), "neden belirtilmeli: {sifir_miktar}");
+    assert!(
+        sifir_miktar.contains("büyük"),
+        "neden belirtilmeli: {sifir_miktar}"
+    );
 
     let bos_numara = create_purchase_order(
         &mut conn,
@@ -372,7 +431,10 @@ async fn fiyati_girilmemis_kalemli_siparis_reddedilir() {
     )
     .await
     .expect_err("bos siparis numarasi reddedilmeli");
-    assert!(bos_numara.contains("numarası"), "neden belirtilmeli: {bos_numara}");
+    assert!(
+        bos_numara.contains("numarası"),
+        "neden belirtilmeli: {bos_numara}"
+    );
 }
 
 #[tokio::test]
@@ -389,16 +451,29 @@ async fn siparisi_teblig_eden_baska_kiraci_yazamaz() {
         .expect("tedarikci olusmali");
 
     // Her işletme kendi ürününe kendi tedarikçi fiyatını yazar.
-    set_supplier_product(&mut conn, T, fiyat_girdisi(&benim_tedarikci.id, &urun_a, 3800, false))
-        .await
-        .expect("fiyat yazilmali");
-    set_supplier_product(&mut conn, T2, fiyat_girdisi(&yabanci_tedarikci.id, &urun_b, 100, false))
-        .await
-        .expect("fiyat yazilmali");
+    set_supplier_product(
+        &mut conn,
+        T,
+        fiyat_girdisi(&benim_tedarikci.id, &urun_a, 3800, false),
+    )
+    .await
+    .expect("fiyat yazilmali");
+    set_supplier_product(
+        &mut conn,
+        T2,
+        fiyat_girdisi(&yabanci_tedarikci.id, &urun_b, 100, false),
+    )
+    .await
+    .expect("fiyat yazilmali");
 
-    let siparis = create_purchase_order(&mut conn, T, AKTOR, siparis_girdisi(&benim_tedarikci.id, &urun_a, 10.0, Some(3800)))
-        .await
-        .expect("siparis acilmali");
+    let siparis = create_purchase_order(
+        &mut conn,
+        T,
+        AKTOR,
+        siparis_girdisi(&benim_tedarikci.id, &urun_a, 10.0, Some(3800)),
+    )
+    .await
+    .expect("siparis acilmali");
 
     // Yabancı işletmenin kendi ürününde kendi fiyatı geçerli; bizim ürünümüzde
     // yabancı tedarikçinin 100 kuruşluk fiyatı görünmemeli.
@@ -417,16 +492,31 @@ async fn siparisi_teblig_eden_baska_kiraci_yazamaz() {
     let hirsizlik = receive_purchase_order(&mut conn, T2, &siparis.id)
         .await
         .expect_err("yabanci siparis teslim alamamamali");
-    assert!(hirsizlik.contains("NOT_FOUND") || hirsizlik.contains("bulunam"), "neden: {hirsizlik}");
+    assert!(
+        hirsizlik.contains("NOT_FOUND") || hirsizlik.contains("bulunam"),
+        "neden: {hirsizlik}"
+    );
 
-    let sizinti = create_purchase_order(&mut conn, T2, AKTOR, siparis_girdisi(&yabanci_tedarikci.id, &urun_a, 5.0, Some(100)))
-        .await
-        .expect_err("yabanci urun siparis kalemi olamamali");
-    assert!(sizinti.contains("NOT_FOUND") || sizinti.contains("bulunam"), "neden: {sizinti}");
+    let sizinti = create_purchase_order(
+        &mut conn,
+        T2,
+        AKTOR,
+        siparis_girdisi(&yabanci_tedarikci.id, &urun_a, 5.0, Some(100)),
+    )
+    .await
+    .expect_err("yabanci urun siparis kalemi olamamali");
+    assert!(
+        sizinti.contains("NOT_FOUND") || sizinti.contains("bulunam"),
+        "neden: {sizinti}"
+    );
 
-    let fiyat_sizintisi = set_supplier_product(&mut conn, T2, fiyat_girdisi(&yabanci_tedarikci.id, &urun_a, 100, false))
-        .await
-        .expect_err("yabanci urune fiyat yazilamamali");
+    let fiyat_sizintisi = set_supplier_product(
+        &mut conn,
+        T2,
+        fiyat_girdisi(&yabanci_tedarikci.id, &urun_a, 100, false),
+    )
+    .await
+    .expect_err("yabanci urune fiyat yazilamamali");
     assert!(
         fiyat_sizintisi.contains("NOT_FOUND") || fiyat_sizintisi.contains("bulunam"),
         "neden: {fiyat_sizintisi}"
@@ -437,5 +527,8 @@ async fn siparisi_teblig_eden_baska_kiraci_yazamaz() {
         .fetch_one(&mut conn)
         .await
         .expect("siparis okunmali");
-    assert_eq!(durum, "TASI", "basarisiz teblig siparis durumunu degistirmemeli");
+    assert_eq!(
+        durum, "TASI",
+        "basarisiz teblig siparis durumunu degistirmemeli"
+    );
 }

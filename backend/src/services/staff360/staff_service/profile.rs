@@ -1,4 +1,4 @@
-﻿//! Personel profili servisi: profil kaydı ve doğum günü listesi.
+//! Personel profili servisi: profil kaydı ve doğum günü listesi.
 //!
 //! Maaş gizliliği (AGENTS.md §3.2): maaş kolonları servis tarafından taşınır
 //! ama `can_view_amounts` yetkisi yoksa `None` olarak döner. `0` bir maaş
@@ -44,9 +44,7 @@ pub async fn list_profiles(
             phone: r.try_get("phone").map_err(|e| e.to_string())?,
             national_id: r.try_get("national_id").map_err(|e| e.to_string())?,
             address: r.try_get("address").map_err(|e| e.to_string())?,
-            emergency_contact: r
-                .try_get("emergency_contact")
-                .map_err(|e| e.to_string())?,
+            emergency_contact: r.try_get("emergency_contact").map_err(|e| e.to_string())?,
             notes: r.try_get("notes").map_err(|e| e.to_string())?,
         });
     }
@@ -66,13 +64,14 @@ pub async fn upsert_profile(
     can_write_amounts: bool,
     input: &StaffProfileInput,
 ) -> Result<(), String> {
-    let exists: Option<i64> =
-        sqlx::query_scalar("SELECT 1 FROM users WHERE tenant_id = ?1 AND id = ?2 AND is_active = 1")
-            .bind(tenant_id)
-            .bind(&input.user_id)
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+    let exists: Option<i64> = sqlx::query_scalar(
+        "SELECT 1 FROM users WHERE tenant_id = ?1 AND id = ?2 AND is_active = 1",
+    )
+    .bind(tenant_id)
+    .bind(&input.user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?;
     if exists.is_none() {
         return Err(format!("kullanici bulunamadi: {}", input.user_id));
     }
@@ -193,8 +192,9 @@ pub async fn upcoming_birthdays(
             let yil = today.year() + 1;
             next = match NaiveDate::from_ymd_opt(yil, birth.month(), birth.day()) {
                 Some(d) => d,
-                None => NaiveDate::from_ymd_opt(yil, birth.month(), birth.day() - 1)
-                    .unwrap_or(next),
+                None => {
+                    NaiveDate::from_ymd_opt(yil, birth.month(), birth.day() - 1).unwrap_or(next)
+                }
             };
         }
         let fark = (next - today).num_days();
@@ -208,4 +208,3 @@ pub async fn upcoming_birthdays(
     }
     Ok(out)
 }
-

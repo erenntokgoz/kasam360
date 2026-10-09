@@ -9,7 +9,9 @@
 use crate::commands::command_helpers::audit_actor;
 use crate::db::DbPool;
 use crate::id_generator::generate_id;
-use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant, require_ledger_write};
+use crate::ledger_commands::guard::{
+    require_ledger_read, require_ledger_tenant, require_ledger_write,
+};
 use crate::services::audit_service::{self, AuditContext, AuditService};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -140,7 +142,11 @@ pub async fn get_directories(
          WHERE d.tenant_id = ?{} 
          ORDER BY d.name ASC",
         BALANCE_SUBQUERY,
-        if directory_type.is_some() { " AND d.type = ?" } else { "" }
+        if directory_type.is_some() {
+            " AND d.type = ?"
+        } else {
+            ""
+        }
     );
 
     let mut query = sqlx::query(&sql).bind(&tid);
@@ -148,7 +154,10 @@ pub async fn get_directories(
         query = query.bind(dtype);
     }
 
-    let rows = query.fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
+    let rows = query
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut result = Vec::with_capacity(rows.len());
     for r in rows {

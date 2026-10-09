@@ -21,9 +21,7 @@ use sqlx::SqlitePool;
 
 use analytics_types::{AnalyticsMetrics, AnalyticsRange};
 
-pub use analytics_product::{
-    bcg_classify, bcg_counts, combinations, median, product_margins,
-};
+pub use analytics_product::{bcg_classify, bcg_counts, combinations, median, product_margins};
 pub use analytics_time::{
     competitor_price_gaps, current_month, monthly_target_status, peak_hours, void_loss_rate,
 };
@@ -37,12 +35,12 @@ pub use analytics_types::{
 ///
 /// `min_support` kombinasyon eşiğidir; 0 veya negatif değer SQL'de 1'e
 /// çekilir, aksi halde "her ürün her ürünle birlikte" gürültüsü rapora girer.
-pub async fn analytics_metrics(pool: &SqlitePool,
+pub async fn analytics_metrics(
+    pool: &SqlitePool,
     tenant_id: &str,
     range: &AnalyticsRange,
     min_support: i64,
-) -> Result<AnalyticsMetrics, String>
-{
+) -> Result<AnalyticsMetrics, String> {
     let margins = product_margins(pool, tenant_id, range).await?;
     let bcg_matrix = bcg_classify(&margins)?;
     let counts = bcg_counts(&bcg_matrix);

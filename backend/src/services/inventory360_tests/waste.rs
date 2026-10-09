@@ -84,7 +84,11 @@ async fn stoktan_fazla_fire_maliyeti_bilinmiyor_olarak_isaretlenir() {
         .expect("fire kaydedilmeli");
     assert_eq!(partsiz.total_cost_cents, None);
     assert_eq!(partsiz.unit_cost_cents, None);
-    assert_ne!(partsiz.total_cost_cents, Some(0), "maliyet bilinmiyorsa sifir yazilmamali");
+    assert_ne!(
+        partsiz.total_cost_cents,
+        Some(0),
+        "maliyet bilinmiyorsa sifir yazilmamali"
+    );
 
     // Stoğu aşan fire: kısmen karşılanır, kalan miktarın maliyeti bilinmez.
     let asim = record_waste(&mut conn, T, AKTOR, fire_girdisi("prd_1", "BOZULDU", 10.0))
@@ -98,12 +102,17 @@ async fn stoktan_fazla_fire_maliyeti_bilinmiyor_olarak_isaretlenir() {
         "stoktan fazla fire raporlanmali: {uyari}"
     );
 
-    let kayitlar = list_waste_records(&mut conn, T, None).await.expect("kayitlar okunmali");
+    let kayitlar = list_waste_records(&mut conn, T, None)
+        .await
+        .expect("kayitlar okunmali");
     assert_eq!(kayitlar.len(), 2);
     // Sıralama zaman damgasına göre; hangisinin önce olduğuna değil, ikisinin de
     // raporda bulunduğuna bakılır.
     let adlar: Vec<&str> = kayitlar.iter().map(|k| k.product_name.as_str()).collect();
-    assert!(adlar.contains(&"Çay") && adlar.contains(&"Süt"), "kayitlar eksik: {adlar:?}");
+    assert!(
+        adlar.contains(&"Çay") && adlar.contains(&"Süt"),
+        "kayitlar eksik: {adlar:?}"
+    );
 
     nullable_kolon_dogrula(&mut conn, T).await;
 }
@@ -115,10 +124,18 @@ async fn gecersiz_fire_gerekcesi_ve_miktari_reddedilir() {
     urun_ekle(&mut conn, T, "prd_1", "Süt", 1500).await;
     parti_ekle(&mut conn, T, "bat_1", "prd_1", 5.0, 3000, None).await;
 
-    let gerekce = record_waste(&mut conn, T, AKTOR, fire_girdisi("prd_1", "BILINMIYOR", 1.0))
-        .await
-        .expect_err("gecersiz gerekce reddedilmeli");
-    assert!(gerekce.contains("geçersiz"), "izin verilenler yazilmali: {gerekce}");
+    let gerekce = record_waste(
+        &mut conn,
+        T,
+        AKTOR,
+        fire_girdisi("prd_1", "BILINMIYOR", 1.0),
+    )
+    .await
+    .expect_err("gecersiz gerekce reddedilmeli");
+    assert!(
+        gerekce.contains("geçersiz"),
+        "izin verilenler yazilmali: {gerekce}"
+    );
 
     // Frontend'in gönderdiği gerekçeler backend kümesinde yok: sözleşme
     // ayrışması sessiz kalmamalı, hata mesajı izin verilenleri listeler.
@@ -126,13 +143,21 @@ async fn gecersiz_fire_gerekcesi_ve_miktari_reddedilir() {
         let hata = record_waste(&mut conn, T, AKTOR, fire_girdisi("prd_1", uyumsuz, 1.0))
             .await
             .expect_err("sozlesme disi gerekce reddedilmeli");
-        assert!(hata.contains("BOZULDU"), "izin verilenler yazilmali: {hata}");
+        assert!(
+            hata.contains("BOZULDU"),
+            "izin verilenler yazilmali: {hata}"
+        );
     }
 
     for miktar in [0.0, -1.0, f64::NAN] {
-        let hata = record_waste(&mut conn, T, AKTOR, fire_girdisi("prd_1", "BOZULDU", miktar))
-            .await
-            .expect_err("gecersiz miktar reddedilmeli");
+        let hata = record_waste(
+            &mut conn,
+            T,
+            AKTOR,
+            fire_girdisi("prd_1", "BOZULDU", miktar),
+        )
+        .await
+        .expect_err("gecersiz miktar reddedilmeli");
         assert!(hata.contains("büyük"), "neden belirtilmeli: {hata}");
     }
 
@@ -170,7 +195,9 @@ async fn kor_sayimda_beklenen_miktar_sayim_sirasinda_gorunmez() {
 
     // Beklenen miktar yalnız kapanışta hesaplanır: sayan kişi kendi ölçümüne
     // göre yazmalıdır.
-    let acik = get_stock_count(&mut conn, T, &sayim.id).await.expect("sayim okunmali");
+    let acik = get_stock_count(&mut conn, T, &sayim.id)
+        .await
+        .expect("sayim okunmali");
     assert_eq!(acik.lines.len(), 1);
     assert_eq!(acik.lines[0].counted_quantity, 18.0);
     assert_eq!(acik.lines[0].expected_quantity, None);
@@ -190,7 +217,9 @@ async fn kor_sayimda_beklenen_miktar_sayim_sirasinda_gorunmez() {
     record_count_line(&mut conn, T, &sayim.id, "prd_1", 19.0, AKTOR)
         .await
         .expect("satir guncellenmeli");
-    let tekrar = get_stock_count(&mut conn, T, &sayim.id).await.expect("sayim okunmali");
+    let tekrar = get_stock_count(&mut conn, T, &sayim.id)
+        .await
+        .expect("sayim okunmali");
     assert_eq!(tekrar.lines.len(), 1);
     assert_eq!(tekrar.lines[0].counted_quantity, 19.0);
 }
@@ -234,7 +263,12 @@ async fn kor_sayim_kapanisi_farki_hesaplar_ve_stogu_gunceller() {
     .await
     .expect("hareket yazilmali");
     let miktar: f64 = hareket.try_get("quantity").expect("miktar okunmali");
-    assert_eq!(hareket.try_get::<String, _>("movement_type").expect("kolon okunmali"), "ADJUST");
+    assert_eq!(
+        hareket
+            .try_get::<String, _>("movement_type")
+            .expect("kolon okunmali"),
+        "ADJUST"
+    );
     assert_eq!(miktar, -3.0, "hareket defteri farkla eslesmeli");
 
     // Kapanmış sayıma satır girilemez ve yeniden kapatılamaz.
@@ -247,7 +281,9 @@ async fn kor_sayim_kapanisi_farki_hesaplar_ve_stogu_gunceller() {
         .expect_err("kapali sayim tekrar kapatilamamali");
     assert!(tekrar.contains("CONFLICT"), "neden belirtilmeli: {tekrar}");
 
-    let sayimlar = list_stock_counts(&mut conn, T).await.expect("sayimlar okunmali");
+    let sayimlar = list_stock_counts(&mut conn, T)
+        .await
+        .expect("sayimlar okunmali");
     assert_eq!(sayimlar.len(), 1);
 }
 
@@ -367,7 +403,9 @@ async fn satirsiz_kor_sayim_kapatilamaz() {
     assert!(hata.contains("satır"), "neden belirtilmeli: {hata}");
 
     // Sayım hâlâ açık: reddedilen kapanış durumu bozmamalı.
-    let acik = get_stock_count(&mut conn, T, &sayim.id).await.expect("sayim okunmali");
+    let acik = get_stock_count(&mut conn, T, &sayim.id)
+        .await
+        .expect("sayim okunmali");
     assert_eq!(acik.status, "ACIK");
 
     // Aynı işletmede ikinci açık sayım açılamaz.
@@ -419,9 +457,14 @@ async fn baska_kiracinin_sayimina_satir_yazilamaz() {
         "neden: {kapatma}"
     );
 
-    let yabanci_fire = record_waste(&mut conn, T2, AKTOR, fire_girdisi("prd_benim", "KIRILDI", 1.0))
-        .await
-        .expect_err("yabanci urun fire kaydi yazilamamali");
+    let yabanci_fire = record_waste(
+        &mut conn,
+        T2,
+        AKTOR,
+        fire_girdisi("prd_benim", "KIRILDI", 1.0),
+    )
+    .await
+    .expect_err("yabanci urun fire kaydi yazilamamali");
     assert!(
         yabanci_fire.contains("NOT_FOUND") || yabanci_fire.contains("bulunam"),
         "neden: {yabanci_fire}"
@@ -435,6 +478,8 @@ async fn baska_kiracinin_sayimina_satir_yazilamaz() {
     .expect("parti okunmali");
     assert_eq!(parti_kalan, 20.0, "basarisiz cagrilar stoğa dokunmamali");
 
-    let sayimlar = list_stock_counts(&mut conn, T2).await.expect("sayimlar okunmali");
+    let sayimlar = list_stock_counts(&mut conn, T2)
+        .await
+        .expect("sayimlar okunmali");
     assert!(sayimlar.is_empty(), "yabanci isletmede sayim gorunmemeli");
 }

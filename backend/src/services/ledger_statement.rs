@@ -66,15 +66,13 @@ pub async fn directory_statement(
     from_date: &str,
     to_date: &str,
 ) -> Result<DirectoryStatement, String> {
-    let dir = sqlx::query(
-        "SELECT name, type FROM directories WHERE id = ? AND tenant_id = ?",
-    )
-    .bind(directory_id)
-    .bind(tenant_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("Cari kart okunamadı: {}", e))?
-    .ok_or_else(|| "NOT_FOUND: cari kart bulunamadı".to_string())?;
+    let dir = sqlx::query("SELECT name, type FROM directories WHERE id = ? AND tenant_id = ?")
+        .bind(directory_id)
+        .bind(tenant_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| format!("Cari kart okunamadı: {}", e))?
+        .ok_or_else(|| "NOT_FOUND: cari kart bulunamadı".to_string())?;
 
     let directory_name: String = dir.try_get("name").map_err(|e| e.to_string())?;
     let directory_type: String = dir.try_get("type").map_err(|e| e.to_string())?;
@@ -139,7 +137,11 @@ pub async fn directory_statement(
         let debt_type: String = r.try_get("type").map_err(|e| e.to_string())?;
         let amount: i64 = r.try_get("total_amount_cents").map_err(|e| e.to_string())?;
         // GIVEN (bize alacak) bakiyeyi artırır, TAKEN (bizim borcumuz) azaltır.
-        let signed = if debt_type == "GIVEN" { amount } else { -amount };
+        let signed = if debt_type == "GIVEN" {
+            amount
+        } else {
+            -amount
+        };
         running += signed;
         if signed > 0 {
             total_debit_cents += signed;
@@ -162,7 +164,11 @@ pub async fn directory_statement(
         let method: String = r.try_get("payment_method").map_err(|e| e.to_string())?;
         // GIVEN tahsilatı (müşteri bize ödüyor) bakiyeyi azaltır;
         // TAKEN tediyesi (biz toptancıya ödüyoruz) artırır.
-        let signed = if debt_type == "GIVEN" { -amount } else { amount };
+        let signed = if debt_type == "GIVEN" {
+            -amount
+        } else {
+            amount
+        };
         running += signed;
         if signed > 0 {
             total_debit_cents += signed;
@@ -251,9 +257,15 @@ pub fn payment_receipt_lines(
     push(&format!("Tarih     : {}", issued_at), false);
     push(&format!("Odeme     : {}", method), false);
     push("--------------------------------", true);
-    push(&format!("Tahsilat  : {:>20}", format_cents(amount_cents)), false);
+    push(
+        &format!("Tahsilat  : {:>20}", format_cents(amount_cents)),
+        false,
+    );
     push("--------------------------------", true);
-    push(&format!("Kalan Borc: {:>20}", format_cents(remaining_after_cents)), false);
+    push(
+        &format!("Kalan Borc: {:>20}", format_cents(remaining_after_cents)),
+        false,
+    );
     push(&format!("Durum     : {}", status), false);
     push("--------------------------------", true);
     push(&format!("Referans  : {}", take12(debt_id)), false);
@@ -279,7 +291,12 @@ pub fn format_cents(cents: i64) -> String {
         }
         grouped.push(c);
     }
-    format!("{}{}.{:02} TL", if negative { "-" } else { "" }, grouped, kurus)
+    format!(
+        "{}{}.{:02} TL",
+        if negative { "-" } else { "" },
+        grouped,
+        kurus
+    )
 }
 
 fn take12(value: &str) -> String {

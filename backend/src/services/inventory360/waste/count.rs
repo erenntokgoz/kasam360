@@ -278,13 +278,15 @@ pub async fn close_stock_count(
                 // Pozitif fark (eşya fazlası) bir maliyet değil, envanter fazlasıdır;
                 // bu yüzden yeni parti **açılmaz**, yalnız kolon güncellenir ve fark
                 // maliyeti negatif (kar) olarak raporlanır.
-                sqlx::query("UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?")
-                    .bind(counted)
-                    .bind(&product_id)
-                    .bind(tenant_id)
-                    .execute(&mut *conn)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                sqlx::query(
+                    "UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?",
+                )
+                .bind(counted)
+                .bind(&product_id)
+                .bind(tenant_id)
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
 
                 sqlx::query(
                     "INSERT INTO stock_movements
@@ -360,12 +362,8 @@ pub async fn close_stock_count(
     .map_err(|e| e.to_string())?;
 
     let location = optional_text(&satir, "location")?;
-    let started_by: String = satir
-        .try_get("started_by")
-        .map_err(|e| e.to_string())?;
-    let started_at: String = satir
-        .try_get("started_at")
-        .map_err(|e| e.to_string())?;
+    let started_by: String = satir.try_get("started_by").map_err(|e| e.to_string())?;
+    let started_at: String = satir.try_get("started_at").map_err(|e| e.to_string())?;
     let notes = optional_text(&satir, "notes")?;
 
     let sonuc = StockCount {

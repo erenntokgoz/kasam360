@@ -95,10 +95,7 @@ pub fn kasa_cikis_kaynagi(vardiya_id: &str, tutar_cents: i64) -> String {
 /// Dönüş: `(actual_amount_cents, difference_cents)`. Sayım yoksa fark
 /// `None` yazılır — **sıfır değil**. Sıfır yazmak "kasayı saydım, tutuyor"
 /// izlenimi verir ve kasa açığı hatasız görünür (AGENTS.md §3.4 mantığı).
-pub fn kapanis_farki(
-    expected_cents: i64,
-    actual_opt: Option<i64>,
-) -> (i64, Option<i64>) {
+pub fn kapanis_farki(expected_cents: i64, actual_opt: Option<i64>) -> (i64, Option<i64>) {
     match actual_opt {
         Some(actual) => (actual, Some(actual - expected_cents)),
         None => (expected_cents, None),
@@ -138,15 +135,23 @@ mod tests {
     fn vardiya_bulunamadi_ayri_mesaj_dondurur() {
         // "Vardiya bulunamadı" ile "Kapalı vardiya" ayrımı kiracının varlığını
         // sızdırır; ikisi de reddediyor ama mesajlar farklı.
-        assert_eq!(vardiya_kabul_eder_mi(None).unwrap_err(), "NOT_FOUND: Vardiya bulunamadı.");
-        assert!(vardiya_kabul_eder_mi(Some("CLOSED")).unwrap_err().starts_with("VALIDATION"));
+        assert_eq!(
+            vardiya_kabul_eder_mi(None).unwrap_err(),
+            "NOT_FOUND: Vardiya bulunamadı."
+        );
+        assert!(vardiya_kabul_eder_mi(Some("CLOSED"))
+            .unwrap_err()
+            .starts_with("VALIDATION"));
     }
 
     #[test]
     fn esik_tam_tutarda_ve_ustunde_onay_ister() {
         let esik = Some(50_000);
         assert!(!onay_gerekli_mi(49_999, esik), "esik altinda onay gerekmez");
-        assert!(onay_gerekli_mi(50_000, esik), "esik tam tutarda onay gerekir");
+        assert!(
+            onay_gerekli_mi(50_000, esik),
+            "esik tam tutarda onay gerekir"
+        );
         assert!(onay_gerekli_mi(50_001, esik), "esik ustunde onay gerekir");
     }
 
@@ -175,7 +180,11 @@ mod tests {
         // hareket kimliğinden değil.
         let kaynak = kasa_cikis_kaynagi("shf_001", 75_000);
         assert_eq!(kaynak, "CASH_OUT:shf_001:75000");
-        assert_eq!(kasa_cikis_kaynagi(" shf_001 ", 75_000), kaynak, "kenar bosluogu onemsiz");
+        assert_eq!(
+            kasa_cikis_kaynagi(" shf_001 ", 75_000),
+            kaynak,
+            "kenar bosluogu onemsiz"
+        );
         // Farkli vardiya veya farkli tutar farkli kaynak: jeton tasinamaz.
         assert_ne!(kasa_cikis_kaynagi("shf_002", 75_000), kaynak);
         assert_ne!(kasa_cikis_kaynagi("shf_001", 75_001), kaynak);
@@ -187,7 +196,10 @@ mod tests {
         assert!(onay_jetonunu_zorunlu_kil(None).is_err());
         assert!(onay_jetonunu_zorunlu_kil(Some("")).is_err());
         assert!(onay_jetonunu_zorunlu_kil(Some("   ")).is_err());
-        assert_eq!(onay_jetonunu_zorunlu_kil(Some(" abc ")).expect("gecerli"), "abc");
+        assert_eq!(
+            onay_jetonunu_zorunlu_kil(Some(" abc ")).expect("gecerli"),
+            "abc"
+        );
     }
 
     #[test]

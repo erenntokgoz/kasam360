@@ -28,17 +28,47 @@ const MASKE: &str = "***";
 /// açardı ve sızıntı sessiz olurdu.
 const HASSAS_ANAHTARLAR: &[&str] = &[
     // Kimlik
-    "tckn", "tcno", "kimlikno", "identity", "passport", "pasaport",
+    "tckn",
+    "tcno",
+    "kimlikno",
+    "identity",
+    "passport",
+    "pasaport",
     // İletişim
-    "phone", "telefon", "gsm", "cep", "email", "eposta", "mail",
+    "phone",
+    "telefon",
+    "gsm",
+    "cep",
+    "email",
+    "eposta",
+    "mail",
     // Adres
-    "adres", "address", "street", "cadde", "ilce",
+    "adres",
+    "address",
+    "street",
+    "cadde",
+    "ilce",
     // Ödeme
-    "iban", "card", "kart", "creditcard", "cvc", "cvv", "pan",
+    "iban",
+    "card",
+    "kart",
+    "creditcard",
+    "cvc",
+    "cvv",
+    "pan",
     // Sır
-    "password", "parola", "sifre", "secret", "pin", "token", "jwt", "session",
+    "password",
+    "parola",
+    "sifre",
+    "secret",
+    "pin",
+    "token",
+    "jwt",
+    "session",
     // Vergi
-    "taxno", "vkn", "vergino",
+    "taxno",
+    "vkn",
+    "vergino",
 ];
 
 /// Bu parçalar başka kelimelerin **içinde** geçtiği için tek başına
@@ -55,8 +85,17 @@ const KISA_PARCA: &[&str] = &["pin", "pan", "cep", "card"];
 /// Bunlar maskelenmez **yalnız** başka bir hassas parça isabet etmiyorsa:
 /// `shippingAddress` yine maskelenir (`address`), `shippingCost` maskelenmez.
 const KACIS_KELIMELERI: &[&str] = &[
-    "shipping", "spin", "spinning", "accept", "concept", "company", "companion", "expansion",
-    "panel", "pano", "discard",
+    "shipping",
+    "spin",
+    "spinning",
+    "accept",
+    "concept",
+    "company",
+    "companion",
+    "expansion",
+    "panel",
+    "pano",
+    "discard",
 ];
 
 /// Verilen konum, bir kaçış kelimesinin **içinde** mi?
@@ -289,7 +328,11 @@ mod tests {
     fn onbir_hane_tckn_metin_degerinde_maskelenir() {
         let mut veri = json!({ "not": "11111111111" });
         maskele(&mut veri);
-        assert_eq!(veri["not"], json!("***"), "11 haneli TCKN metni maskelenmeli");
+        assert_eq!(
+            veri["not"],
+            json!("***"),
+            "11 haneli TCKN metni maskelenmeli"
+        );
     }
 
     #[test]

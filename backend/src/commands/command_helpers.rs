@@ -9,7 +9,10 @@ use sqlx::Row;
 ///
 /// Eskiden bu yollar "System" yazıyordu; fark, artık bunu bir **sabit** olarak
 /// değil, çağıranın gerçekten bildirmediği bir gerçek olarak ifade ediyoruz.
-pub(crate) fn audit_actor(actor_id: Option<String>, actor_role: Option<String>) -> (String, String) {
+pub(crate) fn audit_actor(
+    actor_id: Option<String>,
+    actor_role: Option<String>,
+) -> (String, String) {
     (
         actor_id.unwrap_or_else(|| "SYSTEM".to_string()),
         actor_role.unwrap_or_else(|| "System".to_string()),

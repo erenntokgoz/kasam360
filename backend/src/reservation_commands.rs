@@ -1,4 +1,4 @@
-﻿//! Faz 8 — Rezervasyon komutları.
+//! Faz 8 — Rezervasyon komutları.
 //!
 //! Yetki modeli (AGENTS.md §6):
 //! - Rezervasyon yazma (**rezerve et / kaldır / müşteri geldi / gelmedi**)
@@ -20,7 +20,7 @@ use serde::Deserialize;
 use crate::db::DbPool;
 use crate::management_commands::{audit_actor, record_audit};
 use crate::rbac::{self, Role};
-use crate::services::audit_service::{AuditLock, category};
+use crate::services::audit_service::{category, AuditLock};
 use crate::services::reservation_service::{self, NewReservation, ReservationDto};
 
 /// Rezervasyon yönetebilen roller: masa ve sipariş sahibi olan roller.
@@ -187,14 +187,8 @@ async fn close_with_reason(
     let (actor_id, actor_role) = audit_actor(caller_id, caller_role.as_deref().unwrap_or("WAITER"));
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    let reservation = reservation_service::cancel(
-        &mut tx,
-        &tenant,
-        &id,
-        &actor_id,
-        reason.as_deref(),
-    )
-    .await?;
+    let reservation =
+        reservation_service::cancel(&mut tx, &tenant, &id, &actor_id, reason.as_deref()).await?;
 
     record_audit(
         &mut tx,
@@ -296,8 +290,7 @@ pub async fn mark_reservation_arrived(
     let (actor_id, actor_role) = audit_actor(caller_id, caller_role.as_deref().unwrap_or("WAITER"));
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    let reservation =
-        reservation_service::mark_arrived(&mut tx, &tenant, &id, &actor_id).await?;
+    let reservation = reservation_service::mark_arrived(&mut tx, &tenant, &id, &actor_id).await?;
 
     record_audit(
         &mut tx,

@@ -6,7 +6,6 @@
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ReceiptItemDto {
     pub id: String,
@@ -73,7 +72,6 @@ pub struct ReceiptDto {
     pub has_items: bool,
 }
 
-
 /// Fiş listesi — **tahsilat kaydından** türetilir (Faz 7).
 ///
 /// Neden servis: Faz 6'daki şube kilidine benzer şekilde veri katmanı
@@ -89,7 +87,11 @@ pub async fn get_receipts(
 ) -> Result<Vec<ReceiptDto>, String> {
     crate::rbac::require_any_present(
         actor_role.as_deref(),
-        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
     )?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -124,7 +126,11 @@ pub async fn get_receipt_details(
 ) -> Result<Option<ReceiptDto>, String> {
     crate::rbac::require_any_present(
         actor_role.as_deref(),
-        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
     )?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -147,7 +153,11 @@ pub async fn get_financial_movements(
 ) -> Result<Vec<FinancialMovementDto>, String> {
     crate::rbac::require_any_present(
         actor_role.as_deref(),
-        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
     )?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let range = require_receipt_range(from.as_deref(), to.as_deref())?;
@@ -170,9 +180,12 @@ pub async fn get_financial_movements(
 /// finansal veriyi sınırsız taşır.
 fn require_receipt_range(from: Option<&str>, to: Option<&str>) -> Result<(String, String), String> {
     let normalize = |value: Option<&str>| -> Result<String, String> {
-        let trimmed = value.map(str::trim).filter(|v| !v.is_empty()).ok_or_else(|| {
-            "INVALID_ARGUMENT: from/to are required (tarih aralığı zorunludur)".to_string()
-        })?;
+        let trimmed = value
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| {
+                "INVALID_ARGUMENT: from/to are required (tarih aralığı zorunludur)".to_string()
+            })?;
         // ISO 8601 damgası SQLite `datetime('now')` ile karşılaştırılabilir
         // biçime indirgenir; saat dilimi son eki atılır.
         Ok(trimmed.replace('T', " ").replace("+00:00", ""))
@@ -218,7 +231,11 @@ pub async fn print_receipt(
 ) -> Result<(), String> {
     crate::rbac::require_any_present(
         actor_role.as_deref(),
-        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
     )?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -230,8 +247,18 @@ pub async fn print_receipt(
     println!("             *** KASAM360 ADİSYON ***           ");
     println!("              ESC/POS 80mm TERMAL FİŞ           ");
     println!("================================================");
-    println!("Fiş No   : {}", receipt.fiscal_receipt_no.as_deref().unwrap_or(&receipt.id));
-    println!("Masa     : {}", if receipt.table_id.is_empty() { "-" } else { &receipt.table_id });
+    println!(
+        "Fiş No   : {}",
+        receipt.fiscal_receipt_no.as_deref().unwrap_or(&receipt.id)
+    );
+    println!(
+        "Masa     : {}",
+        if receipt.table_id.is_empty() {
+            "-"
+        } else {
+            &receipt.table_id
+        }
+    );
     println!(
         "Kasiyer  : {}",
         receipt.cashier_name.as_deref().unwrap_or("-")
@@ -276,7 +303,10 @@ pub async fn print_receipt(
             tendered as f64 / 100.0
         );
         if let Some(change) = receipt.change_cents {
-            println!("Para Üstü:                            {:>7.2} TL", change as f64 / 100.0);
+            println!(
+                "Para Üstü:                            {:>7.2} TL",
+                change as f64 / 100.0
+            );
         }
     }
     println!("================================================");

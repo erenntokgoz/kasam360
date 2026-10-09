@@ -51,11 +51,13 @@ pub async fn urun_ekle(
     fiyat_kurus: i64,
 ) {
     // `products.category_id` yabancı anahtar; kategori yoksa ürün eklenemez.
-    sqlx::query("INSERT OR IGNORE INTO categories (id, tenant_id, name) VALUES ('cat_1', ?1, 'Test')")
-        .bind(tenant_id)
-        .execute(&mut *conn)
-        .await
-        .expect("kategori eklenmeli");
+    sqlx::query(
+        "INSERT OR IGNORE INTO categories (id, tenant_id, name) VALUES ('cat_1', ?1, 'Test')",
+    )
+    .bind(tenant_id)
+    .execute(&mut *conn)
+    .await
+    .expect("kategori eklenmeli");
     sqlx::query(
         "INSERT INTO products (id, tenant_id, name, price_cents, category_id, is_active)
          VALUES (?1, ?2, ?3, ?4, 'cat_1', 1)",
@@ -200,9 +202,7 @@ pub async fn nullable_kolon_dogrula(conn: &mut SqliteConnection, tenant_id: &str
         .fetch_one(&mut *conn)
         .await
         .expect("sorgu calismali");
-    let try_get: Option<i64> = satir
-        .try_get("stock_quantity")
-        .expect("kolon okunmali");
+    let try_get: Option<i64> = satir.try_get("stock_quantity").expect("kolon okunmali");
 
     assert_eq!(try_get, None, "NULL kolon try_get ile None okunmali");
     assert_eq!(fetch_one, None, "NULL kolon fetch_one ile None okunmali");

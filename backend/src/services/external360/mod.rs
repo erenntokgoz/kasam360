@@ -25,7 +25,7 @@ pub mod tickets;
 
 /// Çağıranın işletmesini fail-closed doğrular.
 ///
-    /// Neden varsayılan kiracıya düşmek yasak: dış aktör tabloları çok kiracılıdır ve
+/// Neden varsayılan kiracıya düşmek yasak: dış aktör tabloları çok kiracılıdır ve
 /// düşen kiracı, "hiçbir işletmenin verisi" yerine **bir** işletmenin verisini
 /// getirir. B1'de her tablo `tenant_id` zorunlu; buradaki kural o zorunluluğun
 /// tek giriş noktasıdır.

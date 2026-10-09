@@ -1,4 +1,4 @@
-﻿//! Personel yönetimi komutları: listeleme, atama ve pasife alma.
+//! Personel yönetimi komutları: listeleme, atama ve pasife alma.
 //!
 //! Personel kaydı silinmez (AGENTS.md §6); pasife alınır. Kayıt geçmiş
 //! sipariş ve vardiya satırlarının referansı olduğu için fiziksel olarak
@@ -10,7 +10,7 @@ use sqlx::{Acquire, Row};
 use super::{audit_actor, ensure_owned, record_audit, require_tenant};
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
-use crate::services::audit_service::{AuditLock, category};
+use crate::services::audit_service::{category, AuditLock};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct StaffMemberDto {
@@ -50,9 +50,14 @@ pub async fn get_staff(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn create_staff_member(
-    actor_role: String, tenant_id: Option<String>, name: String,
-    role: String, pin: String, actor_id: Option<String>,
-    pool: tauri::State<'_, DbPool>, app_state: tauri::State<'_, crate::AppState>
+    actor_role: String,
+    tenant_id: Option<String>,
+    name: String,
+    role: String,
+    pin: String,
+    actor_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    app_state: tauri::State<'_, crate::AppState>,
 ) -> Result<StaffMemberDto, String> {
     rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
@@ -61,7 +66,11 @@ pub async fn create_staff_member(
     // operasyonel rollerinden biri olmak zorundadır.
     let allowed_roles: Vec<&str> = vec!["MANAGER", "CASHIER", "WAITER", "KITCHEN"];
     if !allowed_roles.contains(&role.as_str()) {
-        return Err(format!("Invalid role: {}. Allowed: {}", role, allowed_roles.join(", ")));
+        return Err(format!(
+            "Invalid role: {}. Allowed: {}",
+            role,
+            allowed_roles.join(", ")
+        ));
     }
     // PIN düz metin saklanmaz; hash_pin format denetimini de yapar.
     let hash = crate::user_credentials::hash_pin(&pin)?;
@@ -87,21 +96,35 @@ pub async fn create_staff_member(
     // Rol ataması yetki matrisini değiştirdiği için kayıt "Personel" kategorisine
     // yazılır; defterde PIN'in kendisi ya da hash'i bulunmaz.
     record_audit(
-        &mut tx, &lock, &tenant_id, &actor_id, &actor_role,
+        &mut tx,
+        &lock,
+        &tenant_id,
+        &actor_id,
+        &actor_role,
         category::PERSONEL,
-        "staff:created", &id,
+        "staff:created",
+        &id,
         serde_json::json!({ "name": name, "assignedRole": role }),
-    ).await?;
+    )
+    .await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
-    Ok(StaffMemberDto { id, name, role, tenant_id })
+    Ok(StaffMemberDto {
+        id,
+        name,
+        role,
+        tenant_id,
+    })
 }
 
 #[tauri::command]
 pub async fn delete_staff_member(
-    actor_role: String, staff_id: String, actor_id: Option<String>,
+    actor_role: String,
+    staff_id: String,
+    actor_id: Option<String>,
     tenant_id: Option<String>,
-    pool: tauri::State<'_, DbPool>, app_state: tauri::State<'_, crate::AppState>
+    pool: tauri::State<'_, DbPool>,
+    app_state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
     // Master admin kullanıcısının pasife alınmasını engelle
@@ -116,16 +139,20 @@ pub async fn delete_staff_member(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "users", &staff_id, &tenant_id).await?;
 
-    let previous: Option<(String, String)> = sqlx::query_as("SELECT name, role FROM users WHERE id = ? AND tenant_id = ?")
-        .bind(&staff_id)
-        .bind(&tenant_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let previous: Option<(String, String)> =
+        sqlx::query_as("SELECT name, role FROM users WHERE id = ? AND tenant_id = ?")
+            .bind(&staff_id)
+            .bind(&tenant_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
 
     let result = sqlx::query("UPDATE users SET is_active = 0 WHERE id = ? AND tenant_id = ?")
-        .bind(&staff_id).bind(&tenant_id)
-        .execute(&mut *conn).await.map_err(|e| e.to_string())?;
+        .bind(&staff_id)
+        .bind(&tenant_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
     if result.rows_affected() == 0 {
         return Err("Kullanıcı bulunamadı.".into());
     }
@@ -136,15 +163,21 @@ pub async fn delete_staff_member(
         .map(|(n, r)| (serde_json::json!(n), serde_json::json!(r)))
         .unwrap_or((serde_json::Value::Null, serde_json::Value::Null));
     record_audit(
-        &mut conn, &lock, &tenant_id, &actor_id, &actor_role,
+        &mut conn,
+        &lock,
+        &tenant_id,
+        &actor_id,
+        &actor_role,
         category::PERSONEL,
-        "staff:deactivated", &staff_id,
+        "staff:deactivated",
+        &staff_id,
         serde_json::json!({
             "name": staff_name,
             "role": staff_role,
             "changes": { "isActive": { "old": true, "new": false } },
         }),
-    ).await?;
+    )
+    .await?;
 
     Ok(())
 }

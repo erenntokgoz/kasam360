@@ -17,7 +17,7 @@
 use sha2::{Digest, Sha256};
 use sqlx::{Connection, SqliteConnection};
 
-use super::{KILIT_SURESI_SN, MAX_HESAP_HATASI, simdi_sn};
+use super::{simdi_sn, KILIT_SURESI_SN, MAX_HESAP_HATASI};
 use crate::id_generator::generate_id;
 
 /// TOTP penceresi (saniye).
@@ -106,12 +106,13 @@ pub async fn kayit_ac(
     user_id: &str,
     etiket: &str,
 ) -> Result<TwoFactorRegistration, String> {
-    let mevcut = sqlx::query("SELECT id FROM two_factor_secrets WHERE tenant_id = ? AND user_id = ?")
-        .bind(tenant_id)
-        .bind(user_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mevcut =
+        sqlx::query("SELECT id FROM two_factor_secrets WHERE tenant_id = ? AND user_id = ?")
+            .bind(tenant_id)
+            .bind(user_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if mevcut.is_some() {
         return Err("CONFLICT: Bu kullanıcı için 2FA zaten kayıtlı.".to_string());
@@ -120,7 +121,7 @@ pub async fn kayit_ac(
     let sirr = sirr_uret();
     let id = generate_id("tfa");
 
-sqlx::query(
+    sqlx::query(
         "INSERT INTO two_factor_secrets
             (id, tenant_id, user_id, secret_hash, pending_secret, label, is_active,
              failed_attempts, created_at)
@@ -164,17 +165,21 @@ pub async fn kayit_dogrula(
     user_id: &str,
     girilen_kod: &str,
 ) -> Result<(), String> {
-    let (satrirdaki_ozet, bekleme_siri, satir_kilit, satir_basarisiz): (String, Option<String>, Option<i64>, i64) =
-        sqlx::query_as(
-            "SELECT secret_hash, pending_secret, locked_until, failed_attempts
+    let (satrirdaki_ozet, bekleme_siri, satir_kilit, satir_basarisiz): (
+        String,
+        Option<String>,
+        Option<i64>,
+        i64,
+    ) = sqlx::query_as(
+        "SELECT secret_hash, pending_secret, locked_until, failed_attempts
              FROM two_factor_secrets WHERE tenant_id = ? AND user_id = ? AND is_active = 1",
-        )
-        .bind(tenant_id)
-        .bind(user_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "NOT_FOUND: 2FA kaydı bulunamadı.".to_string())?;
+    )
+    .bind(tenant_id)
+    .bind(user_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| "NOT_FOUND: 2FA kaydı bulunamadı.".to_string())?;
 
     // Sır özeti gerçekten kayıtlı mı? Sadece sıfır uzunluklu bir satır
     // "doğrulanmış" sayılmaz; kayıt ile doğrulama ayrı kanıttır.
@@ -272,14 +277,13 @@ pub async fn dogrulanmis_mi(
         return Ok(false);
     }
 
-    let dogrulama = sqlx::query(
-        "SELECT id FROM two_factor_verifications WHERE tenant_id = ? AND user_id = ?",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .fetch_optional(&mut *conn)
-    .await
-    .map_err(|e| e.to_string())?;
+    let dogrulama =
+        sqlx::query("SELECT id FROM two_factor_verifications WHERE tenant_id = ? AND user_id = ?")
+            .bind(tenant_id)
+            .bind(user_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
 
     Ok(dogrulama.is_some())
 }
@@ -306,7 +310,11 @@ pub fn kodu_dogrula(sirr: &str, girilen_kod: &str, zaman_sn: i64) -> bool {
 }
 
 /// 2FA kaydını kaldırır (sır + doğrulama birlikte).
-pub async fn kayit_kaldir(conn: &mut SqliteConnection, tenant_id: &str, user_id: &str) -> Result<bool, String> {
+pub async fn kayit_kaldir(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    user_id: &str,
+) -> Result<bool, String> {
     let sildi = sqlx::query("DELETE FROM two_factor_secrets WHERE tenant_id = ? AND user_id = ?")
         .bind(tenant_id)
         .bind(user_id)
@@ -323,7 +331,6 @@ pub async fn kayit_kaldir(conn: &mut SqliteConnection, tenant_id: &str, user_id:
 
     Ok(sildi.rows_affected() > 0)
 }
-
 
 #[cfg(test)]
 #[path = "two_factor_tests.rs"]

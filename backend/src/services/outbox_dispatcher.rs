@@ -85,12 +85,8 @@ where
         // Kolon okumaları `?` ile yükseltilir: kolon eksikse
         // satır sessizce atlanmaz, hata bildirilir (§3.4).
         let id: String = satir.try_get("id").map_err(|e| e.to_string())?;
-        let kiraci: String = satir
-            .try_get("tenant_id")
-            .map_err(|e| e.to_string())?;
-        let olay: String = satir
-            .try_get("event_id")
-            .map_err(|e| e.to_string())?;
+        let kiraci: String = satir.try_get("tenant_id").map_err(|e| e.to_string())?;
+        let olay: String = satir.try_get("event_id").map_err(|e| e.to_string())?;
 
         let teslimat = tokio::time::timeout(
             Duration::from_secs(ZAMAN_ASIMI_SN),
@@ -115,10 +111,7 @@ where
                 yenile_veya_soluk_ileti(&mut conn, &id, &hata, &mut ozet).await?;
             }
             Err(_zaman_asimi) => {
-                let hata = format!(
-                    "ZAMAN_ASIMI: teslimat {} saniyeyi aştı",
-                    ZAMAN_ASIMI_SN
-                );
+                let hata = format!("ZAMAN_ASIMI: teslimat {} saniyeyi aştı", ZAMAN_ASIMI_SN);
                 yenile_veya_soluk_ileti(&mut conn, &id, &hata, &mut ozet).await?;
             }
         }
@@ -168,8 +161,7 @@ async fn yenile_veya_soluk_ileti(
 /// günlüğe yazılır, sonraki tur yeniden denenir.
 pub fn spawn_outbox_worker(pool: DbPool) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let mut aralik =
-            tokio::time::interval(Duration::from_secs(DISPATCH_INTERVAL_SN));
+        let mut aralik = tokio::time::interval(Duration::from_secs(DISPATCH_INTERVAL_SN));
         loop {
             aralik.tick().await;
             let ozet = dispatch_pending(&pool, |kiraci, olay| {
@@ -258,13 +250,11 @@ mod tests {
     /// Kaydın (durum, retry sayısı, son hata) üçlüsünü okur.
     async fn kayit(pool: &DbPool, id: &str) -> (String, i64, Option<String>) {
         let mut conn = pool.acquire().await.expect("baglanti");
-        let satir = sqlx::query(
-            "SELECT status, retry_count, last_error FROM outbox WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_one(&mut *conn)
-        .await
-        .expect("satir okunur");
+        let satir = sqlx::query("SELECT status, retry_count, last_error FROM outbox WHERE id = ?")
+            .bind(id)
+            .fetch_one(&mut *conn)
+            .await
+            .expect("satir okunur");
         (
             satir.try_get("status").expect("durum okunur"),
             satir.try_get("retry_count").expect("sayaç okunur"),
@@ -278,8 +268,9 @@ mod tests {
         let pool = havuz().await;
         let id = olay_yaz(&pool, "tnt_a", "evt_1").await;
 
-        let ozet =
-            dispatch_pending(&pool, |_, _| async { Ok(()) }).await.expect("tur");
+        let ozet = dispatch_pending(&pool, |_, _| async { Ok(()) })
+            .await
+            .expect("tur");
 
         assert_eq!(ozet.islenen, 1);
         assert_eq!(ozet.teslim_edilen, 1);
@@ -317,11 +308,9 @@ mod tests {
         let id = olay_yaz(&pool, "tnt_a", "evt_3").await;
 
         for _ in 0..MAX_RETRY {
-            let ozet = dispatch_pending(&pool, |_, _| async {
-                Err("svc down".to_string())
-            })
-            .await
-            .expect("tur");
+            let ozet = dispatch_pending(&pool, |_, _| async { Err("svc down".to_string()) })
+                .await
+                .expect("tur");
             assert!(ozet.islenen >= 1);
         }
 
@@ -331,8 +320,9 @@ mod tests {
         assert_eq!(hata.as_deref(), Some("svc down"));
 
         // Ölü mektup kutusundaki kayıt bir daha taranmaz.
-        let ozet =
-            dispatch_pending(&pool, |_, _| async { Ok(()) }).await.expect("tur");
+        let ozet = dispatch_pending(&pool, |_, _| async { Ok(()) })
+            .await
+            .expect("tur");
         assert_eq!(ozet.islenen, 0);
     }
 
@@ -365,8 +355,9 @@ mod tests {
     #[tokio::test]
     async fn bos_outbox_sessiz_gecirir() {
         let pool = havuz().await;
-        let ozet =
-            dispatch_pending(&pool, |_, _| async { Ok(()) }).await.expect("tur");
+        let ozet = dispatch_pending(&pool, |_, _| async { Ok(()) })
+            .await
+            .expect("tur");
         assert_eq!(ozet, DispathOzeti::default());
     }
 
@@ -411,8 +402,9 @@ mod tests {
             .await
             .expect("ikinci tur");
 
-        let ozet =
-            dispatch_pending(&pool, |_, _| async { Ok(()) }).await.expect("üçüncü tur");
+        let ozet = dispatch_pending(&pool, |_, _| async { Ok(()) })
+            .await
+            .expect("üçüncü tur");
 
         assert_eq!(ozet.teslim_edilen, 1);
         let (durum, sayac, hata) = kayit(&pool, &id).await;

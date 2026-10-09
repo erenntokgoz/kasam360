@@ -110,7 +110,9 @@ pub async fn get_analytics_dashboard_data(
 
     let mut popular_categories = std::collections::HashMap::new();
     for row in category_rows {
-        let name: String = row.try_get::<String, _>("category_name").map_err(|e| e.to_string())?;
+        let name: String = row
+            .try_get::<String, _>("category_name")
+            .map_err(|e| e.to_string())?;
         let qty: i64 = row.try_get("qty").map_err(|e| e.to_string())?;
         if !name.is_empty() {
             popular_categories.insert(name, qty);
@@ -141,8 +143,16 @@ mod tests {
     #[test]
     fn aralik_zorunlu_ve_sirali_olmalidir() {
         assert!(require_range(None, Some("2026-01-01T00:00:00+00:00")).is_err());
-        assert!(require_range(Some("2026-01-02T00:00:00+00:00"), Some("2026-01-01T00:00:00+00:00")).is_err());
-        assert!(require_range(Some("2026-01-01T00:00:00+00:00"), Some("2026-01-31T00:00:00+00:00")).is_ok());
+        assert!(require_range(
+            Some("2026-01-02T00:00:00+00:00"),
+            Some("2026-01-01T00:00:00+00:00")
+        )
+        .is_err());
+        assert!(require_range(
+            Some("2026-01-01T00:00:00+00:00"),
+            Some("2026-01-31T00:00:00+00:00")
+        )
+        .is_ok());
     }
 
     #[test]

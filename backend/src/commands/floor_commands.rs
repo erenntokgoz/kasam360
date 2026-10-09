@@ -3,11 +3,10 @@
 //! Bu dosya commands.rs 500 satır tavanını aştığı için bölündü; içerik
 //! olduğu gibi taşındı, davranış değiştirilmedi.
 
+use crate::commands::command_helpers::{audit_actor, require_tenant_id, table_tenant};
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use crate::commands::command_helpers::{audit_actor, require_tenant_id, table_tenant};
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct FloorPlanData {
@@ -24,23 +23,30 @@ pub struct FloorPlanData {
 }
 
 #[tauri::command]
-pub async fn get_floor_plan(tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<FloorPlanData>, String> {
+pub async fn get_floor_plan(
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<FloorPlanData>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("SELECT id, name, status, opened_at, waiter_id, current_total FROM tables WHERE tenant_id = ?")
         .bind(&tenant_id)
         .fetch_all(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
-        
+
     let mut res = Vec::new();
     for row in rows {
         res.push(FloorPlanData {
             id: row.try_get("id").unwrap_or_default(),
             name: row.try_get("name").unwrap_or_default(),
-            status: row.try_get("status").unwrap_or_else(|_| "AVAILABLE".to_string()),
+            status: row
+                .try_get("status")
+                .unwrap_or_else(|_| "AVAILABLE".to_string()),
             opened_at: row.try_get("opened_at").ok(),
             waiter_id: row.try_get("waiter_id").ok(),
-            current_total: row.try_get::<i64, _>("current_total").map_err(|e| e.to_string())?,
+            current_total: row
+                .try_get::<i64, _>("current_total")
+                .map_err(|e| e.to_string())?,
         });
     }
     Ok(res)
@@ -57,8 +63,7 @@ pub async fn move_table(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let _lock = state.payment_mutex.lock().await;
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     // Tenant çözümlemesi: masa taşıma kiracı sınırını aşamaz. Bu komut Faz 8
@@ -69,14 +74,10 @@ pub async fn move_table(
     // Açık rezervasyonlu masalar taşınamaz: taşıma kaynak masayı `AVAILABLE`
     // yapıyor, rezervasyon kaydı ortada kalınca hedef masaya hayalet blok
     // bindirilirdi. Önce rezervasyon kaldırılmalıdır.
-    crate::services::reservation_service::assert_no_open_reservation(
-        &mut tx, &tenant, &from_id,
-    )
-    .await?;
-    crate::services::reservation_service::assert_no_open_reservation(
-        &mut tx, &tenant, &to_id,
-    )
-    .await?;
+    crate::services::reservation_service::assert_no_open_reservation(&mut tx, &tenant, &from_id)
+        .await?;
+    crate::services::reservation_service::assert_no_open_reservation(&mut tx, &tenant, &to_id)
+        .await?;
 
     sqlx::query("UPDATE tables SET status='AVAILABLE' WHERE id=? AND tenant_id=?")
         .bind(&from_id)
@@ -133,8 +134,7 @@ pub async fn add_table(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     sqlx::query("INSERT INTO tables (id, tenant_id, name, status, current_total) VALUES (?, ?, ?, 'AVAILABLE', 0)")
@@ -176,8 +176,7 @@ pub async fn remove_table(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let _lock = state.payment_mutex.lock().await;
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let tenant_id = table_tenant(&mut tx, &id).await?;
@@ -221,8 +220,7 @@ pub async fn update_table_name(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let previous_name: Option<String> =
@@ -276,8 +274,7 @@ pub async fn merge_tables(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let _lock = state.payment_mutex.lock().await;
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let tenant = require_tenant_id(tenant_id.as_deref())?;
@@ -285,14 +282,10 @@ pub async fn merge_tables(
     // Birleştirme açık rezervasyonlu masayı da boşaltıyordu; rezervasyon kaydı
     // ortada kalınca hedef masaya hayalet blok bindiriliyordu. Kapı: iki masada da
     // açık rezervasyon olmamalıdır.
-    crate::services::reservation_service::assert_no_open_reservation(
-        &mut tx, &tenant, &source_id,
-    )
-    .await?;
-    crate::services::reservation_service::assert_no_open_reservation(
-        &mut tx, &tenant, &target_id,
-    )
-    .await?;
+    crate::services::reservation_service::assert_no_open_reservation(&mut tx, &tenant, &source_id)
+        .await?;
+    crate::services::reservation_service::assert_no_open_reservation(&mut tx, &tenant, &target_id)
+        .await?;
 
     // Move all open orders from source to target
     sqlx::query("UPDATE orders SET table_id = ? WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')")
@@ -325,8 +318,59 @@ pub async fn merge_tables(
         now_iso,
     )?;
     crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
-    
+
     tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Masa kilidi süresi (milisaniye). Offline çatışma politikası (docs/OFFLINE-CONFLICT-POLICY.md §2):
+/// 30 saniye sonra otomatik unlock. Eski 30 dk'lık TTL, bir terminal kapanınca
+/// başka terminalin masayı açmasını 30 dk blokluyordu.
+const TABLE_LOCK_TTL_MS: i64 = 30_000;
+
+/// Katılıksız kilit alma. `try_lock_table` tauri komutunun kiracı doğrulama ve
+/// kilitleme mantığını taşır; test doğrudan çağrılabilsin diye ayrı çıkarıldı.
+///
+/// `ttl_ms` parametresi: üretimde `TABLE_LOCK_TTL_MS` (30 sn), testlerde 1–5 ms.
+pub(crate) async fn try_acquire_table_lock(
+    locks: &tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>,
+    tenant_id: &str,
+    table_id: &str,
+    waiter_id: &str,
+    ttl_ms: i64,
+) -> Result<bool, String> {
+    let mut guard = locks.lock().await;
+    let now = chrono::Utc::now().timestamp_millis();
+    let lock_key = format!("{}:{}", tenant_id, table_id);
+
+    if let Some((locked_by, locked_at)) = guard.get(&lock_key) {
+        if locked_by != waiter_id && (now - locked_at) < ttl_ms {
+            let remaining = (ttl_ms - (now - locked_at)) / 1000;
+            return Err(format!(
+                "TABLE_LOCKED: Masa {} şu anda {} tarafından açık (kalan {} saniye).",
+                table_id, locked_by, remaining
+            ));
+        }
+    }
+
+    guard.insert(lock_key, (waiter_id.to_string(), now));
+    Ok(true)
+}
+
+/// Katılıksız kilit bırakma. `unlock_table` tauri komutunun çekirdeği.
+pub(crate) async fn release_table_lock(
+    locks: &tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>,
+    tenant_id: &str,
+    table_id: &str,
+    waiter_id: &str,
+) -> Result<(), String> {
+    let mut guard = locks.lock().await;
+    let lock_key = format!("{}:{}", tenant_id, table_id);
+    if let Some((locked_by, _)) = guard.get(&lock_key) {
+        if locked_by == waiter_id {
+            guard.remove(&lock_key);
+        }
+    }
     Ok(())
 }
 
@@ -334,32 +378,27 @@ pub async fn merge_tables(
 pub async fn try_lock_table(
     table_id: String,
     waiter_id: String,
+    tenant_id: String,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
-    let mut locks = state.table_locks.lock().await;
-    let now = chrono::Utc::now().timestamp_millis();
-    
-    if let Some((locked_by, locked_at)) = locks.get(&table_id) {
-        if locked_by != &waiter_id && (now - locked_at) < 1800000 {
-            return Ok(false);
-        }
-    }
-    
-    locks.insert(table_id, (waiter_id, now));
-    Ok(true)
+    let tenant = require_tenant_id(Some(&tenant_id))?;
+    try_acquire_table_lock(
+        &state.table_locks,
+        &tenant,
+        &table_id,
+        &waiter_id,
+        TABLE_LOCK_TTL_MS,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn unlock_table(
     table_id: String,
     waiter_id: String,
+    tenant_id: String,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    let mut locks = state.table_locks.lock().await;
-    if let Some((locked_by, _)) = locks.get(&table_id) {
-        if locked_by == &waiter_id {
-            locks.remove(&table_id);
-        }
-    }
-    Ok(())
+    let tenant = require_tenant_id(Some(&tenant_id))?;
+    release_table_lock(&state.table_locks, &tenant, &table_id, &waiter_id).await
 }

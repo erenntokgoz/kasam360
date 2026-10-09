@@ -55,7 +55,10 @@ fn yanlis_bicimli_kodlar_reddedilir() {
     let zaman = 1_700_000_000;
     let gecerli = kod_uret(&sirr, zaman);
     assert!(kodu_dogrula(&sirr, &gecerli, zaman));
-    assert!(kodu_dogrula(&sirr, &format!(" {gecerli} "), zaman), "kenar bosluogu tolere edilir");
+    assert!(
+        kodu_dogrula(&sirr, &format!(" {gecerli} "), zaman),
+        "kenar bosluogu tolere edilir"
+    );
 
     assert!(!kodu_dogrula(&sirr, "", zaman));
     assert!(!kodu_dogrula(&sirr, "12345", zaman), "5 hane reddedilir");
@@ -73,12 +76,18 @@ fn saat_kaymasi_penceresinde_kabul_eder_uzakta_reddeder() {
     // ±1 pencere kabul: kullanici saati 30 saniye kaymis cihazda girmemesin.
     for kayma in [-TOTP_PENCERE, TOTP_PENCERE] {
         let kod = kod_uret(&sirr, zaman + kayma * TOTP_ADIM_SN);
-        assert!(kodu_dogrula(&sirr, &kod, zaman), "kayma {kayma} kabul edilmeli");
+        assert!(
+            kodu_dogrula(&sirr, &kod, zaman),
+            "kayma {kayma} kabul edilmeli"
+        );
     }
     // ±2 reddedilir: 2 pencereden geniş tolerans kodu tahmin edilebilir kılar.
     for kayma in [-2 * TOTP_PENCERE, 2 * TOTP_PENCERE] {
         let kod = kod_uret(&sirr, zaman + kayma * TOTP_ADIM_SN);
-        assert!(!kodu_dogrula(&sirr, &kod, zaman), "kayma {kayma} reddedilmeli");
+        assert!(
+            !kodu_dogrula(&sirr, &kod, zaman),
+            "kayma {kayma} reddedilmeli"
+        );
     }
 }
 
@@ -337,7 +346,9 @@ async fn kayit_kaldirma_yoksa_ve_baska_kiracida_sessiz_gecer() {
 
     // Baska kiracinin ayni kullanici id'si silinmez: kayit kirac bazinda.
     assert!(
-        !kayit_kaldir(&mut conn, "tenant_b", "usr_1").await.expect("sessiz gecer"),
+        !kayit_kaldir(&mut conn, "tenant_b", "usr_1")
+            .await
+            .expect("sessiz gecer"),
         "baska kiracida kayit yok, silme sessizce false donmeli"
     );
     let kalan: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM two_factor_secrets")

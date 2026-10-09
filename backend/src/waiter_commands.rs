@@ -228,16 +228,20 @@ pub async fn get_table_ready_status(
     let tenant = masa_okuma_kapisi(actor_role.as_deref(), tenant_id.as_deref())?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let row = sqlx::query("
+    let row = sqlx::query(
+        "
         SELECT e.payload FROM events e
         JOIN orders o ON e.aggregate_id = o.id
         WHERE o.table_id = ? AND o.tenant_id = ? AND o.status = 'IN_PROGRESS'
         AND e.event_type = 'TICKET_STATUS_UPDATED'
         ORDER BY e.created_at DESC LIMIT 1
-    ")
+    ",
+    )
     .bind(table_id.trim())
     .bind(&tenant)
-    .fetch_optional(&mut *conn).await.map_err(|e| e.to_string())?;
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
 
     if let Some(r) = row {
         use sqlx::Row;
@@ -245,7 +249,11 @@ pub async fn get_table_ready_status(
         // "okunamadı" ayrımını siler ve mutfak bileti sessizce kaybolur.
         let payload_str: String = r.try_get("payload").map_err(|e| e.to_string())?;
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload_str) {
-            return Ok(v.get("toStatus").and_then(|s| s.as_str()).unwrap_or("Unknown").to_string());
+            return Ok(v
+                .get("toStatus")
+                .and_then(|s| s.as_str())
+                .unwrap_or("Unknown")
+                .to_string());
         }
     }
     Ok("Unknown".to_string())
@@ -277,7 +285,7 @@ pub async fn get_all_table_statuses(
          JOIN orders o ON e.aggregate_id = o.id
          WHERE o.tenant_id = ? AND o.status = 'IN_PROGRESS'
          AND e.event_type = 'TICKET_STATUS_UPDATED'
-         ORDER BY e.created_at ASC"
+         ORDER BY e.created_at ASC",
     )
     .bind(&tid)
     .fetch_all(&mut *conn)
@@ -290,11 +298,17 @@ pub async fn get_all_table_statuses(
         let table_id: String = r.try_get("table_id").map_err(|e| e.to_string())?;
         let payload_str: String = r.try_get("payload").map_err(|e| e.to_string())?;
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload_str) {
-            let status = v.get("toStatus").and_then(|s| s.as_str()).unwrap_or("Unknown").to_string();
+            let status = v
+                .get("toStatus")
+                .and_then(|s| s.as_str())
+                .unwrap_or("Unknown")
+                .to_string();
             map.insert(table_id, status);
         }
     }
 
-    Ok(map.into_iter().map(|(table_id, status)| TableReadyStatusDto { table_id, status }).collect())
+    Ok(map
+        .into_iter()
+        .map(|(table_id, status)| TableReadyStatusDto { table_id, status })
+        .collect())
 }
-

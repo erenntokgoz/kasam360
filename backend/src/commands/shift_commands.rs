@@ -3,13 +3,12 @@
 //! Bu dosya commands.rs 500 satır tavanını aştığı için bölündü; içerik
 //! olduğu gibi taşındı, davranış değiştirilmedi.
 
+use crate::commands::command_helpers::audit_actor;
+use crate::commands::receipt_commands::require_tenant_scope;
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
-use crate::commands::command_helpers::audit_actor;
-use crate::commands::receipt_commands::require_tenant_scope;
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -39,28 +38,33 @@ pub async fn open_shift(
     // kasa vardiyası açıp beklenen bakiyeyi belirleyebiliyordu.
     crate::rbac::require_any_present(
         actor_role.as_deref(),
-        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
     )?;
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
     // düşerse vardiya kimliğine sahip olmayan bir defter
     // yazılır (AGENTS.md §3.3).
     let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
-    
+
     // Check if open shift exists
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
-        .bind(&cashier_id)
-        .bind(&tenant_id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-        
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?",
+    )
+    .bind(&cashier_id)
+    .bind(&tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
     if count > 0 {
         return Err("Vardiya zaten açık (Shift already open)".into());
     }
-    
+
     let id = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO shifts (id, tenant_id, cashier_id, status, opened_at, expected_amount_cents) VALUES (?, ?, ?, 'OPEN', datetime('now'), ?)")
         .bind(&id)
@@ -87,9 +91,9 @@ pub async fn open_shift(
         now_iso,
     )?;
     crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
-        
+
     tx.commit().await.map_err(|e| e.to_string())?;
-    
+
     Ok(ShiftDto {
         id,
         tenant_id,
@@ -99,7 +103,7 @@ pub async fn open_shift(
         closed_at: None,
         expected_amount_cents,
         actual_amount_cents: None,
-        difference_cents: None
+        difference_cents: None,
     })
 }
 
@@ -117,16 +121,19 @@ pub async fn close_shift(
     // kasiyer dışındaki bir rol yapabiliyorsa muhasebe kaydı güvenilmez olur.
     crate::rbac::require_any_present(
         actor_role.as_deref(),
-        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
     )?;
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
     // düşerse vardiya kapanışı başka işletmenin kasanın
     // devresini yazabilir (AGENTS.md §3.3).
     let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
-    
+
     // Find open shift
     let row = sqlx::query("SELECT id, expected_amount_cents, tenant_id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
         .bind(&cashier_id)
@@ -134,16 +141,18 @@ pub async fn close_shift(
         .fetch_optional(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-        
+
     let r = row.ok_or("Aktif açık vardiya bulunamadı (No active open shift found)")?;
     // `expected_amount_cents` para okumasıdır: AGENTS.md §3.4 gereği hata
     // yukarı taşınır, sıfıra düşmez. Kasa farkı sıfır kabul edilemez.
     let id: String = r.try_get("id").map_err(|e| e.to_string())?;
-    let expected: i32 = r.try_get("expected_amount_cents").map_err(|e| e.to_string())?;
+    let expected: i32 = r
+        .try_get("expected_amount_cents")
+        .map_err(|e| e.to_string())?;
     let shift_tenant: String = r.try_get("tenant_id").map_err(|e| e.to_string())?;
-    
+
     let difference = actual_amount_cents - expected;
-    
+
     sqlx::query("UPDATE shifts SET status = 'CLOSED', closed_at = datetime('now'), actual_amount_cents = ?, difference_cents = ? WHERE id = ?")
         .bind(actual_amount_cents)
         .bind(difference)
@@ -173,9 +182,9 @@ pub async fn close_shift(
         now_iso,
     )?;
     crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
-        
+
     tx.commit().await.map_err(|e| e.to_string())?;
-    
+
     Ok(ShiftDto {
         id,
         tenant_id,
@@ -185,7 +194,7 @@ pub async fn close_shift(
         closed_at: Some(chrono::Utc::now().to_rfc3339()),
         expected_amount_cents: expected,
         actual_amount_cents: Some(actual_amount_cents),
-        difference_cents: Some(difference)
+        difference_cents: Some(difference),
     })
 }
 
@@ -204,7 +213,11 @@ pub async fn get_active_shift(
 ) -> Result<Option<ShiftDto>, String> {
     crate::rbac::require_any_present(
         Some(actor_role.as_str()),
-        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
     )?;
     let tenant = require_tenant_scope(Some(tenant_id.as_str()))?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -305,7 +318,11 @@ pub async fn get_shift_history(
     // vardiyalarını (kasa beklenen/gerçek tutarlarıyla) döküyordu.
     crate::rbac::require_any_present(
         actor_role.as_deref(),
-        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager, crate::rbac::Role::Cashier],
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
     )?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -336,10 +353,18 @@ pub async fn get_shift_history(
                 cashier_id: r.try_get("cashier_id").map_err(|e| e.to_string())?,
                 status: r.try_get("status").map_err(|e| e.to_string())?,
                 opened_at: r.try_get("opened_at").map_err(|e| e.to_string())?,
-                closed_at: r.try_get::<Option<String>, _>("closed_at").map_err(|e| e.to_string())?,
-                expected_amount_cents: r.try_get("expected_amount_cents").map_err(|e| e.to_string())?,
-                actual_amount_cents: r.try_get::<Option<i32>, _>("actual_amount_cents").map_err(|e| e.to_string())?,
-                difference_cents: r.try_get::<Option<i32>, _>("difference_cents").map_err(|e| e.to_string())?,
+                closed_at: r
+                    .try_get::<Option<String>, _>("closed_at")
+                    .map_err(|e| e.to_string())?,
+                expected_amount_cents: r
+                    .try_get("expected_amount_cents")
+                    .map_err(|e| e.to_string())?,
+                actual_amount_cents: r
+                    .try_get::<Option<i32>, _>("actual_amount_cents")
+                    .map_err(|e| e.to_string())?,
+                difference_cents: r
+                    .try_get::<Option<i32>, _>("difference_cents")
+                    .map_err(|e| e.to_string())?,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;

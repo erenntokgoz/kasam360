@@ -58,9 +58,14 @@ async fn fiyat_listesi_urun_fiyatini_egerse_kullanilir() {
     // Dinamik kural, listeden de üstündür ve tabanı ürün fiyatıdır: iki indirim
     // üst üste binmez, kural tek başına uygulanır. Aksi halde %20 kural %5 liste
     // üzerine biner ve kasada görünmeyen bir fiyat oluşur.
-    upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Mutfak Akşamı", 20, "17:00", "20:00"))
-        .await
-        .expect("kural kaydedilmeli");
+    upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Mutfak Akşamı", 20, "17:00", "20:00"),
+    )
+    .await
+    .expect("kural kaydedilmeli");
     let kural = effective_price(&mut conn, T, "prd_1", Some(sabit_gun("18:00")))
         .await
         .expect("fiyat cozulemeli");
@@ -87,15 +92,23 @@ async fn fiyat_listesi_urun_fiyatini_egerse_kullanilir() {
     )
     .await
     .expect_err("yabanci urun listeye yazilamamali");
-    assert!(sizinti.contains("NOT_FOUND") || sizinti.contains("bulunam"), "neden: {sizinti}");
+    assert!(
+        sizinti.contains("NOT_FOUND") || sizinti.contains("bulunam"),
+        "neden: {sizinti}"
+    );
 
     // Silme de kiraciya bagli.
-    let listeler = list_price_lists(&mut conn, T).await.expect("listeler okunmali");
+    let listeler = list_price_lists(&mut conn, T)
+        .await
+        .expect("listeler okunmali");
     assert_eq!(listeler.len(), 1);
     let silme = delete_price_list(&mut conn, T2, &listeler[0].id)
         .await
         .expect_err("yabanci liste silinememeli");
-    assert!(silme.contains("NOT_FOUND") || silme.contains("bulunam"), "neden: {silme}");
+    assert!(
+        silme.contains("NOT_FOUND") || silme.contains("bulunam"),
+        "neden: {silme}"
+    );
 }
 
 #[tokio::test]
@@ -116,7 +129,10 @@ async fn ogle_aksam_penceresi_etkin_urunde_gorunur() {
     )
     .await
     .expect("pencere olusmali");
-    assert_eq!(pencere.name, "OGLE", "pencere adi buyuk harfe normalize edilmeli");
+    assert_eq!(
+        pencere.name, "OGLE",
+        "pencere adi buyuk harfe normalize edilmeli"
+    );
 
     set_window_product(&mut conn, T, &pencere.id, "prd_1", true)
         .await
@@ -150,7 +166,9 @@ async fn ogle_aksam_penceresi_etkin_urunde_gorunur() {
         .expect("fiyat cozulemeli");
     assert_eq!(kapali.service_window, None);
 
-    let pencereler = list_service_windows(&mut conn, T).await.expect("pencereler okunmali");
+    let pencereler = list_service_windows(&mut conn, T)
+        .await
+        .expect("pencereler okunmali");
     assert_eq!(pencereler.len(), 1, "ayni ad iki pencere olmamali");
     assert_eq!(pencereler[0].id, pencere.id);
 
@@ -159,7 +177,10 @@ async fn ogle_aksam_penceresi_etkin_urunde_gorunur() {
     let sizinti = set_window_product(&mut conn, T2, &pencere.id, "prd_yabanci", true)
         .await
         .expect_err("yabanci pencere kullanilamamali");
-    assert!(sizinti.contains("NOT_FOUND") || sizinti.contains("bulunam"), "neden: {sizinti}");
+    assert!(
+        sizinti.contains("NOT_FOUND") || sizinti.contains("bulunam"),
+        "neden: {sizinti}"
+    );
 
     // Bitiş başlangıçtan önceyse pencere hiç oluşmamalı.
     let ters = upsert_service_window(

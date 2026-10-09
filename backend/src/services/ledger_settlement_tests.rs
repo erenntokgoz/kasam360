@@ -54,17 +54,16 @@ async fn veresiye_settlement_does_not_touch_cash_drawer() {
         .expect("kasa sayımı");
 
     let mut tx = p.begin().await.expect("işlem başlar");
-    let settlement =
-        crate::services::ledger_service::record_veresiye_settlement(
-            &mut tx,
-            TENANT,
-            "dir_cus",
-            "ord_01",
-            87_500,
-            Some("Masa 4 — veresiye"),
-        )
-        .await
-        .expect("veresiye kaydı açılır");
+    let settlement = crate::services::ledger_service::record_veresiye_settlement(
+        &mut tx,
+        TENANT,
+        "dir_cus",
+        "ord_01",
+        87_500,
+        Some("Masa 4 — veresiye"),
+    )
+    .await
+    .expect("veresiye kaydı açılır");
     tx.commit().await.expect("işlem kapanır");
 
     let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM cash_movements")
@@ -75,14 +74,14 @@ async fn veresiye_settlement_does_not_touch_cash_drawer() {
     assert_eq!(
         before, after,
         "veresiye kasa hareketi üretmemeli: {} -> {}",
-        before,
-        after
+        before, after
     );
 
-    let cash_total: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(amount_cents), 0) FROM cash_movements")
-        .fetch_one(&p)
-        .await
-        .expect("kasa toplamı");
+    let cash_total: i64 =
+        sqlx::query_scalar("SELECT COALESCE(SUM(amount_cents), 0) FROM cash_movements")
+            .fetch_one(&p)
+            .await
+            .expect("kasa toplamı");
     assert_eq!(cash_total, 0, "kasada hiç para hareketi olmamalı");
 
     // Buna karşılık borç açılmış olmalı.
@@ -98,9 +97,14 @@ async fn veresiye_settlement_does_not_touch_cash_drawer() {
 
     assert_eq!(debt_row.try_get::<String, _>("type").unwrap(), "GIVEN");
     assert_eq!(debt_row.try_get::<String, _>("status").unwrap(), "PENDING");
-    assert_eq!(debt_row.try_get::<i64, _>("total_amount_cents").unwrap(), 87_500);
     assert_eq!(
-        debt_row.try_get::<i64, _>("remaining_amount_cents").unwrap(),
+        debt_row.try_get::<i64, _>("total_amount_cents").unwrap(),
+        87_500
+    );
+    assert_eq!(
+        debt_row
+            .try_get::<i64, _>("remaining_amount_cents")
+            .unwrap(),
         87_500,
         "borç tam olarak açılmalı, kısmen değil"
     );
@@ -158,12 +162,7 @@ async fn veresiye_of_other_tenant_is_rejected() {
 
     let mut tx = p.begin().await.expect("işlem başlar");
     let err = crate::services::ledger_service::record_veresiye_settlement(
-        &mut tx,
-        TENANT,
-        "dir_f",
-        "ord_01",
-        5_000,
-        None,
+        &mut tx, TENANT, "dir_f", "ord_01", 5_000, None,
     )
     .await
     .expect_err("başka kiracının kartı reddedilmeli");

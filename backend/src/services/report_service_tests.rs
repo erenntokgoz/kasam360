@@ -56,13 +56,15 @@ async fn seed_table(pool: &sqlx::SqlitePool, tenant: &str, id: &str) {
 }
 
 async fn seed_category(pool: &sqlx::SqlitePool, tenant: &str, id: &str) {
-    sqlx::query("INSERT OR IGNORE INTO categories (id, tenant_id, name, display_order) VALUES (?, ?, ?, 0)")
-        .bind(id)
-        .bind(tenant)
-        .bind(id)
-        .execute(pool)
-        .await
-        .expect("kategori eklenir");
+    sqlx::query(
+        "INSERT OR IGNORE INTO categories (id, tenant_id, name, display_order) VALUES (?, ?, ?, 0)",
+    )
+    .bind(id)
+    .bind(tenant)
+    .bind(id)
+    .execute(pool)
+    .await
+    .expect("kategori eklenir");
 }
 
 async fn seed_product(pool: &sqlx::SqlitePool, tenant: &str, id: &str, category_id: &str) {
@@ -185,15 +187,36 @@ const ARALIK: (&str, &str) = ("2026-01-01T00:00:00+00:00", "2026-12-31T23:59:59+
 async fn ciro_yalnizca_paid_siparislerden_hesaplanir() {
     let pool = pool().await;
     seed_tenant(&pool, TENANT_A).await;
-    seed_order(&pool, TENANT_A, "ord_paid", "tbl_1", 45000, "2026-03-05 12:00:00", "PAID").await;
-    seed_order(&pool, TENANT_A, "ord_open", "tbl_1", 99000, "2026-03-05 12:05:00", "OPEN").await;
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_paid",
+        "tbl_1",
+        45000,
+        "2026-03-05 12:00:00",
+        "PAID",
+    )
+    .await;
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_open",
+        "tbl_1",
+        99000,
+        "2026-03-05 12:05:00",
+        "OPEN",
+    )
+    .await;
     let mut conn = conn_of(&pool).await;
 
     let report = sales_report(&mut conn, TENANT_A, &range(ARALIK.0, ARALIK.1))
         .await
         .expect("rapor okunur");
 
-    assert_eq!(report.total_revenue_cents, 45000, "açık sipariş cirosa girmemeli");
+    assert_eq!(
+        report.total_revenue_cents, 45000,
+        "açık sipariş cirosa girmemeli"
+    );
     assert_eq!(report.total_orders, 1);
     assert_eq!(report.average_order_value_cents, 45000);
 }
@@ -203,23 +226,71 @@ async fn baska_tenantin_cirosu_rapora_girmez() {
     let pool = pool().await;
     seed_tenant(&pool, TENANT_A).await;
     seed_tenant(&pool, TENANT_B).await;
-    seed_order(&pool, TENANT_A, "ord_a", "tbl_a", 10000, "2026-03-05 12:00:00", "PAID").await;
-    seed_order(&pool, TENANT_B, "ord_b", "tbl_b", 999000, "2026-03-05 12:00:00", "PAID").await;
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_a",
+        "tbl_a",
+        10000,
+        "2026-03-05 12:00:00",
+        "PAID",
+    )
+    .await;
+    seed_order(
+        &pool,
+        TENANT_B,
+        "ord_b",
+        "tbl_b",
+        999000,
+        "2026-03-05 12:00:00",
+        "PAID",
+    )
+    .await;
     let mut conn = conn_of(&pool).await;
 
     let a_report = sales_report(&mut conn, TENANT_A, &range(ARALIK.0, ARALIK.1))
         .await
         .expect("A raporu okunur");
-    assert_eq!(a_report.total_revenue_cents, 10000, "çapraz tenant sızıntısı");
+    assert_eq!(
+        a_report.total_revenue_cents, 10000,
+        "çapraz tenant sızıntısı"
+    );
 }
 
 #[tokio::test]
 async fn tarih_araligi_disi_kalan_siparisler_hicelenmez() {
     let pool = pool().await;
     seed_tenant(&pool, TENANT_A).await;
-    seed_order(&pool, TENANT_A, "ord_inside", "tbl_1", 10000, "2026-03-10 12:00:00", "PAID").await;
-    seed_order(&pool, TENANT_A, "ord_before", "tbl_1", 70000, "2025-12-31 23:00:00", "PAID").await;
-    seed_order(&pool, TENANT_A, "ord_after", "tbl_1", 80000, "2026-06-01 09:00:00", "PAID").await;
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_inside",
+        "tbl_1",
+        10000,
+        "2026-03-10 12:00:00",
+        "PAID",
+    )
+    .await;
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_before",
+        "tbl_1",
+        70000,
+        "2025-12-31 23:00:00",
+        "PAID",
+    )
+    .await;
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_after",
+        "tbl_1",
+        80000,
+        "2026-06-01 09:00:00",
+        "PAID",
+    )
+    .await;
     let mut conn = conn_of(&pool).await;
 
     let report = sales_report(
@@ -230,7 +301,10 @@ async fn tarih_araligi_disi_kalan_siparisler_hicelenmez() {
     .await
     .expect("rapor okunur");
 
-    assert_eq!(report.total_orders, 1, "yalnız aralıktaki sipariş sayılmalı");
+    assert_eq!(
+        report.total_orders, 1,
+        "yalnız aralıktaki sipariş sayılmalı"
+    );
     assert_eq!(report.total_revenue_cents, 10000);
 }
 
@@ -291,7 +365,16 @@ async fn kategori_hacmi_baska_tenant_urununu_saymaz() {
     seed_category(&pool, TENANT_B, "cat_b").await;
     seed_product(&pool, TENANT_A, "prd_a", "cat_a").await;
     seed_product(&pool, TENANT_B, "prd_b", "cat_b").await;
-    seed_order(&pool, TENANT_A, "ord_1", "tbl_1", 30000, "2026-03-05 12:00:00", "PAID").await;
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_1",
+        "tbl_1",
+        30000,
+        "2026-03-05 12:00:00",
+        "PAID",
+    )
+    .await;
     seed_order_item(&pool, "it_1", "ord_1", "prd_a", 3, 30000).await;
     let mut conn = conn_of(&pool).await;
 
@@ -368,7 +451,16 @@ async fn fis_raporu_kalem_toplamini_tek_sorguda_getirir() {
     seed_tenant(&pool, TENANT_A).await;
     seed_category(&pool, TENANT_A, "cat_a").await;
     seed_product(&pool, TENANT_A, "prd_a", "cat_a").await;
-    seed_order(&pool, TENANT_A, "ord_1", "tbl_1", 42000, "2026-03-05 12:00:00", "PAID").await;
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_1",
+        "tbl_1",
+        42000,
+        "2026-03-05 12:00:00",
+        "PAID",
+    )
+    .await;
     seed_order_item(&pool, "it_1", "ord_1", "prd_a", 2, 20000).await;
     seed_order_item(&pool, "it_2", "ord_1", "prd_a", 1, 22000).await;
     let mut conn = conn_of(&pool).await;
@@ -388,7 +480,16 @@ async fn fis_raporu_baska_tenantin_fisini_gormez() {
     let pool = pool().await;
     seed_tenant(&pool, TENANT_A).await;
     seed_tenant(&pool, TENANT_B).await;
-    seed_order(&pool, TENANT_B, "ord_b", "tbl_b", 77000, "2026-03-05 12:00:00", "PAID").await;
+    seed_order(
+        &pool,
+        TENANT_B,
+        "ord_b",
+        "tbl_b",
+        77000,
+        "2026-03-05 12:00:00",
+        "PAID",
+    )
+    .await;
     let mut conn = conn_of(&pool).await;
 
     let rows = receipts_report(&mut conn, TENANT_A, &range(ARALIK.0, ARALIK.1), 50)

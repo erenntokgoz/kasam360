@@ -173,9 +173,7 @@ pub async fn net_balance(
 
     let mut positions: Vec<AccountPosition> = Vec::with_capacity(rows.len());
     for r in rows {
-        let directory_type: String = r
-            .try_get("directory_type")
-            .map_err(|e| e.to_string())?;
+        let directory_type: String = r.try_get("directory_type").map_err(|e| e.to_string())?;
         let account_class = AccountClass::from_directory_type(&directory_type)?;
         let receivable_cents: i64 = r.try_get("receivable_cents").map_err(|e| e.to_string())?;
         let payable_cents: i64 = r.try_get("payable_cents").map_err(|e| e.to_string())?;
@@ -192,8 +190,16 @@ pub async fn net_balance(
             account_class,
             directory_id: r.try_get("directory_id").map_err(|e| e.to_string())?,
             directory_name: r.try_get("directory_name").map_err(|e| e.to_string())?,
-            receivable_cents: if owner_withdrawal_cents > 0 { 0 } else { receivable_cents },
-            payable_cents: if owner_withdrawal_cents > 0 { 0 } else { payable_cents },
+            receivable_cents: if owner_withdrawal_cents > 0 {
+                0
+            } else {
+                receivable_cents
+            },
+            payable_cents: if owner_withdrawal_cents > 0 {
+                0
+            } else {
+                payable_cents
+            },
             owner_withdrawal_cents,
             open_debts,
         });
@@ -277,21 +283,15 @@ pub async fn record_veresiye_settlement(
     // `directories.type` ile sınıflandırır. Veresiye bir müşteri alacağıdır;
     // yanlışlıkla bir tedarikçiye veya patron kartına yazılırsa P&L yanlış
     // yönde kayar.
-    let row = sqlx::query(
-        "SELECT name, type FROM directories WHERE id = ? AND tenant_id = ?",
-    )
-    .bind(directory_id)
-    .bind(tenant_id)
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(|e| format!("Veresiye cari kartı okunamadı: {}", e))?
-    .ok_or_else(|| {
-        "Veresiye için geçerli bir müşteri cari kartı seçilmelidir.".to_string()
-    })?;
+    let row = sqlx::query("SELECT name, type FROM directories WHERE id = ? AND tenant_id = ?")
+        .bind(directory_id)
+        .bind(tenant_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|e| format!("Veresiye cari kartı okunamadı: {}", e))?
+        .ok_or_else(|| "Veresiye için geçerli bir müşteri cari kartı seçilmelidir.".to_string())?;
 
-    let directory_type: String = row
-        .try_get("type")
-        .map_err(|e| e.to_string())?;
+    let directory_type: String = row.try_get("type").map_err(|e| e.to_string())?;
     if directory_type != "CUSTOMER" && directory_type != "STAFF" {
         return Err(format!(
             "Veresiye yalnız müşteri (CUSTOMER) veya personel (STAFF) kartına açılabilir; seçilen kart '{}'.",
@@ -326,7 +326,6 @@ pub async fn record_veresiye_settlement(
     })
 }
 
-
 #[cfg(test)]
 #[path = "ledger_service_tests.rs"]
 mod tests;
@@ -334,4 +333,3 @@ mod tests;
 #[cfg(test)]
 #[path = "ledger_settlement_tests.rs"]
 mod settlement_tests;
-

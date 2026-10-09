@@ -9,7 +9,9 @@
 use crate::commands::command_helpers::audit_actor;
 use crate::db::DbPool;
 use crate::id_generator::generate_id;
-use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant, require_ledger_write};
+use crate::ledger_commands::guard::{
+    require_ledger_read, require_ledger_tenant, require_ledger_write,
+};
 use crate::services::audit_service::{self, AuditContext, AuditService};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -114,9 +116,7 @@ pub(crate) fn resolve_date_range<'a>(
             let trimmed_start = s.trim();
             let trimmed_end = e.trim();
             if trimmed_start.is_empty() || trimmed_end.is_empty() {
-                return Err(
-                    "INVALID_ARGUMENT: startDate ve endDate boş olamaz".to_string(),
-                );
+                return Err("INVALID_ARGUMENT: startDate ve endDate boş olamaz".to_string());
             }
             if trimmed_start > trimmed_end {
                 return Err("INVALID_ARGUMENT: startDate endDate'den sonra olamaz".to_string());
@@ -124,9 +124,7 @@ pub(crate) fn resolve_date_range<'a>(
             Ok(Some((s, e)))
         }
         (None, None) => Ok(None),
-        _ => Err(
-            "INVALID_ARGUMENT: startDate ve endDate birlikte verilmelidir".to_string(),
-        ),
+        _ => Err("INVALID_ARGUMENT: startDate ve endDate birlikte verilmelidir".to_string()),
     }
 }
 
@@ -170,7 +168,7 @@ pub async fn get_expenses(
                 e.description, e.expense_date, e.created_at
          FROM general_expenses e
          LEFT JOIN directories d ON e.directory_id = d.id AND d.tenant_id = e.tenant_id
-         WHERE e.tenant_id = ?"
+         WHERE e.tenant_id = ?",
     );
 
     if category.is_some() {
@@ -195,7 +193,10 @@ pub async fn get_expenses(
         query = query.bind(ed);
     }
 
-    let rows = query.fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
+    let rows = query
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut result = Vec::with_capacity(rows.len());
     for r in rows {
@@ -241,7 +242,9 @@ pub async fn create_expense(
     // Nakit ise kasa hareketine yaz
     if payload.payment_method == "CASH" {
         let cm_id = generate_id("csh");
-        let shift_id_for_cm = active_shift_id.clone().unwrap_or_else(|| "NO_SHIFT".to_string());
+        let shift_id_for_cm = active_shift_id
+            .clone()
+            .unwrap_or_else(|| "NO_SHIFT".to_string());
         let reason = format!(
             "İşletme Gideri ({}): {}",
             payload.category,
@@ -331,4 +334,3 @@ pub async fn create_expense(
         created_at: chrono::Utc::now().to_rfc3339(),
     })
 }
-

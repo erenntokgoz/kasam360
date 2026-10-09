@@ -6,8 +6,7 @@
 
 use crate::db::DbPool;
 use crate::ledger_commands::expenses::{
-    resolve_date_range, ExpenseCategorySummaryDto, FinancialReportDto,
-    MonthlyFinancialTrendDto,
+    resolve_date_range, ExpenseCategorySummaryDto, FinancialReportDto, MonthlyFinancialTrendDto,
 };
 use crate::ledger_commands::guard::require_ledger_tenant;
 use crate::services::ledger_statement::format_cents;
@@ -125,20 +124,36 @@ pub async fn export_financial_report(
         "TutarTL".to_string(),
     ]);
 
-    rows.push(summary_row("Gelir", "Peşin satış toplamı", report.total_sales_revenue_cents));
+    rows.push(summary_row(
+        "Gelir",
+        "Peşin satış toplamı",
+        report.total_sales_revenue_cents,
+    ));
     rows.push(summary_row(
         "Gelir",
         "Veresiye tahsilatı",
         report.total_debt_collected_cents,
     ));
-    rows.push(summary_row("Gelir", "TOPLAM GELİR", report.total_revenue_cents));
-    rows.push(summary_row("Gider", "TOPLAM GİDER", report.total_expenses_cents));
+    rows.push(summary_row(
+        "Gelir",
+        "TOPLAM GELİR",
+        report.total_revenue_cents,
+    ));
+    rows.push(summary_row(
+        "Gider",
+        "TOPLAM GİDER",
+        report.total_expenses_cents,
+    ));
     rows.push(summary_row(
         "Sonuç",
         "NET KÂR / ZARAR",
         report.net_profit_cents,
     ));
-    rows.push(summary_row("Bilanço", "Açık alacak", report.receivables_cents));
+    rows.push(summary_row(
+        "Bilanço",
+        "Açık alacak",
+        report.receivables_cents,
+    ));
     rows.push(summary_row("Bilanço", "Açık borç", report.payables_cents));
 
     for c in &report.expenses_by_category {
@@ -146,8 +161,16 @@ pub async fn export_financial_report(
     }
 
     for t in &report.monthly_trend {
-        rows.push(summary_row("Aylık", &format!("{} gelir", t.month), t.revenue_cents));
-        rows.push(summary_row("Aylık", &format!("{} gider", t.month), t.expense_cents));
+        rows.push(summary_row(
+            "Aylık",
+            &format!("{} gelir", t.month),
+            t.revenue_cents,
+        ));
+        rows.push(summary_row(
+            "Aylık",
+            &format!("{} gider", t.month),
+            t.expense_cents,
+        ));
         rows.push(summary_row(
             "Aylık",
             &format!("{} net", t.month),

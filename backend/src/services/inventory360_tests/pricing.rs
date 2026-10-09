@@ -46,9 +46,14 @@ async fn happy_hour_indirimi_saat_disiinda_uygulanmaz() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;
     urun_ekle(&mut conn, T, "prd_1", "Kahve", 4500).await;
-    upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Mutfak Akşamı", 20, "17:00", "20:00"))
-        .await
-        .expect("kural kaydedilmeli");
+    upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Mutfak Akşamı", 20, "17:00", "20:00"),
+    )
+    .await
+    .expect("kural kaydedilmeli");
 
     let disinda = effective_price(&mut conn, T, "prd_1", Some(sabit_gun("12:00")))
         .await
@@ -76,9 +81,14 @@ async fn gece_yarisi_asan_kural_calisir() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;
     urun_ekle(&mut conn, T, "prd_1", "Kahve", 4500).await;
-    upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Gece", 10, "22:00", "02:00"))
-        .await
-        .expect("kural kaydedilmeli");
+    upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Gece", 10, "22:00", "02:00"),
+    )
+    .await
+    .expect("kural kaydedilmeli");
 
     for (saat, beklenen_kaynak) in [
         ("23:30", PriceSource::DynamicRule),
@@ -88,7 +98,10 @@ async fn gece_yarisi_asan_kural_calisir() {
         let sonuc = effective_price(&mut conn, T, "prd_1", Some(sabit_gun(saat)))
             .await
             .expect("fiyat cozulemeli");
-        assert_eq!(sonuc.source, beklenen_kaynak, "saat {saat} icin yanlis kaynak");
+        assert_eq!(
+            sonuc.source, beklenen_kaynak,
+            "saat {saat} icin yanlis kaynak"
+        );
     }
 
     // Saat karşılaştırması metinle yapıldığı için 22:00'i kapsayan akşam kısmı
@@ -104,9 +117,14 @@ async fn fiyat_dondurma_dinamik_indirimden_gucludur() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;
     urun_ekle(&mut conn, T, "prd_1", "Kahve", 4500).await;
-    upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Mutfak Akşamı", 20, "17:00", "20:00"))
-        .await
-        .expect("kural kaydedilmeli");
+    upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Mutfak Akşamı", 20, "17:00", "20:00"),
+    )
+    .await
+    .expect("kural kaydedilmeli");
     create_price_freeze(&mut conn, T, AKTOR, dondurma_girdisi("prd_1", 3800))
         .await
         .expect("dondurma acilmali");
@@ -117,15 +135,17 @@ async fn fiyat_dondurma_dinamik_indirimden_gucludur() {
     // Dondurma bir taahhüttür: aktif %20 indirim onu delmemeli.
     assert_eq!(sonuc.source, PriceSource::Frozen);
     assert_eq!(sonuc.final_price_cents, 3800);
-    assert_eq!(sonuc.rule_id, None, "dondurma secildiğinde kural uygulanmamali");
+    assert_eq!(
+        sonuc.rule_id, None,
+        "dondurma secildiğinde kural uygulanmamali"
+    );
 
     // Süresi dolmuş dondurma tekrar devreye girmemeli.
-    let bitmis = sqlx::query(
-        "UPDATE price_freezes SET valid_from = '2000-01-01', valid_to = '2000-01-02'",
-    )
-    .execute(&mut conn)
-    .await
-    .expect("dondurma guncellenmeli");
+    let bitmis =
+        sqlx::query("UPDATE price_freezes SET valid_from = '2000-01-01', valid_to = '2000-01-02'")
+            .execute(&mut conn)
+            .await
+            .expect("dondurma guncellenmeli");
     assert_eq!(bitmis.rows_affected(), 1);
     let sonraki = effective_price(&mut conn, T, "prd_1", Some(sabit_gun("18:00")))
         .await
@@ -179,7 +199,10 @@ async fn toplu_zam_dondurulmus_urunde_uygulanmaz_ama_atlanmaz() {
     let sonuc = bulk_update_prices(
         &mut conn,
         T,
-        toplu_girdisi(Some(vec!["prd_1".to_string(), "prd_2".to_string()]), Some(10.0)),
+        toplu_girdisi(
+            Some(vec!["prd_1".to_string(), "prd_2".to_string()]),
+            Some(10.0),
+        ),
     )
     .await
     .expect("toplu zam calismali");
@@ -191,8 +214,14 @@ async fn toplu_zam_dondurulmus_urunde_uygulanmaz_ama_atlanmaz() {
     // Dondurma sessizce yutulmaz: raporda görünür ve fiyatı değişmez.
     assert_eq!(sonuc.skipped.len(), 1);
     assert_eq!(sonuc.skipped[0].product_id, "prd_1");
-    assert_eq!(sonuc.skipped[0].new_price_cents, 4500, "dondurulmus urun degismemeli");
-    assert!(sonuc.skipped[0].skipped.is_some(), "atlama nedeni bildirilmeli");
+    assert_eq!(
+        sonuc.skipped[0].new_price_cents, 4500,
+        "dondurulmus urun degismemeli"
+    );
+    assert!(
+        sonuc.skipped[0].skipped.is_some(),
+        "atlama nedeni bildirilmeli"
+    );
 
     let satir = sqlx::query("SELECT price_cents FROM products WHERE id = 'prd_1'")
         .fetch_one(&mut conn)
@@ -208,9 +237,13 @@ async fn toplu_zam_uretken_negatif_fiyat_uretmez() {
     let mut conn = conn_of(&pool).await;
     urun_ekle(&mut conn, T, "prd_1", "Kahve", 100).await;
 
-    let sonuc = bulk_update_prices(&mut conn, T, toplu_girdisi(Some(vec!["prd_1".to_string()]), Some(-150.0)))
-        .await
-        .expect("toplu zam calismali");
+    let sonuc = bulk_update_prices(
+        &mut conn,
+        T,
+        toplu_girdisi(Some(vec!["prd_1".to_string()]), Some(-150.0)),
+    )
+    .await
+    .expect("toplu zam calismali");
 
     assert!(sonuc.changed.is_empty(), "negatif fiyat uygulanmamali");
     assert_eq!(sonuc.skipped.len(), 1);
@@ -235,7 +268,10 @@ async fn toplu_zam_hedefsiz_cagrilamaz() {
     let hedefsiz = bulk_update_prices(&mut conn, T, toplu_girdisi(None, Some(10.0)))
         .await
         .expect_err("hedefsiz toplu zam reddedilmeli");
-    assert!(hedefsiz.contains("zorunlu"), "neden belirtilmeli: {hedefsiz}");
+    assert!(
+        hedefsiz.contains("zorunlu"),
+        "neden belirtilmeli: {hedefsiz}"
+    );
 
     let degisimsiz = bulk_update_prices(
         &mut conn,
@@ -250,7 +286,10 @@ async fn toplu_zam_hedefsiz_cagrilamaz() {
     )
     .await
     .expect_err("yuzdesiz ve kurussuz cagri reddedilmeli");
-    assert!(degisimsiz.contains("zorunlu"), "neden belirtilmeli: {degisimsiz}");
+    assert!(
+        degisimsiz.contains("zorunlu"),
+        "neden belirtilmeli: {degisimsiz}"
+    );
 
     let negatif = bulk_update_prices(
         &mut conn,
@@ -288,20 +327,35 @@ async fn kurt_alan_indirim_yuzdesi_reddedilir() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;
 
-    let sifir = upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Sifir", 0, "10:00", "12:00"))
-        .await
-        .expect_err("sifir indirim reddedilmeli");
+    let sifir = upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Sifir", 0, "10:00", "12:00"),
+    )
+    .await
+    .expect_err("sifir indirim reddedilmeli");
     assert!(sifir.contains("1-90"), "neden belirtilmeli: {sifir}");
 
-    let asiri = upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Asiri", 91, "10:00", "12:00"))
-        .await
-        .expect_err("%91 indirim reddedilmeli");
+    let asiri = upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Asiri", 91, "10:00", "12:00"),
+    )
+    .await
+    .expect_err("%91 indirim reddedilmeli");
     assert!(asiri.contains("1-90"), "neden belirtilmeli: {asiri}");
 
     // Kapsam sınırı kabul edilmeli.
-    upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Sinir", 90, "10:00", "12:00"))
-        .await
-        .expect("siniirdaki indirim kabul edilmeli");
+    upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Sinir", 90, "10:00", "12:00"),
+    )
+    .await
+    .expect("siniirdaki indirim kabul edilmeli");
 
     let tur = upsert_pricing_rule(
         &mut conn,
@@ -316,10 +370,18 @@ async fn kurt_alan_indirim_yuzdesi_reddedilir() {
     .expect_err("bilinmeyen kural turu reddedilmeli");
     assert!(tur.contains("geçersiz"), "neden belirtilmeli: {tur}");
 
-    let sifir_bitis = upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Bos", 10, "10:00", "10:00"))
-        .await
-        .expect_err("baslangicla ayni bitis reddedilmeli");
-    assert!(sifir_bitis.contains("farklı"), "neden belirtilmeli: {sifir_bitis}");
+    let sifir_bitis = upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Bos", 10, "10:00", "10:00"),
+    )
+    .await
+    .expect_err("baslangicla ayni bitis reddedilmeli");
+    assert!(
+        sifir_bitis.contains("farklı"),
+        "neden belirtilmeli: {sifir_bitis}"
+    );
 }
 
 #[tokio::test]
@@ -327,20 +389,44 @@ async fn bozuk_saat_bicimi_reddedilir() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;
 
-    let aralik_disi = upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Bicim", 10, "25:00", "26:00"))
-        .await
-        .expect_err("saat 25 reddedilmeli");
-    assert!(aralik_disi.contains("aralık dışında"), "neden belirtilmeli: {aralik_disi}");
+    let aralik_disi = upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Bicim", 10, "25:00", "26:00"),
+    )
+    .await
+    .expect_err("saat 25 reddedilmeli");
+    assert!(
+        aralik_disi.contains("aralık dışında"),
+        "neden belirtilmeli: {aralik_disi}"
+    );
 
-    let sayi_degil = upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Bicim", 10, "aa:bb", "12:00"))
-        .await
-        .expect_err("sayi olmayan saat reddedilmeli");
-    assert!(sayi_degil.contains("okunamadı"), "neden belirtilmeli: {sayi_degil}");
+    let sayi_degil = upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Bicim", 10, "aa:bb", "12:00"),
+    )
+    .await
+    .expect_err("sayi olmayan saat reddedilmeli");
+    assert!(
+        sayi_degil.contains("okunamadı"),
+        "neden belirtilmeli: {sayi_degil}"
+    );
 
-    let eksik_parca = upsert_pricing_rule(&mut conn, T, AKTOR, kural_girdisi("Bicim", 10, "10", "12:00"))
-        .await
-        .expect_err("saatsiz saat reddedilmeli");
-    assert!(eksik_parca.contains("SS:DD"), "neden belirtilmeli: {eksik_parca}");
+    let eksik_parca = upsert_pricing_rule(
+        &mut conn,
+        T,
+        AKTOR,
+        kural_girdisi("Bicim", 10, "10", "12:00"),
+    )
+    .await
+    .expect_err("saatsiz saat reddedilmeli");
+    assert!(
+        eksik_parca.contains("SS:DD"),
+        "neden belirtilmeli: {eksik_parca}"
+    );
 
     let sayi: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM dynamic_pricing_rules")
         .fetch_one(&mut conn)
@@ -354,13 +440,24 @@ async fn atlanan_urun_satis_disi_birakilir() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;
     urun_ekle(&mut conn, T, "prd_1", "Kahve", 4500).await;
-    set_product_86d(&mut conn, T, AKTOR, "prd_1", true, Some("bitti".to_string()))
-        .await
-        .expect("86 verilmeli");
+    set_product_86d(
+        &mut conn,
+        T,
+        AKTOR,
+        "prd_1",
+        true,
+        Some("bitti".to_string()),
+    )
+    .await
+    .expect("86 verilmeli");
 
-    bulk_update_prices(&mut conn, T, toplu_girdisi(Some(vec!["prd_1".to_string()]), Some(10.0)))
-        .await
-        .expect("toplu zam calismali");
+    bulk_update_prices(
+        &mut conn,
+        T,
+        toplu_girdisi(Some(vec!["prd_1".to_string()]), Some(10.0)),
+    )
+    .await
+    .expect("toplu zam calismali");
 
     // Zam 86 bayrağına dokunmaz: 86 geçicidir, ürün stoğu gelince menüye döner.
     let sonuc = effective_price(&mut conn, T, "prd_1", Some(sabit_gun("12:00")))
@@ -373,21 +470,45 @@ async fn atlanan_urun_satis_disi_birakilir() {
         .fetch_one(&mut conn)
         .await
         .expect("urun okunmali");
-    assert_eq!(satir.try_get::<bool, _>("is_active").expect("kolon okunmali"), true);
-    assert_eq!(satir.try_get::<bool, _>("is_86").expect("kolon okunmali"), true);
+    assert_eq!(
+        satir
+            .try_get::<bool, _>("is_active")
+            .expect("kolon okunmali"),
+        true
+    );
+    assert_eq!(
+        satir.try_get::<bool, _>("is_86").expect("kolon okunmali"),
+        true
+    );
 
     // Stoğa dönünce 86 kalkmalı, kalıcı menü bayrağına dokunulmamalı.
-    set_product_86d(&mut conn, T, AKTOR, "prd_1", false, Some("bitti".to_string()))
-        .await
-        .expect("86 kaldirilmali");
-    let geri = sqlx::query("SELECT is_active, is_86, stockout_reason FROM products WHERE id = 'prd_1'")
-        .fetch_one(&mut conn)
-        .await
-        .expect("urun okunmali");
-    assert_eq!(geri.try_get::<bool, _>("is_active").expect("kolon okunmali"), true);
-    assert_eq!(geri.try_get::<bool, _>("is_86").expect("kolon okunmali"), false);
+    set_product_86d(
+        &mut conn,
+        T,
+        AKTOR,
+        "prd_1",
+        false,
+        Some("bitti".to_string()),
+    )
+    .await
+    .expect("86 kaldirilmali");
+    let geri =
+        sqlx::query("SELECT is_active, is_86, stockout_reason FROM products WHERE id = 'prd_1'")
+            .fetch_one(&mut conn)
+            .await
+            .expect("urun okunmali");
     assert_eq!(
-        geri.try_get::<Option<String>, _>("stockout_reason").expect("kolon okunmali"),
+        geri.try_get::<bool, _>("is_active")
+            .expect("kolon okunmali"),
+        true
+    );
+    assert_eq!(
+        geri.try_get::<bool, _>("is_86").expect("kolon okunmali"),
+        false
+    );
+    assert_eq!(
+        geri.try_get::<Option<String>, _>("stockout_reason")
+            .expect("kolon okunmali"),
         None,
         "stok acilisi gerekcesi temizlenmeli"
     );
@@ -402,7 +523,10 @@ async fn yabanci_isletmenin_urunu_86_yapilamaz() {
     let hata = set_product_86d(&mut conn, T, AKTOR, "prd_yabanci", true, None)
         .await
         .expect_err("yabanci urun 86 yapilamamali");
-    assert!(hata.contains("NOT_FOUND") || hata.contains("bulunam"), "neden belirtilmeli: {hata}");
+    assert!(
+        hata.contains("NOT_FOUND") || hata.contains("bulunam"),
+        "neden belirtilmeli: {hata}"
+    );
 
     let satir = sqlx::query("SELECT is_86 FROM products WHERE id = 'prd_yabanci'")
         .fetch_one(&mut conn)
@@ -425,4 +549,3 @@ async fn yabanci_isletmenin_urunu_86_yapilamaz() {
         .expect("fiyat cozulemeli");
     assert_eq!(yabanci.base_price_cents, 4500);
 }
-

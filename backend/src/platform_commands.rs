@@ -17,10 +17,10 @@ pub use master_vault_commands::{
 };
 
 use crate::db::DbPool;
+use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
 use serde::{Deserialize, Serialize};
 use sqlx::{Acquire, Row};
 use uuid::Uuid;
-use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
 
 /// Platform seviyesindeki (çapraz tenant) denetim kayıtlarının taşındığı
 /// ayrılmış platform ad alanı. MASTER'ın kendi işletmesi yoktur; platform
@@ -43,10 +43,12 @@ pub struct TenantDto {
     pub address: Option<String>,
 }
 
-
-
 #[tauri::command]
-pub async fn get_tenants(caller_role: String, caller_tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<TenantDto>, String> {
+pub async fn get_tenants(
+    caller_role: String,
+    caller_tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<TenantDto>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     // MASTER tüm tenant'ları görür; SPEC kuralı 7 gereği başka hiçbir rol
@@ -65,18 +67,23 @@ pub async fn get_tenants(caller_role: String, caller_tenant_id: String, pool: ta
     if !is_master {
         q = q.bind(caller_tenant_id);
     }
-    
+
     let rows = q.fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
-    
+
     let mut tenants = Vec::new();
     for row in rows {
         let tenant_id: String = row.try_get("id").unwrap_or_default();
-        let module_rows = sqlx::query("SELECT module_id FROM tenant_modules WHERE tenant_id = ? AND is_active = 1")
-            .bind(&tenant_id)
-            .fetch_all(&mut *conn)
-            .await
-            .unwrap_or_default();
-        let modules: Vec<String> = module_rows.into_iter().map(|r| r.try_get("module_id").unwrap_or_default()).collect();
+        let module_rows = sqlx::query(
+            "SELECT module_id FROM tenant_modules WHERE tenant_id = ? AND is_active = 1",
+        )
+        .bind(&tenant_id)
+        .fetch_all(&mut *conn)
+        .await
+        .unwrap_or_default();
+        let modules: Vec<String> = module_rows
+            .into_iter()
+            .map(|r| r.try_get("module_id").unwrap_or_default())
+            .collect();
 
         tenants.push(TenantDto {
             id: tenant_id,
@@ -94,8 +101,6 @@ pub async fn get_tenants(caller_role: String, caller_tenant_id: String, pool: ta
     }
     Ok(tenants)
 }
-
-
 
 #[tauri::command]
 pub async fn create_tenant(
@@ -145,7 +150,7 @@ pub async fn create_tenant(
     let branch_id = format!("br_{}", &Uuid::new_v4().to_string()[..8]);
     let branch_title = branch_name.unwrap_or_else(|| "Merkez Şube".to_string());
     sqlx::query(
-        "INSERT INTO branches (id, tenant_id, name, address, status) VALUES (?, ?, ?, ?, 'ACTIVE')"
+        "INSERT INTO branches (id, tenant_id, name, address, status) VALUES (?, ?, ?, ?, 'ACTIVE')",
     )
     .bind(&branch_id)
     .bind(&tenant_id)
@@ -205,7 +210,13 @@ pub async fn create_tenant(
     // Tenant içi PIN benzersizliği: aynı PIN başka bir personelde kullanılıyorsa
     // işletme kurulumu reddedilir. Kontroller aynı transaction içindedir.
     crate::user_credentials::ensure_pin_available(&mut tx, &tenant_id, &final_pin, None).await?;
-    crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &final_pin, &owner_user_id).await?;
+    crate::user_credentials::ensure_pin_unique_after_write(
+        &mut tx,
+        &tenant_id,
+        &final_pin,
+        &owner_user_id,
+    )
+    .await?;
 
     // 4. Lisans anahtarını kaydet
     let final_license_key = license_key.unwrap_or_else(|| {
@@ -214,7 +225,7 @@ pub async fn create_tenant(
     });
     let lic_id = format!("lic_{}", &Uuid::new_v4().to_string()[..8]);
     sqlx::query(
-        "INSERT INTO licenses (id, tenant_id, license_key, status) VALUES (?, ?, ?, 'ACTIVE')"
+        "INSERT INTO licenses (id, tenant_id, license_key, status) VALUES (?, ?, ?, 'ACTIVE')",
     )
     .bind(&lic_id)
     .bind(&tenant_id)
@@ -227,7 +238,7 @@ pub async fn create_tenant(
     let active_modules = modules.unwrap_or_else(|| vec!["core".to_string()]);
     for module_id in &active_modules {
         sqlx::query(
-            "INSERT INTO tenant_modules (tenant_id, module_id, is_active) VALUES (?, ?, 1)"
+            "INSERT INTO tenant_modules (tenant_id, module_id, is_active) VALUES (?, ?, 1)",
         )
         .bind(&tenant_id)
         .bind(module_id)
@@ -236,7 +247,9 @@ pub async fn create_tenant(
         .map_err(|e| format!("Abonelik modülü kaydedilemedi: {}", e))?;
     }
 
-    tx.commit().await.map_err(|e| format!("İşlem onaylanamadı: {}", e))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("İşlem onaylanamadı: {}", e))?;
 
     // İşletme kurulumu sistem ve yetki tarafını da değiştirir (modüller, lisans,
     // yönetici PIN'i). Tek denetim kaydı yeterlidir; hassas veriler kayda girmez.
@@ -312,14 +325,16 @@ pub async fn update_tenant(
             .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
-        
+
         for module_id in &mod_list {
-            sqlx::query("INSERT INTO tenant_modules (tenant_id, module_id, is_active) VALUES (?, ?, 1)")
-                .bind(&id)
-                .bind(module_id)
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
+            sqlx::query(
+                "INSERT INTO tenant_modules (tenant_id, module_id, is_active) VALUES (?, ?, 1)",
+            )
+            .bind(&id)
+            .bind(module_id)
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
         }
     }
 
@@ -329,12 +344,16 @@ pub async fn update_tenant(
         .await
         .map_err(|e| e.to_string())?;
 
-    let module_rows = sqlx::query("SELECT module_id FROM tenant_modules WHERE tenant_id = ? AND is_active = 1")
-        .bind(&id)
-        .fetch_all(&mut *conn)
-        .await
-        .unwrap_or_default();
-    let current_modules: Vec<String> = module_rows.into_iter().map(|r| r.try_get("module_id").unwrap_or_default()).collect();
+    let module_rows =
+        sqlx::query("SELECT module_id FROM tenant_modules WHERE tenant_id = ? AND is_active = 1")
+            .bind(&id)
+            .fetch_all(&mut *conn)
+            .await
+            .unwrap_or_default();
+    let current_modules: Vec<String> = module_rows
+        .into_iter()
+        .map(|r| r.try_get("module_id").unwrap_or_default())
+        .collect();
 
     let audit_ctx = AuditContext::new(
         PLATFORM_AUDIT_TENANT.to_string(),
@@ -367,19 +386,32 @@ pub async fn update_tenant(
 }
 
 #[tauri::command]
-pub async fn suspend_tenant(caller_role: String, tenant_id: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
+pub async fn suspend_tenant(
+    caller_role: String,
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     sqlx::query("UPDATE tenants SET status = 'SUSPENDED' WHERE id = ?")
-        .bind(&tenant_id).execute(&*pool).await.map_err(|e| e.to_string())?;
+        .bind(&tenant_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
     let _ = sqlx::query("UPDATE subscriptions SET status = 'SUSPENDED' WHERE tenant_id = ?")
-        .bind(&tenant_id).execute(&*pool).await;
+        .bind(&tenant_id)
+        .execute(&*pool)
+        .await;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let ctx = AuditContext::new(
-        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
+        PLATFORM_AUDIT_TENANT.to_string(),
+        "usr_master".to_string(),
+        "MASTER".to_string(),
         crate::services::audit_service::category::SISTEM,
-        "system:tenant_suspended", tenant_id.clone(),
+        "system:tenant_suspended",
+        tenant_id.clone(),
         serde_json::json!({ "changes": { "status": { "old": "ACTIVE", "new": "SUSPENDED" } } }),
         chrono::Utc::now().to_rfc3339(),
     )?;
@@ -388,19 +420,32 @@ pub async fn suspend_tenant(caller_role: String, tenant_id: String, pool: tauri:
 }
 
 #[tauri::command]
-pub async fn activate_tenant(caller_role: String, tenant_id: String, pool: tauri::State<'_, DbPool>, state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
+pub async fn activate_tenant(
+    caller_role: String,
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     sqlx::query("UPDATE tenants SET status = 'ACTIVE' WHERE id = ?")
-        .bind(&tenant_id).execute(&*pool).await.map_err(|e| e.to_string())?;
+        .bind(&tenant_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| e.to_string())?;
     let _ = sqlx::query("UPDATE subscriptions SET status = 'ACTIVE' WHERE tenant_id = ?")
-        .bind(&tenant_id).execute(&*pool).await;
+        .bind(&tenant_id)
+        .execute(&*pool)
+        .await;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let ctx = AuditContext::new(
-        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
+        PLATFORM_AUDIT_TENANT.to_string(),
+        "usr_master".to_string(),
+        "MASTER".to_string(),
         crate::services::audit_service::category::SISTEM,
-        "system:tenant_activated", tenant_id.clone(),
+        "system:tenant_activated",
+        tenant_id.clone(),
         serde_json::json!({ "changes": { "status": { "old": "SUSPENDED", "new": "ACTIVE" } } }),
         chrono::Utc::now().to_rfc3339(),
     )?;
@@ -433,22 +478,27 @@ pub async fn update_tenant_modules(
         .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
-    
+
     for module_id in &modules {
-        sqlx::query("INSERT INTO tenant_modules (tenant_id, module_id, is_active) VALUES (?, ?, 1)")
-            .bind(&tenant_id)
-            .bind(module_id)
-            .execute(&mut *conn)
-            .await
-            .map_err(|e| e.to_string())?;
+        sqlx::query(
+            "INSERT INTO tenant_modules (tenant_id, module_id, is_active) VALUES (?, ?, 1)",
+        )
+        .bind(&tenant_id)
+        .bind(module_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
     }
 
     // Modül değişikliği işletmenin yetki sınırlarını belirler: "Yetki"
     // kategorisine yazılır ve eski liste kayıtta korunur.
     let ctx = AuditContext::new(
-        PLATFORM_AUDIT_TENANT.to_string(), "usr_master".to_string(), "MASTER".to_string(),
+        PLATFORM_AUDIT_TENANT.to_string(),
+        "usr_master".to_string(),
+        "MASTER".to_string(),
         crate::services::audit_service::category::YETKI,
-        "platform:tenant_modules_updated", tenant_id.clone(),
+        "platform:tenant_modules_updated",
+        tenant_id.clone(),
         serde_json::json!({
             "changes": { "modules": { "old": previous, "new": modules } }
         }),
@@ -468,17 +518,25 @@ pub struct GlobalUserDto {
 }
 
 #[tauri::command]
-pub async fn get_global_users(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<GlobalUserDto>, String> {
+pub async fn get_global_users(
+    caller_role: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<GlobalUserDto>, String> {
     crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("SELECT id, name, role, tenant_id FROM users")
-        .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
-    let users = rows.into_iter().map(|r| GlobalUserDto {
-        id: r.try_get("id").unwrap_or_default(),
-        name: r.try_get("name").unwrap_or_default(),
-        role: r.try_get("role").unwrap_or_default(),
-        tenant_id: r.try_get("tenant_id").unwrap_or_default(),
-    }).collect();
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+    let users = rows
+        .into_iter()
+        .map(|r| GlobalUserDto {
+            id: r.try_get("id").unwrap_or_default(),
+            name: r.try_get("name").unwrap_or_default(),
+            role: r.try_get("role").unwrap_or_default(),
+            tenant_id: r.try_get("tenant_id").unwrap_or_default(),
+        })
+        .collect();
     Ok(users)
 }
 
@@ -486,22 +544,30 @@ pub async fn get_global_users(caller_role: String, pool: tauri::State<'_, DbPool
 /// zincirin bütünlüğü `verify_audit_ledger_integrity` ile ayrı komuttan sorulur,
 /// ham hash hiçbir arayüzden görünmez (AGENTS.md §3.2).
 #[tauri::command]
-pub async fn get_platform_audit_logs(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<serde_json::Value>, String> {
+pub async fn get_platform_audit_logs(
+    caller_role: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<serde_json::Value>, String> {
     crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = sqlx::query("SELECT id, sequence, timestamp, actor_id, actor_role, category, action, resource_id FROM audit_ledger ORDER BY sequence DESC LIMIT 200")
         .fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
-    let logs: Vec<serde_json::Value> = rows.into_iter().map(|r| serde_json::json!({
-        "id": r.try_get::<String,_>("id").unwrap_or_default(),
-        "sequence": r.try_get::<i64,_>("sequence").unwrap_or(0),
-        "timestamp": r.try_get::<String,_>("timestamp").unwrap_or_default(),
-        "actorId": r.try_get::<String,_>("actor_id").unwrap_or_default(),
-        "actorRole": r.try_get::<String,_>("actor_role").unwrap_or_default(),
-        "category": r.try_get::<String,_>("category").unwrap_or_default(),
-        "action": r.try_get::<String,_>("action").unwrap_or_default(),
-        "resourceId": r.try_get::<String,_>("resource_id").unwrap_or_default(),
-        "sealed": true,
-    })).collect();
+    let logs: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|r| {
+            serde_json::json!({
+                "id": r.try_get::<String,_>("id").unwrap_or_default(),
+                "sequence": r.try_get::<i64,_>("sequence").unwrap_or(0),
+                "timestamp": r.try_get::<String,_>("timestamp").unwrap_or_default(),
+                "actorId": r.try_get::<String,_>("actor_id").unwrap_or_default(),
+                "actorRole": r.try_get::<String,_>("actor_role").unwrap_or_default(),
+                "category": r.try_get::<String,_>("category").unwrap_or_default(),
+                "action": r.try_get::<String,_>("action").unwrap_or_default(),
+                "resourceId": r.try_get::<String,_>("resource_id").unwrap_or_default(),
+                "sealed": true,
+            })
+        })
+        .collect();
     Ok(logs)
 }
 
@@ -509,7 +575,10 @@ pub async fn get_platform_audit_logs(caller_role: String, pool: tauri::State<'_,
 /// row is reported to the caller; verification never mutates the ledger and
 /// never returns a hash value.
 #[tauri::command]
-pub async fn verify_audit_ledger_integrity(caller_role: String, pool: tauri::State<'_, DbPool>) -> Result<serde_json::Value, String> {
+pub async fn verify_audit_ledger_integrity(
+    caller_role: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<serde_json::Value, String> {
     crate::rbac::require_master(&caller_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
@@ -548,7 +617,10 @@ pub async fn create_remote_session(
     crate::rbac::require_master_present(caller_role.as_deref())?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let session_id = format!("sess_{}", &uuid::Uuid::new_v4().to_string()[..8]);
-    let ticket = format!("TICKET_{}", &uuid::Uuid::new_v4().to_string()[..12].to_uppercase());
+    let ticket = format!(
+        "TICKET_{}",
+        &uuid::Uuid::new_v4().to_string()[..12].to_uppercase()
+    );
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let now_iso = chrono::Utc::now().to_rfc3339();
@@ -564,7 +636,10 @@ pub async fn create_remote_session(
         "usr_master".to_string(),
         "MASTER".to_string(),
         crate::services::audit_service::category::SISTEM,
-        format!("system:remote_session_attached ({}/{})", target_view, target_role),
+        format!(
+            "system:remote_session_attached ({}/{})",
+            target_view, target_role
+        ),
         format!("tenant:{}", tenant_id),
         payload,
         now_iso,
@@ -636,7 +711,6 @@ pub async fn execute_it_action(
     }))
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultCredentialsDto {
@@ -682,7 +756,10 @@ pub async fn get_user_credentials(
         // Düz metin PIN artık hiçbir yerde saklanmaz, dolayısıyla geri döndürülemez.
         // Kasa yalnızca yeni PIN tanımlayabilir; modal bunu yerelde gösterir.
         pin: None,
-        email: Some(format!("{}@kasam360.com", name.to_lowercase().replace(' ', ""))),
+        email: Some(format!(
+            "{}@kasam360.com",
+            name.to_lowercase().replace(' ', "")
+        )),
         password: Some("••••••••".to_string()),
         license_key: license_key.or_else(|| Some("LIC-360-DEFAULT-KEY".to_string())),
         last_login: Some(chrono::Utc::now().to_rfc3339()),
@@ -723,13 +800,14 @@ pub async fn reset_user_password(
     // `tenant_id` hedef kullanıcının **kendi** kiracısıdır: MASTER bir kiracının
     // parolasını sıfırlayabilir ama başka kiracınınki değiştirilemez. Satır
     // etkilenmezse hata verilir; aksi halde "bulunamadı" mesajı sessizce yutulur.
-    let etkilenen = sqlx::query("UPDATE users SET credential_hash = ? WHERE id = ? AND tenant_id = ?")
-        .bind(&hash)
-        .bind(&user_id)
-        .bind(&tenant_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
+    let etkilenen =
+        sqlx::query("UPDATE users SET credential_hash = ? WHERE id = ? AND tenant_id = ?")
+            .bind(&hash)
+            .bind(&user_id)
+            .bind(&tenant_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if etkilenen.rows_affected() == 0 {
         return Err("Kullanıcı bulunamadı.".to_string());
@@ -739,17 +817,24 @@ pub async fn reset_user_password(
     // parolayla giremezse eski hatalı denemeleri yüzünden kilitli kalır ve
     // "parolam sıfırlandı ama giremiyorum" durumu oluşur.
     sqlx::query("DELETE FROM login_attempts WHERE scope IN (?, ?)")
-        .bind(crate::services::security360::login_lockout::hesap_kapsami(&user_id))
-        .bind(crate::services::security360::login_lockout::pin_kapsami(&tenant_id))
+        .bind(crate::services::security360::login_lockout::hesap_kapsami(
+            &user_id,
+        ))
+        .bind(crate::services::security360::login_lockout::pin_kapsami(
+            &tenant_id,
+        ))
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
 
     // Defterde parolanın kendisi ya da hash'i yazılmaz; yalnızca olay.
     let ctx = AuditContext::new(
-        tenant_id, "usr_master".to_string(), "MASTER".to_string(),
+        tenant_id,
+        "usr_master".to_string(),
+        "MASTER".to_string(),
         crate::services::audit_service::category::GUVENLIK,
-        "security:password_reset_by_master", user_id.clone(),
+        "security:password_reset_by_master",
+        user_id.clone(),
         serde_json::json!({ "targetUserId": user_id }),
         chrono::Utc::now().to_rfc3339(),
     )?;
@@ -789,7 +874,8 @@ pub async fn change_user_pin(
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-    crate::user_credentials::ensure_pin_available(&mut tx, &tenant_id, &new_pin, Some(&user_id)).await?;
+    crate::user_credentials::ensure_pin_available(&mut tx, &tenant_id, &new_pin, Some(&user_id))
+        .await?;
 
     sqlx::query("UPDATE users SET pin_hash = ? WHERE id = ?")
         .bind(&hash)
@@ -806,15 +892,19 @@ pub async fn change_user_pin(
         .await
         .map_err(|e| e.to_string())?;
 
-    crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &new_pin, &user_id).await?;
+    crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &new_pin, &user_id)
+        .await?;
     tx.commit().await.map_err(|e| e.to_string())?;
 
     // Denetim kaydı transaction dışında yazılır: `append` bağlantı düzeyinde
     // çalışır ve kendi satırını tek başına yazar. PIN'in kendisi kaydedilmez.
     let ctx = AuditContext::new(
-        tenant_id, "usr_master".to_string(), "MASTER".to_string(),
+        tenant_id,
+        "usr_master".to_string(),
+        "MASTER".to_string(),
         crate::services::audit_service::category::GUVENLIK,
-        "security:pin_changed_by_master", user_id.clone(),
+        "security:pin_changed_by_master",
+        user_id.clone(),
         serde_json::json!({ "targetUserId": user_id, "method": "master_override" }),
         chrono::Utc::now().to_rfc3339(),
     )?;
@@ -841,13 +931,14 @@ pub async fn regenerate_license_key(
     // Hedef kullanıcı bu kiracının mı? Kiracı çözülemezse
     // varsayılan kiracıya düşmek, lisansı kimliği belirsiz
     // bir işletmeye yazmaktır (fail-closed, AGENTS.md §3.3).
-    let tenant_id: String = sqlx::query_scalar::<_, String>("SELECT tenant_id FROM users WHERE id = ?")
-        .bind(&user_id)
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| format!("NOT_FOUND: kullanıcı bulunamadı ({user_id})"))?;
+    let tenant_id: String =
+        sqlx::query_scalar::<_, String>("SELECT tenant_id FROM users WHERE id = ?")
+            .bind(&user_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| format!("NOT_FOUND: kullanıcı bulunamadı ({user_id})"))?;
 
     sqlx::query(
         "INSERT INTO licenses (id, tenant_id, license_key, status) VALUES (?, ?, ?, 'ACTIVE')
@@ -863,9 +954,12 @@ pub async fn regenerate_license_key(
     // Lisans anahtarı işletmenin yetkisini belirler: "Yetki" kategorisine yazılır.
     // Anahtarın kendisi defterde tutulmaz.
     let ctx = AuditContext::new(
-        tenant_id, "usr_master".to_string(), "MASTER".to_string(),
+        tenant_id,
+        "usr_master".to_string(),
+        "MASTER".to_string(),
         crate::services::audit_service::category::YETKI,
-        "platform:license_key_regenerated", user_id.clone(),
+        "platform:license_key_regenerated",
+        user_id.clone(),
         serde_json::json!({ "targetUserId": user_id }),
         chrono::Utc::now().to_rfc3339(),
     )?;

@@ -1,4 +1,4 @@
-﻿//! Vardiya planı servisi — planlama tablosu üzerinde.
+//! Vardiya planı servisi — planlama tablosu üzerinde.
 //!
 //! Gerçekleşen vardiya `shifts` tablosunda tutulur (kasa vardiyası). Plan ile
 //! gerçekleşen vardiyayı karıştırmamak için ayrı yüzeylerdir.
@@ -72,13 +72,14 @@ pub async fn add_shift_plan(
     if plan.planned_break_minutes < 0 {
         return Err("mola negatif olamaz".to_string());
     }
-    let exists: Option<i64> =
-        sqlx::query_scalar("SELECT 1 FROM users WHERE tenant_id = ?1 AND id = ?2 AND is_active = 1")
-            .bind(tenant_id)
-            .bind(&plan.user_id)
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+    let exists: Option<i64> = sqlx::query_scalar(
+        "SELECT 1 FROM users WHERE tenant_id = ?1 AND id = ?2 AND is_active = 1",
+    )
+    .bind(tenant_id)
+    .bind(&plan.user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?;
     if exists.is_none() {
         return Err(format!("kullanici bulunamadi: {}", plan.user_id));
     }
@@ -107,4 +108,3 @@ pub async fn add_shift_plan(
     .map_err(|e| e.to_string())?;
     Ok(id)
 }
-

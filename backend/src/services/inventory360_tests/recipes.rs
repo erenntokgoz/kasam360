@@ -84,15 +84,23 @@ async fn recete_maliyeti_randiman_ve_fireyi_hesaplar() {
     let recete = recete_olustur(
         &mut conn,
         KIRACI_A,
-        recete_girdisi("prd_kruasan", "Kruasan hamuru", 80.0, 1.0, vec![
-            malzeme("prd_un", 1000.0, "g", None),
-            malzeme("prd_yag", 100.0, "g", Some(50.0)),
-            malzeme("prd_tuz", 10.0, "g", None),
-        ]),
+        recete_girdisi(
+            "prd_kruasan",
+            "Kruasan hamuru",
+            80.0,
+            1.0,
+            vec![
+                malzeme("prd_un", 1000.0, "g", None),
+                malzeme("prd_yag", 100.0, "g", Some(50.0)),
+                malzeme("prd_tuz", 10.0, "g", None),
+            ],
+        ),
     )
     .await;
     assert_eq!(recete.items.len(), 3, "kalemler kaydedilmeli");
-    let maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &recete.id).await.unwrap();
+    let maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &recete.id)
+        .await
+        .unwrap();
     // Fire payı işleme kaybıdır: %50 fire 100 g yağı 200 g ihtiyaca çıkarır.
     let yag = bilesen(&maliyet, "prd_yag");
     assert!((yag.quantity - 200.0).abs() < 1e-9, "fire ihtiyacı büyütür");
@@ -119,16 +127,30 @@ async fn fiyatsiz_malzeme_maliyeti_sifir_degil_bilinmiyor_olur() {
     let recete = recete_olustur(
         &mut conn,
         KIRACI_A,
-        recete_girdisi("prd_kruasan", "Kruasan hamuru", 100.0, 1.0, vec![
-            malzeme("prd_un", 1000.0, "g", None),
-            malzeme("prd_baharat", 50.0, "g", None),
-        ]),
+        recete_girdisi(
+            "prd_kruasan",
+            "Kruasan hamuru",
+            100.0,
+            1.0,
+            vec![
+                malzeme("prd_un", 1000.0, "g", None),
+                malzeme("prd_baharat", 50.0, "g", None),
+            ],
+        ),
     )
     .await;
-    let maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &recete.id).await.unwrap();
+    let maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &recete.id)
+        .await
+        .unwrap();
     let bilinmeyen = bilesen(&maliyet, "prd_baharat");
-    assert_eq!(bilinmeyen.unit_cost_cents, None, "partisi olmayanın maliyeti bilinmez");
-    assert_eq!(bilinmeyen.line_cost_cents, None, "bilinmeyen maliyet 0 olmaz");
+    assert_eq!(
+        bilinmeyen.unit_cost_cents, None,
+        "partisi olmayanın maliyeti bilinmez"
+    );
+    assert_eq!(
+        bilinmeyen.line_cost_cents, None,
+        "bilinmeyen maliyet 0 olmaz"
+    );
     assert_ne!(bilinmeyen.line_cost_cents, Some(0));
     assert!(bilinmeyen.unresolved_reason.is_some(), "açıklama bulunmalı");
     // Tek bilinmeyen malzeme toplamı da bilinmez yapar; kalan malzeme 0 sayılmaz.
@@ -142,7 +164,9 @@ async fn fiyatsiz_malzeme_maliyeti_sifir_degil_bilinmiyor_olur() {
     // Reçetesiz üründe de maliyet uydurulmaz: dönen şey sıfır maliyetli bir
     // döküm değil, dökümün kendisinin yokluğudur.
     urun_ekle(&mut conn, KIRACI_A, "prd_recetesiz", "Reçetesiz ürün", 3000).await;
-    let yok = cost_for_active_recipe(&mut conn, KIRACI_A, "prd_recetesiz").await.unwrap();
+    let yok = cost_for_active_recipe(&mut conn, KIRACI_A, "prd_recetesiz")
+        .await
+        .unwrap();
     assert!(yok.is_none(), "reçetesiz ürüne sıfır döküm uydurulmaz");
 }
 
@@ -155,9 +179,13 @@ async fn ikinci_aktif_recete_reddedilir() {
     let b_recetesi = recete_olustur(
         &mut conn,
         KIRACI_B,
-        recete_girdisi("prd_b", "B tarifi", 100.0, 1.0, vec![
-            malzeme("prd_b_un", 500.0, "g", None),
-        ]),
+        recete_girdisi(
+            "prd_b",
+            "B tarifi",
+            100.0,
+            1.0,
+            vec![malzeme("prd_b_un", 500.0, "g", None)],
+        ),
     )
     .await;
     urun_ekle(&mut conn, KIRACI_A, "prd_kruasan", "Kruasan", 12000).await;
@@ -166,9 +194,13 @@ async fn ikinci_aktif_recete_reddedilir() {
     let ilk = recete_olustur(
         &mut conn,
         KIRACI_A,
-        recete_girdisi("prd_kruasan", "Kruasan hamuru", 80.0, 1.0, vec![
-            malzeme("prd_un", 1000.0, "g", None),
-        ]),
+        recete_girdisi(
+            "prd_kruasan",
+            "Kruasan hamuru",
+            80.0,
+            1.0,
+            vec![malzeme("prd_un", 1000.0, "g", None)],
+        ),
     )
     .await;
     // B'nin aktif reçetesi A'nınkini engellemez; A'nınki B'yi de görmez.
@@ -191,11 +223,12 @@ async fn ikinci_aktif_recete_reddedilir() {
     );
     // Reddedilen deneme yarım kayıt bırakmamalı: yarım reçete kalırsa kullanıcı
     // hatayı düzeltip yeniden denediğinde yine aynı hatayı alır ve ürün kilitlenir.
-    let recete_sayisi: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM recipes WHERE tenant_id = ?1")
-        .bind(KIRACI_A)
-        .fetch_one(&mut conn)
-        .await
-        .unwrap();
+    let recete_sayisi: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM recipes WHERE tenant_id = ?1")
+            .bind(KIRACI_A)
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
     assert_eq!(recete_sayisi, 1, "reddedilen deneme yarım reçete bırakmaz");
     let kalem_sayisi: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM recipe_items WHERE tenant_id = ?1")
@@ -205,33 +238,71 @@ async fn ikinci_aktif_recete_reddedilir() {
             .unwrap();
     assert_eq!(kalem_sayisi, 1, "reddedilen deneme kalem bırakmaz");
     // Pasife alma geçmiş maliyeti bozmaz: geçmiş hesaplar bu kaydı referans alır.
-    deactivate_recipe(&mut conn, KIRACI_A, &ilk.id).await.unwrap();
-    let gecmis = calculate_recipe_cost(&mut conn, KIRACI_A, &ilk.id).await.unwrap();
-    assert_eq!(gecmis.unit_cost_cents, Some(50000), "pasif maliyet bozulmaz");
+    deactivate_recipe(&mut conn, KIRACI_A, &ilk.id)
+        .await
+        .unwrap();
+    let gecmis = calculate_recipe_cost(&mut conn, KIRACI_A, &ilk.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        gecmis.unit_cost_cents,
+        Some(50000),
+        "pasif maliyet bozulmaz"
+    );
     let yenisi = recete_olustur(
         &mut conn,
         KIRACI_A,
-        recete_girdisi("prd_kruasan", "Kruasan hamuru v2", 80.0, 1.0, vec![
-            malzeme("prd_un", 900.0, "g", None),
-        ]),
+        recete_girdisi(
+            "prd_kruasan",
+            "Kruasan hamuru v2",
+            80.0,
+            1.0,
+            vec![malzeme("prd_un", 900.0, "g", None)],
+        ),
     )
     .await;
-    assert!(yenisi.is_active, "önceki pasife alınınca yerine geçebilmeli");
-    assert_eq!(list_recipes(&mut conn, KIRACI_A, false).await.unwrap().len(), 1);
-    assert_eq!(list_recipes(&mut conn, KIRACI_A, true).await.unwrap().len(), 2);
+    assert!(
+        yenisi.is_active,
+        "önceki pasife alınınca yerine geçebilmeli"
+    );
+    assert_eq!(
+        list_recipes(&mut conn, KIRACI_A, false)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        list_recipes(&mut conn, KIRACI_A, true).await.unwrap().len(),
+        2
+    );
     // Çapraz kiracı: B'nin reçetesi A'da ne listelenir ne değiştirilebilir.
     let a_listesi = list_recipes(&mut conn, KIRACI_A, true).await.unwrap();
-    assert!(a_listesi.iter().all(|r| r.product_id != "prd_b"), "yabancı görünmez");
+    assert!(
+        a_listesi.iter().all(|r| r.product_id != "prd_b"),
+        "yabancı görünmez"
+    );
     let ele_gecirme = deactivate_recipe(&mut conn, KIRACI_A, &b_recetesi.id).await;
-    assert!(matches!(ele_gecirme, Err(_)), "yabancı reçete pasife alınamaz");
+    assert!(
+        matches!(ele_gecirme, Err(_)),
+        "yabancı reçete pasife alınamaz"
+    );
     let yabanci_maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &b_recetesi.id).await;
     assert!(
         matches!(yabanci_maliyet, Err(ref hata) if hata.starts_with("NOT_FOUND")),
         "yabancı reçetenin maliyeti çözülemez"
     );
-    let yabanci_urun = cost_for_active_recipe(&mut conn, KIRACI_A, "prd_b").await.unwrap();
+    let yabanci_urun = cost_for_active_recipe(&mut conn, KIRACI_A, "prd_b")
+        .await
+        .unwrap();
     assert!(yabanci_urun.is_none(), "yabancı ürüne maliyet uydurulmaz");
-    assert_eq!(list_recipes(&mut conn, KIRACI_B, false).await.unwrap().len(), 1);
+    assert_eq!(
+        list_recipes(&mut conn, KIRACI_B, false)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -244,46 +315,83 @@ async fn yarin_mamul_recetesi_ozyinelemeli_cozulur() {
     parti_ekle(&mut conn, KIRACI_A, "bat_un", "prd_un", 5000.0, 40, None).await;
     // Okuma tarafı `tenant_id` ile sınırlanmazsa ucuz yabancı parti kazanan olur
     // ve maliyet sessizce düşer; bu kayıt bilinçli olarak yerleştirilir.
-    parti_ekle(&mut conn, KIRACI_B, "bat_yabanci_un", "prd_un", 5000.0, 1, None).await;
+    parti_ekle(
+        &mut conn,
+        KIRACI_B,
+        "bat_yabanci_un",
+        "prd_un",
+        5000.0,
+        1,
+        None,
+    )
+    .await;
     let hamur = recete_olustur(
         &mut conn,
         KIRACI_A,
-        recete_girdisi("prd_hamur", "Hamur", 100.0, 10.0, vec![
-            malzeme("prd_un", 1000.0, "g", None),
-        ]),
+        recete_girdisi(
+            "prd_hamur",
+            "Hamur",
+            100.0,
+            10.0,
+            vec![malzeme("prd_un", 1000.0, "g", None)],
+        ),
     )
     .await;
     // Hamurun kendi partisi yok: maliyeti yalnız kendi reçetesinden gelebilir.
-    let hamur_maliyeti = calculate_recipe_cost(&mut conn, KIRACI_A, &hamur.id).await.unwrap();
+    let hamur_maliyeti = calculate_recipe_cost(&mut conn, KIRACI_A, &hamur.id)
+        .await
+        .unwrap();
     assert_eq!(hamur_maliyeti.materials_cost_cents, Some(40000));
     // `standard_cost_cents` on adet üretimin **toplam** maliyetidir;
     // `unit_cost_cents` onun birime bölünmüş hâli. İkisi karıştırılırsa ekran
     // maliyeti on kat şişirir.
     assert_eq!(
-        hamur_maliyeti.standard_cost_cents, Some(40000),
+        hamur_maliyeti.standard_cost_cents,
+        Some(40000),
         "on adet uretimin toplam maliyeti 40000"
     );
     assert_eq!(
-        hamur_maliyeti.unit_cost_cents, Some(4000),
+        hamur_maliyeti.unit_cost_cents,
+        Some(4000),
         "birim maliyet 40000 / 10 adet"
     );
     let kruasan = recete_olustur(
         &mut conn,
         KIRACI_A,
-        recete_girdisi("prd_kruasan", "Kruasan", 80.0, 1.0, vec![
-            malzeme("prd_hamur", 2.0, "adet", None),
-            malzeme("prd_un", 200.0, "g", None),
-        ]),
+        recete_girdisi(
+            "prd_kruasan",
+            "Kruasan",
+            80.0,
+            1.0,
+            vec![
+                malzeme("prd_hamur", 2.0, "adet", None),
+                malzeme("prd_un", 200.0, "g", None),
+            ],
+        ),
     )
     .await;
-    let maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &kruasan.id).await.unwrap();
+    let maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &kruasan.id)
+        .await
+        .unwrap();
     let hamur_bileseni = bilesen(&maliyet, "prd_hamur");
-    assert_eq!(hamur_bileseni.unit_cost_cents, Some(4000), "adet maliyeti 4000");
+    assert_eq!(
+        hamur_bileseni.unit_cost_cents,
+        Some(4000),
+        "adet maliyeti 4000"
+    );
     assert_eq!(hamur_bileseni.line_cost_cents, Some(8000));
-    assert_eq!(bilesen(&maliyet, "prd_un").unit_cost_cents, Some(40), "yabancı yok");
+    assert_eq!(
+        bilesen(&maliyet, "prd_un").unit_cost_cents,
+        Some(40),
+        "yabancı yok"
+    );
     assert_eq!(bilesen(&maliyet, "prd_un").line_cost_cents, Some(8000));
     assert_eq!(maliyet.materials_cost_cents, Some(16000));
-    assert_eq!(maliyet.standard_cost_cents, Some(20000), "%80 randiman 16000'i 20000'e cikarir");
+    assert_eq!(
+        maliyet.standard_cost_cents,
+        Some(20000),
+        "%80 randiman 16000'i 20000'e cikarir"
+    );
     // Çıktı miktarı 1 adet olduğu için toplam ile birim maliyet aynıdır; bu eşitlik
     // `output_quantity` bölmesinin doğru çalıştığının kanıtı.
     assert_eq!(maliyet.output_quantity, 1.0);
@@ -291,7 +399,10 @@ async fn yarin_mamul_recetesi_ozyinelemeli_cozulur() {
     assert_eq!(maliyet.waste_cost_cents, Some(4000));
     assert!(maliyet.unresolved.is_empty());
     assert!(
-        maliyet.components.iter().all(|b| b.unit_cost_cents.is_some()),
+        maliyet
+            .components
+            .iter()
+            .all(|b| b.unit_cost_cents.is_some()),
         "özyineleme çalışmazsa hamur `None` dönerdi, sessiz sıfır değil"
     );
 }
@@ -306,7 +417,13 @@ async fn aktif_recete_maliyeti_urun_kimligiyle_cozulur() {
     recete_olustur(
         &mut conn,
         KIRACI_A,
-        recete_girdisi("prd_ekmek", "Ekmek", 100.0, 10.0, vec![malzeme("prd_un", 1000.0, "g", None)]),
+        recete_girdisi(
+            "prd_ekmek",
+            "Ekmek",
+            100.0,
+            10.0,
+            vec![malzeme("prd_un", 1000.0, "g", None)],
+        ),
     )
     .await;
 
@@ -316,7 +433,11 @@ async fn aktif_recete_maliyeti_urun_kimligiyle_cozulur() {
         .await
         .expect("maliyet cozulmeli");
     let maliyet = cozulen.expect("aktif recete cozulmeli");
-    assert_eq!(maliyet.recipe_id.is_empty(), false, "recete kimligi dolu olmali");
+    assert_eq!(
+        maliyet.recipe_id.is_empty(),
+        false,
+        "recete kimligi dolu olmali"
+    );
     assert_eq!(maliyet.materials_cost_cents, Some(40_000));
     assert_eq!(maliyet.standard_cost_cents, Some(40_000));
     assert_eq!(maliyet.unit_cost_cents, Some(4_000));
@@ -326,7 +447,10 @@ async fn aktif_recete_maliyeti_urun_kimligiyle_cozulur() {
     let recetesiz = cost_for_active_recipe(&mut conn, KIRACI_A, "prd_cay")
         .await
         .expect("sorgu hata vermemeli");
-    assert!(recetesiz.is_none(), "recetesiz urun icin maliyet bilinmiyor");
+    assert!(
+        recetesiz.is_none(),
+        "recetesiz urun icin maliyet bilinmiyor"
+    );
 
     // Kapalı işletmenin ürünü görünmez: başarı hâli de sıfır maliyet de değil.
     urun_ekle(&mut conn, KIRACI_B, "prd_yabanci", "Ekmek", 0).await;
@@ -347,13 +471,25 @@ async fn dongusel_recete_yine_reddedilir() {
     recete_olustur(
         &mut conn,
         KIRACI_A,
-        recete_girdisi("prd_a", "A", 100.0, 1.0, vec![malzeme("prd_b", 1.0, "adet", None)]),
+        recete_girdisi(
+            "prd_a",
+            "A",
+            100.0,
+            1.0,
+            vec![malzeme("prd_b", 1.0, "adet", None)],
+        ),
     )
     .await;
     recete_olustur(
         &mut conn,
         KIRACI_A,
-        recete_girdisi("prd_b", "B", 100.0, 1.0, vec![malzeme("prd_a", 1.0, "adet", None)]),
+        recete_girdisi(
+            "prd_b",
+            "B",
+            100.0,
+            1.0,
+            vec![malzeme("prd_a", 1.0, "adet", None)],
+        ),
     )
     .await;
 
@@ -392,7 +528,11 @@ async fn birim_maliyet_standart_uretim_maliyetinden_ayrilir() {
 
     assert_eq!(maliyet.output_quantity, 10.0);
     assert_eq!(maliyet.materials_cost_cents, Some(40_000));
-    assert_eq!(maliyet.standard_cost_cents, Some(50_000), "%80 randiman maliyeti 50000'e cikarir");
+    assert_eq!(
+        maliyet.standard_cost_cents,
+        Some(50_000),
+        "%80 randiman maliyeti 50000'e cikarir"
+    );
     assert_eq!(
         maliyet.unit_cost_cents,
         Some(5_000),

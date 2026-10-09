@@ -11,8 +11,18 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+# G6 · Item 22: Property-based test (proptest).
+# Testlere değil üretime değil; bu satır `dev-dependencies` altında yer alır
+# ve sadece `cargo test` derlemesine girer. Prodüksiyon bağımlılığı artırmaz.
+[dev-dependencies]
+proptest = "1"
+
 [dependencies]
 tauri = { version = "2", features = [] }
+# G6 · Item 24: Auto-updater. `updater` feature ile birlikte gelen
+# `tauri::updater` modülü imzalı paket doğrulaması yapar; manifest URL
+# `tauri.conf.json` içindeki `updater` bloğundan okunur.
+tauri-plugin-updater = "2"
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls", "uuid", "chrono"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

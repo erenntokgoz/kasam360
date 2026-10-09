@@ -15,7 +15,7 @@ use sqlx::Acquire;
 use crate::db::DbPool;
 use crate::management_commands::{audit_actor, record_audit};
 use crate::rbac::{self, Role};
-use crate::services::audit_service::{AuditLock, category};
+use crate::services::audit_service::{category, AuditLock};
 use crate::services::modifier_service;
 
 /// Çağıranın tenant'ı zorunludur: eksik veya boşsa fail-closed reddedilir.
@@ -113,8 +113,7 @@ pub async fn add_modifier_option(
     let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
 
     // Servis, grubun çağıranın tenant'ına ait olduğunu doğrular.
-    let id =
-        modifier_service::add_option(&mut tx, &tid, &group_id, &name, price_cents).await?;
+    let id = modifier_service::add_option(&mut tx, &tid, &group_id, &name, price_cents).await?;
 
     record_audit(
         &mut tx,

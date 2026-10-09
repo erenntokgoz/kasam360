@@ -6,9 +6,7 @@
 
 use sqlx::SqlitePool;
 
-use crate::services::staff360::payroll_types::{
-    TipAllocation, TipAllocationInput, TipPoolSummary,
-};
+use crate::services::staff360::payroll_types::{TipAllocation, TipAllocationInput, TipPoolSummary};
 
 /// Havuza bahşiş ekler. Kartla alınan bahşiş terminale işlendiği için
 /// buraya **yalnız nakit** bahşiş yazılır; kart bahşişini de yazmak havuzu
@@ -23,8 +21,7 @@ pub async fn record_tip(
     if amount_cents <= 0 {
         return Err("bahsis sifirdan buyuk olmali".to_string());
     }
-    let period = period_of(paid_at)
-        .ok_or_else(|| format!("tarih ayrıştırılamadı: {paid_at}"))?;
+    let period = period_of(paid_at).ok_or_else(|| format!("tarih ayrıştırılamadı: {paid_at}"))?;
 
     let id = crate::id_generator::generate_id("tip");
     sqlx::query(
@@ -253,7 +250,10 @@ mod tests {
 
     #[test]
     fn donem_ayrilir() {
-        assert_eq!(period_of("2026-03-15T10:22:31Z").as_deref(), Some("2026-03"));
+        assert_eq!(
+            period_of("2026-03-15T10:22:31Z").as_deref(),
+            Some("2026-03")
+        );
     }
 
     #[test]

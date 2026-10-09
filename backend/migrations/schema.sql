@@ -301,7 +301,7 @@ CREATE TABLE IF NOT EXISTS orders (
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
     table_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'OPEN'
-        CHECK (status IN ('OPEN', 'IN_PROGRESS', 'PAID', 'CANCELLED', 'VOID')),
+        CHECK (status IN ('OPEN', 'IN_PROGRESS', 'PAID', 'CANCELLED', 'VOID', 'COMPENSATED')),
     total_cents INTEGER NOT NULL DEFAULT 0 CHECK (total_cents >= 0),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -1903,3 +1903,67 @@ CREATE TABLE IF NOT EXISTS email_queue (
 );
 CREATE INDEX IF NOT EXISTS idx_email_queue_tenant_status
     ON email_queue(tenant_id, status, created_at);
+
+-- ============================================================================
+-- FAZ 17 · OFFLINE / COMPENSATION — Çatışma Günlüğü ve Ters İşlemler
+-- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- OFFLINE ÇATIŞMA GÜNLÜĞÜ
+-- ---------------------------------------------------------------------------
+-- İki terminal aynı masa / sipariş ID'sine yazarken çelişen kalemler bu tabloya
+-- kaydedilir: kullanıcı müdahale edene kadar PENDING, ardından çözümleme yapılır.
+--
+-- Neden `tenant_id` NOT NULL: çapraz-tenant çatışma kaydı, başka bir işletmenin
+-- verisine erişim hakkına dönüşür (AGENTS.md §3.3).
+CREATE TABLE IF NOT EXISTS conflict_log (
+    id                  TEXT PRIMARY KEY,
+    tenant_id           TEXT NOT NULL,
+    table_id            TEXT NOT NULL,
+    order_id            TEXT NOT NULL,
+    conflict_type       TEXT NOT NULL
+        CHECK (conflict_type IN ('LINE_ITEM_DUPLICATE', 'LINE_ITEM_PRICE_MISMATCH', 'ORDER_STATUS_CONFLICT')),
+    terminal_a          TEXT NOT NULL,
+    terminal_b          TEXT NOT NULL,
+    payload             TEXT NOT NULL CHECK (json_valid(payload)),
+    status              TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING', 'RESOLVED_MERGE', 'RESOLVED_REJECT', 'AUTO_MERGED')),
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resolved_at         DATETIME,
+    resolved_by         TEXT,
+    resolution          TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_conflict_log_tenant
+    ON conflict_log(tenant_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conflict_log_order
+    ON conflict_log(tenant_id, order_id);
+
+-- ---------------------------------------------------------------------------
+-- GERİ ÖDEME / COMPENSATION KAYITLARI
+-- ---------------------------------------------------------------------------
+-- `refunds` tablosu, ters para hareketlerinin kalıcı izidir. `create_compensation_refund`
+-- bu tabloyu yazar; aynı zamanda `audit_ledger.action = 'payment:compensation_refund'`
+-- kaydı da eklenir. İki kayıt birbirini takip eder: tablo para akışı sorgulamasını
+-- hızlandırır, defter zinciri bütünlüğünü korur.
+--
+-- Neden ayrı tablo: audit_ledger append-only'dir; REFUND'ı sorgulamak için her
+-- satırı taramak malgındır. `refunds` sadece ters hareketi tutar.
+CREATE TABLE IF NOT EXISTS refunds (
+    id                  TEXT PRIMARY KEY,
+    tenant_id           TEXT NOT NULL,
+    original_transaction_id TEXT NOT NULL,
+    original_order_id   TEXT,
+    compensation_txn_id TEXT NOT NULL,
+    amount_cents        INTEGER NOT NULL CHECK (amount_cents > 0),
+    reason              TEXT NOT NULL,
+    method              TEXT NOT NULL
+        CHECK (method IN ('CASH', 'CREDIT_CARD', 'BANK_TRANSFER', 'VERESIYE', 'COMPENSATION')),
+    actor_id            TEXT NOT NULL,
+    approval_token_hash TEXT,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (original_order_id) REFERENCES orders(id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS idx_refunds_tenant
+    ON refunds(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_refunds_original_txn
+    ON refunds(tenant_id, original_transaction_id);

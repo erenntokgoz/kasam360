@@ -1,4 +1,4 @@
-﻿//! Urun yonetimi komutlari.
+//! Urun yonetimi komutlari.
 //!
 //! Tenant izolasyonu krali: `tenant_id` **her zaman cagirandan** gelir ve her
 //! `SELECT`/`UPDATE`/`DELETE` icinde `WHERE` olarak yer alir. Kategori tasima
@@ -12,7 +12,7 @@ use uuid::Uuid;
 use super::{audit_actor, ensure_owned, record_audit, require_tenant};
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
-use crate::services::audit_service::{AuditLock, category};
+use crate::services::audit_service::{category, AuditLock};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ProductDto {
@@ -46,9 +46,13 @@ pub async fn get_management_products(
             id: row.try_get("id").map_err(|e| e.to_string())?,
             category_id: row.try_get("category_id").map_err(|e| e.to_string())?,
             name: row.try_get("name").map_err(|e| e.to_string())?,
-            price_cents: row.try_get::<i32, _>("price_cents").map_err(|e| e.to_string())?,
+            price_cents: row
+                .try_get::<i32, _>("price_cents")
+                .map_err(|e| e.to_string())?,
             image_url: row.try_get("image_url").ok(),
-            is_active: row.try_get::<bool, _>("is_active").map_err(|e| e.to_string())?,
+            is_active: row
+                .try_get::<bool, _>("is_active")
+                .map_err(|e| e.to_string())?,
         });
     }
     Ok(res)
@@ -75,7 +79,10 @@ pub async fn create_product(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await.map_err(|e| e.to_string())?;
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
     let result: Result<ProductDto, String> = async {
         let id = Uuid::new_v4().to_string();
         // Kategori kimliği başka işletmeye aitse ürün o işletmenin menüsünde
@@ -110,7 +117,10 @@ pub async fn create_product(
 
     match result {
         Ok(v) => {
-            sqlx::query("COMMIT").execute(&mut *conn).await.map_err(|e| e.to_string())?;
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(v)
         }
         Err(e) => {
@@ -143,7 +153,10 @@ pub async fn update_product(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "products", &id, &tenant_id).await?;
 
-    sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await.map_err(|e| e.to_string())?;
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
     let result: Result<ProductDto, String> = async {
         // Ürünün taşınacağı kategori de bu işletmenin menüsünde olmalı; aksi
         // halde ürün başka işletmenin kategorisine bağlanır ve menü orada görünür.
@@ -192,7 +205,10 @@ pub async fn update_product(
 
     match result {
         Ok(v) => {
-            sqlx::query("COMMIT").execute(&mut *conn).await.map_err(|e| e.to_string())?;
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(v)
         }
         Err(e) => {
@@ -219,14 +235,18 @@ pub async fn update_product_status(
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "products", &id, &tenant_id).await?;
-    let previous_active: Option<bool> = sqlx::query_scalar("SELECT is_active FROM products WHERE id = ? AND tenant_id = ?")
-        .bind(&id)
-        .bind(&tenant_id)
-        .fetch_optional(&mut *conn)
+    let previous_active: Option<bool> =
+        sqlx::query_scalar("SELECT is_active FROM products WHERE id = ? AND tenant_id = ?")
+            .bind(&id)
+            .bind(&tenant_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
-
-    sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await.map_err(|e| e.to_string())?;
     let result: Result<(), String> = async {
         sqlx::query("UPDATE products SET is_active = ? WHERE id = ? AND tenant_id = ?")
             .bind(is_active)
@@ -237,20 +257,30 @@ pub async fn update_product_status(
             .map_err(|e| e.to_string())?;
 
         record_audit(
-            &mut conn, &lock, &tenant_id, &actor_id, &actor_role,
+            &mut conn,
+            &lock,
+            &tenant_id,
+            &actor_id,
+            &actor_role,
             category::MENU,
-            "menu:product_status_changed", &id,
+            "menu:product_status_changed",
+            &id,
             serde_json::json!({
                 "changes": { "isActive": { "old": previous_active, "new": is_active } }
             }),
-        ).await?;
+        )
+        .await?;
 
         Ok(())
-    }.await;
+    }
+    .await;
 
     match result {
         Ok(v) => {
-            sqlx::query("COMMIT").execute(&mut *conn).await.map_err(|e| e.to_string())?;
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(v)
         }
         Err(e) => {
@@ -276,14 +306,18 @@ pub async fn delete_product(
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "products", &id, &tenant_id).await?;
-    let previous_name: Option<String> = sqlx::query_scalar("SELECT name FROM products WHERE id = ? AND tenant_id = ?")
-        .bind(&id)
-        .bind(&tenant_id)
-        .fetch_optional(&mut *conn)
+    let previous_name: Option<String> =
+        sqlx::query_scalar("SELECT name FROM products WHERE id = ? AND tenant_id = ?")
+            .bind(&id)
+            .bind(&tenant_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
-
-    sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await.map_err(|e| e.to_string())?;
     let result: Result<(), String> = async {
         sqlx::query("DELETE FROM products WHERE id = ? AND tenant_id = ?")
             .bind(&id)
@@ -293,18 +327,28 @@ pub async fn delete_product(
             .map_err(|e| e.to_string())?;
 
         record_audit(
-            &mut conn, &lock, &tenant_id, &actor_id, &actor_role,
+            &mut conn,
+            &lock,
+            &tenant_id,
+            &actor_id,
+            &actor_role,
             category::MENU,
-            "menu:product_deleted", &id,
+            "menu:product_deleted",
+            &id,
             serde_json::json!({ "name": previous_name }),
-        ).await?;
+        )
+        .await?;
 
         Ok(())
-    }.await;
+    }
+    .await;
 
     match result {
         Ok(v) => {
-            sqlx::query("COMMIT").execute(&mut *conn).await.map_err(|e| e.to_string())?;
+            sqlx::query("COMMIT")
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(v)
         }
         Err(e) => {

@@ -15,8 +15,7 @@
 use crate::db::DbPool;
 use crate::rbac;
 use crate::services::report_service::{
-    self, AdjustmentsReportDto, ReceiptReportRowDto, ReportRange, SalesReportDto,
-    ShiftReportRowDto,
+    self, AdjustmentsReportDto, ReceiptReportRowDto, ReportRange, SalesReportDto, ShiftReportRowDto,
 };
 
 /// Arayüzün istediği satır sayısı bu aralıkta tutulur. Sınırsız liste hem

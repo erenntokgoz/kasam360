@@ -8,7 +8,9 @@
 use crate::commands::command_helpers::audit_actor;
 use crate::db::DbPool;
 use crate::id_generator::generate_id;
-use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant, require_ledger_write};
+use crate::ledger_commands::guard::{
+    require_ledger_read, require_ledger_tenant, require_ledger_write,
+};
 use crate::services::audit_service::{self, AuditContext, AuditService};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -105,7 +107,9 @@ fn row_to_debt(r: &sqlx::sqlite::SqliteRow) -> Result<DebtDto, String> {
         directory_name: r.try_get("directory_name").map_err(|e| e.to_string())?,
         debt_type: r.try_get("type").map_err(|e| e.to_string())?,
         total_amount_cents: r.try_get("total_amount_cents").map_err(|e| e.to_string())?,
-        remaining_amount_cents: r.try_get("remaining_amount_cents").map_err(|e| e.to_string())?,
+        remaining_amount_cents: r
+            .try_get("remaining_amount_cents")
+            .map_err(|e| e.to_string())?,
         due_date: r.try_get("due_date").map_err(|e| e.to_string())?,
         status: r.try_get("status").map_err(|e| e.to_string())?,
         is_cash: is_cash_int == 1,
@@ -135,7 +139,7 @@ pub async fn get_debts(
                 deb.status, deb.is_cash, deb.order_id, deb.description, deb.created_at
          FROM debts deb
          LEFT JOIN directories d ON deb.directory_id = d.id AND d.tenant_id = deb.tenant_id
-         WHERE deb.tenant_id = ?"
+         WHERE deb.tenant_id = ?",
     );
 
     if status.is_some() {
@@ -154,7 +158,10 @@ pub async fn get_debts(
         query = query.bind(dt);
     }
 
-    let rows = query.fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
+    let rows = query
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut result = Vec::with_capacity(rows.len());
     for r in rows {
@@ -184,20 +191,23 @@ pub async fn create_debt(
 
     let tid = require_ledger_tenant(payload.tenant_id.as_deref())?;
     let id = generate_id("dbt");
-    let is_cash_val = if payload.is_cash.unwrap_or(false) { 1 } else { 0 };
+    let is_cash_val = if payload.is_cash.unwrap_or(false) {
+        1
+    } else {
+        0
+    };
 
     let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     // Cari kartın adını çek
-    let dir_name: Option<String> = sqlx::query_scalar(
-        "SELECT name FROM directories WHERE id = ? AND tenant_id = ?"
-    )
-    .bind(&payload.directory_id)
-    .bind(&tid)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
+    let dir_name: Option<String> =
+        sqlx::query_scalar("SELECT name FROM directories WHERE id = ? AND tenant_id = ?")
+            .bind(&payload.directory_id)
+            .bind(&tid)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
 
     // Neden bu kapı şart: `dir_name` `None` çıkabilir (cari kart silinmiş ya da
     // başka kiracının kartı). Bu durumda borç kaydı yine de açılırdı ve
@@ -224,10 +234,8 @@ pub async fn create_debt(
     .await
     .map_err(|e| format!("Borç kaydı oluşturulamadı: {}", e))?;
 
-    let (audit_actor_id, audit_actor_role) = audit_actor(
-        actor_id.or(payload.actor_id.clone()),
-        actor_role,
-    );
+    let (audit_actor_id, audit_actor_role) =
+        audit_actor(actor_id.or(payload.actor_id.clone()), actor_role);
     let ctx = AuditContext::new(
         tid.clone(),
         audit_actor_id,
@@ -298,9 +306,13 @@ pub async fn pay_debt(
     .map_err(|e| e.to_string())?
     .ok_or_else(|| "Borç kaydı bulunamadı.".to_string())?;
 
-    let remaining: i64 = debt_row.try_get("remaining_amount_cents").map_err(|e| e.to_string())?;
+    let remaining: i64 = debt_row
+        .try_get("remaining_amount_cents")
+        .map_err(|e| e.to_string())?;
     let debt_type: String = debt_row.try_get("type").map_err(|e| e.to_string())?;
-    let dir_name: String = debt_row.try_get("directory_name").map_err(|e| e.to_string())?;
+    let dir_name: String = debt_row
+        .try_get("directory_name")
+        .map_err(|e| e.to_string())?;
 
     if debt_type != "GIVEN" && debt_type != "TAKEN" {
         return Err(format!("Bilinmeyen borç tipi: {}", debt_type));
@@ -313,11 +325,15 @@ pub async fn pay_debt(
     }
 
     let new_remaining = remaining - payload.amount_cents;
-    let new_status = if new_remaining == 0 { "PAID" } else { "PARTIAL" };
+    let new_status = if new_remaining == 0 {
+        "PAID"
+    } else {
+        "PARTIAL"
+    };
 
     // Borç durumunu güncelle
     let updated = sqlx::query(
-        "UPDATE debts SET remaining_amount_cents = ?, status = ? WHERE id = ? AND tenant_id = ?"
+        "UPDATE debts SET remaining_amount_cents = ?, status = ? WHERE id = ? AND tenant_id = ?",
     )
     .bind(new_remaining)
     .bind(new_status)
@@ -357,7 +373,9 @@ pub async fn pay_debt(
             format!("Cari Borç Tediyesi: {}", dir_name)
         };
 
-        let shift_id_for_cm = active_shift_id.clone().unwrap_or_else(|| "NO_SHIFT".to_string());
+        let shift_id_for_cm = active_shift_id
+            .clone()
+            .unwrap_or_else(|| "NO_SHIFT".to_string());
 
         sqlx::query(
             "INSERT INTO cash_movements (id, tenant_id, shift_id, movement_type, amount_cents, reason, actor_id, created_at)
@@ -394,7 +412,8 @@ pub async fn pay_debt(
     .await
     .map_err(|e| format!("Ödeme kaydı eklenemedi: {}", e))?;
 
-    let (audit_actor_id, audit_actor_role) = audit_actor(Some(payload.actor_id.clone()), actor_role);
+    let (audit_actor_id, audit_actor_role) =
+        audit_actor(Some(payload.actor_id.clone()), actor_role);
     let ctx = AuditContext::new(
         tid.clone(),
         audit_actor_id,

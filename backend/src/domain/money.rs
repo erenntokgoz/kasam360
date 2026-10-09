@@ -62,6 +62,101 @@ impl std::ops::Sub for Cents {
     }
 }
 
+/// Kontrollü finansal toplama.
+///
+/// Neden bu fonksiyon: AGENTS.md §3.4 "finansal toplamlarda unwrap_or(0) YASAK"
+/// kuralının temeli budur. `i64::MAX`'i aşan bir toplam sessizce sıfırlanamaz;
+/// `Err` dönüşü yukarı taşınır ve komut `Err` döner. `Cents + Cents`
+/// operatörü wrapping yapar (Rust default), bu yüzden büyük toplamarda
+/// dogrulama gereklidir — bu fonksiyon o dogrulamayı tek yerde sağlar.
+pub fn checked_add(a: Cents, b: Cents) -> Result<Cents, String> {
+    a.0.checked_add(b.0)
+        .map(Cents)
+        .ok_or_else(|| format!("Kuruş taşması: {} + {} i64 sınırlarını aşıyor", a.0, b.0))
+}
+
+/// listedeki tüm kuruşları kontrollü toplar.
+///
+/// Boş liste sıfır döndürür (toplam yok, hata yok). Empty-list case is not a
+/// silent zero — it is a defined aggregate of zero elements.
+pub fn checked_sum(values: &[Cents]) -> Result<Cents, String> {
+    let mut total: i64 = 0;
+    for v in values {
+        total = total.checked_add(v.0).ok_or_else(|| {
+            format!(
+                "Kuruş taşması: toplam i64 sınırlarını aşıyor ({} + {})",
+                total, v.0
+            )
+        })?;
+    }
+    Ok(Cents(total))
+}
+
+/// Parçalı ödeme bakiye doğrulayıcısı.
+///
+/// ## Kural (AGENTS.md P0 #8)
+/// ```text
+/// remaining = order_total_cents - paid_so_far
+/// sum(splits.amount) + remaining == order_total_cents
+/// ```
+/// Her split negatif olamaz; toplam splits order_total'ı aşamaz.
+///
+/// Neden Result: bakiye uyuşmazlığı sessizce kabul etmek, "zarar yok"
+/// göstermesine neden olur. Hata yukarı taşınır.
+pub fn validate_split_balance(
+    order_total_cents: i64,
+    paid_so_far: i64,
+    splits: &[Cents],
+) -> Result<i64, String> {
+    if order_total_cents < 0 {
+        return Err(format!(
+            "Sipariş toplamı negatif olamaz, got {}",
+            order_total_cents
+        ));
+    }
+    if paid_so_far < 0 {
+        return Err(format!("Ödenen tutar negatif olamaz, got {}", paid_so_far));
+    }
+    if paid_so_far > order_total_cents {
+        return Err(format!(
+            "Ödenen tutar ({}) sipariş toplamını ({}) aşamaz",
+            paid_so_far, order_total_cents
+        ));
+    }
+
+    let remaining = order_total_cents.checked_sub(paid_so_far).ok_or_else(|| {
+        format!(
+            "Bakiye negatif olamaz: {} - {}",
+            order_total_cents, paid_so_far
+        )
+    })?;
+
+    let mut splits_total: i64 = 0;
+    for (i, s) in splits.iter().enumerate() {
+        if s.0 < 0 {
+            return Err(format!("Split {} negatif olamaz, got {}", i, s.0));
+        }
+        splits_total = splits_total
+            .checked_add(s.0)
+            .ok_or_else(|| format!("Split toplamında kuruş taşması: {} + {}", splits_total, s.0))?;
+    }
+
+    // sum(splits) bu ödemede alınan tutardır; kalan bakiye bundan sonra düşer.
+    // Denklem: paid_so_far + sum(splits) + remaining_after == order_total_cents.
+    if splits_total > remaining {
+        return Err(format!(
+            "Split toplamı ({}) kalan bakiyeyi ({}) aşamaz",
+            splits_total, remaining
+        ));
+    }
+
+    let remaining_after = remaining
+        .checked_sub(splits_total)
+        .ok_or_else(|| format!("Bakiye negatif olamaz: {} - {}", remaining, splits_total))?;
+
+    Ok(remaining_after)
+}
+
 /// Sayı ile çarpma (adet × birim fiyat).
 impl std::ops::Mul<i64> for Cents {
     type Output = Cents;

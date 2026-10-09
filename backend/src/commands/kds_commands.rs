@@ -56,7 +56,6 @@ async fn siparis_kiracisi(
         .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())
 }
 
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TicketStatusTransitionDto {
     #[serde(rename = "orderId")]
@@ -85,8 +84,7 @@ pub async fn kds_update_ticket_status(
     // yetkisiz çağrı durur (fail-closed).
     kds_kapisi(Some(payload.actor_role.as_str()))?;
 
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let event_id = format!("evt_kds_{}", Uuid::new_v4());
@@ -208,13 +206,15 @@ pub async fn get_active_tickets(
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
-    let rows = sqlx::query("
+    let rows = sqlx::query(
+        "
         SELECT o.id, t.name as table_name, o.created_at, o.notes
         FROM orders o
         LEFT JOIN tables t ON o.table_id = t.id
         WHERE o.status = 'IN_PROGRESS' AND o.tenant_id = ?
         ORDER BY o.created_at ASC
-    ")
+    ",
+    )
     .bind(&tenant_id)
     .fetch_all(&mut *conn)
     .await
@@ -252,7 +252,9 @@ pub async fn get_active_tickets(
             let resolved_station = station.unwrap_or_else(|| "Sıcak".to_string());
             let modifiers_str: Option<String> = ir.try_get("modifiers").ok();
             let notes: Option<String> = ir.try_get("notes").ok();
-            let status: String = ir.try_get("status").unwrap_or_else(|_| "Pending".to_string());
+            let status: String = ir
+                .try_get("status")
+                .unwrap_or_else(|_| "Pending".to_string());
 
             let st_upper = status.to_uppercase();
             if st_upper != "COMPLETED" && st_upper != "SERVED" && st_upper != "CANCELLED" {
@@ -297,8 +299,10 @@ pub async fn get_active_tickets(
         };
 
         let created_at_str: String = r.try_get("created_at").unwrap_or_default();
-        let priority = if let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(&created_at_str) {
-            let elapsed = chrono::Utc::now().signed_duration_since(created_at.with_timezone(&chrono::Utc));
+        let priority = if let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(&created_at_str)
+        {
+            let elapsed =
+                chrono::Utc::now().signed_duration_since(created_at.with_timezone(&chrono::Utc));
             if elapsed.num_minutes() >= 15 {
                 "RUSH".to_string()
             } else {
@@ -310,7 +314,10 @@ pub async fn get_active_tickets(
 
         res.push(KdsOrderDto {
             id: id.clone(),
-            order_number: format!("ORD-{}", id.chars().take(4).collect::<String>().to_uppercase()),
+            order_number: format!(
+                "ORD-{}",
+                id.chars().take(4).collect::<String>().to_uppercase()
+            ),
             table_number: r.try_get("table_name").ok(),
             status: final_status,
             items,

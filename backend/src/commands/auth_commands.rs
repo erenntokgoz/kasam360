@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Acquire, Row};
 
 use crate::services::security360::login_lockout::{
-    basari_sifirla, hesap_kapsami, hata_kaydet, kilit_kontrol, pin_kapsami, KilitDurumu,
+    basari_sifirla, hata_kaydet, hesap_kapsami, kilit_kontrol, pin_kapsami, KilitDurumu,
 };
 
 #[cfg(test)]
@@ -98,14 +98,13 @@ async fn user_dto_with_modules(
     // Kiracı kimliği hata yukarı taşınır: kolon eksikse
     // satır varsayılan kiracıya düşer ve oturum başka
     // bir işletmenin kimliğiyle açılır (AGENTS.md §3.3).
-    let tenant_id: String = row
-        .try_get("tenant_id")
-        .map_err(|e| e.to_string())?;
-    let module_rows = sqlx::query("SELECT module_id FROM tenant_modules WHERE tenant_id = ? AND is_active = 1")
-        .bind(&tenant_id)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let tenant_id: String = row.try_get("tenant_id").map_err(|e| e.to_string())?;
+    let module_rows =
+        sqlx::query("SELECT module_id FROM tenant_modules WHERE tenant_id = ? AND is_active = 1")
+            .bind(&tenant_id)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     let active_modules: Vec<String> = module_rows
         .into_iter()
@@ -123,7 +122,11 @@ async fn user_dto_with_modules(
 
 /// Authenticates an exact, provisioned login identifier.  Names and roles are
 /// deliberately not identifiers: neither is stable nor secret.
-pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret: &str) -> Result<UserDto, String> {
+pub async fn authenticate_by_identifier(
+    pool: &DbPool,
+    identifier: &str,
+    secret: &str,
+) -> Result<UserDto, String> {
     let identifier = identifier.trim();
     if identifier.is_empty() || secret.is_empty() {
         return Err("Geçersiz kimlik bilgileri".to_string());
@@ -200,9 +203,7 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
     if !is_valid {
         // Kilit kapsamı için kiracı okunur: kolon eksikse hata
         // yükselir, boş kiracıya sessizce düşülmez.
-        let tenant: String = row
-            .try_get("tenant_id")
-            .map_err(|e| e.to_string())?;
+        let tenant: String = row.try_get("tenant_id").map_err(|e| e.to_string())?;
         let durum = hata_kaydet(&mut conn, &tenant, &kapsam).await?;
         return Err(kilit_mesaji(&durum));
     }
@@ -215,7 +216,11 @@ pub async fn authenticate_by_identifier(pool: &DbPool, identifier: &str, secret:
 /// against salted Argon2 hashes when available, with safe fallback to provisioned PINs.
 /// PIN ile kimlik doğrulama — Restoran çalışma istasyonları için.
 /// Multi-tenant izolasyonu: Eğer tenant_id belirtilmişse, öncelikle o işletmeye ait personel aranır.
-pub async fn authenticate_by_pin(pool: &DbPool, pin: &str, target_tenant_id: Option<&str>) -> Result<UserDto, String> {
+pub async fn authenticate_by_pin(
+    pool: &DbPool,
+    pin: &str,
+    target_tenant_id: Option<&str>,
+) -> Result<UserDto, String> {
     // Multi-tenant PIN çakışmasını engelle (Cross-Tenant PIN Fallthrough Koruması):
     // tenant belirtilmişse yalnızca o tenant taranır, bulunamazsa hiçbir başka
     // kiracıya düşülmez. Tenant belirtilmemişse yalnızca merkez işletme
@@ -280,7 +285,7 @@ pub async fn authenticate_by_pin(pool: &DbPool, pin: &str, target_tenant_id: Opt
     let matched =
         crate::user_credentials::find_user_by_pin(&mut conn, pin, Some(&effective_tenant)).await?;
 
-        match matched {
+    match matched {
         Some(found) => {
             basari_sifirla(&mut conn, &kapsam).await?;
             drop(conn);
@@ -291,13 +296,12 @@ pub async fn authenticate_by_pin(pool: &DbPool, pin: &str, target_tenant_id: Opt
             // edilebiliyor, sonra normal giriş açılıyor.
             // Kolon eksikse hata yükselir — varsayılan kiracıya
             // sessiz düşülmez (AGENTS.md §3.3/§3.4).
-            let must_degis: i64 = sqlx::query_scalar(
-                "SELECT must_change_pin FROM users WHERE id = ?",
-            )
-            .bind(&found.id)
-            .fetch_one(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+            let must_degis: i64 =
+                sqlx::query_scalar("SELECT must_change_pin FROM users WHERE id = ?")
+                    .bind(&found.id)
+                    .fetch_one(pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
             if must_degis != 0 {
                 return Err(
                     "MUST_CHANGE_PIN: Güvenlik: ilk girişte PIN değiştirilmesi zorunludur."
@@ -323,7 +327,11 @@ pub async fn authenticate_by_pin(pool: &DbPool, pin: &str, target_tenant_id: Opt
 }
 
 #[tauri::command]
-pub async fn auth_login_credentials(identifier: String, secret: String, pool: tauri::State<'_, DbPool>) -> Result<UserDto, String> {
+pub async fn auth_login_credentials(
+    identifier: String,
+    secret: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<UserDto, String> {
     authenticate_by_identifier(&pool, &identifier, &secret).await
 }
 
@@ -331,8 +339,7 @@ pub async fn auth_login_credentials(identifier: String, secret: String, pool: ta
 pub async fn auth_login(
     pin: String,
     tenant_id: Option<String>,
-    #[allow(non_snake_case)]
-    tenantId: Option<String>,
+    #[allow(non_snake_case)] tenantId: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<UserDto, String> {
     let effective_tenant = tenant_id.or(tenantId);
@@ -356,9 +363,7 @@ pub(crate) async fn pin_degisim_tx(
     current_pin: &str,
     new_pin: &str,
 ) -> Result<(), String> {
-    if !crate::user_credentials::verify_user_pin(tx, user_id, current_pin)
-        .await?
-    {
+    if !crate::user_credentials::verify_user_pin(tx, user_id, current_pin).await? {
         return Err("Mevcut PIN hatalı.".to_string());
     }
 
@@ -375,13 +380,18 @@ pub(crate) async fn pin_degisim_tx(
     // Yeniden kullanım engeli: son 5 PIN reddedilir. Kontrol **yazmadan önce**
     // ve aynı transaction içinde yapılır; aksi halde kullanıcı eski PIN'ini
     // geri yazıp geçmişten silebilirdi.
-    if crate::services::security360::policy::pin_geride_kalmis_mi(&mut *tx, &tenant_id, user_id, new_pin)
-        .await?
+    if crate::services::security360::policy::pin_geride_kalmis_mi(
+        &mut *tx, &tenant_id, user_id, new_pin,
+    )
+    .await?
     {
-        return Err("VALIDATION: Bu PIN son kullanımlarınız arasında. Farklı bir PIN seçin.".into());
+        return Err(
+            "VALIDATION: Bu PIN son kullanımlarınız arasında. Farklı bir PIN seçin.".into(),
+        );
     }
 
-    crate::user_credentials::ensure_pin_available(&mut *tx, &tenant_id, new_pin, Some(user_id)).await?;
+    crate::user_credentials::ensure_pin_available(&mut *tx, &tenant_id, new_pin, Some(user_id))
+        .await?;
 
     sqlx::query("UPDATE users SET pin_hash = ? WHERE id = ?")
         .bind(&hash)
@@ -400,7 +410,8 @@ pub(crate) async fn pin_degisim_tx(
         .await
         .map_err(|e| e.to_string())?;
 
-    crate::user_credentials::ensure_pin_unique_after_write(&mut *tx, &tenant_id, new_pin, user_id).await?;
+    crate::user_credentials::ensure_pin_unique_after_write(&mut *tx, &tenant_id, new_pin, user_id)
+        .await?;
 
     // Yalnızca hash yazılır; geçmiş tablosu bir kimlik dökümü olmamalı.
     crate::services::security360::policy::pin_gecmise_ekle(&mut *tx, &tenant_id, user_id, &hash)
@@ -408,12 +419,11 @@ pub(crate) async fn pin_degisim_tx(
 
     // Kimlik bilgisi değişikliği "Güvenlik" kategorisine yazılır. Deftere PIN'in
     // kendisi ya da hash'i girmez; yalnızca değişikliğin gerçekleştiği yazılır.
-    let user_role: String =
-        sqlx::query_scalar("SELECT role FROM users WHERE id = ?")
-            .bind(user_id)
-            .fetch_one(&mut *tx)
-            .await
-            .unwrap_or_else(|_| "System".to_string());
+    let user_role: String = sqlx::query_scalar("SELECT role FROM users WHERE id = ?")
+        .bind(user_id)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap_or_else(|_| "System".to_string());
 
     let ctx = crate::services::audit_service::AuditContext::new(
         tenant_id,
@@ -451,8 +461,7 @@ pub async fn change_self_pin(
     // birlikte yapılacak (bkz. docs/FAZ-15-PLAN.md).
     let cur_pin = mevcut_pin_zorunlu(current_pin.as_deref())?;
 
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
 

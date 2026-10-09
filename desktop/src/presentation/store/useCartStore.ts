@@ -174,7 +174,8 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
     const activeTableId = get().activeTableId;
     if (currentView === 'POS' && view !== 'POS' && activeTableId) {
       const waiterId = useAuthStore.getState().user?.userId || 'UNKNOWN';
-      tauriInvoke('unlock_table', { tableId: activeTableId, waiterId }).catch(console.warn);
+      const tenantId = useAuthStore.getState().user?.tenantId || '';
+      tauriInvoke('unlock_table', { tableId: activeTableId, waiterId, tenantId }).catch(console.warn);
     }
     set({ currentView: view });
   },

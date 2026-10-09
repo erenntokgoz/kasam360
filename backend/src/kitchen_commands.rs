@@ -269,12 +269,13 @@ pub async fn update_kds_item_status(
     .map_err(|e| e.to_string())?;
 
     if let Some(order_id) = order_id_opt {
-        let rows = sqlx::query("SELECT status FROM order_items WHERE order_id = ? AND tenant_id = ?")
-            .bind(&order_id)
-            .bind(&tenant)
-            .fetch_all(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
+        let rows =
+            sqlx::query("SELECT status FROM order_items WHERE order_id = ? AND tenant_id = ?")
+                .bind(&order_id)
+                .bind(&tenant)
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
 
         // Durum metni okunacaksa hata yükselir: boş string "hazır değil"
         // sayılır ve bilet "tüm kalemler hazır" yanlışlamasıyla kapanır.

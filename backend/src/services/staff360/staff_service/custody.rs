@@ -1,4 +1,4 @@
-﻿//! Zimmet servisi — demirbaş teslim ve iade.
+//! Zimmet servisi — demirbaş teslim ve iade.
 
 use sqlx::{Row, SqlitePool};
 
@@ -104,4 +104,3 @@ pub async fn return_custody(
     .map_err(|e| e.to_string())?;
     Ok(())
 }
-

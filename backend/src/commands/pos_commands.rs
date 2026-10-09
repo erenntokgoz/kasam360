@@ -3,14 +3,13 @@
 //! Bu dosya commands.rs 500 satır tavanını aştığı için bölündü; içerik
 //! olduğu gibi taşındı, davranış değiştirilmedi.
 
+use crate::commands::command_helpers::audit_actor;
+use crate::commands::payment_commands::CartItemDto;
+use crate::commands::receipt_commands::require_tenant_scope;
 use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
-use crate::commands::command_helpers::audit_actor;
-use crate::commands::payment_commands::CartItemDto;
-use crate::commands::receipt_commands::require_tenant_scope;
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PosCategoryDto {
@@ -41,14 +40,19 @@ pub struct PosProductDto {
 }
 
 #[tauri::command]
-pub async fn pos_get_categories(tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<PosCategoryDto>, String> {
+pub async fn pos_get_categories(
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<PosCategoryDto>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT id, name, icon FROM categories WHERE tenant_id = ? ORDER BY display_order ASC")
-        .bind(&tenant_id)
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-        
+    let rows = sqlx::query(
+        "SELECT id, name, icon FROM categories WHERE tenant_id = ? ORDER BY display_order ASC",
+    )
+    .bind(&tenant_id)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
     let mut res = Vec::new();
     for row in rows {
         res.push(PosCategoryDto {
@@ -61,7 +65,10 @@ pub async fn pos_get_categories(tenant_id: String, pool: tauri::State<'_, DbPool
 }
 
 #[tauri::command]
-pub async fn pos_get_products(tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<PosProductDto>, String> {
+pub async fn pos_get_products(
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<PosProductDto>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     // Akıllı Sipariş Motoru: En sık sipariş edilen ürünler en başta yer alır
     let rows = sqlx::query(
@@ -75,7 +82,7 @@ pub async fn pos_get_products(tenant_id: String, pool: tauri::State<'_, DbPool>)
         .fetch_all(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
-        
+
     let mut res = Vec::new();
     for row in rows {
         let price_cents: i64 = row.try_get("price_cents").map_err(|e| e.to_string())?;
@@ -89,7 +96,9 @@ pub async fn pos_get_products(tenant_id: String, pool: tauri::State<'_, DbPool>)
             tax_rate_bp,
             category: row.try_get("category_id").map_err(|e| e.to_string())?,
             description: row.try_get("description").ok(),
-            in_stock: row.try_get::<bool, _>("is_active").map_err(|e| e.to_string())?,
+            in_stock: row
+                .try_get::<bool, _>("is_active")
+                .map_err(|e| e.to_string())?,
             stock_quantity: row.try_get("stock_quantity").ok(),
             color: row.try_get("color").ok(),
             image_url: row.try_get("image_url").ok(),
@@ -153,7 +162,9 @@ pub(crate) async fn authoritative_modifier_snapshot(
         }));
     }
 
-    Ok(Some(serde_json::to_string(&snapshot).map_err(|e| e.to_string())?))
+    Ok(Some(
+        serde_json::to_string(&snapshot).map_err(|e| e.to_string())?,
+    ))
 }
 
 #[tauri::command]
@@ -165,8 +176,7 @@ pub async fn submit_order(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     // 1. Calculate authoritative totals and prepared items
@@ -186,16 +196,19 @@ pub async fn submit_order(
     let mut total_cents: i64 = 0;
 
     for item in &payload.items {
-        let product_id = item.product.get("id")
+        let product_id = item
+            .product
+            .get("id")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-            
-let row = sqlx::query("SELECT price_cents, tax_rate_bp FROM products WHERE id=? AND tenant_id=?")
-            .bind(product_id)
-            .bind(&tenant_id)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| format!("Product not found: {}", e))?;
+
+        let row =
+            sqlx::query("SELECT price_cents, tax_rate_bp FROM products WHERE id=? AND tenant_id=?")
+                .bind(product_id)
+                .bind(&tenant_id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| format!("Product not found: {}", e))?;
 
         let price_cents: i64 = row.try_get("price_cents").map_err(|e| e.to_string())?;
         let db_tax_rate_bp: i64 = row.try_get("tax_rate_bp").map_err(|e| e.to_string())?;
@@ -220,10 +233,13 @@ let row = sqlx::query("SELECT price_cents, tax_rate_bp FROM products WHERE id=? 
         // Snapshot: seçenek adları ve **gerçekten ücretlenen** fiyat farkı
         // yazılır. İstemcinin gönderdiği fiyat değeri kullanılmaz; aksi hâlde
         // fişte görünen ekstre ile tahsil edilen tutar ayrışırdı.
-        let modifiers_json = match authoritative_modifier_snapshot(&mut tx, &tenant_id, item.modifiers.as_ref()).await? {
-            Some(json) => Some(json),
-            None => None,
-        };
+        let modifiers_json =
+            match authoritative_modifier_snapshot(&mut tx, &tenant_id, item.modifiers.as_ref())
+                .await?
+            {
+                Some(json) => Some(json),
+                None => None,
+            };
 
         prepared_items.push(PreparedOrderItem {
             id: format!("item_{}", Uuid::new_v4()),
@@ -239,7 +255,7 @@ let row = sqlx::query("SELECT price_cents, tax_rate_bp FROM products WHERE id=? 
     }
 
     // 2. Insert parent order first (satisfying FK constraint on order_items)
-// Garson kimliği: siparişi açan kişidir. Garson KPI'sı (Faz 11) bu kolonu
+    // Garson kimliği: siparişi açan kişidir. Garson KPI'sı (Faz 11) bu kolonu
     // okur; yazılmadığı sürece karnesi hep boş döner. `tables.waiter_id` önce
     // denir, yoksa komutu çağıran `actor_id` kullanılır (müdür açtıysa
     // masadaki garson kaydedilir, kişi bazlı kırılım doğru kalır).
@@ -266,7 +282,7 @@ let row = sqlx::query("SELECT price_cents, tax_rate_bp FROM products WHERE id=? 
         .await
         .map_err(|e| e.to_string())?;
 
-// 3. Insert child order_items with valid FK reference
+    // 3. Insert child order_items with valid FK reference
     for p_item in prepared_items {
         sqlx::query("INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_cents, tax_rate_bp, subtotal_cents, tax_amount_cents, total_cents, modifiers, waiter_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&p_item.id)
@@ -419,7 +435,8 @@ pub async fn get_order_items(
     let mut result = Vec::new();
     for row in items {
         let modifiers_str: Option<String> = row.try_get("modifiers").ok();
-        let modifiers_val: Option<serde_json::Value> = modifiers_str.and_then(|m| serde_json::from_str(&m).ok());
+        let modifiers_val: Option<serde_json::Value> =
+            modifiers_str.and_then(|m| serde_json::from_str(&m).ok());
 
         let product_json = serde_json::json!({
             "id": row.try_get::<String, _>("product_id").map_err(|e| e.to_string())?,
@@ -435,12 +452,28 @@ pub async fn get_order_items(
         result.push(CartItemDto {
             id: row.try_get("id").map_err(|e| e.to_string())?,
             product: product_json,
-            quantity: row.try_get::<i64, _>("quantity").map_err(|e| e.to_string())?,
-            unit_price: row.try_get::<i64, _>("unit_price_cents").map_err(|e| e.to_string())?,
-            tax_rate: Some(row.try_get::<i64, _>("tax_rate_bp").map_err(|e| e.to_string())?),
-            subtotal: Some(row.try_get::<i64, _>("subtotal_cents").map_err(|e| e.to_string())?),
-            tax_amount: Some(row.try_get::<i64, _>("tax_amount_cents").map_err(|e| e.to_string())?),
-            total: Some(row.try_get::<i64, _>("total_cents").map_err(|e| e.to_string())?),
+            quantity: row
+                .try_get::<i64, _>("quantity")
+                .map_err(|e| e.to_string())?,
+            unit_price: row
+                .try_get::<i64, _>("unit_price_cents")
+                .map_err(|e| e.to_string())?,
+            tax_rate: Some(
+                row.try_get::<i64, _>("tax_rate_bp")
+                    .map_err(|e| e.to_string())?,
+            ),
+            subtotal: Some(
+                row.try_get::<i64, _>("subtotal_cents")
+                    .map_err(|e| e.to_string())?,
+            ),
+            tax_amount: Some(
+                row.try_get::<i64, _>("tax_amount_cents")
+                    .map_err(|e| e.to_string())?,
+            ),
+            total: Some(
+                row.try_get::<i64, _>("total_cents")
+                    .map_err(|e| e.to_string())?,
+            ),
             modifiers: modifiers_val,
             note: row.try_get("notes").ok(),
             discount: None,
@@ -461,18 +494,26 @@ pub struct LiveOrderDto {
 }
 
 #[tauri::command]
-pub async fn get_live_orders(actor_role: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<LiveOrderDto>, String> {
+pub async fn get_live_orders(
+    actor_role: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<LiveOrderDto>, String> {
     crate::rbac::require_reporting(&actor_role)?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("
+    let rows = sqlx::query(
+        "
         SELECT o.id, t.name as table_name, o.status, o.total_cents, o.created_at,
                (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
         FROM orders o
         JOIN tables t ON o.table_id = t.id
         WHERE o.status IN ('OPEN', 'IN_PROGRESS')
         ORDER BY o.created_at ASC
-    ").fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
-    
+    ",
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
     let orders = rows
         .into_iter()
         .map(|r| -> Result<LiveOrderDto, String> {

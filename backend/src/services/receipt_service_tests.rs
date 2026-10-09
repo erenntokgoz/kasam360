@@ -84,13 +84,15 @@ async fn seed_order(
 
 async fn seed_product(pool: &sqlx::SqlitePool, tenant: &str, id: &str) {
     // `products.category_id` yabancı anahtarı NOT NULL: kategori önce eklenir.
-    sqlx::query("INSERT OR IGNORE INTO categories (id, tenant_id, name, display_order) VALUES (?, ?, ?, 0)")
-        .bind(format!("cat_{}", tenant))
-        .bind(tenant)
-        .bind("Kategori")
-        .execute(pool)
-        .await
-        .expect("ategori eklenir");
+    sqlx::query(
+        "INSERT OR IGNORE INTO categories (id, tenant_id, name, display_order) VALUES (?, ?, ?, 0)",
+    )
+    .bind(format!("cat_{}", tenant))
+    .bind(tenant)
+    .bind("Kategori")
+    .execute(pool)
+    .await
+    .expect("ategori eklenir");
     sqlx::query(
         "INSERT OR IGNORE INTO products (id, tenant_id, name, price_cents, tax_rate_bp, category_id, is_active) \
          VALUES (?, ?, ?, 1000, 2000, ?, 1)",
@@ -193,7 +195,11 @@ async fn tahsilat_kaydi_tsiparis_tek_fis_uretir() {
     let mut conn = pool.acquire().await.expect("bağlantı");
 
     let receipts = list(&mut conn, TENANT_A, 50).await.expect("liste okunur");
-    assert_eq!(receipts.len(), 1, "bir tahsilat tam olarak bir fiş üretmeli");
+    assert_eq!(
+        receipts.len(),
+        1,
+        "bir tahsilat tam olarak bir fiş üretmeli"
+    );
 
     let receipt = &receipts[0];
     assert_eq!(receipt.transaction_id, "txn_1");
@@ -228,7 +234,9 @@ async fn ayni_siparis_iki_tahsilat_iki_fiştir_tek_tahsilat_bir_fistir() {
     assert!(ids.contains(&"txn_1") && ids.contains(&"txn_2"));
 
     // Tek bir tahsilat ise tekrar üretilmez.
-    let single = list(&mut conn, TENANT_A, 1).await.expect("sınırlı liste okunur");
+    let single = list(&mut conn, TENANT_A, 1)
+        .await
+        .expect("sınırlı liste okunur");
     assert_eq!(single.len(), 1);
 }
 
@@ -244,10 +252,14 @@ async fn fis_listesi_baska_tenantin_fisini_gormez() {
     seed_sale_event(&pool, TENANT_A, "txn_a", payload, "2026-05-01 12:00:00").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
 
-    let mine = list(&mut conn, TENANT_A, 50).await.expect("kendi liste okunur");
+    let mine = list(&mut conn, TENANT_A, 50)
+        .await
+        .expect("kendi liste okunur");
     assert_eq!(mine.len(), 1);
 
-    let theirs = list(&mut conn, TENANT_B, 50).await.expect("karşı liste okunur");
+    let theirs = list(&mut conn, TENANT_B, 50)
+        .await
+        .expect("karşı liste okunur");
     assert!(theirs.is_empty(), "çapraz tenant fişi sızmamalı");
 }
 
@@ -261,15 +273,21 @@ async fn fis_kimligiyle_arama_yalniz_kendi_tenantinda_calisir() {
     seed_sale_event(&pool, TENANT_A, "txn_a", payload, "2026-05-01 12:00:00").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
 
-    let found = find(&mut conn, TENANT_A, "txn_a").await.expect("arama yapılır");
+    let found = find(&mut conn, TENANT_A, "txn_a")
+        .await
+        .expect("arama yapılır");
     assert!(found.is_some());
 
     // Aynı kimlik diğer işletmede aranırsa bulunmaz: kimlik tahmin edilebilir
     // olsa bile fiş sızmaz.
-    let cross = find(&mut conn, TENANT_B, "txn_a").await.expect("arama yapılır");
+    let cross = find(&mut conn, TENANT_B, "txn_a")
+        .await
+        .expect("arama yapılır");
     assert!(cross.is_none(), "çapraz tenant fiş erişimi açık kalmış");
 
-    let unknown = find(&mut conn, TENANT_A, "txn_yok").await.expect("arama yapılır");
+    let unknown = find(&mut conn, TENANT_A, "txn_yok")
+        .await
+        .expect("arama yapılır");
     assert!(unknown.is_none());
 }
 
@@ -279,7 +297,14 @@ async fn fis_numarasi_ile_aramak_da_calisir() {
     seed_tenant(&pool, TENANT_A).await;
     let mut payload = payment_payload(None, 15_000, "CASH");
     payload["transactionId"] = serde_json::json!("txn_abc123");
-    seed_sale_event(&pool, TENANT_A, "txn_abc123", payload, "2026-05-01 12:00:00").await;
+    seed_sale_event(
+        &pool,
+        TENANT_A,
+        "txn_abc123",
+        payload,
+        "2026-05-01 12:00:00",
+    )
+    .await;
     let mut conn = pool.acquire().await.expect("bağlantı");
 
     let found = find(&mut conn, TENANT_A, "FISC-txn_ab")
@@ -298,12 +323,18 @@ async fn basim_izni_icin_varlik_kontrolu_tenant_kilitlidir() {
     seed_sale_event(&pool, TENANT_A, "txn_a", payload, "2026-05-01 12:00:00").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
 
-    assert!(exists(&mut conn, TENANT_A, "txn_a").await.expect("kontrol yapılır"));
+    assert!(exists(&mut conn, TENANT_A, "txn_a")
+        .await
+        .expect("kontrol yapılır"));
     assert!(
-        !exists(&mut conn, TENANT_B, "txn_a").await.expect("kontrol yapılır"),
+        !exists(&mut conn, TENANT_B, "txn_a")
+            .await
+            .expect("kontrol yapılır"),
         "başka tenant'ın fişi basılabilmemeli"
     );
-    assert!(!exists(&mut conn, TENANT_A, "txn_yok").await.expect("kontrol yapılır"));
+    assert!(!exists(&mut conn, TENANT_A, "txn_yok")
+        .await
+        .expect("kontrol yapılır"));
 }
 
 // ─── Uydurma veri yasağı ─────────────────────────────────────────────────────
@@ -391,8 +422,9 @@ async fn finansal_hareket_turleri_tek_listede_donusur() {
     .expect("kasa hareketi eklenir");
 
     let mut conn = pool.acquire().await.expect("bağlantı");
-    let movements =
-        list_financial_movements(&mut conn, TENANT_A, FROM, TO, 50).await.expect("hareketler okunur");
+    let movements = list_financial_movements(&mut conn, TENANT_A, FROM, TO, 50)
+        .await
+        .expect("hareketler okunur");
 
     assert_eq!(movements.len(), 2);
 
@@ -410,7 +442,10 @@ async fn finansal_hareket_turleri_tek_listede_donusur() {
     assert_eq!(sale.receipt_id.as_deref(), Some("txn_1"));
     assert!(sale.fiscal_receipt_no.is_some());
     assert_eq!(cash.receipt_id, None);
-    assert_eq!(cash.amount_cents, -5_000, "kasa çıkışı negatif işaretlenmeli");
+    assert_eq!(
+        cash.amount_cents, -5_000,
+        "kasa çıkışı negatif işaretlenmeli"
+    );
 }
 
 #[tokio::test]
@@ -443,10 +478,15 @@ async fn aralik_disindaki_hareketler_listelenmez() {
     seed_sale_event(&pool, TENANT_A, "txn_1", payload, "2026-05-02 10:00:00").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
 
-    let outside =
-        list_financial_movements(&mut conn, TENANT_A, "2027-01-01 00:00:00", "2027-12-31 23:59:59", 50)
-            .await
-            .expect("liste okunur");
+    let outside = list_financial_movements(
+        &mut conn,
+        TENANT_A,
+        "2027-01-01 00:00:00",
+        "2027-12-31 23:59:59",
+        50,
+    )
+    .await
+    .expect("liste okunur");
     assert!(outside.is_empty());
 }
 

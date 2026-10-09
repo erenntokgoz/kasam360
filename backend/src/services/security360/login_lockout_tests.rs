@@ -24,14 +24,8 @@ use uuid::Uuid;
 /// bağlantı kapanırken kaybolur; restart sonrası
 /// kalıcılık ancak kalıcı bir dosyada ölçülebilir.
 async fn dosya_havuzu() -> (SqlitePool, std::path::PathBuf) {
-    let dosya = std::env::temp_dir().join(format!(
-        "kasam360_g2_lockout_{}.db",
-        Uuid::new_v4()
-    ));
-    let url = format!(
-        "sqlite://{}",
-        dosya.to_string_lossy().replace('\\', "/")
-    );
+    let dosya = std::env::temp_dir().join(format!("kasam360_g2_lockout_{}.db", Uuid::new_v4()));
+    let url = format!("sqlite://{}", dosya.to_string_lossy().replace('\\', "/"));
     let secenek = SqliteConnectOptions::from_str(&url)
         .expect("gecerli secenekler")
         .create_if_missing(true);
@@ -71,12 +65,8 @@ fn dosya_sil(dosya: &std::path::Path) {
 
 /// Aynı dosyadan yeni havuz açar (restart simülasyonu).
 async fn yeniden_ac(dosya: &std::path::Path) -> SqlitePool {
-    let url = format!(
-        "sqlite://{}",
-        dosya.to_string_lossy().replace('\\', "/")
-    );
-    let secenek = SqliteConnectOptions::from_str(&url)
-        .expect("gecerli secenekler");
+    let url = format!("sqlite://{}", dosya.to_string_lossy().replace('\\', "/"));
+    let secenek = SqliteConnectOptions::from_str(&url).expect("gecerli secenekler");
     SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(secenek)
@@ -162,10 +152,9 @@ async fn kismi_sayac_yeniden_baslatmada_kalir() {
         let mut conn = ikinci.acquire().await.expect("baglanti");
         // Kilit hâlâ sürmüyor; yeni hata mevcut
         // sayıyı üzerine ekler.
-        let durum =
-            hata_kaydet(&mut conn, kiraci, &pin_kapsami(kiraci))
-                .await
-                .expect("hata yazilir");
+        let durum = hata_kaydet(&mut conn, kiraci, &pin_kapsami(kiraci))
+            .await
+            .expect("hata yazilir");
         assert!(!durum.kilitli);
         assert_eq!(
             durum.kalan_hak,
@@ -211,10 +200,9 @@ async fn basarili_sifirlama_yeniden_baslatmada_kalir() {
             .expect("temizlenen sayaç kilitlememeli");
         // Sıfırlanmış kapsamda yeni hata yeni turdan
         // başlar: dört hak kalır.
-        let durum =
-            hata_kaydet(&mut conn, kiraci, &pin_kapsami(kiraci))
-                .await
-                .expect("hata yazilir");
+        let durum = hata_kaydet(&mut conn, kiraci, &pin_kapsami(kiraci))
+            .await
+            .expect("hata yazilir");
         assert_eq!(durum.kalan_hak, Some(4));
     }
 

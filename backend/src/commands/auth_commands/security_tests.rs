@@ -11,8 +11,8 @@
 
 use super::*;
 use crate::db::DbPool;
-use sqlx::Acquire;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::Acquire;
 use sqlx::Row;
 use std::str::FromStr;
 
@@ -109,11 +109,12 @@ async fn parola_yolu_kaba_kuvvet_kilidine_dahil() {
 
     // Sayaç gerçekten yazıldı: süreç yeniden başlasa da kilit kalır.
     let mut conn = pool.acquire().await.expect("baglanti");
-    let satir = sqlx::query("SELECT failed_count, locked_until FROM login_attempts WHERE scope = ?")
-        .bind(hesap_kapsami(kimlik))
-        .fetch_one(&mut *conn)
-        .await
-        .expect("kilit satiri yazildi");
+    let satir =
+        sqlx::query("SELECT failed_count, locked_until FROM login_attempts WHERE scope = ?")
+            .bind(hesap_kapsami(kimlik))
+            .fetch_one(&mut *conn)
+            .await
+            .expect("kilit satiri yazildi");
     let hata_sayisi: i64 = satir.try_get("failed_count").expect("sayaç okunur");
     assert_eq!(hata_sayisi, crate::services::security360::MAX_HESAP_HATASI);
     let kilit_bitis: i64 = satir.try_get("locked_until").expect("kilit okunur");
@@ -178,7 +179,14 @@ async fn kapsam_harf_bicimi_duyarsizdir() {
 async fn basarili_giris_sayaci_sifirlar() {
     let pool = havuz().await;
     let kimlik = "sifirla@ornek.com";
-    kullanici_ekle(&pool, "usr_sifirla", "DEFAULT_TENANT", kimlik, "DogruParola1").await;
+    kullanici_ekle(
+        &pool,
+        "usr_sifirla",
+        "DEFAULT_TENANT",
+        kimlik,
+        "DogruParola1",
+    )
+    .await;
 
     for _ in 0..3 {
         authenticate_by_identifier(&pool, kimlik, "yanlis")
@@ -214,12 +222,18 @@ async fn kalan_hak_mesaji_yol_durumunu_degistirmez() {
     let ilk = authenticate_by_identifier(&pool, kimlik, "yanlis")
         .await
         .expect_err("hatali");
-    assert_eq!(ilk, "Geçersiz kimlik bilgileri", "4 hak kaldığında uyarı olmamalı");
+    assert_eq!(
+        ilk, "Geçersiz kimlik bilgileri",
+        "4 hak kaldığında uyarı olmamalı"
+    );
 
     let ikinci = authenticate_by_identifier(&pool, kimlik, "yanlis")
         .await
         .expect_err("hatali");
-    assert_eq!(ikinci, "Geçersiz kimlik bilgileri", "3 hak kaldığında uyarı olmamalı");
+    assert_eq!(
+        ikinci, "Geçersiz kimlik bilgileri",
+        "3 hak kaldığında uyarı olmamalı"
+    );
 
     let ucuncu = authenticate_by_identifier(&pool, kimlik, "yanlis")
         .await
@@ -246,7 +260,14 @@ async fn kalan_hak_mesaji_yol_durumunu_degistirmez() {
 async fn son_hak_kaldiginda_dogru_parola_girer() {
     let pool = havuz().await;
     let kimlik = "sonhak@ornek.com";
-    kullanici_ekle(&pool, "usr_sonhak", "DEFAULT_TENANT", kimlik, "DogruParola1").await;
+    kullanici_ekle(
+        &pool,
+        "usr_sonhak",
+        "DEFAULT_TENANT",
+        kimlik,
+        "DogruParola1",
+    )
+    .await;
 
     for _ in 0..4 {
         authenticate_by_identifier(&pool, kimlik, "yanlis")
@@ -268,7 +289,14 @@ async fn son_hak_kaldiginda_dogru_parola_girer() {
 #[tokio::test]
 async fn bilinmeyen_kimlik_ayni_mesaji_dondurur() {
     let pool = havuz().await;
-    kullanici_ekle(&pool, "usr_var", "DEFAULT_TENANT", "var@ornek.com", "DogruParola1").await;
+    kullanici_ekle(
+        &pool,
+        "usr_var",
+        "DEFAULT_TENANT",
+        "var@ornek.com",
+        "DogruParola1",
+    )
+    .await;
 
     for _ in 0..3 {
         authenticate_by_identifier(&pool, "yok@ornek.com", "yanlis")
@@ -429,8 +457,7 @@ async fn pin_degisim_tx_ilk_giris_zorlamasini_bitirir() {
     // (fabrika öntanımlı) doğrulandı, yeni PIN yazılır,
     // ilk giriş zorlaması biter.
     let mutex = tokio::sync::Mutex::new(());
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(mutex.lock().await);
     let mut conn = pool.acquire().await.expect("baglanti");
     let mut tx = conn.begin().await.expect("tx baslar");
     pin_degisim_tx(&mut tx, audit_lock, "usr_pin", "2222", "9876")
@@ -472,12 +499,10 @@ async fn pin_degisim_tx_yanlis_mevcut_pini_reddeder() {
     drop(conn);
 
     let mutex = tokio::sync::Mutex::new(());
-    let audit_lock =
-        crate::services::audit_service::AuditLock::new(mutex.lock().await);
+    let audit_lock = crate::services::audit_service::AuditLock::new(mutex.lock().await);
     let mut conn = pool.acquire().await.expect("baglanti");
     let mut tx = conn.begin().await.expect("tx baslar");
-    let sonuc =
-        pin_degisim_tx(&mut tx, audit_lock, "usr_eski", "9999", "4321").await;
+    let sonuc = pin_degisim_tx(&mut tx, audit_lock, "usr_eski", "9999", "4321").await;
     tx.rollback().await.expect("rollback");
     drop(conn);
 

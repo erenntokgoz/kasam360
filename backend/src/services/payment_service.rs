@@ -52,43 +52,42 @@ impl PaymentService {
         // 5.5 K2: sunucu hesabında indirim varsa anlık PIN onayı zorunludur.
         // Onay tüketimi, ödeme satırı yazılmadan **önce** olur: onaysız ödeme
         // denemesi kalıcı bir iz bırakmaz.
-        let consumed_approval =
-            crate::services::payment_approval::consume_discount_approval(
-                conn,
-                audit_lock,
-                tenant_id,
-                actor_id,
-                actor_role,
-                &payload.transaction_id,
-                &server_truth,
-                payload.approval_token.as_deref(),
-            )
-            .await?;
+        let consumed_approval = crate::services::payment_approval::consume_discount_approval(
+            conn,
+            audit_lock,
+            tenant_id,
+            actor_id,
+            actor_role,
+            &payload.transaction_id,
+            &server_truth,
+            payload.approval_token.as_deref(),
+        )
+        .await?;
 
         // 5.6 D3: kiracı eşiği tanımladıysa ve ödeme toplamı eşiğe eşit veya
         // üstündeyse ikinci bir onay gerekir. İndirim onayı tüketildiyse bu
         // yüzey atlanır (tek jeton iki işleme bağlanamaz) — gerekçesi
         // `consume_total_approval` dokümanında.
-        let consumed_total_approval =
-            crate::services::payment_approval::consume_total_approval(
-                conn,
-                audit_lock,
-                tenant_id,
-                actor_id,
-                actor_role,
-                &payload.transaction_id,
-                server_total_cents,
-                payload.approval_token.as_deref(),
-                consumed_approval.is_some(),
-            )
-            .await?;
+        let consumed_total_approval = crate::services::payment_approval::consume_total_approval(
+            conn,
+            audit_lock,
+            tenant_id,
+            actor_id,
+            actor_role,
+            &payload.transaction_id,
+            server_total_cents,
+            payload.approval_token.as_deref(),
+            consumed_approval.is_some(),
+        )
+        .await?;
         let consumed_approval = consumed_approval.or(consumed_total_approval);
 
         // 6. Değiştirilemez (immutable) Satış Olayı (Sale Event) + Outbox kaydı ekle.
         PaymentRepository::insert_sale_event(conn, payload, tenant_id).await?;
 
         // 6.5 Uygulanabilirse siparişi kapat
-        PaymentRepository::close_order_if_applicable(conn, payload.order_id.as_deref(), tenant_id).await?;
+        PaymentRepository::close_order_if_applicable(conn, payload.order_id.as_deref(), tenant_id)
+            .await?;
 
         // 7. FIFO stok maliyeti düşümü.
         let fifo = InventoryService::execute_fifo_deduction(

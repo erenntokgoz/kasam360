@@ -150,13 +150,20 @@ export function FloorPlanContainer() {
     try {
       const locked = await tauriInvoke<boolean>('try_lock_table', { 
         tableId: table.id, 
-        waiterId: user?.userId || 'UNKNOWN' 
+        waiterId: user?.userId || 'UNKNOWN',
+        tenantId: user?.tenantId || ''
       });
-      if (!locked) {
+      if (locked === false) {
         notifyError('Masa Kilitli', 'Bu masa şu anda başka bir personel tarafından işlem görüyor. Lütfen bekleyiniz.');
         return;
       }
-    } catch (e) {
+    } catch (e: unknown) {
+      // Backend lock hatası: detaylı mesaj kullanıcıya gösterilir.
+      const msg = e as Error;
+      if (msg.message.startsWith('TABLE_LOCKED')) {
+        notifyError('Masa Kilitli', msg.message.replace('TABLE_LOCKED: ', ''));
+        return;
+      }
       console.warn("Kilit kontrolü başarısız, devam ediliyor:", e);
     }
 

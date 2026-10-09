@@ -76,7 +76,13 @@ async fn seed_directory(pool: &sqlx::SqlitePool, id: &str, name: &str) {
     .expect("cari kart eklenir");
 }
 
-async fn seed_debt(pool: &sqlx::SqlitePool, id: &str, order_id: Option<&str>, amount: i64, created_at: &str) {
+async fn seed_debt(
+    pool: &sqlx::SqlitePool,
+    id: &str,
+    order_id: Option<&str>,
+    amount: i64,
+    created_at: &str,
+) {
     sqlx::query(
         "INSERT INTO debts (id, tenant_id, directory_id, type, total_amount_cents,
                             remaining_amount_cents, status, is_cash, order_id, created_at)
@@ -93,7 +99,13 @@ async fn seed_debt(pool: &sqlx::SqlitePool, id: &str, order_id: Option<&str>, am
     .expect("borç eklenir");
 }
 
-async fn seed_payment(pool: &sqlx::SqlitePool, id: &str, debt_id: &str, amount: i64, created_at: &str) {
+async fn seed_payment(
+    pool: &sqlx::SqlitePool,
+    id: &str,
+    debt_id: &str,
+    amount: i64,
+    created_at: &str,
+) {
     sqlx::query(
         "INSERT INTO debt_payments (id, tenant_id, debt_id, amount_cents, payment_method,
                                     actor_id, created_at)
@@ -126,7 +138,9 @@ async fn seed_expense(pool: &sqlx::SqlitePool, category: &str, amount: i64, date
 }
 
 async fn report(pool: &sqlx::SqlitePool) -> crate::services::pnl_service::FinancialReport {
-    financial_report(pool, TENANT, &None).await.expect("P&L üretilir")
+    financial_report(pool, TENANT, &None)
+        .await
+        .expect("P&L üretilir")
 }
 
 // ============================================================================
@@ -162,15 +176,29 @@ async fn genuine_veresiye_collection_is_still_counted() {
     // Düzeltme aşırıya kaçmamalı: siparişi PAID olmayan veresiye tahsilatı
     // gelirdir ve sayılmalıdır. Aksi hâlde tüm veresiye gelir kaybolur.
     let p = pool().await;
-    seed_order(&p, "ord_1", TENANT, 100_000, "IN_PROGRESS", "2026-10-05 20:00:00").await;
+    seed_order(
+        &p,
+        "ord_1",
+        TENANT,
+        100_000,
+        "IN_PROGRESS",
+        "2026-10-05 20:00:00",
+    )
+    .await;
     seed_directory(&p, "dir_cus", "Müşteri Ayşe").await;
     seed_debt(&p, "dbt_1", Some("ord_1"), 100_000, "2026-10-05 20:05:00").await;
     seed_payment(&p, "pay_1", "dbt_1", 100_000, "2026-10-25 11:00:00").await;
 
     let r = report(&p).await;
 
-    assert_eq!(r.total_sales_revenue_cents, 0, "IN_PROGRESS sipariş peşin gelir değildir");
-    assert_eq!(r.total_debt_collected_cents, 100_000, "veresiye tahsilatı gelirdir");
+    assert_eq!(
+        r.total_sales_revenue_cents, 0,
+        "IN_PROGRESS sipariş peşin gelir değildir"
+    );
+    assert_eq!(
+        r.total_debt_collected_cents, 100_000,
+        "veresiye tahsilatı gelirdir"
+    );
     assert_eq!(r.total_revenue_cents, 100_000);
 }
 
@@ -208,12 +236,31 @@ async fn cash_sale_minus_expense_equals_net_profit() {
 #[tokio::test]
 async fn unpaid_orders_are_not_revenue() {
     let p = pool().await;
-    seed_order(&p, "ord_1", TENANT, 300_000, "IN_PROGRESS", "2026-10-05 20:00:00").await;
-    seed_order(&p, "ord_2", TENANT, 200_000, "CANCELLED", "2026-10-05 21:00:00").await;
+    seed_order(
+        &p,
+        "ord_1",
+        TENANT,
+        300_000,
+        "IN_PROGRESS",
+        "2026-10-05 20:00:00",
+    )
+    .await;
+    seed_order(
+        &p,
+        "ord_2",
+        TENANT,
+        200_000,
+        "CANCELLED",
+        "2026-10-05 21:00:00",
+    )
+    .await;
 
     let r = report(&p).await;
 
-    assert_eq!(r.total_revenue_cents, 0, "ödenmemiş ve iptal sipariş gelir değildir");
+    assert_eq!(
+        r.total_revenue_cents, 0,
+        "ödenmemiş ve iptal sipariş gelir değildir"
+    );
 }
 
 // ============================================================================
@@ -254,9 +301,14 @@ async fn date_range_excludes_other_months() {
     seed_expense(&p, "OTHER", 50_000, "2026-10-10").await;
 
     let r: DateRange = Some(("2026-10-01".to_string(), "2026-10-31".to_string()));
-    let rep = financial_report(&p, TENANT, &r).await.expect("P&L üretilir");
+    let rep = financial_report(&p, TENANT, &r)
+        .await
+        .expect("P&L üretilir");
 
-    assert_eq!(rep.total_revenue_cents, 200_000, "yalnız Ekim geliri sayılmalı");
+    assert_eq!(
+        rep.total_revenue_cents, 200_000,
+        "yalnız Ekim geliri sayılmalı"
+    );
     assert_eq!(rep.total_expenses_cents, 50_000);
     assert_eq!(
         rep.expenses_by_category.len(),
@@ -269,12 +321,23 @@ async fn date_range_excludes_other_months() {
 async fn other_tenant_is_excluded_everywhere() {
     let p = pool().await;
     seed_order(&p, "ord_a", TENANT, 100_000, "PAID", "2026-10-10 20:00:00").await;
-    seed_order(&p, "ord_x", "tenant_b", 900_000, "PAID", "2026-10-11 20:00:00").await;
+    seed_order(
+        &p,
+        "ord_x",
+        "tenant_b",
+        900_000,
+        "PAID",
+        "2026-10-11 20:00:00",
+    )
+    .await;
     seed_expense(&p, "OTHER", 50_000, "2026-10-10").await;
 
     let r = report(&p).await;
 
-    assert_eq!(r.total_revenue_cents, 100_000, "başka kiracının 9.000 TL'si sızmamalı");
+    assert_eq!(
+        r.total_revenue_cents, 100_000,
+        "başka kiracının 9.000 TL'si sızmamalı"
+    );
 }
 
 // ============================================================================

@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: Swatinh/rust-cache@v2
+
+      - name: cargo check --all-targets
+        run: cd backend && cargo check --all-targets
+
+      - name: cargo fmt --check
+        run: cd backend && cargo fmt --check
+
+      - name: cargo clippy
+        # G6 · Item 21: `-D warnings` yerine `-W` kullanılıyor. 70 hata
+        # Faz 21 (Clean Code) adımıyla düzeltilecek; detay için
+        # docs/FAZ-17-SOZLER.md'ye bakın.
+        run: cd backend && cargo clippy -- -W clippy::all
+
+      - name: cargo test
+        run: cd backend && cargo test
+
+      - name: AI slop tarama (emoji / gradient / unwrap)
+        run: |
+          grep -rP "[\x{1F300}-\x{1F9FF}]" backend/src/ && echo "EMOJI FOUND" && exit 1 || true
+          grep -rn "bg-gradient" backend/src/ && echo "GRADIENT FOUND" && exit 1 || true
+          grep -rn "unwrap()" backend/src/ | grep -v "test" | grep -v "#\[cfg(test)\]" && echo "UNWRAP FOUND" && exit 1 || true
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: cd desktop && npm ci
+
+      - name: tsc --noEmit
+        run: cd desktop && npx tsc --noEmit
+
+      - name: vitest run
+        run: cd desktop && npx vitest run

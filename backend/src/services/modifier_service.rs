@@ -49,14 +49,15 @@ pub struct ModifierGroupDto {
 /// Negatif fiyat farkı bir veri hatasıdır; ekstra indirim olamaz.
 fn validate_option_price(price_cents: i64) -> Result<(), String> {
     if price_cents < 0 {
-        return Err(
-            "INVALID_MODIFIER_PRICE: Seçenek fiyat farkı negatif olamaz.".to_string(),
-        );
+        return Err("INVALID_MODIFIER_PRICE: Seçenek fiyat farkı negatif olamaz.".to_string());
     }
     Ok(())
 }
 
-fn row_to_group(row: &sqlx::sqlite::SqliteRow, options: Vec<ModifierOptionDto>) -> ModifierGroupDto {
+fn row_to_group(
+    row: &sqlx::sqlite::SqliteRow,
+    options: Vec<ModifierOptionDto>,
+) -> ModifierGroupDto {
     ModifierGroupDto {
         id: row.try_get("id").unwrap_or_default(),
         name: row.try_get("name").unwrap_or_default(),
@@ -95,7 +96,10 @@ async fn options_of(
         query = query.bind(id);
     }
     query = query.bind(tenant_id);
-    let rows = query.fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
+    let rows = query
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut out = Vec::new();
     for row in rows {
@@ -119,27 +123,23 @@ pub async fn list_groups(
     category_id: Option<&str>,
 ) -> Result<Vec<ModifierGroupDto>, String> {
     let rows = match category_id {
-        Some(cid) => {
-            sqlx::query(
-                "SELECT id, name, is_required, min_selections, max_selections, category_id \
+        Some(cid) => sqlx::query(
+            "SELECT id, name, is_required, min_selections, max_selections, category_id \
                  FROM modifier_groups WHERE tenant_id = ? AND category_id = ? ORDER BY name ASC",
-            )
-            .bind(tenant_id)
-            .bind(cid)
-            .fetch_all(&mut *conn)
-            .await
-            .map_err(|e| e.to_string())?
-        }
-        None => {
-            sqlx::query(
-                "SELECT id, name, is_required, min_selections, max_selections, category_id \
+        )
+        .bind(tenant_id)
+        .bind(cid)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?,
+        None => sqlx::query(
+            "SELECT id, name, is_required, min_selections, max_selections, category_id \
                  FROM modifier_groups WHERE tenant_id = ? ORDER BY name ASC",
-            )
-            .bind(tenant_id)
-            .fetch_all(&mut *conn)
-            .await
-            .map_err(|e| e.to_string())?
-        }
+        )
+        .bind(tenant_id)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?,
     };
 
     let ids: Vec<String> = rows

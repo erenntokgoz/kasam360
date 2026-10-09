@@ -224,7 +224,10 @@ mod tests {
 
         assert_eq!(sonuc.amount_cents, Some(250_000));
         assert!(sonuc.changed);
-        assert_eq!(threshold::esik_oku(&mut conn, "tenant_a").await.unwrap(), Some(250_000));
+        assert_eq!(
+            threshold::esik_oku(&mut conn, "tenant_a").await.unwrap(),
+            Some(250_000)
+        );
     }
 
     #[tokio::test]
@@ -234,21 +237,17 @@ mod tests {
         let lock = lock_for(&mutex).await;
 
         for rol in ["MANAGER", "CASHIER", "WAITER", "MASTER"] {
-            let hata = esik_degistir(
-                &mut conn,
-                &lock,
-                rol,
-                "usr_1",
-                "tenant_a",
-                Some(250_000),
-            )
-            .await
-            .expect_err("yetkisiz rol reddedilmeli");
+            let hata = esik_degistir(&mut conn, &lock, rol, "usr_1", "tenant_a", Some(250_000))
+                .await
+                .expect_err("yetkisiz rol reddedilmeli");
             assert!(!hata.is_empty(), "{rol} için hata metni olmalı");
         }
 
         // Reddedilen denemeler eşiğe dokunmaz.
-        assert_eq!(threshold::esik_oku(&mut conn, "tenant_a").await.unwrap(), None);
+        assert_eq!(
+            threshold::esik_oku(&mut conn, "tenant_a").await.unwrap(),
+            None
+        );
     }
 
     #[tokio::test]
@@ -257,7 +256,15 @@ mod tests {
         let mutex = tokio::sync::Mutex::new(());
         let lock = lock_for(&mutex).await;
 
-        let _ = esik_degistir(&mut conn, &lock, "CASHIER", "usr_1", "tenant_a", Some(1_000)).await;
+        let _ = esik_degistir(
+            &mut conn,
+            &lock,
+            "CASHIER",
+            "usr_1",
+            "tenant_a",
+            Some(1_000),
+        )
+        .await;
 
         let adet: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_ledger")
             .fetch_one(&mut conn)
@@ -272,9 +279,16 @@ mod tests {
         let mutex = tokio::sync::Mutex::new(());
         let lock = lock_for(&mutex).await;
 
-        esik_degistir(&mut conn, &lock, "OWNER", "usr_owner", "tenant_a", Some(300_000))
-            .await
-            .expect("ayarlanır");
+        esik_degistir(
+            &mut conn,
+            &lock,
+            "OWNER",
+            "usr_owner",
+            "tenant_a",
+            Some(300_000),
+        )
+        .await
+        .expect("ayarlanır");
 
         let satir = sqlx::query("SELECT action, category, payload FROM audit_ledger")
             .fetch_one(&mut conn)
@@ -295,12 +309,26 @@ mod tests {
         let mutex = tokio::sync::Mutex::new(());
         let lock = lock_for(&mutex).await;
 
-        esik_degistir(&mut conn, &lock, "OWNER", "usr_owner", "tenant_a", Some(300_000))
-            .await
-            .expect("ayarlanır");
-        let ikinci = esik_degistir(&mut conn, &lock, "OWNER", "usr_owner", "tenant_a", Some(300_000))
-            .await
-            .expect("ayarlanır");
+        esik_degistir(
+            &mut conn,
+            &lock,
+            "OWNER",
+            "usr_owner",
+            "tenant_a",
+            Some(300_000),
+        )
+        .await
+        .expect("ayarlanır");
+        let ikinci = esik_degistir(
+            &mut conn,
+            &lock,
+            "OWNER",
+            "usr_owner",
+            "tenant_a",
+            Some(300_000),
+        )
+        .await
+        .expect("ayarlanır");
 
         assert!(!ikinci.changed, "aynı değer değişiklik değildir");
 
@@ -322,21 +350,33 @@ mod tests {
             .expect("sıfırlama hata vermemeli");
         assert!(!etkisiz.changed, "kayıt yokken sıfırlama etkisizdir");
 
-        esik_degistir(&mut conn, &lock, "OWNER", "usr_owner", "tenant_a", Some(300_000))
-            .await
-            .expect("ayarlanır");
+        esik_degistir(
+            &mut conn,
+            &lock,
+            "OWNER",
+            "usr_owner",
+            "tenant_a",
+            Some(300_000),
+        )
+        .await
+        .expect("ayarlanır");
         let sonuc = esik_degistir(&mut conn, &lock, "OWNER", "usr_owner", "tenant_a", None)
             .await
             .expect("sıfırlanır");
         assert!(sonuc.changed);
         assert_eq!(sonuc.amount_cents, None);
-        assert_eq!(threshold::esik_oku(&mut conn, "tenant_a").await.unwrap(), None);
+        assert_eq!(
+            threshold::esik_oku(&mut conn, "tenant_a").await.unwrap(),
+            None
+        );
     }
 
     #[tokio::test]
     async fn okuma_sahip_ve_mudure_acik_kasaya_degil() {
         let mut conn = bellek().await;
-        threshold::esik_ayarla(&mut conn, "tenant_a", 100_000).await.expect("yazılır");
+        threshold::esik_ayarla(&mut conn, "tenant_a", 100_000)
+            .await
+            .expect("yazılır");
 
         for rol in ["OWNER", "MANAGER"] {
             let okunan = esik_okut(&mut conn, rol, "tenant_a").await.expect("okunur");
@@ -350,7 +390,9 @@ mod tests {
     #[tokio::test]
     async fn okuma_kaydi_yoksa_varsayilani_bildirir() {
         let mut conn = bellek().await;
-        let okunan = esik_okut(&mut conn, "OWNER", "tenant_a").await.expect("okunur");
+        let okunan = esik_okut(&mut conn, "OWNER", "tenant_a")
+            .await
+            .expect("okunur");
         assert_eq!(okunan.amount_cents, None, "kayıt yoksa eşik yoktur");
         assert!(okunan.is_default, "arayüz varsayılanı göstermeli");
     }
@@ -367,11 +409,20 @@ mod tests {
         let mutex = tokio::sync::Mutex::new(());
         let lock = lock_for(&mutex).await;
 
-        esik_degistir(&mut conn, &lock, "OWNER", "usr_owner", "tenant_a", Some(900_000))
-            .await
-            .expect("ayarlanır");
+        esik_degistir(
+            &mut conn,
+            &lock,
+            "OWNER",
+            "usr_owner",
+            "tenant_a",
+            Some(900_000),
+        )
+        .await
+        .expect("ayarlanır");
 
-        let diger = esik_okut(&mut conn, "OWNER", "tenant_b").await.expect("okunur");
+        let diger = esik_okut(&mut conn, "OWNER", "tenant_b")
+            .await
+            .expect("okunur");
         assert_eq!(diger.amount_cents, None, "başka kiracının eşiği etkilemez");
     }
 }

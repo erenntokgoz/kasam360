@@ -213,28 +213,20 @@ async fn payment_method_shares(
     // (AGENTS.md §3.4), yoksa ciro "hiç ödeme alınmamış" gibi görünür.
     let mut sum: i64 = 0;
     for row in rows.iter() {
-        let amount: i64 = row
-            .try_get::<i64, _>("amount")
-            .map_err(|e| e.to_string())?;
+        let amount: i64 = row.try_get::<i64, _>("amount").map_err(|e| e.to_string())?;
         sum += amount;
     }
 
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
-        let amount: i64 = row
-            .try_get::<i64, _>("amount")
-            .map_err(|e| e.to_string())?;
+        let amount: i64 = row.try_get::<i64, _>("amount").map_err(|e| e.to_string())?;
         out.push(PaymentMethodShareDto {
             method: row
                 .try_get::<Option<String>, _>("method")
                 .map_err(|e| e.to_string())?
                 .unwrap_or_default(),
             amount_cents: amount,
-            share_percent: if sum > 0 {
-                (amount * 100) / sum
-            } else {
-                0
-            },
+            share_percent: if sum > 0 { (amount * 100) / sum } else { 0 },
         });
     }
     Ok(out)
@@ -272,14 +264,11 @@ async fn category_volumes(
     let mut out = Vec::with_capacity(rows.len());
     for r in rows.iter() {
         out.push(CategoryVolumeDto {
-            name: r.try_get::<String, _>("category_name")
+            name: r
+                .try_get::<String, _>("category_name")
                 .map_err(|e| e.to_string())?,
-            quantity: r
-                .try_get::<i64, _>("qty")
-                .map_err(|e| e.to_string())?,
-            total_cents: r
-                .try_get::<i64, _>("total")
-                .map_err(|e| e.to_string())?,
+            quantity: r.try_get::<i64, _>("qty").map_err(|e| e.to_string())?,
+            total_cents: r.try_get::<i64, _>("total").map_err(|e| e.to_string())?,
         });
     }
     Ok(out)
@@ -316,7 +305,8 @@ pub async fn shift_report(
     let mut out = Vec::with_capacity(rows.len());
     for r in rows.iter() {
         out.push(ShiftReportRowDto {
-            id: r.try_get::<Option<String>, _>("id")
+            id: r
+                .try_get::<Option<String>, _>("id")
                 .map_err(|e| e.to_string())?
                 .unwrap_or_default(),
             cashier_id: r
@@ -383,7 +373,8 @@ pub async fn receipts_report(
     let mut out = Vec::with_capacity(rows.len());
     for r in rows.iter() {
         out.push(ReceiptReportRowDto {
-            id: r.try_get::<Option<String>, _>("id")
+            id: r
+                .try_get::<Option<String>, _>("id")
                 .map_err(|e| e.to_string())?
                 .unwrap_or_default(),
             table_id: r

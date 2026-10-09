@@ -56,7 +56,10 @@ pub async fn list(
     include_archived: bool,
 ) -> Result<Vec<Branch>, String> {
     let sql = if include_archived {
-        format!("{} WHERE tenant_id = ? ORDER BY created_at ASC, name ASC", SELECT_COLUMNS)
+        format!(
+            "{} WHERE tenant_id = ? ORDER BY created_at ASC, name ASC",
+            SELECT_COLUMNS
+        )
     } else {
         format!(
             "{} WHERE tenant_id = ? AND status != '{}' ORDER BY created_at ASC, name ASC",

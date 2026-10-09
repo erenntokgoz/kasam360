@@ -96,11 +96,10 @@ async fn conn_of(pool: &sqlx::SqlitePool) -> sqlx::pool::PoolConnection<sqlx::Sq
 }
 
 fn options_json(ids: &[&str]) -> serde_json::Value {
-    serde_json::json!(
-        ids.iter()
-            .map(|id| serde_json::json!({ "id": id, "name": "Seçenek", "priceCents": 0 }))
-            .collect::<Vec<_>>()
-    )
+    serde_json::json!(ids
+        .iter()
+        .map(|id| serde_json::json!({ "id": id, "name": "Seçenek", "priceCents": 0 }))
+        .collect::<Vec<_>>())
 }
 
 // ─── Temel CRUD + tenant izolasyonu ─────────────────────────────────────────
@@ -112,11 +111,21 @@ async fn grup_olusturur_ve_tenant_kapsaminda_listeler() {
     seed_tenant(&pool, TENANT_A).await;
     let mut conn = conn_of(&pool).await;
 
-    let id = create_group(&mut conn, TENANT_A, "Pişme Derecesi", true, 1, Some(1), None)
-        .await
-        .expect("grup oluşturulur");
+    let id = create_group(
+        &mut conn,
+        TENANT_A,
+        "Pişme Derecesi",
+        true,
+        1,
+        Some(1),
+        None,
+    )
+    .await
+    .expect("grup oluşturulur");
 
-    let groups = list_groups(&mut conn, TENANT_A, None).await.expect("liste okunur");
+    let groups = list_groups(&mut conn, TENANT_A, None)
+        .await
+        .expect("liste okunur");
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].id, id);
     assert_eq!(groups[0].name, "Pişme Derecesi");
@@ -135,7 +144,9 @@ async fn baska_tenantin_grubu_listede_gorunmez() {
         .await
         .expect("A grubu oluşturulur");
 
-    let b_groups = list_groups(&mut conn, TENANT_B, None).await.expect("B listeler");
+    let b_groups = list_groups(&mut conn, TENANT_B, None)
+        .await
+        .expect("B listeler");
     assert!(b_groups.is_empty(), "çapraz tenant sızıntısı");
 }
 
@@ -173,7 +184,9 @@ async fn baska_tenantin_grubu_silinemez() {
     assert!(err.contains("NOT_FOUND"), "beklenen hata: {}", err);
 
     // A'nın verisi yerinde kalmalı.
-    let still_there = list_groups(&mut conn, TENANT_A, None).await.expect("listelenir");
+    let still_there = list_groups(&mut conn, TENANT_A, None)
+        .await
+        .expect("listelenir");
     assert_eq!(still_there.len(), 1, "başka işletmenin grubu silinmemeli");
 }
 
@@ -191,7 +204,11 @@ async fn negatif_fiyat_farki_reddedilir() {
     let err = add_option(&mut conn, TENANT_A, &group_id, "Eksik Ödeme", -100)
         .await
         .expect_err("negatif fiyat farkı reddedilmeli");
-    assert!(err.contains("INVALID_MODIFIER_PRICE"), "beklenen hata: {}", err);
+    assert!(
+        err.contains("INVALID_MODIFIER_PRICE"),
+        "beklenen hata: {}",
+        err
+    );
 }
 
 #[tokio::test]
@@ -212,12 +229,11 @@ async fn grup_silinince_secenekleri_de_silinir() {
         .await
         .expect("grup silinir");
 
-    let remaining: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM modifier_options WHERE id = ?")
-            .bind(&option_id)
-            .fetch_one(&mut *conn)
-            .await
-            .expect("sayaç okunur");
+    let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM modifier_options WHERE id = ?")
+        .bind(&option_id)
+        .fetch_one(&mut *conn)
+        .await
+        .expect("sayaç okunur");
     assert_eq!(remaining, 0, "CASCADE: seçenekler de silinmeli");
 }
 
@@ -247,7 +263,9 @@ async fn kategori_sablonu_kategoriye_bağlanir() {
     assert_eq!(all.len(), 1);
     assert_eq!(all[0].category_id.as_deref(), Some("cat_1"));
 
-    let scoped = list_groups(&mut conn, TENANT_A, Some("cat_1")).await.expect("kategori");
+    let scoped = list_groups(&mut conn, TENANT_A, Some("cat_1"))
+        .await
+        .expect("kategori");
     assert_eq!(scoped.len(), 1);
     assert_eq!(scoped[0].id, group_id);
 }
@@ -277,8 +295,13 @@ async fn serbest_grup_kategorisiz_kalir() {
         .await
         .expect("grup oluşturulur");
 
-    let scoped = list_groups(&mut conn, TENANT_A, Some("cat_yok")).await.expect("kategori");
-    assert!(scoped.is_empty(), "kategorisiz grup kategori listesine girmemeli");
+    let scoped = list_groups(&mut conn, TENANT_A, Some("cat_yok"))
+        .await
+        .expect("kategori");
+    assert!(
+        scoped.is_empty(),
+        "kategorisiz grup kategori listesine girmemeli"
+    );
 }
 
 // ─── Ürün bağlantısı ────────────────────────────────────────────────────────
@@ -292,9 +315,17 @@ async fn urune_grup_baglanir_ve_pos_gorunumu_dogru_doner() {
     seed_product(&pool, TENANT_A, "prd_1", "cat_1", 30000).await;
     let mut conn = conn_of(&pool).await;
 
-    let group_id = create_group(&mut conn, TENANT_A, "Pişme Derecesi", true, 1, Some(1), None)
-        .await
-        .expect("grup oluşturulur");
+    let group_id = create_group(
+        &mut conn,
+        TENANT_A,
+        "Pişme Derecesi",
+        true,
+        1,
+        Some(1),
+        None,
+    )
+    .await
+    .expect("grup oluşturulur");
     let option_id = add_option(&mut conn, TENANT_A, &group_id, "Orta", 0)
         .await
         .expect("seçenek eklenir");
@@ -336,7 +367,10 @@ async fn urun_grup_baglantisi_kume_ile_degisir() {
         .await
         .expect("iki grup");
     assert_eq!(
-        product_group_ids(&mut conn, TENANT_A, "prd_1").await.unwrap().len(),
+        product_group_ids(&mut conn, TENANT_A, "prd_1")
+            .await
+            .unwrap()
+            .len(),
         2
     );
 
@@ -345,7 +379,9 @@ async fn urun_grup_baglantisi_kume_ile_degisir() {
         .await
         .expect("tek grup");
     assert_eq!(
-        product_group_ids(&mut conn, TENANT_A, "prd_1").await.unwrap(),
+        product_group_ids(&mut conn, TENANT_A, "prd_1")
+            .await
+            .unwrap(),
         vec![g2]
     );
 }
@@ -370,7 +406,9 @@ async fn urune_baska_tenantin_grubu_baglanamaz() {
     assert!(err.contains("TENANT_ISOLATION"), "beklenen hata: {}", err);
 
     // Bağlanma denemesi yarım atama bırakmamalı.
-    let ids = product_group_ids(&mut conn, TENANT_A, "prd_1").await.unwrap_or_default();
+    let ids = product_group_ids(&mut conn, TENANT_A, "prd_1")
+        .await
+        .unwrap_or_default();
     assert!(ids.is_empty(), "başarısız deneme atama bırakmamalı");
 }
 
@@ -407,7 +445,8 @@ async fn secenek_fiyati_istemciden_degil_veritabanindan_alinir() {
         .expect("seçenek");
 
     // İstemci fiyatı 0 göndererek ek ücretten kurtulmaya çalışıyor.
-    let malicious = serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 0 }]);
+    let malicious =
+        serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 0 }]);
     let total = sum_selected_option_prices(&mut conn, TENANT_A, Some(&malicious))
         .await
         .expect("toplam");
@@ -559,7 +598,10 @@ async fn category_id_kolonu_eklenmeden_once_yazan_veri_okunur() {
         .expect("eski veri okunur");
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].id, "mod_legacy");
-    assert_eq!(groups[0].category_id, None, "eski satır serbest grup sayılmalı");
+    assert_eq!(
+        groups[0].category_id, None,
+        "eski satır serbest grup sayılmalı"
+    );
 }
 
 #[tokio::test]
@@ -571,13 +613,27 @@ async fn grup_listesi_tek_sorguda_secenekleri_cekir() {
     let mut conn = conn_of(&pool).await;
 
     for idx in 0..3 {
-        let gid = create_group(&mut conn, TENANT_A, &format!("Grup {}", idx), false, 0, None, None)
-            .await
-            .expect("grup");
+        let gid = create_group(
+            &mut conn,
+            TENANT_A,
+            &format!("Grup {}", idx),
+            false,
+            0,
+            None,
+            None,
+        )
+        .await
+        .expect("grup");
         for opt in 0..3 {
-            add_option(&mut conn, TENANT_A, &gid, &format!("Seçenek {}", opt), opt * 100)
-                .await
-                .expect("seçenek");
+            add_option(
+                &mut conn,
+                TENANT_A,
+                &gid,
+                &format!("Seçenek {}", opt),
+                opt * 100,
+            )
+            .await
+            .expect("seçenek");
         }
     }
 
@@ -602,10 +658,11 @@ async fn secenek_listesi_fiyat_farkini_korur() {
         .await
         .expect("seçenek");
 
-    let stored: i64 = sqlx::query_scalar("SELECT price_cents FROM modifier_options WHERE group_id = ?")
-        .bind(&gid)
-        .fetch_one(&mut *conn)
-        .await
-        .expect("fiyat okunur");
+    let stored: i64 =
+        sqlx::query_scalar("SELECT price_cents FROM modifier_options WHERE group_id = ?")
+            .bind(&gid)
+            .fetch_one(&mut *conn)
+            .await
+            .expect("fiyat okunur");
     assert_eq!(stored, 4000);
 }

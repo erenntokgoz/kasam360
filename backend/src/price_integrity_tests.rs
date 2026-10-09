@@ -48,11 +48,13 @@ async fn seed_catalog(pool: &sqlx::SqlitePool, product_price_cents: i64) {
         .execute(pool)
         .await
         .expect("tenant eklenir");
-    sqlx::query("INSERT OR IGNORE INTO categories (id, tenant_id, name) VALUES ('cat_1', ?, 'Test')")
-        .bind(TENANT)
-        .execute(pool)
-        .await
-        .expect("kategori eklenir");
+    sqlx::query(
+        "INSERT OR IGNORE INTO categories (id, tenant_id, name) VALUES ('cat_1', ?, 'Test')",
+    )
+    .bind(TENANT)
+    .execute(pool)
+    .await
+    .expect("kategori eklenir");
     sqlx::query(
         "INSERT OR IGNORE INTO products (id, tenant_id, name, price_cents, tax_rate_bp, category_id, is_active) \
          VALUES ('prd_1', ?, 'Burger', ?, 2000, 'cat_1', 1)",
@@ -72,9 +74,10 @@ async fn seed_catalog(pool: &sqlx::SqlitePool, product_price_cents: i64) {
 
 async fn seed_option(pool: &sqlx::SqlitePool, name: &str, price_cents: i64) -> String {
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
-    let group_id = modifier_service::create_group(&mut conn, TENANT, "Ekstralar", false, 0, None, None)
-        .await
-        .expect("grup oluşturulur");
+    let group_id =
+        modifier_service::create_group(&mut conn, TENANT, "Ekstralar", false, 0, None, None)
+            .await
+            .expect("grup oluşturulur");
     modifier_service::add_option(&mut conn, TENANT, &group_id, name, price_cents)
         .await
         .expect("seçenek eklenir")
@@ -107,14 +110,23 @@ async fn istemci_sifir_fiyat_gondererek_ekstre_ucretinden_kacamaz() {
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
     // İstemci yalan söylüyor: gerçek fiyat farkı 4000 kuruş.
-    let cheating = serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 0 }]);
-    let truth = PaymentRepository::calculate_server_truth(&mut conn, TENANT, &[item("itm_1", Some(cheating))], None)
-        .await
-        .expect("sunucu hesabı");
+    let cheating =
+        serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 0 }]);
+    let truth = PaymentRepository::calculate_server_truth(
+        &mut conn,
+        TENANT,
+        &[item("itm_1", Some(cheating))],
+        None,
+    )
+    .await
+    .expect("sunucu hesabı");
 
     // 34000 brüt + %20 KDV = 40800
     assert_eq!(truth.gross_cents, 34000, "ürün 300 TL + ekstra 40 TL");
-    assert_eq!(truth.total_cents, 40800, "istemcinin 0 fiyatı geçerli olmamalı");
+    assert_eq!(
+        truth.total_cents, 40800,
+        "istemcinin 0 fiyatı geçerli olmamalı"
+    );
 }
 
 #[tokio::test]
@@ -124,10 +136,16 @@ async fn istemci_fiyati_asiri_yuksek_gonderemez() {
     let option_id = seed_option(&pool, "Ekstra Peynir", 4000).await;
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
-    let inflated = serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 999_000 }]);
-    let truth = PaymentRepository::calculate_server_truth(&mut conn, TENANT, &[item("itm_1", Some(inflated))], None)
-        .await
-        .expect("sunucu hesabı");
+    let inflated =
+        serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 999_000 }]);
+    let truth = PaymentRepository::calculate_server_truth(
+        &mut conn,
+        TENANT,
+        &[item("itm_1", Some(inflated))],
+        None,
+    )
+    .await
+    .expect("sunucu hesabı");
 
     assert_eq!(truth.gross_cents, 34000, "fiyat veritabanından gelmeli");
 }
@@ -142,18 +160,25 @@ async fn baska_tenantin_secenegi_fiyatlandirilamaz() {
         .expect("tenant eklenir");
 
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
-    let group_b = modifier_service::create_group(&mut conn, "tenant_b", "B Grubu", false, 0, None, None)
-        .await
-        .expect("B grubu");
-    let option_b = modifier_service::add_option(&mut conn, "tenant_b", &group_b, "B Seçeneği", 1000)
-        .await
-        .expect("B seçeneği");
+    let group_b =
+        modifier_service::create_group(&mut conn, "tenant_b", "B Grubu", false, 0, None, None)
+            .await
+            .expect("B grubu");
+    let option_b =
+        modifier_service::add_option(&mut conn, "tenant_b", &group_b, "B Seçeneği", 1000)
+            .await
+            .expect("B seçeneği");
     drop(conn);
 
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
     let foreign = serde_json::json!([{ "id": option_b, "name": "B Seçeneği", "priceCents": 0 }]);
-    let outcome = PaymentRepository::calculate_server_truth(&mut conn, TENANT, &[item("itm_1", Some(foreign))], None)
-        .await;
+    let outcome = PaymentRepository::calculate_server_truth(
+        &mut conn,
+        TENANT,
+        &[item("itm_1", Some(foreign))],
+        None,
+    )
+    .await;
     let err: String = match outcome {
         Ok(_) => panic!("çapraz tenant seçeneği reddedilmeliydi"),
         Err(e) => e,
@@ -186,10 +211,16 @@ async fn donmus_fiyat_modifieri_iki_kez_eklemez() {
         .await
         .expect("kalem eklenir");
 
-    let selected = serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 4000 }]);
-    let truth = PaymentRepository::calculate_server_truth(&mut conn, TENANT, &[item("itm_1", Some(selected))], None)
-        .await
-        .expect("sunucu hesabı");
+    let selected =
+        serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 4000 }]);
+    let truth = PaymentRepository::calculate_server_truth(
+        &mut conn,
+        TENANT,
+        &[item("itm_1", Some(selected))],
+        None,
+    )
+    .await
+    .expect("sunucu hesabı");
 
     assert_eq!(
         truth.gross_cents, 34000,
@@ -205,10 +236,16 @@ async fn donmus_fiyat_yoksa_modifier_bir_kez_eklenir() {
     let option_id = seed_option(&pool, "Ekstra Peynir", 4000).await;
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
-    let selected = serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 4000 }]);
-    let truth = PaymentRepository::calculate_server_truth(&mut conn, TENANT, &[item("itm_1", Some(selected))], None)
-        .await
-        .expect("sunucu hesabı");
+    let selected =
+        serde_json::json!([{ "id": option_id, "name": "Ekstra Peynir", "priceCents": 4000 }]);
+    let truth = PaymentRepository::calculate_server_truth(
+        &mut conn,
+        TENANT,
+        &[item("itm_1", Some(selected))],
+        None,
+    )
+    .await
+    .expect("sunucu hesabı");
     assert_eq!(truth.gross_cents, 34000, "ürün + tek ekstra");
 }
 
@@ -233,9 +270,10 @@ async fn donmus_fiyat_baska_tenantin_kaleminden_alinmaz() {
     drop(conn);
 
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
-    let truth = PaymentRepository::calculate_server_truth(&mut conn, TENANT, &[item("itm_x", None)], None)
-        .await
-        .expect("sunucu hesabı");
+    let truth =
+        PaymentRepository::calculate_server_truth(&mut conn, TENANT, &[item("itm_x", None)], None)
+            .await
+            .expect("sunucu hesabı");
     assert_eq!(
         truth.gross_cents, 30000,
         "başka işletmenin donmuş fiyatı kullanılmamalı"
@@ -267,10 +305,12 @@ async fn siparis_snapshoti_gercek_fiyati_yazar() {
 async fn snapshot_yoksa_boş_kalem_yazilir() {
     let pool = pool().await;
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
-    assert!(super::authoritative_modifier_snapshot(&mut conn, TENANT, None)
-        .await
-        .expect("işlenir")
-        .is_none());
+    assert!(
+        super::authoritative_modifier_snapshot(&mut conn, TENANT, None)
+            .await
+            .expect("işlenir")
+            .is_none()
+    );
     assert!(
         super::authoritative_modifier_snapshot(&mut conn, TENANT, Some(&serde_json::json!([])))
             .await
@@ -406,7 +446,10 @@ async fn negatif_toplam_siparis_reddedilir() {
     .execute(&mut *conn)
     .await;
 
-    assert!(result.is_err(), "negatif total_cents CHECK tarafından reddedilmeli");
+    assert!(
+        result.is_err(),
+        "negatif total_cents CHECK tarafından reddedilmeli"
+    );
 }
 
 /// shifts.expected_amount_cents negatif olamaz (CHECK >= 0).
@@ -424,7 +467,10 @@ async fn negatif_beklenen_tutar_vardiya_reddedilir() {
     .execute(&mut *conn)
     .await;
 
-    assert!(result.is_err(), "negatif expected_amount_cents CHECK tarafından reddedilmeli");
+    assert!(
+        result.is_err(),
+        "negatif expected_amount_cents CHECK tarafından reddedilmeli"
+    );
 }
 
 /// shifts.actual_amount_cents negatif olamaz (CHECK >= 0).
@@ -442,7 +488,10 @@ async fn negatif_gercek_tutar_vardiya_reddedilir() {
     .execute(&mut *conn)
     .await;
 
-    assert!(result.is_err(), "negatif actual_amount_cents CHECK tarafından reddedilmeli");
+    assert!(
+        result.is_err(),
+        "negatif actual_amount_cents CHECK tarafından reddedilmeli"
+    );
 }
 
 /// products.tax_rate_bp negatif olamaz (CHECK >= 0).
@@ -471,5 +520,8 @@ async fn negatif_kdv_orani_urun_reddedilir() {
     .execute(&mut *conn)
     .await;
 
-    assert!(result.is_err(), "negatif tax_rate_bp CHECK tarafından reddedilmeli");
+    assert!(
+        result.is_err(),
+        "negatif tax_rate_bp CHECK tarafından reddedilmeli"
+    );
 }

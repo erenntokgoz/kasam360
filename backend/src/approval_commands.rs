@@ -77,9 +77,8 @@ pub async fn verify_manager_pin(
     // düşerse onay jetonu yanlış işletmenin defterinde
     // sorgulanır ve PIN kapsamı kiracılara karışırdı
     // (AGENTS.md §3.3).
-    let tenant_id = crate::commands::command_helpers::require_tenant_id(
-        payload.tenant_id.as_deref(),
-    )?;
+    let tenant_id =
+        crate::commands::command_helpers::require_tenant_id(payload.tenant_id.as_deref())?;
 
     let request = crate::approval_service::ApprovalRequest {
         tenant_id: tenant_id.clone(),
@@ -97,7 +96,8 @@ pub async fn verify_manager_pin(
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
 
-    let outcome = crate::approval_service::verify_and_issue(&mut conn, &request, &payload.pin).await;
+    let outcome =
+        crate::approval_service::verify_and_issue(&mut conn, &request, &payload.pin).await;
     let remaining = crate::approval_service::remaining_attempts(&mut conn, &request)
         .await
         .unwrap_or(0);

@@ -7,7 +7,6 @@ use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
-
 /// Denetim kaydının istemciye giden hali.
 ///
 /// `current_hash` **bilerek yoktur**: ham SHA-256 değeri ne API'den ne arayüzden
@@ -91,7 +90,12 @@ pub async fn get_audit_logs(
         builder.push(" AND timestamp <= ");
         builder.push_bind(end_date.to_string());
     }
-    if let Some(search) = filter.search.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(search) = filter
+        .search
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         builder.push(" AND (action LIKE ");
         builder.push_bind(format!("%{}%", search));
         builder.push(" OR resource_id LIKE ");

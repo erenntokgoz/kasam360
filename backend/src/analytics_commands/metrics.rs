@@ -49,8 +49,12 @@ fn validate_month(raw: &str) -> Result<(), String> {
     if parts.len() != 2 {
         return Err(format!("ay YYYY-MM biciminde olmali: {raw}"));
     }
-    let year: i64 = parts[0].parse().map_err(|_| format!("gecersiz yil: {raw}"))?;
-    let month: u32 = parts[1].parse().map_err(|_| format!("gecersiz ay: {raw}"))?;
+    let year: i64 = parts[0]
+        .parse()
+        .map_err(|_| format!("gecersiz yil: {raw}"))?;
+    let month: u32 = parts[1]
+        .parse()
+        .map_err(|_| format!("gecersiz ay: {raw}"))?;
     if !(1970..=9999).contains(&year) {
         return Err(format!("yil aralik disinda: {raw}"));
     }

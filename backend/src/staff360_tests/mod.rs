@@ -1,4 +1,4 @@
-﻿//! Faz 11 testleri — ortak fixture'lar ve alt modüller.
+//! Faz 11 testleri — ortak fixture'lar ve alt modüller.
 //!
 //! Dosya 500 satır sınırını aşmasın diye konu alanına göre bölündü. Her test
 //! gerçek SQLite şeması üzerinde çalışır ve **hesabın tutarlılığını**
@@ -20,7 +20,9 @@ use crate::services::staff360::{
 };
 
 async fn pool() -> SqlitePool {
-    let p = SqlitePool::connect("sqlite::memory:").await.expect("hafıza");
+    let p = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("hafıza");
     sqlx::raw_sql(include_str!("../../migrations/schema.sql"))
         .execute(&p)
         .await
@@ -103,13 +105,12 @@ async fn siparis(
     .expect("sipariş");
     // Ürün kimliği kiracının kendi ürünüdür: `product_id` global FK'dir, yanlış
     // işletmenin ürününe bağlamak testin konusunu bozardı.
-    let urun_id: String = sqlx::query_scalar(
-        "SELECT id FROM products WHERE tenant_id = ?1 ORDER BY id LIMIT 1",
-    )
-    .bind(tenant)
-    .fetch_one(p)
-    .await
-    .expect("ürün");
+    let urun_id: String =
+        sqlx::query_scalar("SELECT id FROM products WHERE tenant_id = ?1 ORDER BY id LIMIT 1")
+            .bind(tenant)
+            .fetch_one(p)
+            .await
+            .expect("ürün");
     sqlx::query(
         "INSERT INTO order_items (id, tenant_id, order_id, product_id, quantity, total_cents, waiter_id)
          VALUES (?1,?2,?3,?4,1,?5,?6)",
@@ -124,4 +125,3 @@ async fn siparis(
     .await
     .expect("kalem");
 }
-

@@ -97,12 +97,21 @@ mod tests {
             .await
             .unwrap();
 
-        let matched = authenticate_by_identifier(&pool, "master@kasam360.com", "Master-3736!").await;
-        assert!(matched.is_ok(), "hash'li MASTER girişi başarısız: {:?}", matched.err());
+        let matched =
+            authenticate_by_identifier(&pool, "master@kasam360.com", "Master-3736!").await;
+        assert!(
+            matched.is_ok(),
+            "hash'li MASTER girişi başarısız: {:?}",
+            matched.err()
+        );
         assert_eq!(matched.unwrap().role, "MASTER");
 
         // Yanlış kimlik reddedilir.
-        assert!(authenticate_by_identifier(&pool, "master@kasam360.com", "yanlis").await.is_err());
+        assert!(
+            authenticate_by_identifier(&pool, "master@kasam360.com", "yanlis")
+                .await
+                .is_err()
+        );
 
         // Hash yerine düz metin kalmış bir satır kabul edilmez (fallback kaldırıldı).
         sqlx::query("UPDATE platform_admins SET pin_hash = 'Master-3736!' WHERE id = 'adm_1'")
@@ -164,10 +173,16 @@ mod tests {
             .unwrap();
 
         let matched = authenticate_by_pin(&pool, "7373", Some("DEFAULT_TENANT")).await;
-        assert!(matched.is_ok(), "hash'li MASTER PIN girişi başarısız: {:?}", matched.err());
+        assert!(
+            matched.is_ok(),
+            "hash'li MASTER PIN girişi başarısız: {:?}",
+            matched.err()
+        );
         assert_eq!(matched.unwrap().role, "MASTER");
 
-        assert!(authenticate_by_pin(&pool, "9999", Some("DEFAULT_TENANT")).await.is_err());
+        assert!(authenticate_by_pin(&pool, "9999", Some("DEFAULT_TENANT"))
+            .await
+            .is_err());
 
         // Düz metne dönen satır artık kabul edilmez.
         sqlx::query("UPDATE platform_admins SET pin_hash = '7373' WHERE id = 'adm_1'")
@@ -175,7 +190,9 @@ mod tests {
             .await
             .unwrap();
         assert!(
-            authenticate_by_pin(&pool, "7373", Some("DEFAULT_TENANT")).await.is_err(),
+            authenticate_by_pin(&pool, "7373", Some("DEFAULT_TENANT"))
+                .await
+                .is_err(),
             "düz metn saklanan MASTER PIN kabul edildi"
         );
     }
@@ -195,7 +212,8 @@ mod tests {
             "approvalToken": "9f2c_token"
         }"#;
 
-        let dto: VoidOrderPayloadDto = serde_json::from_str(json_data).expect("Failed to deserialize");
+        let dto: VoidOrderPayloadDto =
+            serde_json::from_str(json_data).expect("Failed to deserialize");
         assert_eq!(dto.order_id, "ORD-101");
         assert_eq!(dto.table_id, "TABLE-5");
         assert_eq!(dto.reason, "Customer cancellation");
@@ -262,7 +280,8 @@ mod tests {
             "note": "Extra hot",
             "discount": { "type": "PERCENTAGE", "value": 10 }
         }"#;
-        let item: CartItemDto = serde_json::from_str(json).expect("Must deserialize when all fields present");
+        let item: CartItemDto =
+            serde_json::from_str(json).expect("Must deserialize when all fields present");
         assert_eq!(item.id, "item-1");
         assert_eq!(item.quantity, 2);
         assert_eq!(item.unit_price, 1000);
@@ -288,7 +307,8 @@ mod tests {
             "note": null,
             "discount": null
         }"#;
-        let item: CartItemDto = serde_json::from_str(json).expect("Must deserialize null optional fields");
+        let item: CartItemDto =
+            serde_json::from_str(json).expect("Must deserialize null optional fields");
         assert_eq!(item.id, "item-2");
         assert_eq!(item.unit_price, 2000);
         assert_eq!(item.tax_rate, None);
@@ -305,7 +325,8 @@ mod tests {
             "quantity": 1,
             "unitPrice": 1500
         }"#;
-        let item: CartItemDto = serde_json::from_str(json).expect("Must deserialize missing optional fields");
+        let item: CartItemDto =
+            serde_json::from_str(json).expect("Must deserialize missing optional fields");
         assert_eq!(item.id, "item-3");
         assert_eq!(item.unit_price, 1500);
         assert_eq!(item.tax_rate, None);
@@ -337,7 +358,8 @@ mod tests {
             "taxAmount": 160,
             "total": 2160
         }"#;
-        let item: CartItemDto = serde_json::from_str(json).expect("Must deserialize standard normal POS item");
+        let item: CartItemDto =
+            serde_json::from_str(json).expect("Must deserialize standard normal POS item");
         assert_eq!(item.id, "item-normal");
         assert_eq!(item.unit_price, 2000);
         assert_eq!(item.total, Some(2160));

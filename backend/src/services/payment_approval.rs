@@ -146,8 +146,7 @@ pub async fn consume_total_approval(
         return Ok(None);
     }
 
-    let esik =
-        crate::services::security360::threshold::esik_oku(conn, tenant_id).await?;
+    let esik = crate::services::security360::threshold::esik_oku(conn, tenant_id).await?;
     if !crate::services::security360::money_gate::onay_gerekli_mi(total_cents, esik) {
         return Ok(None);
     }
@@ -216,7 +215,11 @@ pub fn discount_percent_for_test(server_truth: &ServerTruth) -> i64 {
 /// Tüketim yolunda `consume_token` aynı denetimi kendi satırından yapar; bu
 /// yardımcı, onay **üretilmeden** önce "bu indirim kim tarafından onaylanabilir"
 /// sorusunun tek cevabını sunmak içindir (arayüz ve testler aynı kuralı görür).
-pub fn approver_roles_for(operation: &str, percent_hint: i64, amount_cents: i64) -> Vec<rbac::Role> {
+pub fn approver_roles_for(
+    operation: &str,
+    percent_hint: i64,
+    amount_cents: i64,
+) -> Vec<rbac::Role> {
     let request = ApprovalRequest {
         tenant_id: String::new(),
         operation: operation.to_string(),

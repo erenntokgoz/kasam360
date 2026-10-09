@@ -5,15 +5,19 @@ pub mod auth;
 pub mod branch_commands;
 pub mod cashier_commands;
 pub mod commands;
+#[cfg(test)]
+mod compensation_tests;
 pub mod db;
 pub mod domain;
+#[cfg(test)]
+mod floor_lock_tests;
 pub mod id_generator;
-pub mod log;
 pub mod inventory360_commands;
 pub mod inventory_commands;
 pub mod kitchen_commands;
 pub mod ledger_commands;
 pub mod legal360_commands;
+pub mod log;
 pub mod management_commands;
 #[cfg(test)]
 mod menu_tenant_tests;
@@ -127,6 +131,8 @@ pub fn run() {
             commands::threshold_commands::reset_approval_threshold,
             commands::get_receipt_details,
             commands::void_order,
+            commands::create_compensation_void,
+            commands::create_compensation_refund,
             commands::get_audit_logs,
             commands::print_receipt,
             // Faz 7: Hesap Defteri finansal hareketleri. Fiş, ayrı ekranın
@@ -170,9 +176,9 @@ pub fn run() {
             platform_commands::activate_tenant,
             platform_commands::update_tenant_modules,
             // Cihaz komutları alt modülde (`platform_commands::devices`). `generate_handler!`
-// `__cmd__` makrolarını hedef modülün **kendi yolunda** arar; yalnız `pub use`
-// yeniden dışa aktarımı yetmez, bu yüzden tam yol yazılır (Faz 14'te
-// `legal360_commands` için aynı zorunluluk vardı).
+            // `__cmd__` makrolarını hedef modülün **kendi yolunda** arar; yalnız `pub use`
+            // yeniden dışa aktarımı yetmez, bu yüzden tam yol yazılır (Faz 14'te
+            // `legal360_commands` için aynı zorunluluk vardı).
             platform_commands::devices::get_devices,
             platform_commands::devices::record_device_heartbeat,
             platform_commands::devices::register_device,

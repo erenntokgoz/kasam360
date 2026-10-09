@@ -1,10 +1,8 @@
-﻿//! `approval_service` testleri ayrı dosyada tutulur (AGENTS.md §10: dosya başına
+//! `approval_service` testleri ayrı dosyada tutulur (AGENTS.md §10: dosya başına
 //! en fazla 500 satır). Modül `#[path]` ile içeri alınır, davranış değişmez.
 
 use super::*;
-use crate::approval_service::{
-    attempt_scope_for_test, MAX_FAILED_ATTEMPTS,
-};
+use crate::approval_service::{attempt_scope_for_test, MAX_FAILED_ATTEMPTS};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::Row;
 use std::str::FromStr;
@@ -108,9 +106,13 @@ async fn hatali_pin_tum_roller_icin_ayni_mesaji_dondurur() {
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
     for _ in 0..3 {
-        let err = verify_and_issue(&mut conn, &request("usr_cashier", operation::VOID, 0), "9999")
-            .await
-            .expect_err("hatalı PIN reddedilir");
+        let err = verify_and_issue(
+            &mut conn,
+            &request("usr_cashier", operation::VOID, 0),
+            "9999",
+        )
+        .await
+        .expect_err("hatalı PIN reddedilir");
         assert_eq!(err, error::INVALID_PIN);
     }
 
@@ -143,9 +145,13 @@ async fn basta_tenant_pini_onay_veremez() {
     seed_user(&pool, "usr_owner_b", "tenant_b", "OWNER", "2222", 1).await;
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
-    let err = verify_and_issue(&mut conn, &request("usr_cashier", operation::VOID, 0), "2222")
-        .await
-        .expect_err("başka tenant PIN'i reddedilir");
+    let err = verify_and_issue(
+        &mut conn,
+        &request("usr_cashier", operation::VOID, 0),
+        "2222",
+    )
+    .await
+    .expect_err("başka tenant PIN'i reddedilir");
     assert_eq!(err, error::INVALID_PIN);
 }
 
@@ -155,9 +161,13 @@ async fn pasif_personel_pini_onay_veremez() {
     seed_user(&pool, "usr_owner", "tenant_a", "OWNER", "2222", 0).await;
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
-    let err = verify_and_issue(&mut conn, &request("usr_cashier", operation::VOID, 0), "2222")
-        .await
-        .expect_err("pasif personel reddedilir");
+    let err = verify_and_issue(
+        &mut conn,
+        &request("usr_cashier", operation::VOID, 0),
+        "2222",
+    )
+    .await
+    .expect_err("pasif personel reddedilir");
     assert_eq!(err, error::INVALID_PIN);
 }
 
@@ -168,14 +178,22 @@ async fn bes_hatali_deneden_sonra_terminal_kilitlenir_ve_kayit_kalici_yazilir() 
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
     for _ in 0..MAX_FAILED_ATTEMPTS {
-        let _ = verify_and_issue(&mut conn, &request("usr_cashier", operation::VOID, 0), "9999")
-            .await;
+        let _ = verify_and_issue(
+            &mut conn,
+            &request("usr_cashier", operation::VOID, 0),
+            "9999",
+        )
+        .await;
     }
 
     // Kilit artık doğru PIN'i de reddediyor.
-    let err = verify_and_issue(&mut conn, &request("usr_cashier", operation::VOID, 0), "2222")
-        .await
-        .expect_err("kilitliyken doğru PIN de reddedilir");
+    let err = verify_and_issue(
+        &mut conn,
+        &request("usr_cashier", operation::VOID, 0),
+        "2222",
+    )
+    .await
+    .expect_err("kilitliyken doğru PIN de reddedilir");
     assert!(err.starts_with("APPROVAL_LOCKED"), "{}", err);
 
     let scope = attempt_scope_for_test("tenant_a", "term_01", operation::VOID);

@@ -65,25 +65,23 @@ async fn kasa_hareketi_yalniz_kendi_tenant_indan_bulunur() {
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
     // Kendi tenant'ında bulunur.
-    let found: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM cash_movements WHERE id = ? AND tenant_id = ?",
-    )
-    .bind("cm_a")
-    .bind(TENANT_A)
-    .fetch_one(&mut *conn)
-    .await
-    .expect("sorgu çalışır");
+    let found: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM cash_movements WHERE id = ? AND tenant_id = ?")
+            .bind("cm_a")
+            .bind(TENANT_A)
+            .fetch_one(&mut *conn)
+            .await
+            .expect("sorgu çalışır");
     assert_eq!(found, 1);
 
     // Başka tenant'ın çağrısında görünmez.
-    let foreign: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM cash_movements WHERE id = ? AND tenant_id = ?",
-    )
-    .bind("cm_a")
-    .bind(TENANT_B)
-    .fetch_one(&mut *conn)
-    .await
-    .expect("sorgu çalışır");
+    let foreign: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM cash_movements WHERE id = ? AND tenant_id = ?")
+            .bind("cm_a")
+            .bind(TENANT_B)
+            .fetch_one(&mut *conn)
+            .await
+            .expect("sorgu çalışır");
     assert_eq!(foreign, 0, "başka işletmenin kasa hareketi sızmamalı");
 }
 
@@ -92,13 +90,11 @@ async fn gunluk_zapor_tahsilat_hareketlerinden_turetilir() {
     let pool = pool().await;
     seed_tenant(&pool, TENANT_A).await;
 
-    sqlx::query(
-        "INSERT INTO tables (id, tenant_id, name) VALUES ('tbl_1', ?, 'Masa 1')",
-    )
-    .bind(TENANT_A)
-    .execute(&pool)
-    .await
-    .expect("masa eklenir");
+    sqlx::query("INSERT INTO tables (id, tenant_id, name) VALUES ('tbl_1', ?, 'Masa 1')")
+        .bind(TENANT_A)
+        .execute(&pool)
+        .await
+        .expect("masa eklenir");
 
     sqlx::query(
         "INSERT INTO orders (id, tenant_id, table_id, status, total_cents)

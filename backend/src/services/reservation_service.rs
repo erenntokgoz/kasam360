@@ -110,7 +110,8 @@ fn normalize_new(input: NewReservation) -> Result<NewReservation, String> {
         return Err("VALIDATION: kişi sayısı 1 ile 500 arasında olmalıdır".to_string());
     }
     let reserved_at = trimmed(&input.reserved_at).ok_or_else(|| {
-        "VALIDATION: randevu saati zorunludur (ISO-8601, örn. 2026-10-02T20:30:00+03:00)".to_string()
+        "VALIDATION: randevu saati zorunludur (ISO-8601, örn. 2026-10-02T20:30:00+03:00)"
+            .to_string()
     })?;
     Ok(NewReservation {
         customer_name,
@@ -130,7 +131,9 @@ fn row_to_dto(row: &sqlx::sqlite::SqliteRow) -> ReservationDto {
         id: row.try_get("id").unwrap_or_default(),
         table_id: row.try_get("table_id").unwrap_or_default(),
         table_name: row.try_get("table_name").unwrap_or_default(),
-        status: row.try_get("status").unwrap_or_else(|_| "ACTIVE".to_string()),
+        status: row
+            .try_get("status")
+            .unwrap_or_else(|_| "ACTIVE".to_string()),
         customer_name: row.try_get("customer_name").unwrap_or_default(),
         customer_phone: row.try_get("customer_phone").ok(),
         party_size: row.try_get("party_size").unwrap_or(1),
@@ -357,7 +360,11 @@ async fn set_status(
     Ok(())
 }
 
-async fn free_table(conn: &mut sqlx::SqliteConnection, tenant_id: &str, table_id: &str) -> Result<(), String> {
+async fn free_table(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+    table_id: &str,
+) -> Result<(), String> {
     sqlx::query("UPDATE tables SET status = 'AVAILABLE' WHERE id = ? AND tenant_id = ? AND status = 'RESERVED'")
         .bind(table_id)
         .bind(tenant_id)
@@ -447,15 +454,25 @@ pub async fn seat_for_order(
     let Some(reservation) = reservation else {
         return Ok(None);
     };
-    set_status(conn, &reservation.id, "SEATED", true, actor_id, Some("ADISYON")).await?;
-    sqlx::query("UPDATE tables SET status = 'OCCUPIED', opened_at = COALESCE(opened_at, ?), \
-                  current_total = 0 WHERE id = ? AND tenant_id = ?")
-        .bind(now_iso())
-        .bind(table_id)
-        .bind(tenant_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    set_status(
+        conn,
+        &reservation.id,
+        "SEATED",
+        true,
+        actor_id,
+        Some("ADISYON"),
+    )
+    .await?;
+    sqlx::query(
+        "UPDATE tables SET status = 'OCCUPIED', opened_at = COALESCE(opened_at, ?), \
+                  current_total = 0 WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(now_iso())
+    .bind(table_id)
+    .bind(tenant_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(Some(find(conn, tenant_id, &reservation.id).await?))
 }
 
@@ -477,7 +494,11 @@ pub async fn close_open_for_table(
     set_status(
         conn,
         &reservation.id,
-        if reason == "NO_SHOW" { "NO_SHOW" } else { "CANCELLED" },
+        if reason == "NO_SHOW" {
+            "NO_SHOW"
+        } else {
+            "CANCELLED"
+        },
         false,
         actor_id,
         Some(reason),

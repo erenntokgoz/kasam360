@@ -105,12 +105,10 @@ pub async fn master_vault_status(
 ) -> Result<serde_json::Value, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let configured: Option<i64> = sqlx::query_scalar(
-        "SELECT 1 FROM master_vault WHERE id = 1",
-    )
-    .fetch_optional(&mut *conn)
-    .await
-    .map_err(|e| e.to_string())?;
+    let configured: Option<i64> = sqlx::query_scalar("SELECT 1 FROM master_vault WHERE id = 1")
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(serde_json::json!({
         "configured": configured.is_some(),
     }))

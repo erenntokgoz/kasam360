@@ -39,13 +39,7 @@ async fn seed_user(pool: &sqlx::SqlitePool, id: &str, role: &str, pin: &str) {
     seed_user_in(pool, id, TENANT, role, pin).await;
 }
 
-async fn seed_user_in(
-    pool: &sqlx::SqlitePool,
-    id: &str,
-    tenant: &str,
-    role: &str,
-    pin: &str,
-) {
+async fn seed_user_in(pool: &sqlx::SqlitePool, id: &str, tenant: &str, role: &str, pin: &str) {
     let hash = crate::user_credentials::hash_pin(pin).expect("PIN hash'lenir");
     sqlx::query(
         "INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active)
@@ -183,7 +177,10 @@ async fn dogru_jeton_indirimi_acitir_ve_guvenlik_kaydi_yazar() {
     .fetch_one(&mut *conn)
     .await
     .expect("güvenlik kaydı yazılır");
-    assert_eq!(row.try_get::<String, _>("category").unwrap(), category::GUVENLIK);
+    assert_eq!(
+        row.try_get::<String, _>("category").unwrap(),
+        category::GUVENLIK
+    );
     assert_eq!(row.try_get::<String, _>("actor_id").unwrap(), "usr_owner");
 }
 
@@ -196,7 +193,10 @@ async fn ikram_yuzeyi_yuzde_yuz_indirimden_turetilir() {
     // %100 indirim: brüt 11.000, indirim 11.000, tahsilat sıfır.
     let complimentary = truth(10_000, 1_000, 11_000, 11_000);
     assert_eq!(complimentary.total_cents, 0);
-    assert_eq!(operation_for_truth(&complimentary), operation::COMPLIMENTARY);
+    assert_eq!(
+        operation_for_truth(&complimentary),
+        operation::COMPLIMENTARY
+    );
 
     let issue = ApprovalRequest {
         operation: operation::COMPLIMENTARY.to_string(),
@@ -210,10 +210,15 @@ async fn ikram_yuzeyi_yuzde_yuz_indirimden_turetilir() {
 
     let audit_mutex = tokio::sync::Mutex::new(());
     let audit_lock = lock_for(&audit_mutex).await;
-    let consumed = consume(&mut conn, &audit_lock, &complimentary, Some(&verified.token))
-        .await
-        .expect("jeton tüketilir")
-        .expect("onay döner");
+    let consumed = consume(
+        &mut conn,
+        &audit_lock,
+        &complimentary,
+        Some(&verified.token),
+    )
+    .await
+    .expect("jeton tüketilir")
+    .expect("onay döner");
     assert_eq!(consumed.operation, operation::COMPLIMENTARY);
 }
 
@@ -407,10 +412,15 @@ async fn esik_kurali_tuketim_aninda_tekrar_denetlenir() {
         .expect("tutar düzeltilir");
     let audit_mutex = tokio::sync::Mutex::new(());
     let audit_lock = lock_for(&audit_mutex).await;
-    let consumed = consume(&mut conn, &audit_lock, &discount_truth(500), Some(forged_token))
-        .await
-        .expect("küçük indirimde MASTER onayı geçerli")
-        .expect("onay döner");
+    let consumed = consume(
+        &mut conn,
+        &audit_lock,
+        &discount_truth(500),
+        Some(forged_token),
+    )
+    .await
+    .expect("küçük indirimde MASTER onayı geçerli")
+    .expect("onay döner");
     assert_eq!(consumed.approver_role, "MASTER");
 
     // Doğru jetonla üretilmiş büyük indirimde MASTER reddedilir: bu, üretim
@@ -490,13 +500,11 @@ async fn consume_for(
 async fn sunucu_hesabindaki_indirim_kapiyi_acitir() {
     let pool = pool().await;
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
-    sqlx::query(
-        "INSERT INTO categories (id, tenant_id, name) VALUES ('cat_1', ?, 'Test')",
-    )
-    .bind(TENANT)
-    .execute(&mut *conn)
-    .await
-    .expect("kategori eklenir");
+    sqlx::query("INSERT INTO categories (id, tenant_id, name) VALUES ('cat_1', ?, 'Test')")
+        .bind(TENANT)
+        .execute(&mut *conn)
+        .await
+        .expect("kategori eklenir");
     sqlx::query(
         "INSERT INTO products (id, tenant_id, name, price_cents, tax_rate_bp, category_id)
          VALUES ('prd_1', ?, 'Test Ürün', 10000, 1000, 'cat_1')",

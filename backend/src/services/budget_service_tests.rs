@@ -3,7 +3,9 @@
 //! Kapsam: limit karşılaştırması, %80 uyarı eşiği, ay filtresi, kiracı
 //! izolasyonu, ay sonu sıkıştırma ve `AGENTS.md §3.4` sessiz hata yasağı.
 
-use crate::services::budget_service::{budget_status, days_in_month, month_prefix_from_iso, recurring_due};
+use crate::services::budget_service::{
+    budget_status, days_in_month, month_prefix_from_iso, recurring_due,
+};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::str::FromStr;
 
@@ -152,7 +154,10 @@ async fn budget_excludes_other_tenant() {
         .expect("bütçe okunur");
 
     assert_eq!(s.len(), 1, "yalnız kendi limitin görünmeli");
-    assert_eq!(s[0].spent_cents, 10_000, "başka kiracının 99000'i sızmamalı");
+    assert_eq!(
+        s[0].spent_cents, 10_000,
+        "başka kiracının 99000'i sızmamalı"
+    );
 }
 
 #[tokio::test]
@@ -181,7 +186,10 @@ async fn broken_budget_column_returns_err_not_zero() {
 
 #[test]
 fn month_prefix_parses_iso_and_rejects_garbage() {
-    assert_eq!(month_prefix_from_iso("2026-10-05T10:00:00Z").unwrap(), "2026-10");
+    assert_eq!(
+        month_prefix_from_iso("2026-10-05T10:00:00Z").unwrap(),
+        "2026-10"
+    );
     assert_eq!(month_prefix_from_iso("2026-01").unwrap(), "2026-01");
     assert!(month_prefix_from_iso("2026").is_err());
     assert!(month_prefix_from_iso("26-10-05").is_err());
@@ -234,7 +242,17 @@ async fn seed_recurring(
 async fn recurring_reports_overdue_and_today() {
     let p = pool().await;
     seed_recurring(&p, "rec_1", "Kira", "RENT", 250_000, "MONTHLY", 5, true).await;
-    seed_recurring(&p, "rec_2", "Elektrik", "UTILITIES", 18_000, "MONTHLY", 20, true).await;
+    seed_recurring(
+        &p,
+        "rec_2",
+        "Elektrik",
+        "UTILITIES",
+        18_000,
+        "MONTHLY",
+        20,
+        true,
+    )
+    .await;
 
     let s = recurring_due(&p, TENANT, Some("2026-10-15"))
         .await
@@ -276,7 +294,10 @@ async fn recurring_day_31_is_clamped_in_february() {
 
     assert_eq!(s[0].days_in_month, 28, "2026 Şubat 28 gün");
     assert_eq!(s[0].due_day, 28, "31 Şubat'ta 28'e sıkıştırılmalı");
-    assert!(!s[0].is_overdue, "10 Şubat, 28 Şubat vadesinden önce: gecikmiş sayılmamalı");
+    assert!(
+        !s[0].is_overdue,
+        "10 Şubat, 28 Şubat vadesinden önce: gecikmiş sayılmamalı"
+    );
 
     let s = recurring_due(&p, TENANT, Some("2024-02-10"))
         .await
@@ -288,7 +309,17 @@ async fn recurring_day_31_is_clamped_in_february() {
 async fn inactive_recurring_is_hidden() {
     let p = pool().await;
     seed_recurring(&p, "rec_1", "Kira", "RENT", 250_000, "MONTHLY", 5, true).await;
-    seed_recurring(&p, "rec_2", "Eski Abonelik", "OTHER", 9_000, "MONTHLY", 5, false).await;
+    seed_recurring(
+        &p,
+        "rec_2",
+        "Eski Abonelik",
+        "OTHER",
+        9_000,
+        "MONTHLY",
+        5,
+        false,
+    )
+    .await;
 
     let s = recurring_due(&p, TENANT, Some("2026-10-15"))
         .await

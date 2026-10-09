@@ -1,4 +1,3 @@
-
 // `payment_approval::tests` alt modülü: aynı havuz/seed/lock yardımcılarını
 // kullanır, bu yüzden `use super::*` ile üst modülün içe aktarmalarını alır.
 use super::*;

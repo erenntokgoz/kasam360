@@ -77,10 +77,7 @@ pub async fn configure_passcode(
 /// Neden `Result<bool>`: tablo/hatası (SQL hatası) ile
 /// kod eşleşmemesi (yanlış kod) ayrı sonuçlardır. Yanlış
 /// kod sessiz `false` döner; depo hatası yukarı taşınır.
-pub async fn unlock(
-    conn: &mut SqliteConnection,
-    passcode: &str,
-) -> Result<bool, String> {
+pub async fn unlock(conn: &mut SqliteConnection, passcode: &str) -> Result<bool, String> {
     let row = sqlx::query("SELECT passcode_hash FROM master_vault WHERE id = 1")
         .fetch_optional(&mut *conn)
         .await
@@ -90,9 +87,7 @@ pub async fn unlock(
         // (fail-closed; varsayılan kod yoktur).
         return Ok(false);
     };
-    let hash: String = row
-        .try_get("passcode_hash")
-        .map_err(|e| e.to_string())?;
+    let hash: String = row.try_get("passcode_hash").map_err(|e| e.to_string())?;
     if !user_credentials::is_argon2_hash(&hash) {
         // Bozuk veya düz metin kayıt: vault açılmaz.
         return Err("SECURITY: vault kaydı bozuk (Argon2 hash bekleniyor).".to_string());
@@ -133,12 +128,15 @@ mod tests {
         let mut conn = pool.acquire().await.unwrap();
         ensure_table(&mut conn).await.unwrap();
 
-        configure_passcode(&mut conn, "kasam-vault-2026").await.unwrap();
-
-        let hash: String = sqlx::query_scalar("SELECT passcode_hash FROM master_vault WHERE id = 1")
-            .fetch_one(&mut *conn)
+        configure_passcode(&mut conn, "kasam-vault-2026")
             .await
             .unwrap();
+
+        let hash: String =
+            sqlx::query_scalar("SELECT passcode_hash FROM master_vault WHERE id = 1")
+                .fetch_one(&mut *conn)
+                .await
+                .unwrap();
         // Depolanan değer düz kod değil, Argon2id PHC hash'idir.
         assert!(user_credentials::is_argon2_hash(&hash), "hash: {hash}");
         assert!(!hash.contains("kasam-vault-2026"));

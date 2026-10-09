@@ -37,11 +37,11 @@ pub(crate) fn date_filter(range: &AnalyticsRange) -> (String, String) {
 // 2.1 — Ürün kâr marjı (BCG girdisi)
 // ---------------------------------------------------------------------------
 
-pub async fn product_margins(pool: &SqlitePool,
+pub async fn product_margins(
+    pool: &SqlitePool,
     tenant_id: &str,
     range: &AnalyticsRange,
-) -> Result<Vec<ProductMargin>, String>
-{
+) -> Result<Vec<ProductMargin>, String> {
     let (from, to) = date_filter(range);
     let sql = format!(
         "SELECT p.id AS product_id, COALESCE(p.name, p.id) AS product_name,
@@ -99,10 +99,10 @@ pub async fn product_margins(pool: &SqlitePool,
 
 /// FIFO ortalama birim maliyet. Ürün başına tek satır döner; tükenmiş parti
 /// ortalamayı bozmaz, yalnız `NULL` (bilinmeyen maliyet) üretir.
-async fn average_unit_costs(pool: &SqlitePool,
+async fn average_unit_costs(
+    pool: &SqlitePool,
     tenant_id: &str,
-) -> Result<Vec<(String, Option<i64>)>, String>
-{
+) -> Result<Vec<(String, Option<i64>)>, String> {
     let rows = sqlx::query(
         // Kolon adlari gercek sema ile birebir ayni olmak zorunda: test fixture'i
         // kendi sahte tablosunu kurdugu icin hatali kolon adi yalnizca uretimde
@@ -159,8 +159,7 @@ pub fn bcg_classify(margins: &[ProductMargin]) -> Result<Vec<BcgEntry>, String> 
     let margin_median =
         median(&known).ok_or_else(|| "BCG icin en az bir urunun maliyeti bilinmeli".to_string())?;
     let units: Vec<i64> = margins.iter().map(|m| m.units_sold).collect();
-    let volume_median =
-        median(&units).ok_or_else(|| "birim medyani hesaplanamadi".to_string())?;
+    let volume_median = median(&units).ok_or_else(|| "birim medyani hesaplanamadi".to_string())?;
 
     Ok(margins
         .iter()
@@ -204,15 +203,16 @@ pub fn bcg_counts(entries: &[BcgEntry]) -> BcgCounts {
 
 /// Ürün kimliği - ad eşlemesi. `IN` listesi bind edilemediği için kimlikler
 /// tek tek bağlanır; kiracı sınırı korunur.
-async fn product_names(pool: &SqlitePool,
+async fn product_names(
+    pool: &SqlitePool,
     tenant_id: &str,
     ids: &[String],
-) -> Result<std::collections::HashMap<String, String>, String>
-{
+) -> Result<std::collections::HashMap<String, String>, String> {
     if ids.is_empty() {
         return Ok(std::collections::HashMap::new());
     }
-    let mut qb = sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT id, name FROM products WHERE tenant_id = ");
+    let mut qb =
+        sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT id, name FROM products WHERE tenant_id = ");
     qb.push_bind(tenant_id);
     qb.push(" AND id IN (");
     let mut sep = qb.separated(", ");
@@ -220,7 +220,11 @@ async fn product_names(pool: &SqlitePool,
         sep.push_bind(id);
     }
     qb.push(")");
-    let rows = qb.build().fetch_all(pool).await.map_err(|e| e.to_string())?;
+    let rows = qb
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut map = std::collections::HashMap::with_capacity(rows.len());
     for r in rows {
@@ -234,12 +238,12 @@ async fn product_names(pool: &SqlitePool,
 
 /// Destek eşiğinin altındaki çiftler gürültüdür; `HAVING COUNT(*) >= min_support`
 /// ile SQL içinde elenir. `min_support` 0 ise her çift listelenirdi.
-pub async fn combinations(pool: &SqlitePool,
+pub async fn combinations(
+    pool: &SqlitePool,
     tenant_id: &str,
     range: &AnalyticsRange,
     min_support: i64,
-) -> Result<Vec<ProductCombination>, String>
-{
+) -> Result<Vec<ProductCombination>, String> {
     let (from, to) = date_filter(range);
     let sql = format!(
         "SELECT a.product_id AS a_id, b.product_id AS b_id, COUNT(*) AS support

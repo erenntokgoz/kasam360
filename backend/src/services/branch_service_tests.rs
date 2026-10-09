@@ -46,9 +46,15 @@ async fn sube_ekler_ve_prefexli_kimlik_doner() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
 
-    let branch = create(&mut conn, "tnt_a", "br_000000000001", "Kadıköy", Some("Moda Cad. 12"))
-        .await
-        .expect("şube eklenir");
+    let branch = create(
+        &mut conn,
+        "tnt_a",
+        "br_000000000001",
+        "Kadıköy",
+        Some("Moda Cad. 12"),
+    )
+    .await
+    .expect("şube eklenir");
 
     assert_eq!(branch.id, "br_000000000001");
     assert_eq!(branch.tenant_id, "tnt_a");
@@ -64,14 +70,20 @@ async fn bos_ad_reddedilir() {
     let err = create(&mut conn, "tnt_a", "br_x", "   ", None)
         .await
         .expect_err("boş ad kabul edilmemeli");
-    assert!(err.contains("INVALID_ARGUMENT"), "beklenmeyen hata: {}", err);
+    assert!(
+        err.contains("INVALID_ARGUMENT"),
+        "beklenmeyen hata: {}",
+        err
+    );
 }
 
 #[tokio::test]
 async fn ayni_isimli_aktif_sube_acilamaz() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
-    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None).await.unwrap();
+    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None)
+        .await
+        .unwrap();
 
     let err = create(&mut conn, "tnt_a", "br_2", "Kadıköy", None)
         .await
@@ -79,8 +91,12 @@ async fn ayni_isimli_aktif_sube_acilamaz() {
     assert!(err.contains("CONFLICT"), "beklenmeyen hata: {}", err);
 
     // Arşivlenen isim yeniden kullanılabilir: geçmiş kayıt satırı silinmedi.
-    create(&mut conn, "tnt_a", "br_3", "Şişli", None).await.unwrap();
-    archive(&mut conn, "tnt_a", "br_1").await.expect("Kadıköy arşivlenir");
+    create(&mut conn, "tnt_a", "br_3", "Şişli", None)
+        .await
+        .unwrap();
+    archive(&mut conn, "tnt_a", "br_1")
+        .await
+        .expect("Kadıköy arşivlenir");
     let again = create(&mut conn, "tnt_a", "br_4", "Kadıköy", None)
         .await
         .expect("arşivlenen isim yeniden kullanılabilir");
@@ -95,8 +111,12 @@ async fn liste_yalnizca_kendi_tenant_inin_subelerini_doner() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
     seed_tenant(&mut conn, "tnt_b").await;
-    create(&mut conn, "tnt_a", "br_a1", "Kadıköy", None).await.unwrap();
-    create(&mut conn, "tnt_b", "br_b1", "Beşiktaş", None).await.unwrap();
+    create(&mut conn, "tnt_a", "br_a1", "Kadıköy", None)
+        .await
+        .unwrap();
+    create(&mut conn, "tnt_b", "br_b1", "Beşiktaş", None)
+        .await
+        .unwrap();
 
     let branches = list(&mut conn, "tnt_a", false).await.unwrap();
     assert_eq!(branches.len(), 1);
@@ -109,7 +129,9 @@ async fn baska_tenantin_subesi_okunamaz_guncellenemez_arsivlenemez() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
     seed_tenant(&mut conn, "tnt_b").await;
-    create(&mut conn, "tnt_b", "br_b1", "Beşiktaş", None).await.unwrap();
+    create(&mut conn, "tnt_b", "br_b1", "Beşiktaş", None)
+        .await
+        .unwrap();
 
     assert!(load(&mut conn, "tnt_a", "br_b1").await.is_err());
     assert!(update(&mut conn, "tnt_a", "br_b1", Some("Çalınan"), None)
@@ -127,8 +149,12 @@ async fn baska_tenantin_subesi_okunamaz_guncellenemez_arsivlenemez() {
 async fn arsivlenen_sube_listede_gorunmez_istendiginde_gorunur() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
-    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None).await.unwrap();
-    create(&mut conn, "tnt_a", "br_2", "Şişli", None).await.unwrap();
+    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None)
+        .await
+        .unwrap();
+    create(&mut conn, "tnt_a", "br_2", "Şişli", None)
+        .await
+        .unwrap();
     archive(&mut conn, "tnt_a", "br_2").await.unwrap();
 
     let visible = list(&mut conn, "tnt_a", false).await.unwrap();
@@ -143,7 +169,9 @@ async fn arsivlenen_sube_listede_gorunmez_istendiginde_gorunur() {
 async fn son_aktif_sube_arsivlenemez() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
-    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None).await.unwrap();
+    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None)
+        .await
+        .unwrap();
 
     let err = archive(&mut conn, "tnt_a", "br_1")
         .await
@@ -156,8 +184,12 @@ async fn son_aktif_sube_arsivlenemez() {
 async fn iki_sube_varken_birisi_arsivlenebilir() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
-    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None).await.unwrap();
-    create(&mut conn, "tnt_a", "br_2", "Şişli", None).await.unwrap();
+    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None)
+        .await
+        .unwrap();
+    create(&mut conn, "tnt_a", "br_2", "Şişli", None)
+        .await
+        .unwrap();
 
     let archived = archive(&mut conn, "tnt_a", "br_2").await.unwrap();
     assert_eq!(archived.status, ARCHIVED_STATUS);
@@ -171,17 +203,27 @@ async fn iki_sube_varken_birisi_arsivlenebilir() {
 async fn ad_gunceller_cakisma_yeniden_denetlenir() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
-    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None).await.unwrap();
-    create(&mut conn, "tnt_a", "br_2", "Şişli", None).await.unwrap();
+    create(&mut conn, "tnt_a", "br_1", "Kadıköy", None)
+        .await
+        .unwrap();
+    create(&mut conn, "tnt_a", "br_2", "Şişli", None)
+        .await
+        .unwrap();
 
     let err = update(&mut conn, "tnt_a", "br_2", Some("Kadıköy"), None)
         .await
         .expect_err("çakışan ad kabul edilmemeli");
     assert!(err.contains("CONFLICT"), "beklenmeyen hata: {}", err);
 
-    let renamed = update(&mut conn, "tnt_a", "br_2", Some("Beşiktaş"), Some("Levent Cd. 3"))
-        .await
-        .unwrap();
+    let renamed = update(
+        &mut conn,
+        "tnt_a",
+        "br_2",
+        Some("Beşiktaş"),
+        Some("Levent Cd. 3"),
+    )
+    .await
+    .unwrap();
     assert_eq!(renamed.name, "Beşiktaş");
     assert_eq!(renamed.address.as_deref(), Some("Levent Cd. 3"));
 }
@@ -190,9 +232,13 @@ async fn ad_gunceller_cakisma_yeniden_denetlenir() {
 async fn adres_verilmezse_korunur() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
-    create(&mut conn, "tnt_a", "br_1", "Kadıköy", Some("Moda Cad. 12")).await.unwrap();
+    create(&mut conn, "tnt_a", "br_1", "Kadıköy", Some("Moda Cad. 12"))
+        .await
+        .unwrap();
 
-    let updated = update(&mut conn, "tnt_a", "br_1", None, None).await.unwrap();
+    let updated = update(&mut conn, "tnt_a", "br_1", None, None)
+        .await
+        .unwrap();
     assert_eq!(updated.name, "Kadıköy");
     assert_eq!(updated.address.as_deref(), Some("Moda Cad. 12"));
 }
@@ -214,8 +260,12 @@ async fn subeler_sql_de_tenant_filtresiyle_sorgulanir() {
     let mut conn = conn().await;
     seed_tenant(&mut conn, "tnt_a").await;
     seed_tenant(&mut conn, "tnt_b").await;
-    create(&mut conn, "tnt_a", "br_a1", "A Şubesi", None).await.unwrap();
-    create(&mut conn, "tnt_b", "br_b1", "B Şubesi", None).await.unwrap();
+    create(&mut conn, "tnt_a", "br_a1", "A Şubesi", None)
+        .await
+        .unwrap();
+    create(&mut conn, "tnt_b", "br_b1", "B Şubesi", None)
+        .await
+        .unwrap();
 
     let raw: Vec<String> = sqlx::query_scalar("SELECT tenant_id FROM branches")
         .fetch_all(&mut *conn)

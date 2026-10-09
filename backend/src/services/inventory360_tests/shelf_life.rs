@@ -1,4 +1,4 @@
-﻿//! Faz 12 · Raf ömrü testleri.
+//! Faz 12 · Raf ömrü testleri.
 //!
 //! Kapsam: dolmuş partinin risk tutarıyla raporlanması, uyarı penceresi,
 //! tarihi yazılmamış partinin "bilinmiyor" sayılması, boşalan partinin
@@ -52,7 +52,9 @@ async fn dolmus_parti_risk_tutariyla_birlikte_raporlanir() {
     urun_ekle(&mut conn, T, "prd_1", "Süt", 1500).await;
     parti_ekle(&mut conn, T, "bat_1", "prd_1", 10.0, 3800, Some(&gun(-3))).await;
 
-    let rapor = expiring_batches(&mut conn, T).await.expect("rapor alinmali");
+    let rapor = expiring_batches(&mut conn, T)
+        .await
+        .expect("rapor alinmali");
     assert_eq!(rapor.expired.len(), 1);
     assert_eq!(rapor.expired[0].batch_id, "bat_1");
     assert_eq!(rapor.expired[0].state, Freshness::Expired);
@@ -87,7 +89,9 @@ async fn uyari_penceresindeki_parti_ayri_gosterilir() {
     .await
     .expect("politika yazilmali");
 
-    let rapor = expiring_batches(&mut conn, T).await.expect("rapor alinmali");
+    let rapor = expiring_batches(&mut conn, T)
+        .await
+        .expect("rapor alinmali");
     assert_eq!(rapor.expiring_soon.len(), 1);
     assert_eq!(rapor.expiring_soon[0].batch_id, "bat_yakin");
     assert_eq!(rapor.expiring_soon[0].days_remaining, Some(2));
@@ -108,8 +112,14 @@ async fn uyari_penceresindeki_parti_ayri_gosterilir() {
     )
     .await
     .expect("politika guncellenmeli");
-    let genis = expiring_batches(&mut conn, T).await.expect("rapor alinmali");
-    assert_eq!(genis.expiring_soon.len(), 2, "genis pencerede iki parti de uyarilir");
+    let genis = expiring_batches(&mut conn, T)
+        .await
+        .expect("rapor alinmali");
+    assert_eq!(
+        genis.expiring_soon.len(),
+        2,
+        "genis pencerede iki parti de uyarilir"
+    );
 }
 
 #[tokio::test]
@@ -119,8 +129,14 @@ async fn tarihi_yazilmayan_parti_bilinmiyor_olarak_raporlanir() {
     urun_ekle(&mut conn, T, "prd_1", "Süt", 1500).await;
     parti_ekle(&mut conn, T, "bat_1", "prd_1", 10.0, 3800, None).await;
 
-    let rapor = expiring_batches(&mut conn, T).await.expect("rapor alinmali");
-    assert_eq!(rapor.expired.len(), 0, "tarihi olmayan parti dolmus sayilmamali");
+    let rapor = expiring_batches(&mut conn, T)
+        .await
+        .expect("rapor alinmali");
+    assert_eq!(
+        rapor.expired.len(),
+        0,
+        "tarihi olmayan parti dolmus sayilmamali"
+    );
     assert_eq!(rapor.expiring_soon.len(), 0);
     assert_eq!(rapor.missing_expiry_date.len(), 1);
     assert_eq!(rapor.missing_expiry_date[0].state, Freshness::Unknown);
@@ -142,7 +158,9 @@ async fn bosalan_parti_rapora_girmez() {
     parti_ekle(&mut conn, T, "bat_1", "prd_1", 10.0, 3800, Some(&gun(-3))).await;
     parti_ekle(&mut conn, T, "bat_bos", "prd_1", 0.0, 3800, Some(&gun(-3))).await;
 
-    let rapor = expiring_batches(&mut conn, T).await.expect("rapor alinmali");
+    let rapor = expiring_batches(&mut conn, T)
+        .await
+        .expect("rapor alinmali");
     // Tükenen partinin dolmuş olması bir risk değildir; rapor yanıltmamalı.
     assert_eq!(rapor.expired.len(), 1);
     assert_eq!(rapor.expired[0].batch_id, "bat_1");
@@ -227,7 +245,9 @@ async fn politika_olmayan_urunde_tarih_uretilmez() {
         .await
         .expect("parti okunmali");
     assert_eq!(
-        satir.try_get::<Option<String>, _>("expiry_date").expect("kolon okunmali"),
+        satir
+            .try_get::<Option<String>, _>("expiry_date")
+            .expect("kolon okunmali"),
         None,
         "partiye tarih yazilmamali"
     );
@@ -335,7 +355,9 @@ async fn raf_omru_ve_uyari_penceresi_dogrulanir() {
     .expect("politika guncellenmeli");
     assert_eq!(ikinci.id, ilk.id, "ayni urun icin ikinci kayit acilmamali");
 
-    let politikalar = list_shelf_life_policies(&mut conn, T).await.expect("politikalar okunmali");
+    let politikalar = list_shelf_life_policies(&mut conn, T)
+        .await
+        .expect("politikalar okunmali");
     assert_eq!(politikalar.len(), 1);
     assert_eq!(politikalar[0].shelf_life_days, 10);
 }
@@ -346,13 +368,34 @@ async fn baska_kiracinin_partisine_tarih_yazilamaz() {
     let mut conn = conn_of(&pool).await;
     urun_ekle(&mut conn, T, "prd_benim", "Süt", 1500).await;
     urun_ekle(&mut conn, T2, "prd_yabanci", "Süt", 9900).await;
-    parti_ekle(&mut conn, T, "bat_benim", "prd_benim", 10.0, 3800, Some(&gun(-3))).await;
-    parti_ekle(&mut conn, T2, "bat_yabanci", "prd_yabanci", 10.0, 100, Some(&gun(-3))).await;
+    parti_ekle(
+        &mut conn,
+        T,
+        "bat_benim",
+        "prd_benim",
+        10.0,
+        3800,
+        Some(&gun(-3)),
+    )
+    .await;
+    parti_ekle(
+        &mut conn,
+        T2,
+        "bat_yabanci",
+        "prd_yabanci",
+        10.0,
+        100,
+        Some(&gun(-3)),
+    )
+    .await;
 
     let hata = set_batch_expiry(&mut conn, T2, "bat_benim", &gun(10))
         .await
         .expect_err("yabanci partiye tarih yazilamamali");
-    assert!(hata.contains("NOT_FOUND") || hata.contains("bulunam"), "neden: {hata}");
+    assert!(
+        hata.contains("NOT_FOUND") || hata.contains("bulunam"),
+        "neden: {hata}"
+    );
 
     let bicim = set_batch_expiry(&mut conn, T, "bat_benim", "31-12-2026")
         .await
@@ -365,12 +408,22 @@ async fn baska_kiracinin_partisine_tarih_yazilamaz() {
     assert_eq!(benim, (), "yazma komutu bir deger dondurmaz");
 
     // Yabancı işletmenin raporu kendi riskini görür, bizim partimizi görmez.
-    let rapor = expiring_batches(&mut conn, T2).await.expect("rapor alinmali");
+    let rapor = expiring_batches(&mut conn, T2)
+        .await
+        .expect("rapor alinmali");
     assert_eq!(rapor.expired.len(), 1);
     assert_eq!(rapor.expired[0].batch_id, "bat_yabanci");
-    assert_eq!(rapor.at_risk_cost_cents, 1_000, "baska kiracinin riski karismamali");
+    assert_eq!(
+        rapor.at_risk_cost_cents, 1_000,
+        "baska kiracinin riski karismamali"
+    );
 
-    let benim_rapor = expiring_batches(&mut conn, T).await.expect("rapor alinmali");
-    assert!(benim_rapor.expired.is_empty(), "yazilan tarih sonrasi dolmus degil");
+    let benim_rapor = expiring_batches(&mut conn, T)
+        .await
+        .expect("rapor alinmali");
+    assert!(
+        benim_rapor.expired.is_empty(),
+        "yazilan tarih sonrasi dolmus degil"
+    );
     assert_eq!(benim_rapor.at_risk_cost_cents, 0);
 }

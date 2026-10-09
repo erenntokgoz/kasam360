@@ -4,12 +4,12 @@
 //! tutar veya metin kabul edilmez; aksi hâlde uydurma mali belge basılabilirdi.
 
 use crate::db::DbPool;
-use sqlx::Row;
 use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant};
 use crate::services::ledger_statement::{
     directory_statement, format_cents, payment_receipt_lines, StatementLine,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct StatementLineDto {
@@ -151,8 +151,9 @@ pub async fn print_payment_receipt(
     let debt_id: String = row.try_get("debt_id").map_err(|e| e.to_string())?;
     let directory_name: String = row.try_get("directory_name").map_err(|e| e.to_string())?;
     let amount_cents: i64 = row.try_get("amount_cents").map_err(|e| e.to_string())?;
-    let remaining_after_cents: i64 =
-        row.try_get("remaining_amount_cents").map_err(|e| e.to_string())?;
+    let remaining_after_cents: i64 = row
+        .try_get("remaining_amount_cents")
+        .map_err(|e| e.to_string())?;
     let method: String = row.try_get("payment_method").map_err(|e| e.to_string())?;
     let status: String = row.try_get("status").map_err(|e| e.to_string())?;
     let issued_at: String = row.try_get("created_at").map_err(|e| e.to_string())?;

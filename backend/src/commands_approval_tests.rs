@@ -57,7 +57,8 @@ async fn jetonsuz_iptal_reddedilir() {
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
     for token in [None, Some(""), Some("   ")] {
-        let err = require_void_approval(&mut conn, &request(CASHIER, 12_000), token).await
+        let err = require_void_approval(&mut conn, &request(CASHIER, 12_000), token)
+            .await
             .expect_err("jetonsuz iptal reddedilmeli");
         assert_eq!(err, error::TOKEN_REQUIRED);
     }
@@ -74,12 +75,14 @@ async fn dogru_jeton_iptali_acitir_ve_tuketilir() {
         .await
         .expect("müdür iptali onaylar");
 
-    let approver = require_void_approval(&mut conn, &req, Some(&verified.token)).await
+    let approver = require_void_approval(&mut conn, &req, Some(&verified.token))
+        .await
         .expect("jeton iptali açar");
     assert_eq!(approver.approver_id, "usr_manager");
 
     // Aynı jeton ikinci kez kullanılamaz: iptal iki kez yürütülemez.
-    let err = require_void_approval(&mut conn, &req, Some(&verified.token)).await
+    let err = require_void_approval(&mut conn, &req, Some(&verified.token))
+        .await
         .expect_err("jeton tekrar kullanılamaz");
     assert_eq!(err, error::TOKEN_USED);
 }
@@ -96,7 +99,8 @@ async fn kasa_jetonu_baska_adisyonda_kullanilamaz() {
         .expect("onay verilir");
 
     let other_order = void_approval_request(TENANT, "ord_02", 12_000, CASHIER, "CASHIER");
-    let err = require_void_approval(&mut conn, &other_order, Some(&verified.token)).await
+    let err = require_void_approval(&mut conn, &other_order, Some(&verified.token))
+        .await
         .expect_err("jeton başka adisyona taşınamaz");
     assert_eq!(err, error::TOKEN_SCOPE);
 }
@@ -115,7 +119,8 @@ async fn kasa_jetonu_baska_tutara_tasinamaz() {
     // Tutar istemciden değil sipariş satırından okunur; satır değişmişse
     // eski onay geçerli olmaz.
     let changed = void_approval_request(TENANT, ORDER_ID, 99_000, CASHIER, "CASHIER");
-    let err = require_void_approval(&mut conn, &changed, Some(&verified.token)).await
+    let err = require_void_approval(&mut conn, &changed, Some(&verified.token))
+        .await
         .expect_err("jeton eski tutara bağlıdır");
     assert_eq!(err, error::TOKEN_SCOPE);
 }
@@ -133,7 +138,8 @@ async fn baska_kisinin_jetonu_ile_iptal_edilemez() {
 
     // Jeton işlemi yapan kişiye göre üretilmiştir; kasa onu kullanamaz.
     let cashier_req = request(CASHIER, 12_000);
-    let err = require_void_approval(&mut conn, &cashier_req, Some(&verified.token)).await
+    let err = require_void_approval(&mut conn, &cashier_req, Some(&verified.token))
+        .await
         .expect_err("jeton sahibinden başkası kullanamaz");
     assert_eq!(err, error::TOKEN_SCOPE);
 }
@@ -200,7 +206,8 @@ async fn isletme_sahibi_ve_mudur_iptali_onaylayabilir() {
         let verified = approval_service::verify_and_issue(&mut conn, &req, pin)
             .await
             .unwrap_or_else(|err| panic!("{} onaylayamadı: {}", id, err));
-        require_void_approval(&mut conn, &req, Some(&verified.token)).await
+        require_void_approval(&mut conn, &req, Some(&verified.token))
+            .await
             .unwrap_or_else(|err| panic!("{} jetonu kabul edilmedi: {}", id, err));
     }
 }
@@ -226,7 +233,8 @@ async fn sure_dolmus_jeton_iptali_acmaz() {
         .await
         .expect("süre düzenlenir");
 
-    let err = require_void_approval(&mut conn, &req, Some(&verified.token)).await
+    let err = require_void_approval(&mut conn, &req, Some(&verified.token))
+        .await
         .expect_err("süresi dolmuş jeton reddedilmeli");
     assert_eq!(err, error::TOKEN_EXPIRED);
 }
@@ -243,7 +251,8 @@ async fn baska_tenantin_jetonu_iptali_acmaz() {
         .expect("onay verilir");
 
     let other_tenant = void_approval_request("tenant_b", ORDER_ID, 12_000, CASHIER, "CASHIER");
-    let err = require_void_approval(&mut conn, &other_tenant, Some(&verified.token)).await
+    let err = require_void_approval(&mut conn, &other_tenant, Some(&verified.token))
+        .await
         .expect_err("çapraz tenant jetonu reddedilmeli");
     assert_eq!(err, error::TOKEN_INVALID);
 }
@@ -258,7 +267,8 @@ async fn islem_yapan_kisi_jeton_sahibiyle_eslesmelidir() {
     let verified = approval_service::verify_and_issue(&mut conn, &req, "3333")
         .await
         .expect("onay verilir");
-    require_void_approval(&mut conn, &req, Some(&verified.token)).await
+    require_void_approval(&mut conn, &req, Some(&verified.token))
+        .await
         .expect("jeton tüketilir");
 
     // Tüketim kaydı approver ve operation ile birlikte rapor için kalıcıdır.
@@ -268,9 +278,18 @@ async fn islem_yapan_kisi_jeton_sahibiyle_eslesmelidir() {
     .fetch_one(&mut *conn)
     .await
     .expect("onay kaydı okunur");
-    assert_eq!(row.try_get::<String, _>("approver_id").unwrap(), "usr_manager");
-    assert_eq!(row.try_get::<String, _>("approved_by_role").unwrap(), "MANAGER");
-    assert_eq!(row.try_get::<String, _>("request_type").unwrap(), operation::VOID);
+    assert_eq!(
+        row.try_get::<String, _>("approver_id").unwrap(),
+        "usr_manager"
+    );
+    assert_eq!(
+        row.try_get::<String, _>("approved_by_role").unwrap(),
+        "MANAGER"
+    );
+    assert_eq!(
+        row.try_get::<String, _>("request_type").unwrap(),
+        operation::VOID
+    );
     assert!(row
         .try_get::<Option<String>, _>("consumed_at")
         .unwrap()

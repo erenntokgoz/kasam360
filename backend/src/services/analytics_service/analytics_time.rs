@@ -5,10 +5,10 @@
 
 use sqlx::{Row, SqlitePool};
 
+use super::analytics_product::REVENUE_CORE;
 use super::analytics_types::{
     AnalyticsRange, CompetitorPriceGap, MonthlyTargetStatus, PeakHourBucket, VoidLossRate,
 };
-use super::analytics_product::REVENUE_CORE;
 
 // ---------------------------------------------------------------------------
 // 2.4 — Yoğun saat kovaları (0–23)
@@ -16,11 +16,11 @@ use super::analytics_product::REVENUE_CORE;
 
 /// Veri yoksa 24 kova yine de döner; eksik saat "satış yok" demektir, silinmez.
 /// Böylece grafik, eksik kova nedeniyle yanlış zaman aralığını göstermez.
-pub async fn peak_hours(pool: &SqlitePool,
+pub async fn peak_hours(
+    pool: &SqlitePool,
     tenant_id: &str,
     range: &AnalyticsRange,
-) -> Result<Vec<PeakHourBucket>, String>
-{
+) -> Result<Vec<PeakHourBucket>, String> {
     let (from, to) = super::analytics_product::date_filter(range);
     let sql = format!(
         "SELECT CAST(strftime('%H', o.created_at) AS INTEGER) AS hour,
@@ -70,11 +70,11 @@ pub async fn peak_hours(pool: &SqlitePool,
 
 /// `ALL` kategorisi tüm kategorileri toplar; kategori satırı kendi adını toplar.
 /// Gerçekleşme ciroya göre hesaplanır (`void` tutarları gider olarak kalır).
-pub async fn monthly_target_status(pool: &SqlitePool,
+pub async fn monthly_target_status(
+    pool: &SqlitePool,
     tenant_id: &str,
     month: &str,
-) -> Result<Vec<MonthlyTargetStatus>, String>
-{
+) -> Result<Vec<MonthlyTargetStatus>, String> {
     let rows = sqlx::query(
         "SELECT t.month, t.category, t.target_cents,
                 COALESCE((
@@ -126,10 +126,10 @@ pub async fn monthly_target_status(pool: &SqlitePool,
 
 /// `gap_cents = bizim - rakip`: negatifse biz daha pahalıyız. Her ürün+rakip
 /// için yalnız **en güncel** gözlem kullanılır; geçmiş silinmez.
-pub async fn competitor_price_gaps(pool: &SqlitePool,
+pub async fn competitor_price_gaps(
+    pool: &SqlitePool,
     tenant_id: &str,
-) -> Result<Vec<CompetitorPriceGap>, String>
-{
+) -> Result<Vec<CompetitorPriceGap>, String> {
     let rows = sqlx::query(
         "SELECT cp.product_id,
                 COALESCE(p.name, cp.product_id) AS product_name,
@@ -186,11 +186,11 @@ pub async fn competitor_price_gaps(pool: &SqlitePool,
 /// Toplam ciro 0 ise oran `None`: "sıfır kayıp" değil, "hesaplanamaz".
 /// Sayaçlar da ciroyla aynı evreni kullanır (`PAID` + `VOID`), böylece
 /// `voided_orders / total_orders` her zaman ciro oranıyla tutarlıdır.
-pub async fn void_loss_rate(pool: &SqlitePool,
+pub async fn void_loss_rate(
+    pool: &SqlitePool,
     tenant_id: &str,
     range: &AnalyticsRange,
-) -> Result<VoidLossRate, String>
-{
+) -> Result<VoidLossRate, String> {
     let (from, to) = super::analytics_product::date_filter(range);
     let sql = format!(
         "SELECT

@@ -9,7 +9,9 @@
 //! ise komutun kullandığı **aynı sorgu metni** üzerinde çalıştırılır.
 
 use crate::ledger_commands::expenses::resolve_date_range;
-use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant, require_ledger_write};
+use crate::ledger_commands::guard::{
+    require_ledger_read, require_ledger_tenant, require_ledger_write,
+};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::Row;
 use std::str::FromStr;
@@ -77,7 +79,11 @@ fn ledger_read_gate_is_fail_closed_when_role_missing() {
 #[test]
 fn ledger_write_gate_rejects_cashier() {
     for role in ["OWNER", "MANAGER"] {
-        assert!(require_ledger_write(Some(role)).is_ok(), "{} yazabilmeli", role);
+        assert!(
+            require_ledger_write(Some(role)).is_ok(),
+            "{} yazabilmeli",
+            role
+        );
     }
     // Neden: bu komutlar `cash_movements` yazar veya borç bakiyesini değiştirir.
     for role in ["CASHIER", "WAITER", "KITCHEN", "MASTER"] {
@@ -284,10 +290,7 @@ async fn broken_column_returns_err_and_not_zero() {
     .fetch_one(&p)
     .await;
 
-    assert!(
-        err.is_err(),
-        "yanlış kolonlu toplam sorgusu hata dönmeli"
-    );
+    assert!(err.is_err(), "yanlış kolonlu toplam sorgusu hata dönmeli");
 
     // Aynı hatayı `unwrap_or(0)` yutardı: sessiz sıfır. Kanıt burada.
     let swallowed: i64 = sqlx::query_scalar::<_, i64>(

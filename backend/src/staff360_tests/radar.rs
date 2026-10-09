@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 // ---------------------------------------------------------------------------
 // Şüpheli işlem radarı
 // ---------------------------------------------------------------------------
@@ -10,13 +10,36 @@ async fn radar_az_orneklemli_iptalde_uyar_uretmez() {
     urun(&p, "tenant_a", "a").await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "CASHIER").await;
     // 2 siparişin 2'si de iptal: oran %100 ama örneklem 2 < 5 → uyarı yok.
-    siparis(&p, "tenant_a", "ord_1", "usr_1", "usr_1", 10_000, "VOID", "2026-03-10 12:00:00").await;
-    siparis(&p, "tenant_a", "ord_2", "usr_1", "usr_1", 10_000, "VOID", "2026-03-11 12:00:00").await;
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_1",
+        "usr_1",
+        "usr_1",
+        10_000,
+        "VOID",
+        "2026-03-10 12:00:00",
+    )
+    .await;
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_2",
+        "usr_1",
+        "usr_1",
+        10_000,
+        "VOID",
+        "2026-03-11 12:00:00",
+    )
+    .await;
 
     let bayrak = suspicious_service::radar(&p, "tenant_a", "2000-01-01", "2100-01-01")
         .await
         .expect("radar");
-    assert!(bayrak.is_empty(), "az örneklemli yüksek oran iftira olurdu: {bayrak:?}");
+    assert!(
+        bayrak.is_empty(),
+        "az örneklemli yüksek oran iftira olurdu: {bayrak:?}"
+    );
 }
 
 #[tokio::test]
@@ -26,18 +49,44 @@ async fn radar_yuksek_iptal_oranini_yakinlar() {
     urun(&p, "tenant_a", "a").await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "CASHIER").await;
     for i in 1..=4 {
-        siparis(&p, "tenant_a", &format!("ord_v{i}"), "usr_1", "usr_1", 10_000, "VOID", "2026-03-10 12:00:00").await;
+        siparis(
+            &p,
+            "tenant_a",
+            &format!("ord_v{i}"),
+            "usr_1",
+            "usr_1",
+            10_000,
+            "VOID",
+            "2026-03-10 12:00:00",
+        )
+        .await;
     }
     for i in 1..=6 {
-        siparis(&p, "tenant_a", &format!("ord_p{i}"), "usr_1", "usr_1", 10_000, "PAID", "2026-03-10 12:00:00").await;
+        siparis(
+            &p,
+            "tenant_a",
+            &format!("ord_p{i}"),
+            "usr_1",
+            "usr_1",
+            10_000,
+            "PAID",
+            "2026-03-10 12:00:00",
+        )
+        .await;
     }
 
     let bayrak = suspicious_service::radar(&p, "tenant_a", "2000-01-01", "2100-01-01")
         .await
         .expect("radar");
-    let iptal = bayrak.iter().find(|b| b.rule.contains("iptal")).expect("iptal bayrağı");
+    let iptal = bayrak
+        .iter()
+        .find(|b| b.rule.contains("iptal"))
+        .expect("iptal bayrağı");
     assert_eq!(iptal.measured, "%40", "4/10 iptal = %40");
-    assert!(iptal.threshold.contains("asgari 5"), "eşik raporda görünmeli");
+    assert!(
+        iptal.threshold.contains("asgari 5"),
+        "eşik raporda görünmeli"
+    );
 }
 
 #[tokio::test]
@@ -47,12 +96,25 @@ async fn radar_normal_isletmede_sessiz_kalir() {
     urun(&p, "tenant_a", "a").await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "CASHIER").await;
     for i in 1..=20 {
-        siparis(&p, "tenant_a", &format!("ord_{i}"), "usr_1", "usr_1", 10_000, "PAID", "2026-03-10 12:00:00").await;
+        siparis(
+            &p,
+            "tenant_a",
+            &format!("ord_{i}"),
+            "usr_1",
+            "usr_1",
+            10_000,
+            "PAID",
+            "2026-03-10 12:00:00",
+        )
+        .await;
     }
     let bayrak = suspicious_service::radar(&p, "tenant_a", "2000-01-01", "2100-01-01")
         .await
         .expect("radar");
-    assert!(bayrak.is_empty(), "sağlıklı işletmede uyarı üretilmemeli: {bayrak:?}");
+    assert!(
+        bayrak.is_empty(),
+        "sağlıklı işletmede uyarı üretilmemeli: {bayrak:?}"
+    );
 }
 
 #[tokio::test]
@@ -76,7 +138,13 @@ async fn radar_gunluk_onay_yogunlugunu_yakinlar() {
     let bayrak = suspicious_service::radar(&p, "tenant_a", "2026-03-01", "2026-03-31")
         .await
         .expect("radar");
-    let onay = bayrak.iter().find(|b| b.rule.contains("onay")).expect("onay bayrağı");
-    assert!(onay.measured.contains("7 onay/gun"), "ölçüm: {}", onay.measured);
+    let onay = bayrak
+        .iter()
+        .find(|b| b.rule.contains("onay"))
+        .expect("onay bayrağı");
+    assert!(
+        onay.measured.contains("7 onay/gun"),
+        "ölçüm: {}",
+        onay.measured
+    );
 }
-

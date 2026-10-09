@@ -12,7 +12,7 @@ use sqlx::SqlitePool;
 use crate::services::staff360::payroll_types::{
     PayrollAmounts, PayrollRule, PayrollRuleInput, PayrollRun,
 };
-use crate::services::staff360::{tip_service};
+use crate::services::staff360::tip_service;
 
 /// Maaş kuralını yazar (UPSERT). Model doğrulanır: bilinmeyen model
 /// bordroyu sessizce sıfır bırakırdı.
@@ -113,9 +113,7 @@ pub async fn list_rules(
             } else {
                 r.try_get("base_salary_cents").map_err(|e| e.to_string())?
             },
-            commission_percent: r
-                .try_get("commission_percent")
-                .map_err(|e| e.to_string())?,
+            commission_percent: r.try_get("commission_percent").map_err(|e| e.to_string())?,
             hourly_rate_cents: if gizli {
                 0
             } else {
@@ -155,11 +153,13 @@ pub fn period_range(period: &str) -> Result<(String, String), String> {
     let son_gun = 31u8
         - match ay {
             4 | 6 | 9 | 11 => 2,
-            2 => if (yil % 4 == 0 && yil % 100 != 0) || yil % 400 == 0 {
-                2
-            } else {
-                3
-            },
+            2 => {
+                if (yil % 4 == 0 && yil % 100 != 0) || yil % 400 == 0 {
+                    2
+                } else {
+                    3
+                }
+            }
             _ => 0,
         };
     // Aralık için ayrı dal YOKTUR. Önceden `yil+1-01-31` üreten dal vardı ve
@@ -217,19 +217,17 @@ pub async fn run_payroll(
             if h == 0.0 {
                 uyari.push("bu donemde kapanmis vardiye kaydi yok".to_string());
             }
-            (
-                (h * kural.hourly_rate_cents as f64).round() as i64,
-                h,
-            )
+            ((h * kural.hourly_rate_cents as f64).round() as i64, h)
         } else {
             (0, 0.0)
         };
 
         let kar_payi = if kural.profit_share_percent > 0 {
             if net_kar.is_none() {
-                let rapor = crate::services::pnl_service::financial_report(pool, tenant_id, &kar_aran)
-                    .await
-                    .map_err(|e| format!("donem kari hesaplanamadi: {e}"))?;
+                let rapor =
+                    crate::services::pnl_service::financial_report(pool, tenant_id, &kar_aran)
+                        .await
+                        .map_err(|e| format!("donem kari hesaplanamadi: {e}"))?;
                 net_kar = Some(rapor.net_profit_cents);
             }
             let kar = net_kar.unwrap_or(0);
@@ -291,15 +289,14 @@ pub async fn run_payroll(
         .await
         .map_err(|e| e.to_string())?;
 
-        let role: String = sqlx::query_scalar(
-            "SELECT role FROM users WHERE tenant_id = ?1 AND id = ?2",
-        )
-        .bind(tenant_id)
-        .bind(&kural.user_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?
-        .unwrap_or_else(|| "BILINMIYOR".to_string());
+        let role: String =
+            sqlx::query_scalar("SELECT role FROM users WHERE tenant_id = ?1 AND id = ?2")
+                .bind(tenant_id)
+                .bind(&kural.user_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| e.to_string())?
+                .unwrap_or_else(|| "BILINMIYOR".to_string());
 
         out.push(PayrollRun {
             id,
@@ -423,12 +420,7 @@ fn basis_note(
             taban_maas, komisyon_taban, komisyon_yuzde as f64, brut
         ),
         "TIP" => format!("sabit {} kr + dagitilmis bahsis {} kr", taban_maas, bahsis),
-        "HOURLY" => format!(
-            "{:.1} saat × saatlik {} kr = {} kr",
-            saat,
-            taban_maas,
-            brut
-        ),
+        "HOURLY" => format!("{:.1} saat × saatlik {} kr = {} kr", saat, taban_maas, brut),
         "PROFIT_SHARE" => {
             format!("sabit {} kr + kar payi {} kr", taban_maas, kar_payi)
         }

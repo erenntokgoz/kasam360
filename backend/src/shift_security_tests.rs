@@ -24,7 +24,10 @@ async fn pool() -> sqlx::SqlitePool {
         .connect_with(options)
         .await
         .expect("in-memory db");
-    sqlx::raw_sql(SCHEMA).execute(&p).await.expect("şema uygulanmalı");
+    sqlx::raw_sql(SCHEMA)
+        .execute(&p)
+        .await
+        .expect("şema uygulanmalı");
     p
 }
 
@@ -86,7 +89,9 @@ async fn active_shift_sql(
     .fetch_optional(p)
     .await
     .map_err(|e| e.to_string())?;
-    Ok(row.map(|r| r.try_get::<String, _>("id").map_err(|e| e.to_string())).transpose()?)
+    Ok(row
+        .map(|r| r.try_get::<String, _>("id").map_err(|e| e.to_string()))
+        .transpose()?)
 }
 
 async fn open_shifts_sql(p: &sqlx::SqlitePool, tenant: &str) -> Result<Vec<String>, String> {
@@ -122,10 +127,18 @@ async fn v1_aktif_vardiya_baska_kiracininkini_gormez() {
     add_shift(&p, "tenant_a", "shf_a", "usr_cash_a", 50_000).await;
     add_shift(&p, "tenant_b", "shf_b", "usr_cash_b", 900_000).await;
 
-    let a = active_shift_sql(&p, "tenant_a", "usr_cash_a").await.expect("okunmali");
-    assert_eq!(a.as_deref(), Some("shf_a"), "kiraci A yalnız kendi vardiyasini gormeli");
+    let a = active_shift_sql(&p, "tenant_a", "usr_cash_a")
+        .await
+        .expect("okunmali");
+    assert_eq!(
+        a.as_deref(),
+        Some("shf_a"),
+        "kiraci A yalnız kendi vardiyasini gormeli"
+    );
 
-    let b = active_shift_sql(&p, "tenant_b", "usr_cash_b").await.expect("okunmali");
+    let b = active_shift_sql(&p, "tenant_b", "usr_cash_b")
+        .await
+        .expect("okunmali");
     assert_eq!(b.as_deref(), Some("shf_b"));
 }
 
@@ -140,7 +153,9 @@ async fn v1_tenant_kirilmis_satir_komsu_kiraciya_sizmaz() {
     // Satır `tenant_b` altında ama kasiyer `tenant_a`'nın kullanıcısı.
     add_shift(&p, "tenant_b", "shf_kirilmis", "usr_cash_a", 900_000).await;
 
-    let a = active_shift_sql(&p, "tenant_a", "usr_cash_a").await.expect("okunmali");
+    let a = active_shift_sql(&p, "tenant_a", "usr_cash_a")
+        .await
+        .expect("okunmali");
     assert!(
         a.is_none(),
         "kiraci A, tenant'i yanlis yazilmis vardiyayi gormemeli: {a:?}"
@@ -152,8 +167,13 @@ async fn v1_baska_kiracida_vardiya_yoksa_null_doner() {
     let p = pool().await;
     add_shift(&p, "tenant_a", "shf_a", "usr_cash_a", 50_000).await;
 
-    let yabanci = active_shift_sql(&p, "tenant_b", "usr_cash_a").await.expect("okunmali");
-    assert!(yabanci.is_none(), "var olmayan vardiya null dönmeli, sıfır tutar değil");
+    let yabanci = active_shift_sql(&p, "tenant_b", "usr_cash_a")
+        .await
+        .expect("okunmali");
+    assert!(
+        yabanci.is_none(),
+        "var olmayan vardiya null dönmeli, sıfır tutar değil"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +191,10 @@ async fn v2_acik_vardiyalar_yalniz_kendi_kiracini_listeler() {
 
     let a = open_shifts_sql(&p, "tenant_a").await.expect("okunmali");
     assert_eq!(a.len(), 2, "kiraci A iki vardiya gormeli");
-    assert!(!a.contains(&"shf_b1".to_string()), "kiraci B vardiyasi sizmamali");
+    assert!(
+        !a.contains(&"shf_b1".to_string()),
+        "kiraci B vardiyasi sizmamali"
+    );
 
     let b = open_shifts_sql(&p, "tenant_b").await.expect("okunmali");
     assert_eq!(b.len(), 1);
@@ -221,7 +244,8 @@ async fn v2_kullanici_bulunamazsa_ad_null_doner_sifir_degil() {
     .expect("satır okunmali");
     // Bilinmeyen kasiyer adı boş string olmamalı; null döner.
     assert_eq!(
-        row.try_get::<Option<String>, _>("cashier_name").expect("kolon okunmali"),
+        row.try_get::<Option<String>, _>("cashier_name")
+            .expect("kolon okunmali"),
         None
     );
 }
@@ -362,15 +386,20 @@ async fn v5_siparis_kaydinda_cashier_id_doldurulur() {
     let p = pool().await;
     add_table(&p, "tenant_a", "tbl_1", Some("usr_waiter")).await;
 
-    let waiter_id: Option<String> =
-        sqlx::query_scalar::<_, Option<String>>("SELECT waiter_id FROM tables WHERE tenant_id = ? AND id = ?")
-            .bind("tenant_a")
-            .bind("tbl_1")
-            .fetch_optional(&p)
-            .await
-            .expect("okunmali")
-            .flatten();
-    assert_eq!(waiter_id.as_deref(), Some("usr_waiter"), "masanin garsonu devralinmali");
+    let waiter_id: Option<String> = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT waiter_id FROM tables WHERE tenant_id = ? AND id = ?",
+    )
+    .bind("tenant_a")
+    .bind("tbl_1")
+    .fetch_optional(&p)
+    .await
+    .expect("okunmali")
+    .flatten();
+    assert_eq!(
+        waiter_id.as_deref(),
+        Some("usr_waiter"),
+        "masanin garsonu devralinmali"
+    );
 
     sqlx::query(
         "INSERT INTO orders (id, tenant_id, table_id, status, total_cents, cashier_id, created_at, updated_at)
@@ -387,7 +416,9 @@ async fn v5_siparis_kaydinda_cashier_id_doldurulur() {
         .expect("siparis okunmali");
     // V5'in kanıtı: sipariş seviyesinde garson kaydı artık dolu.
     assert_eq!(
-        satir.try_get::<Option<String>, _>("cashier_id").expect("kolon"),
+        satir
+            .try_get::<Option<String>, _>("cashier_id")
+            .expect("kolon"),
         Some("usr_waiter".to_string())
     );
 }
@@ -398,10 +429,12 @@ async fn v5_kalem_kaydinda_waiter_id_yazilabilir() {
     // `orders.table_id` FK'si ve `order_items.product_id` FK'si için üst kayıtlar
     // önce yazılmalı; aksi halde test şema kısıtına takılır, V5'i sınamaz.
     add_table(&p, "tenant_a", "tbl_1", Some("usr_waiter")).await;
-    sqlx::query("INSERT INTO categories (id, tenant_id, name) VALUES ('cat_1', 'tenant_a', 'Kahve')")
-        .execute(&p)
-        .await
-        .expect("kategori yazılmalı");
+    sqlx::query(
+        "INSERT INTO categories (id, tenant_id, name) VALUES ('cat_1', 'tenant_a', 'Kahve')",
+    )
+    .execute(&p)
+    .await
+    .expect("kategori yazılmalı");
     sqlx::query(
         "INSERT INTO products (id, tenant_id, name, category_id, price_cents)
          VALUES ('prd_1', 'tenant_a', 'Kahve', 'cat_1', 25000)",
@@ -431,7 +464,9 @@ async fn v5_kalem_kaydinda_waiter_id_yazilabilir() {
         .await
         .expect("kalem okunmali");
     assert_eq!(
-        satir.try_get::<Option<String>, _>("waiter_id").expect("kolon"),
+        satir
+            .try_get::<Option<String>, _>("waiter_id")
+            .expect("kolon"),
         Some("usr_waiter".to_string())
     );
 }
@@ -462,14 +497,15 @@ async fn v5_garsonsuz_masa_siparisinde_kayit_null_kalir() {
     let p = pool().await;
     add_table(&p, "tenant_a", "tbl_bos", None).await;
 
-    let waiter_id: Option<String> =
-        sqlx::query_scalar::<_, Option<String>>("SELECT waiter_id FROM tables WHERE tenant_id = ? AND id = ?")
-            .bind("tenant_a")
-            .bind("tbl_bos")
-            .fetch_optional(&p)
-            .await
-            .expect("okunmali")
-            .flatten();
+    let waiter_id: Option<String> = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT waiter_id FROM tables WHERE tenant_id = ? AND id = ?",
+    )
+    .bind("tenant_a")
+    .bind("tbl_bos")
+    .fetch_optional(&p)
+    .await
+    .expect("okunmali")
+    .flatten();
     // Boş string yerine null: masada garson yok demektir.
     assert!(waiter_id.is_none(), "garsonsuz masa null vermeli");
 }

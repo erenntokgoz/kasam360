@@ -73,13 +73,19 @@ async fn supplier_debt_counts_as_payable() {
     seed_directory(&p, "dir_sup", "Toptancı Ltd.", "SUPPLIER").await;
     seed_debt(&p, "dbt_1", "dir_sup", "TAKEN", 75_000).await;
 
-    let r = net_balance(&p, TENANT, false).await.expect("net bakiye hesaplanır");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("net bakiye hesaplanır");
 
     assert_eq!(r.payable_cents, 75_000, "toptancı borcu 75000 olmalı");
     assert_eq!(r.receivable_cents, 0, "toptancı alacağı olmamalı");
     assert_eq!(r.net_balance_cents, -75_000, "net negatif olmalı");
 
-    let pos = r.positions.iter().find(|p| p.directory_id == "dir_sup").expect("kart var");
+    let pos = r
+        .positions
+        .iter()
+        .find(|p| p.directory_id == "dir_sup")
+        .expect("kart var");
     assert_eq!(pos.account_class, AccountClass::Supplier);
     assert_eq!(pos.account_class.label(), "Toptancı Borcu");
     assert_eq!(pos.open_debts, 1);
@@ -93,7 +99,9 @@ async fn supplier_given_is_receivable() {
     seed_directory(&p, "dir_sup", "Toptancı Ltd.", "SUPPLIER").await;
     seed_debt(&p, "dbt_1", "dir_sup", "GIVEN", 12_000).await;
 
-    let r = net_balance(&p, TENANT, false).await.expect("net bakiye hesaplanır");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("net bakiye hesaplanır");
 
     assert_eq!(r.receivable_cents, 12_000);
     assert_eq!(r.payable_cents, 0);
@@ -111,7 +119,9 @@ async fn customer_veresiye_counts_as_receivable() {
     seed_debt(&p, "dbt_1", "dir_cus", "GIVEN", 40_000).await;
     seed_debt(&p, "dbt_2", "dir_cus", "GIVEN", 10_000).await;
 
-    let r = net_balance(&p, TENANT, false).await.expect("net bakiye hesaplanır");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("net bakiye hesaplanır");
 
     assert_eq!(
         r.receivable_cents, 50_000,
@@ -119,7 +129,11 @@ async fn customer_veresiye_counts_as_receivable() {
     );
     assert_eq!(r.net_balance_cents, 50_000);
 
-    let pos = r.positions.iter().find(|p| p.directory_id == "dir_cus").expect("kart var");
+    let pos = r
+        .positions
+        .iter()
+        .find(|p| p.directory_id == "dir_cus")
+        .expect("kart var");
     assert_eq!(pos.account_class, AccountClass::CustomerVeresiye);
     assert_eq!(pos.account_class.label(), "Müşteri Veresiye");
     assert_eq!(pos.open_debts, 2, "kayıt yığmak yerine kart birleşmeli");
@@ -140,7 +154,9 @@ async fn staff_advance_is_receivable_and_unpaid_salary_is_payable() {
     // Veli'nin hakedişi ödenmedi → işletme borçlu
     seed_debt(&p, "dbt_sal", "dir_stf_b", "TAKEN", 30_000).await;
 
-    let r = net_balance(&p, TENANT, false).await.expect("net bakiye hesaplanır");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("net bakiye hesaplanır");
 
     assert_eq!(r.receivable_cents, 5_000, "personel avansı alacak");
     assert_eq!(r.payable_cents, 30_000, "ödenmemiş hakediş borç");
@@ -152,7 +168,10 @@ async fn staff_advance_is_receivable_and_unpaid_salary_is_payable() {
         .find(|(c, _)| *c == AccountClass::Staff)
         .map(|(_, total)| *total)
         .expect("Personel sınıfı toplamı var");
-    assert_eq!(staff_total, -25_000, "Personel sınıfı tek kalemde birleşmeli");
+    assert_eq!(
+        staff_total, -25_000,
+        "Personel sınıfı tek kalemde birleşmeli"
+    );
 }
 
 // ============================================================================
@@ -165,10 +184,16 @@ async fn fixed_expense_invoice_counts_as_payable() {
     seed_directory(&p, "dir_fix", "Elektrik Faturası", "FIXED_EXPENSE").await;
     seed_debt(&p, "dbt_inv", "dir_fix", "TAKEN", 22_500).await;
 
-    let r = net_balance(&p, TENANT, false).await.expect("net bakiye hesaplanır");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("net bakiye hesaplanır");
 
     assert_eq!(r.payable_cents, 22_500);
-    let pos = r.positions.iter().find(|p| p.directory_id == "dir_fix").expect("kart var");
+    let pos = r
+        .positions
+        .iter()
+        .find(|p| p.directory_id == "dir_fix")
+        .expect("kart var");
     assert_eq!(pos.account_class, AccountClass::FixedExpense);
     assert_eq!(pos.account_class.label(), "Sabit Gider");
 }
@@ -183,7 +208,9 @@ async fn owner_personal_is_equity_withdrawal_not_receivable() {
     seed_directory(&p, "dir_own", "Patron Şahsi", "OWNER_PERSONAL").await;
     seed_debt(&p, "dbt_draw", "dir_own", "GIVEN", 50_000).await;
 
-    let r = net_balance(&p, TENANT, false).await.expect("net bakiye hesaplanır");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("net bakiye hesaplanır");
 
     assert_eq!(
         r.receivable_cents, 0,
@@ -195,7 +222,11 @@ async fn owner_personal_is_equity_withdrawal_not_receivable() {
         "sermaye çekimi net bakiyeyi düşürmeli"
     );
 
-    let pos = r.positions.iter().find(|p| p.directory_id == "dir_own").expect("kart var");
+    let pos = r
+        .positions
+        .iter()
+        .find(|p| p.directory_id == "dir_own")
+        .expect("kart var");
     assert_eq!(pos.account_class, AccountClass::OwnerPersonal);
     assert_eq!(pos.account_class.label(), "Patron Şahsi");
 }
@@ -219,7 +250,9 @@ async fn five_account_classes_merge_into_one_net_number() {
     seed_debt(&p, "d_4", "dir_fix", "TAKEN", 15_000).await; // borç
     seed_debt(&p, "d_5", "dir_own", "GIVEN", 5_000).await; // sermaye çekimi
 
-    let r = net_balance(&p, TENANT, false).await.expect("net bakiye hesaplanır");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("net bakiye hesaplanır");
 
     assert_eq!(r.receivable_cents, 90_000, "80k müşteri + 10k personel");
     assert_eq!(r.payable_cents, 115_000, "100k toptancı + 15k sabit gider");
@@ -251,7 +284,9 @@ async fn other_tenant_debt_is_excluded() {
     .await
     .expect("yabancı borç eklenir");
 
-    let r = net_balance(&p, TENANT, false).await.expect("net bakiye hesaplanır");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("net bakiye hesaplanır");
 
     assert_eq!(
         r.receivable_cents, 10_000,
@@ -276,7 +311,9 @@ async fn paid_debts_are_excluded() {
         .await
         .expect("borç kapanır");
 
-    let r = net_balance(&p, TENANT, false).await.expect("net bakiye hesaplanır");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("net bakiye hesaplanır");
 
     assert_eq!(r.receivable_cents, 10_000, "ödenmiş borç sayılmamalı");
 }
@@ -400,7 +437,9 @@ fn account_class_labels_are_turkish_and_distinct() {
 #[tokio::test]
 async fn empty_ledger_returns_zero_without_error() {
     let p = pool().await;
-    let r = net_balance(&p, TENANT, false).await.expect("boş defter hata vermemeli");
+    let r = net_balance(&p, TENANT, false)
+        .await
+        .expect("boş defter hata vermemeli");
 
     assert_eq!(r.net_balance_cents, 0);
     assert!(r.positions.is_empty());
@@ -409,4 +448,3 @@ async fn empty_ledger_returns_zero_without_error() {
 // ============================================================================
 // VERESİYE İLE MASA KAPATMA — "KASA DEĞİŞMEDİ" KANITI
 // ============================================================================
-

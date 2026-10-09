@@ -107,13 +107,9 @@ async fn bilinmeyen_ve_bos_jeton_reddedilir() {
     .expect_err("uydurma jeton reddedilir");
     assert_eq!(err, error::TOKEN_INVALID);
 
-    let err = consume_token(
-        &mut conn,
-        "  ",
-        &request("usr_cashier", operation::VOID, 0),
-    )
-    .await
-    .expect_err("boş jeton reddedilir");
+    let err = consume_token(&mut conn, "  ", &request("usr_cashier", operation::VOID, 0))
+        .await
+        .expect_err("boş jeton reddedilir");
     assert_eq!(err, error::TOKEN_INVALID);
 }
 
@@ -160,12 +156,11 @@ async fn tuketilen_jeton_approver_rapor_icin_kayitli_kalir() {
         .await
         .expect("jeton tüketilir");
 
-    let row = sqlx::query(
-        "SELECT status, approver_id, approved_by_role, consumed_at FROM approvals",
-    )
-    .fetch_one(&mut *conn)
-    .await
-    .expect("onay kaydı okunur");
+    let row =
+        sqlx::query("SELECT status, approver_id, approved_by_role, consumed_at FROM approvals")
+            .fetch_one(&mut *conn)
+            .await
+            .expect("onay kaydı okunur");
     assert_eq!(row.try_get::<String, _>("status").unwrap(), "APPROVED");
     assert_eq!(
         row.try_get::<String, _>("approver_id").unwrap(),

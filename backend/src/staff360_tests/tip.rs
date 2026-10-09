@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 // ---------------------------------------------------------------------------
 // Bahşiş havuzu
 // ---------------------------------------------------------------------------
@@ -17,9 +17,13 @@ async fn havuz_toplami_gercek_bahsis_toplamidir() {
         .await
         .expect("bahşiş");
 
-    let mart = tip_service::pool_total(&p, "tenant_a", "2026-03").await.expect("toplam");
+    let mart = tip_service::pool_total(&p, "tenant_a", "2026-03")
+        .await
+        .expect("toplam");
     assert_eq!(mart, 8_500, "dönem filtresi çalışmıyor");
-    let nisan = tip_service::pool_total(&p, "tenant_a", "2026-04").await.expect("toplam");
+    let nisan = tip_service::pool_total(&p, "tenant_a", "2026-04")
+        .await
+        .expect("toplam");
     assert_eq!(nisan, 9_000);
 }
 
@@ -33,7 +37,9 @@ async fn havuz_baska_kiraci_tutarini_gormez() {
         .await
         .expect("bahşiş");
 
-    let a = tip_service::pool_total(&p, "tenant_a", "2026-03").await.expect("toplam");
+    let a = tip_service::pool_total(&p, "tenant_a", "2026-03")
+        .await
+        .expect("toplam");
     assert_eq!(a, 5_000, "başka işletmenin bahşişi sızdı");
 }
 
@@ -54,19 +60,39 @@ async fn dagitimda_kurus_kaybi_olmaz() {
         "tenant_a",
         "2026-03",
         &[
-            TipAllocationInput { user_id: "usr_1".into(), basis_cents: 1, multiplier_percent: 100 },
-            TipAllocationInput { user_id: "usr_2".into(), basis_cents: 1, multiplier_percent: 100 },
-            TipAllocationInput { user_id: "usr_3".into(), basis_cents: 1, multiplier_percent: 100 },
+            TipAllocationInput {
+                user_id: "usr_1".into(),
+                basis_cents: 1,
+                multiplier_percent: 100,
+            },
+            TipAllocationInput {
+                user_id: "usr_2".into(),
+                basis_cents: 1,
+                multiplier_percent: 100,
+            },
+            TipAllocationInput {
+                user_id: "usr_3".into(),
+                basis_cents: 1,
+                multiplier_percent: 100,
+            },
         ],
     )
     .await
     .expect("dağıtım");
 
     let toplam: i64 = dagilim.iter().map(|d| d.amount_cents).sum();
-    assert_eq!(toplam, 100, "dağıtım havuzla uyuşmuyor, {toplam} kuruş dağıtıldı");
-    assert!(dagilim.iter().all(|d| d.amount_cents > 0), "bir kişi hiç pay almamalı");
+    assert_eq!(
+        toplam, 100,
+        "dağıtım havuzla uyuşmuyor, {toplam} kuruş dağıtıldı"
+    );
+    assert!(
+        dagilim.iter().all(|d| d.amount_cents > 0),
+        "bir kişi hiç pay almamalı"
+    );
 
-    let ozet = tip_service::pool_summary(&p, "tenant_a", "2026-03").await.expect("özet");
+    let ozet = tip_service::pool_summary(&p, "tenant_a", "2026-03")
+        .await
+        .expect("özet");
     assert_eq!(ozet.leftover_cents, 0, "dağıtılmamış kuruş kalmalı");
 }
 
@@ -82,13 +108,19 @@ async fn dagitim_tabani_sifirsa_hata_verir_kayip_sessizce_olmaz() {
         &p,
         "tenant_a",
         "2026-03",
-        &[TipAllocationInput { user_id: "usr_1".into(), basis_cents: 0, multiplier_percent: 100 }],
+        &[TipAllocationInput {
+            user_id: "usr_1".into(),
+            basis_cents: 0,
+            multiplier_percent: 100,
+        }],
     )
     .await;
     assert!(sonuc.is_err(), "sıfır tabanla dağıtım yapılmamalı");
 
     // Havuz hâlâ tam durmalı: sessizce dağıtılmış gibi görünmemeli.
-    let ozet = tip_service::pool_summary(&p, "tenant_a", "2026-03").await.expect("özet");
+    let ozet = tip_service::pool_summary(&p, "tenant_a", "2026-03")
+        .await
+        .expect("özet");
     assert_eq!(ozet.leftover_cents, 5_000, "hatalı dağıtım havuzu yemiş");
 }
 
@@ -106,15 +138,29 @@ async fn katsayi_payagini_gercekten_degistirir() {
         "tenant_a",
         "2026-03",
         &[
-            TipAllocationInput { user_id: "usr_1".into(), basis_cents: 1_000, multiplier_percent: 200 },
-            TipAllocationInput { user_id: "usr_2".into(), basis_cents: 1_000, multiplier_percent: 100 },
+            TipAllocationInput {
+                user_id: "usr_1".into(),
+                basis_cents: 1_000,
+                multiplier_percent: 200,
+            },
+            TipAllocationInput {
+                user_id: "usr_2".into(),
+                basis_cents: 1_000,
+                multiplier_percent: 100,
+            },
         ],
     )
     .await
     .expect("dağıtım");
 
-    let a = dagilim.iter().find(|d| d.user_id == "usr_1").expect("kayıt");
-    let b = dagilim.iter().find(|d| d.user_id == "usr_2").expect("kayıt");
+    let a = dagilim
+        .iter()
+        .find(|d| d.user_id == "usr_1")
+        .expect("kayıt");
+    let b = dagilim
+        .iter()
+        .find(|d| d.user_id == "usr_2")
+        .expect("kayıt");
     assert_eq!(a.amount_cents, 6_666, "200% katsayı iki kat pay vermeli");
     assert_eq!(b.amount_cents, 3_334);
     assert_eq!(a.amount_cents + b.amount_cents, 10_000);
@@ -128,7 +174,11 @@ async fn bos_havuz_dagitim_hatasi_verir() {
         &p,
         "tenant_a",
         "2026-03",
-        &[TipAllocationInput { user_id: "usr_1".into(), basis_cents: 1_000, multiplier_percent: 100 }],
+        &[TipAllocationInput {
+            user_id: "usr_1".into(),
+            basis_cents: 1_000,
+            multiplier_percent: 100,
+        }],
     )
     .await;
     assert!(sonuc.is_err(), "havuz boşken dağıtım yapılmamalı");
@@ -142,4 +192,3 @@ async fn negatif_bahsis_kaydedilmez() {
     let sonuc = tip_service::record_tip(&p, "tenant_a", None, 0, "2026-03-10T12:00:00Z").await;
     assert!(sonuc.is_err(), "sıfır bahşiş kaydı kirlilik üretir");
 }
-

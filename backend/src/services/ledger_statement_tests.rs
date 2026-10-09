@@ -106,7 +106,15 @@ const TO: &str = "2026-10-31";
 async fn customer_statement_open_raises_and_payment_lowers_balance() {
     let p = pool().await;
     seed_directory(&p, "dir_cus", TENANT, "Müşteri Ayşe", "CUSTOMER").await;
-    seed_debt(&p, "debt_1", "dir_cus", "GIVEN", 87_500, "2026-10-05 10:00:00").await;
+    seed_debt(
+        &p,
+        "debt_1",
+        "dir_cus",
+        "GIVEN",
+        87_500,
+        "2026-10-05 10:00:00",
+    )
+    .await;
     seed_payment(&p, "pay_1", "debt_1", 37_500, "2026-10-20 12:00:00").await;
 
     let s = directory_statement(&p, TENANT, "dir_cus", FROM, TO)
@@ -116,10 +124,16 @@ async fn customer_statement_open_raises_and_payment_lowers_balance() {
     assert_eq!(s.opening_balance_cents, 0);
     assert_eq!(s.lines.len(), 2, "bir borç + bir tahsilat");
     assert_eq!(s.lines[0].kind, "BORC_ACILDI");
-    assert_eq!(s.lines[0].signed_amount_cents, 87_500, "veresiye bakiyeyi artırır");
+    assert_eq!(
+        s.lines[0].signed_amount_cents, 87_500,
+        "veresiye bakiyeyi artırır"
+    );
     assert_eq!(s.lines[0].balance_after_cents, 87_500);
     assert_eq!(s.lines[1].kind, "TAHSILAT");
-    assert_eq!(s.lines[1].signed_amount_cents, -37_500, "tahsilat bakiyeyi azaltır");
+    assert_eq!(
+        s.lines[1].signed_amount_cents, -37_500,
+        "tahsilat bakiyeyi azaltır"
+    );
     assert_eq!(s.lines[1].balance_after_cents, 50_000);
     assert_eq!(s.closing_balance_cents, 50_000);
     assert_eq!(s.total_debit_cents, 87_500);
@@ -134,7 +148,15 @@ async fn customer_statement_open_raises_and_payment_lowers_balance() {
 async fn supplier_statement_reads_direction_in_reverse() {
     let p = pool().await;
     seed_directory(&p, "dir_sup", TENANT, "Toptancı Ltd.", "SUPPLIER").await;
-    seed_debt(&p, "debt_2", "dir_sup", "TAKEN", 200_000, "2026-10-03 09:00:00").await;
+    seed_debt(
+        &p,
+        "debt_2",
+        "dir_sup",
+        "TAKEN",
+        200_000,
+        "2026-10-03 09:00:00",
+    )
+    .await;
     seed_payment(&p, "pay_2", "debt_2", 200_000, "2026-10-18 09:00:00").await;
 
     let s = directory_statement(&p, TENANT, "dir_sup", FROM, TO)
@@ -173,8 +195,24 @@ async fn supplier_statement_reads_direction_in_reverse() {
 async fn prior_period_debt_flows_into_opening_balance() {
     let p = pool().await;
     seed_directory(&p, "dir_cus", TENANT, "Müşteri Ayşe", "CUSTOMER").await;
-    seed_debt(&p, "debt_old", "dir_cus", "GIVEN", 120_000, "2026-09-12 15:00:00").await;
-    seed_debt(&p, "debt_new", "dir_cus", "GIVEN", 30_000, "2026-10-05 15:00:00").await;
+    seed_debt(
+        &p,
+        "debt_old",
+        "dir_cus",
+        "GIVEN",
+        120_000,
+        "2026-09-12 15:00:00",
+    )
+    .await;
+    seed_debt(
+        &p,
+        "debt_new",
+        "dir_cus",
+        "GIVEN",
+        30_000,
+        "2026-10-05 15:00:00",
+    )
+    .await;
 
     let s = directory_statement(&p, TENANT, "dir_cus", FROM, TO)
         .await
@@ -193,7 +231,15 @@ async fn prior_period_debt_flows_into_opening_balance() {
 async fn paid_prior_debt_is_not_carried_into_opening() {
     let p = pool().await;
     seed_directory(&p, "dir_cus", TENANT, "Müşteri Ayşe", "CUSTOMER").await;
-    seed_debt(&p, "debt_old", "dir_cus", "GIVEN", 120_000, "2026-09-12 15:00:00").await;
+    seed_debt(
+        &p,
+        "debt_old",
+        "dir_cus",
+        "GIVEN",
+        120_000,
+        "2026-09-12 15:00:00",
+    )
+    .await;
     seed_payment(&p, "pay_old", "debt_old", 120_000, "2026-09-20 15:00:00").await;
     sqlx::query("UPDATE debts SET status = 'PAID', remaining_amount_cents = 0 WHERE id = ?")
         .bind("debt_old")
@@ -220,9 +266,25 @@ async fn paid_prior_debt_is_not_carried_into_opening() {
 async fn statement_lines_are_chronological() {
     let p = pool().await;
     seed_directory(&p, "dir_cus", TENANT, "Müşteri Ayşe", "CUSTOMER").await;
-    seed_debt(&p, "debt_1", "dir_cus", "GIVEN", 10_000, "2026-10-25 20:00:00").await;
+    seed_debt(
+        &p,
+        "debt_1",
+        "dir_cus",
+        "GIVEN",
+        10_000,
+        "2026-10-25 20:00:00",
+    )
+    .await;
     seed_payment(&p, "pay_1", "debt_1", 4_000, "2026-10-02 08:00:00").await;
-    seed_debt(&p, "debt_2", "dir_cus", "GIVEN", 6_000, "2026-10-11 08:00:00").await;
+    seed_debt(
+        &p,
+        "debt_2",
+        "dir_cus",
+        "GIVEN",
+        6_000,
+        "2026-10-11 08:00:00",
+    )
+    .await;
 
     let s = directory_statement(&p, TENANT, "dir_cus", FROM, TO)
         .await
@@ -257,7 +319,10 @@ async fn statement_excludes_other_tenant_directory() {
         .await
         .expect("ekstre üretilir");
 
-    assert_eq!(s.closing_balance_cents, 0, "başka kiracının 999.999 TL'si sızmamalı");
+    assert_eq!(
+        s.closing_balance_cents, 0,
+        "başka kiracının 999.999 TL'si sızmamalı"
+    );
     assert!(s.lines.is_empty());
 }
 
@@ -274,7 +339,15 @@ async fn broken_debt_column_returns_err_not_zero() {
     // Bozuk kolon hata dönmeli.
     let p = pool().await;
     seed_directory(&p, "dir_cus", TENANT, "Müşteri Ayşe", "CUSTOMER").await;
-    seed_debt(&p, "debt_1", "dir_cus", "GIVEN", 50_000, "2026-10-05 10:00:00").await;
+    seed_debt(
+        &p,
+        "debt_1",
+        "dir_cus",
+        "GIVEN",
+        50_000,
+        "2026-10-05 10:00:00",
+    )
+    .await;
 
     sqlx::raw_sql("ALTER TABLE debts DROP COLUMN total_amount_cents")
         .execute(&p)
@@ -300,7 +373,11 @@ fn format_cents_uses_turkish_thousands_separator() {
     assert_eq!(format_cents(87_500), "875.00 TL");
     assert_eq!(format_cents(1_234_567), "12.345.67 TL");
     assert_eq!(format_cents(1_000_000_00), "1.000.000.00 TL");
-    assert_eq!(format_cents(-30_000), "-300.00 TL", "aşım negatif işaretlenmeli");
+    assert_eq!(
+        format_cents(-30_000),
+        "-300.00 TL",
+        "aşım negatif işaretlenmeli"
+    );
 }
 
 // ============================================================================
@@ -332,8 +409,14 @@ fn receipt_lines_fit_80mm_and_carry_totals() {
     }
     assert!(joined.contains("TEDIYE MAKBUZU"));
     assert!(joined.contains("Müşteri Ayşe"));
-    assert!(joined.contains("375.00 TL"), "tahsilat tutarı makbuzda görünmeli");
-    assert!(joined.contains("500.00 TL"), "kalan borç makbuzda görünmeli");
+    assert!(
+        joined.contains("375.00 TL"),
+        "tahsilat tutarı makbuzda görünmeli"
+    );
+    assert!(
+        joined.contains("500.00 TL"),
+        "kalan borç makbuzda görünmeli"
+    );
     assert!(
         joined.contains("Imza"),
         "imza alanı olmadan tediye makbuzu hukuken değersizdir"

@@ -25,13 +25,16 @@ pub struct StockMovementDto {
 }
 
 #[tauri::command]
-pub async fn get_inventory(tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<InventoryItemDto>, String> {
+pub async fn get_inventory(
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<InventoryItemDto>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     let rows = sqlx::query(
         "SELECT id, name, sku, current_stock, unit, min_stock_alert 
          FROM inventory_items 
-         WHERE tenant_id = ?"
+         WHERE tenant_id = ?",
     )
     .bind(&tenant_id)
     .fetch_all(&mut *conn)
@@ -56,9 +59,9 @@ pub async fn get_inventory(tenant_id: String, pool: tauri::State<'_, DbPool>) ->
 #[tauri::command]
 pub async fn adjust_stock(
     caller_role: Option<String>,
-    tenant_id: String, 
-    item_id: String, 
-    quantity_change: f64, 
+    tenant_id: String,
+    item_id: String,
+    quantity_change: f64,
     movement_type: String,
     actor_id: String,
     reason: Option<String>,
@@ -67,10 +70,10 @@ pub async fn adjust_stock(
 ) -> Result<(), String> {
     // Stok giriş/çıkış parasal değer taşır ve fire kayıtları denetim defterinde
     // tutulur. Önceden hiç rol kapısı yoktu: kasiyer de fire silebiliyordu.
-    crate::rbac::require_any_present(caller_role.as_deref(), &[
-        crate::rbac::Role::Owner,
-        crate::rbac::Role::Manager,
-    ])?;
+    crate::rbac::require_any_present(
+        caller_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager],
+    )?;
 
     let audit_lock =
         crate::services::audit_service::AuditLock::new(app_state.audit_mutex.lock().await);
@@ -149,19 +152,19 @@ pub async fn adjust_stock(
 #[tauri::command]
 pub async fn create_inventory_item(
     caller_role: Option<String>,
-    tenant_id: String, 
-    name: String, 
-    sku: Option<String>, 
-    initial_stock: f64, 
-    unit: String, 
-    min_stock_alert: Option<f64>, 
+    tenant_id: String,
+    name: String,
+    sku: Option<String>,
+    initial_stock: f64,
+    unit: String,
+    min_stock_alert: Option<f64>,
     pool: tauri::State<'_, DbPool>,
     app_state: tauri::State<'_, crate::AppState>,
 ) -> Result<InventoryItemDto, String> {
-    crate::rbac::require_any_present(caller_role.as_deref(), &[
-        crate::rbac::Role::Owner,
-        crate::rbac::Role::Manager,
-    ])?;
+    crate::rbac::require_any_present(
+        caller_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager],
+    )?;
 
     let audit_lock =
         crate::services::audit_service::AuditLock::new(app_state.audit_mutex.lock().await);
@@ -216,13 +219,16 @@ pub async fn create_inventory_item(
 }
 
 #[tauri::command]
-pub async fn get_low_stock_alerts(tenant_id: String, pool: tauri::State<'_, DbPool>) -> Result<Vec<InventoryItemDto>, String> {
+pub async fn get_low_stock_alerts(
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<InventoryItemDto>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     let rows = sqlx::query(
         "SELECT id, name, sku, current_stock, unit, min_stock_alert 
          FROM inventory_items 
-         WHERE tenant_id = ? AND min_stock_alert IS NOT NULL AND current_stock <= min_stock_alert"
+         WHERE tenant_id = ? AND min_stock_alert IS NOT NULL AND current_stock <= min_stock_alert",
     )
     .bind(&tenant_id)
     .fetch_all(&mut *conn)
@@ -243,4 +249,3 @@ pub async fn get_low_stock_alerts(tenant_id: String, pool: tauri::State<'_, DbPo
 
     Ok(items)
 }
-

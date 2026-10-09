@@ -36,7 +36,14 @@ impl Role {
 
     /// SPEC §34'ün tamamı.
     pub fn all() -> &'static [Role] {
-        &[Role::Master, Role::Owner, Role::Manager, Role::Cashier, Role::Waiter, Role::Kitchen]
+        &[
+            Role::Master,
+            Role::Owner,
+            Role::Manager,
+            Role::Cashier,
+            Role::Waiter,
+            Role::Kitchen,
+        ]
     }
 }
 
@@ -96,7 +103,11 @@ pub fn require_any(raw_role: &str, allowed: &[Role]) -> Result<Role, String> {
         Some(role) if allowed.contains(&role) => Ok(role),
         _ => Err(format!(
             "UNAUTHORIZED: Bu işlem için yetki yok (izin: {}).",
-            allowed.iter().map(|r| r.as_str()).collect::<Vec<_>>().join(", ")
+            allowed
+                .iter()
+                .map(|r| r.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         )),
     }
 }
@@ -172,7 +183,13 @@ pub fn require_shift_planning(raw_role: &str) -> Result<Role, String> {
 pub fn require_leave_request(raw_role: &str) -> Result<Role, String> {
     require_any(
         raw_role,
-        &[Role::Master, Role::Owner, Role::Manager, Role::Cashier, Role::Waiter],
+        &[
+            Role::Master,
+            Role::Owner,
+            Role::Manager,
+            Role::Cashier,
+            Role::Waiter,
+        ],
     )
 }
 
@@ -217,10 +234,19 @@ mod tests {
         for spelling in ["OWNER", "Owner", "owner", " owner "] {
             assert_eq!(canonical_role(spelling), Some(Role::Owner), "{}", spelling);
         }
-        for spelling in ["MASTER", "Master Admin", "MASTER ADMIN", "master_admin", "SuperAdmin", "super admin"] {
+        for spelling in [
+            "MASTER",
+            "Master Admin",
+            "MASTER ADMIN",
+            "master_admin",
+            "SuperAdmin",
+            "super admin",
+        ] {
             assert_eq!(canonical_role(spelling), Some(Role::Master), "{}", spelling);
         }
-        for spelling in ["MANAGER", "Manager", "CASHIER", "Cashier", "WAITER", "KITCHEN", "Kitchen"] {
+        for spelling in [
+            "MANAGER", "Manager", "CASHIER", "Cashier", "WAITER", "KITCHEN", "Kitchen",
+        ] {
             assert!(canonical_role(spelling).is_some(), "{}", spelling);
         }
     }
@@ -269,8 +295,14 @@ mod tests {
         assert!(require_audit_read("Owner").is_ok());
         assert!(require_audit_read("MANAGER").is_ok());
 
-        for role in ["CASHIER", "WAITER", "KITCHEN", "Cashier", "Waiter", "Kitchen"] {
-            assert!(require_audit_read(role).is_err(), "{} denetim defterini görebiliyor", role);
+        for role in [
+            "CASHIER", "WAITER", "KITCHEN", "Cashier", "Waiter", "Kitchen",
+        ] {
+            assert!(
+                require_audit_read(role).is_err(),
+                "{} denetim defterini görebiliyor",
+                role
+            );
         }
         // MASTER işletme denetim defterine bu kapıdan giremez.
         assert!(require_audit_read("Master Admin").is_err());

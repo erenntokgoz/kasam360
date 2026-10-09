@@ -1,4 +1,4 @@
-﻿//! `reservation_service` testleri (Faz 8).
+//! `reservation_service` testleri (Faz 8).
 //!
 //! Kapsam karar kurallarıdır:
 //! 1. **Yalnız boş masa:** `OCCUPIED`/`RESERVED` masaya rezervasyon yazılamaz.
@@ -116,7 +116,10 @@ async fn dolu_masa_rezerve_edilemez() {
     .expect_err("dolu masa rezerve edilemez");
 
     assert!(error.starts_with("CONFLICT"), "beklenen: {}", error);
-    assert_eq!(table_status(&mut conn, TENANT_A, "tbl_occ").await, "OCCUPIED");
+    assert_eq!(
+        table_status(&mut conn, TENANT_A, "tbl_occ").await,
+        "OCCUPIED"
+    );
 }
 
 #[tokio::test]
@@ -125,12 +128,22 @@ async fn baska_kiracinin_masasi_bulunamaz() {
     seed_table(&pool, TENANT_B, "tbl_b", "AVAILABLE").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
 
-    let error = create(&mut conn, TENANT_A, "tbl_b", "usr_1", "OWNER", input("Ayşe"))
-        .await
-        .expect_err("çapraz kiracı reddedilir");
+    let error = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_b",
+        "usr_1",
+        "OWNER",
+        input("Ayşe"),
+    )
+    .await
+    .expect_err("çapraz kiracı reddedilir");
 
     assert!(error.starts_with("NOT_FOUND"), "beklenen: {}", error);
-    assert_eq!(table_status(&mut conn, TENANT_B, "tbl_b").await, "AVAILABLE");
+    assert_eq!(
+        table_status(&mut conn, TENANT_B, "tbl_b").await,
+        "AVAILABLE"
+    );
     assert!(open_for_table(&mut conn, TENANT_A, "tbl_b")
         .await
         .expect("sorgu çalışır")
@@ -142,18 +155,32 @@ async fn ayni_masada_ikinci_acik_rezervasyon_yazilamaz() {
     let pool = pool().await;
     seed_table(&pool, TENANT_A, "tbl_one", "AVAILABLE").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
-    create(&mut conn, TENANT_A, "tbl_one", "usr_1", "WAITER", input("Ayşe"))
-        .await
-        .expect("ilk rezervasyon yazılır");
+    create(
+        &mut conn,
+        TENANT_A,
+        "tbl_one",
+        "usr_1",
+        "WAITER",
+        input("Ayşe"),
+    )
+    .await
+    .expect("ilk rezervasyon yazılır");
 
     // Uygulama ön koşulu zaten yakalar; indeks yarış koşulunda ikinci güvenlik katmanıdır.
     sqlx::query("UPDATE tables SET status = 'AVAILABLE' WHERE id = 'tbl_one'")
         .execute(&mut *conn)
         .await
         .expect("durum zorla sıfırlanır (yariş simülasyonu)");
-    let error = create(&mut conn, TENANT_A, "tbl_one", "usr_2", "WAITER", input("Ali"))
-        .await
-        .expect_err("ikinci açık rezervasyon reddedilir");
+    let error = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_one",
+        "usr_2",
+        "WAITER",
+        input("Ali"),
+    )
+    .await
+    .expect_err("ikinci açık rezervasyon reddedilir");
 
     assert!(error.starts_with("CONFLICT"), "beklenen: {}", error);
 }
@@ -163,9 +190,16 @@ async fn rezervasyon_iptal_edilir_masa_bosalir_kayit_kalir() {
     let pool = pool().await;
     seed_table(&pool, TENANT_A, "tbl_c", "AVAILABLE").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
-    let created = create(&mut conn, TENANT_A, "tbl_c", "usr_1", "WAITER", input("Ayşe"))
-        .await
-        .expect("rezervasyon yazılır");
+    let created = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_c",
+        "usr_1",
+        "WAITER",
+        input("Ayşe"),
+    )
+    .await
+    .expect("rezervasyon yazılır");
 
     let cancelled = cancel(&mut conn, TENANT_A, &created.id, "usr_2", None)
         .await
@@ -173,7 +207,10 @@ async fn rezervasyon_iptal_edilir_masa_bosalir_kayit_kalir() {
 
     assert_eq!(cancelled.status, "CANCELLED");
     assert!(cancelled.closed_at.is_some(), "kapanma zamanı yazılır");
-    assert_eq!(table_status(&mut conn, TENANT_A, "tbl_c").await, "AVAILABLE");
+    assert_eq!(
+        table_status(&mut conn, TENANT_A, "tbl_c").await,
+        "AVAILABLE"
+    );
 
     let again = cancel(&mut conn, TENANT_A, &created.id, "usr_2", None)
         .await
@@ -184,7 +221,13 @@ async fn rezervasyon_iptal_edilir_masa_bosalir_kayit_kalir() {
         .expect("liste okunur")
         .is_empty());
     // Kapanan kayıt silinmez: günlük sorgusu hâlâ görmelidir.
-    assert_eq!(list_day(&mut conn, TENANT_A, "2026-10-02").await.expect("günlük okunur").len(), 1);
+    assert_eq!(
+        list_day(&mut conn, TENANT_A, "2026-10-02")
+            .await
+            .expect("günlük okunur")
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -192,9 +235,16 @@ async fn gelmedi_isaretlemesi_no_show_uretir() {
     let pool = pool().await;
     seed_table(&pool, TENANT_A, "tbl_ns", "AVAILABLE").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
-    let created = create(&mut conn, TENANT_A, "tbl_ns", "usr_1", "WAITER", input("Ayşe"))
-        .await
-        .expect("rezervasyon yazılır");
+    let created = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_ns",
+        "usr_1",
+        "WAITER",
+        input("Ayşe"),
+    )
+    .await
+    .expect("rezervasyon yazılır");
 
     let no_show = cancel(&mut conn, TENANT_A, &created.id, "usr_2", Some("NO_SHOW"))
         .await
@@ -202,7 +252,10 @@ async fn gelmedi_isaretlemesi_no_show_uretir() {
 
     assert_eq!(no_show.status, "NO_SHOW");
     assert_eq!(no_show.close_reason.as_deref(), Some("NO_SHOW"));
-    assert_eq!(table_status(&mut conn, TENANT_A, "tbl_ns").await, "AVAILABLE");
+    assert_eq!(
+        table_status(&mut conn, TENANT_A, "tbl_ns").await,
+        "AVAILABLE"
+    );
 }
 
 #[tokio::test]
@@ -210,9 +263,16 @@ async fn musteri_geldi_masa_yine_reserved_kalir() {
     let pool = pool().await;
     seed_table(&pool, TENANT_A, "tbl_arr", "AVAILABLE").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
-    let created = create(&mut conn, TENANT_A, "tbl_arr", "usr_1", "WAITER", input("Ayşe"))
-        .await
-        .expect("rezervasyon yazılır");
+    let created = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_arr",
+        "usr_1",
+        "WAITER",
+        input("Ayşe"),
+    )
+    .await
+    .expect("rezervasyon yazılır");
 
     let arrived = mark_arrived(&mut conn, TENANT_A, &created.id, "usr_2")
         .await
@@ -220,7 +280,10 @@ async fn musteri_geldi_masa_yine_reserved_kalir() {
 
     assert_eq!(arrived.status, "ARRIVED");
     assert!(arrived.arrived_at.is_some(), "geliş zamanı yazılır");
-    assert_eq!(table_status(&mut conn, TENANT_A, "tbl_arr").await, "RESERVED");
+    assert_eq!(
+        table_status(&mut conn, TENANT_A, "tbl_arr").await,
+        "RESERVED"
+    );
 
     let repeat = mark_arrived(&mut conn, TENANT_A, &created.id, "usr_2")
         .await
@@ -233,9 +296,16 @@ async fn adisyon_gonderimi_rezervasyonu_seated_yapar_masayi_doldurur() {
     let pool = pool().await;
     seed_table(&pool, TENANT_A, "tbl_seat", "AVAILABLE").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
-    let created = create(&mut conn, TENANT_A, "tbl_seat", "usr_1", "WAITER", input("Ayşe"))
-        .await
-        .expect("rezervasyon yazılır");
+    let created = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_seat",
+        "usr_1",
+        "WAITER",
+        input("Ayşe"),
+    )
+    .await
+    .expect("rezervasyon yazılır");
 
     let seated = seat_for_order(&mut conn, TENANT_A, "tbl_seat", "usr_1")
         .await
@@ -245,7 +315,10 @@ async fn adisyon_gonderimi_rezervasyonu_seated_yapar_masayi_doldurur() {
     assert_eq!(seated.id, created.id);
     assert_eq!(seated.status, "SEATED");
     assert_eq!(seated.close_reason.as_deref(), Some("ADISYON"));
-    assert_eq!(table_status(&mut conn, TENANT_A, "tbl_seat").await, "OCCUPIED");
+    assert_eq!(
+        table_status(&mut conn, TENANT_A, "tbl_seat").await,
+        "OCCUPIED"
+    );
     assert!(list_open(&mut conn, TENANT_A)
         .await
         .expect("liste okunur")
@@ -275,9 +348,16 @@ async fn acil_kapanan_yollarda_rezervasyon_kaydi_korunur() {
     let pool = pool().await;
     seed_table(&pool, TENANT_A, "tbl_pay", "AVAILABLE").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
-    let _created = create(&mut conn, TENANT_A, "tbl_pay", "usr_1", "CASHIER", input("Ayşe"))
-        .await
-        .expect("rezervasyon yazılır");
+    let _created = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_pay",
+        "usr_1",
+        "CASHIER",
+        input("Ayşe"),
+    )
+    .await
+    .expect("rezervasyon yazılır");
 
     let closed = close_open_for_table(&mut conn, TENANT_A, "tbl_pay", "usr_2", "ODEME")
         .await
@@ -286,7 +366,10 @@ async fn acil_kapanan_yollarda_rezervasyon_kaydi_korunur() {
 
     assert_eq!(closed.status, "CANCELLED");
     assert_eq!(closed.close_reason.as_deref(), Some("ODEME"));
-    assert_eq!(table_status(&mut conn, TENANT_A, "tbl_pay").await, "AVAILABLE");
+    assert_eq!(
+        table_status(&mut conn, TENANT_A, "tbl_pay").await,
+        "AVAILABLE"
+    );
 }
 
 #[tokio::test]
@@ -294,9 +377,16 @@ async fn acil_rezervasyonlu_masa_tasinamaz() {
     let pool = pool().await;
     seed_table(&pool, TENANT_A, "tbl_move", "AVAILABLE").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
-    create(&mut conn, TENANT_A, "tbl_move", "usr_1", "WAITER", input("Ayşe"))
-        .await
-        .expect("rezervasyon yazılır");
+    create(
+        &mut conn,
+        TENANT_A,
+        "tbl_move",
+        "usr_1",
+        "WAITER",
+        input("Ayşe"),
+    )
+    .await
+    .expect("rezervasyon yazılır");
 
     let error = assert_no_open_reservation(&mut conn, TENANT_A, "tbl_move")
         .await
@@ -332,7 +422,11 @@ async fn gecerlilik_kurallari_uygulanir() {
     )
     .await
     .expect_err("boş müşteri adı reddedilir");
-    assert!(blank_name.starts_with("VALIDATION"), "beklenen: {}", blank_name);
+    assert!(
+        blank_name.starts_with("VALIDATION"),
+        "beklenen: {}",
+        blank_name
+    );
 
     let zero_party = NewReservation {
         party_size: 0,
@@ -347,9 +441,16 @@ async fn gecerlilik_kurallari_uygulanir() {
         reserved_at: "  ".to_string(),
         ..input("Ayşe")
     };
-    let error = create(&mut conn, TENANT_A, "tbl_v", "usr_1", "WAITER", missing_time)
-        .await
-        .expect_err("saatsiz rezervasyon reddedilir");
+    let error = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_v",
+        "usr_1",
+        "WAITER",
+        missing_time,
+    )
+    .await
+    .expect_err("saatsiz rezervasyon reddedilir");
     assert!(error.starts_with("VALIDATION"), "beklenen: {}", error);
 }
 
@@ -360,12 +461,26 @@ async fn salon_listesi_yalniz_acik_kayitlari_gosterir() {
     seed_table(&pool, TENANT_A, "tbl_l2", "AVAILABLE").await;
     let mut conn = pool.acquire().await.expect("bağlantı");
 
-    let first = create(&mut conn, TENANT_A, "tbl_l1", "usr_1", "WAITER", input("Ayşe"))
-        .await
-        .expect("ilk kayıt");
-    let second = create(&mut conn, TENANT_A, "tbl_l2", "usr_1", "WAITER", input("Ali"))
-        .await
-        .expect("ikinci kayıt");
+    let first = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_l1",
+        "usr_1",
+        "WAITER",
+        input("Ayşe"),
+    )
+    .await
+    .expect("ilk kayıt");
+    let second = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_l2",
+        "usr_1",
+        "WAITER",
+        input("Ali"),
+    )
+    .await
+    .expect("ikinci kayıt");
     cancel(&mut conn, TENANT_A, &second.id, "usr_1", None)
         .await
         .expect("ikinci kayıt iptal edilir");

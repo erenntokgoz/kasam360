@@ -1800,32 +1800,39 @@ function browserMock<T>(cmd: string, args: Record<string, unknown>): T {
     lsSave('tables', mockTables);
     return toMockReservationDto(reservation, table?.name) as unknown as T;
   }
-  // Eşzamanlı adisyon kilidi: backend `try_lock_table` (30 dk TTL) ile aynı söz.
+  // Eşzamanlı adisyon kilidi: backend `try_lock_table` (30 sn TTL) ile aynı söz.
   // Mock önceden genel "işlem başarılı" dönüşüne düşüyordu, bu yüzden tarayıcı
   // modunda kilit hiç işlevsel değildi.
   if (cmd === 'try_lock_table') {
     if (!callerTenantId) {
       throw new Error('UNAUTHORIZED: tenant_id is required');
     }
+    const tenantId = String(args.tenantId || args.tenant_id || callerTenantId).trim();
     const tableId = String(args.tableId || args.table_id || '').trim();
     const waiterId = String(args.waiterId || args.waiter_id || 'UNKNOWN');
+    const lockKey = `${tenantId}:${tableId}`;
     const now = Date.now();
+    // 30 sn'lık TTL: süresi dolan kilit otomatik temizlenir.
+    const LOCK_TTL_MS = 30_000;
     for (const [key, lock] of mockTableLocks.entries()) {
-      if (now - lock.at > 30 * 60000) mockTableLocks.delete(key);
+      if (now - lock.at > LOCK_TTL_MS) mockTableLocks.delete(key);
     }
-    const existing = mockTableLocks.get(tableId);
+    const existing = mockTableLocks.get(lockKey);
     if (existing && existing.waiterId !== waiterId) {
-      return false as unknown as T;
+      const remaining = Math.ceil((LOCK_TTL_MS - (now - existing.at)) / 1000);
+      throw new Error(`TABLE_LOCKED: Masa ${tableId} şu anda ${existing.waiterId} tarafından açık (kalan ${remaining} saniye).`);
     }
-    mockTableLocks.set(tableId, { waiterId, at: now });
+    mockTableLocks.set(lockKey, { waiterId, at: now });
     return true as unknown as T;
   }
   if (cmd === 'unlock_table') {
+    const tenantId = String(args.tenantId || args.tenant_id || callerTenantId).trim();
     const tableId = String(args.tableId || args.table_id || '').trim();
     const waiterId = String(args.waiterId || args.waiter_id || 'UNKNOWN');
-    const existing = mockTableLocks.get(tableId);
+    const lockKey = `${tenantId}:${tableId}`;
+    const existing = mockTableLocks.get(lockKey);
     if (existing && existing.waiterId === waiterId) {
-      mockTableLocks.delete(tableId);
+      mockTableLocks.delete(lockKey);
     }
     return { success: true } as unknown as T;
   }

@@ -25,7 +25,8 @@ const DEFAULT_LOG_LEVEL: &str = "info";
 /// Dosya açılamazsa sadece konsol katmanı çalışır.
 /// Loglama asla uygulama başlatmayı durdurmaz.
 pub fn init() {
-    let log_level = std::env::var("TRACING_LOG_LEVEL").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.to_string());
+    let log_level =
+        std::env::var("TRACING_LOG_LEVEL").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.to_string());
 
     let env_filter = EnvFilter::new(format!(
         "kasam360_core={},tauri={},sqlx={}",

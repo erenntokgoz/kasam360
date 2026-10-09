@@ -5,10 +5,10 @@
 
 use sqlx::SqlitePool;
 
+use super::analytics_types::{AnalyticsRange, BcgQuadrant, ProductMargin};
 use crate::services::analytics_service::{
     bcg_classify, bcg_counts, combinations, median, product_margins,
 };
-use super::analytics_types::{AnalyticsRange, BcgQuadrant, ProductMargin};
 
 /// Test tablosu minimal şemayla kurulur: analitik yalnız bu alanları okur.
 async fn test_pool() -> SqlitePool {
@@ -35,7 +35,14 @@ async fn test_pool() -> SqlitePool {
 }
 
 /// FIFO partisi ekler. `qty`/`cost` kuruş cinsindendir.
-async fn batch(pool: &SqlitePool, tenant: &str, product: &str, qty: f64, remaining: f64, cost: i64) {
+async fn batch(
+    pool: &SqlitePool,
+    tenant: &str,
+    product: &str,
+    qty: f64,
+    remaining: f64,
+    cost: i64,
+) {
     sqlx::query(
         "INSERT INTO inventory_batches
          (tenant_id, id, product_id, initial_quantity, remaining_quantity, unit_cost_cents)
@@ -59,7 +66,14 @@ fn mart() -> AnalyticsRange {
     Some(("2026-03-01".to_string(), "2026-03-31".to_string()))
 }
 
-async fn product(pool: &SqlitePool, tenant: &str, id: &str, name: &str, category: &str, price: i64) {
+async fn product(
+    pool: &SqlitePool,
+    tenant: &str,
+    id: &str,
+    name: &str,
+    category: &str,
+    price: i64,
+) {
     sqlx::query(
         "INSERT INTO products (id, tenant_id, name, category_id, price_cents)
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -75,13 +89,15 @@ async fn product(pool: &SqlitePool, tenant: &str, id: &str, name: &str, category
 }
 
 async fn paid_order(pool: &SqlitePool, tenant: &str, id: &str, at: &str) {
-    sqlx::query("INSERT INTO orders (id, tenant_id, status, created_at) VALUES (?1, ?2, 'PAID', ?3)")
-        .bind(id)
-        .bind(tenant)
-        .bind(at)
-        .execute(pool)
-        .await
-        .expect("siparis eklenmeli");
+    sqlx::query(
+        "INSERT INTO orders (id, tenant_id, status, created_at) VALUES (?1, ?2, 'PAID', ?3)",
+    )
+    .bind(id)
+    .bind(tenant)
+    .bind(at)
+    .execute(pool)
+    .await
+    .expect("siparis eklenmeli");
 }
 
 async fn line(pool: &SqlitePool, tenant: &str, order: &str, product: &str, qty: i64, cents: i64) {
@@ -173,10 +189,7 @@ fn bcg_yalniz_medyan_ustu_marji_yildiz_yapar() {
 
 #[test]
 fn bcg_dusuk_hacim_yuksek_marj_bova_olur() {
-    let margins = vec![
-        margin("buyuk", 100, Some(10)),
-        margin("nis", 1, Some(90)),
-    ];
+    let margins = vec![margin("buyuk", 100, Some(10)), margin("nis", 1, Some(90))];
     let out = bcg_classify(&margins).expect("siniflandirilmali");
     let nis = out.iter().find(|e| e.product_id == "nis").unwrap();
     assert_eq!(nis.quadrant, BcgQuadrant::Plowhorse);
@@ -226,7 +239,9 @@ async fn urun_marji_fifo_ortalamasindan_hesaplanir() {
     paid_order(&pool, "t1", "o1", "2026-03-10T10:00:00Z").await;
     line(&pool, "t1", "o1", "p1", 2, 4000).await;
 
-    let m = product_margins(&pool, "t1", &mart()).await.expect("marj okunmali");
+    let m = product_margins(&pool, "t1", &mart())
+        .await
+        .expect("marj okunmali");
     assert_eq!(m.len(), 1);
     assert_eq!(m[0].unit_cost_cents, Some(140));
     // 2 adet x 140 = 280 ciro 4000 -> 3720 kâr, marj %93.
@@ -241,7 +256,9 @@ async fn partisi_olmayan_urun_maliyeti_null_dondurur() {
     paid_order(&pool, "t1", "o1", "2026-03-10T10:00:00Z").await;
     line(&pool, "t1", "o1", "p1", 1, 2000).await;
 
-    let m = product_margins(&pool, "t1", &mart()).await.expect("marj okunmali");
+    let m = product_margins(&pool, "t1", &mart())
+        .await
+        .expect("marj okunmali");
     // Maliyet bilinmiyor: 0'a çevrilmez, null kalır.
     assert_eq!(m[0].unit_cost_cents, None);
     assert_eq!(m[0].gross_profit_cents, None);
@@ -258,7 +275,9 @@ async fn tükenmiş_parti_maliyeti_bozmaz() {
     paid_order(&pool, "t1", "o1", "2026-03-10T10:00:00Z").await;
     line(&pool, "t1", "o1", "p1", 1, 2000).await;
 
-    let m = product_margins(&pool, "t1", &mart()).await.expect("marj okunmali");
+    let m = product_margins(&pool, "t1", &mart())
+        .await
+        .expect("marj okunmali");
     assert_eq!(m[0].unit_cost_cents, Some(100));
 }
 
@@ -271,7 +290,9 @@ async fn kiraci_sizinti_yoktur() {
     paid_order(&pool, "t1", "o1", "2026-03-10T10:00:00Z").await;
     line(&pool, "t1", "o1", "p1", 1, 2000).await;
 
-    let m = product_margins(&pool, "t1", &mart()).await.expect("marj okunmali");
+    let m = product_margins(&pool, "t1", &mart())
+        .await
+        .expect("marj okunmali");
     assert_eq!(m.len(), 1);
     // t2 partisi görünmemeli.
     assert_eq!(m[0].unit_cost_cents, None);
@@ -290,7 +311,9 @@ async fn iptal_siparis_ciraya_dahil_hesaplanir() {
         .expect("void siparis");
     line(&pool, "t1", "o2", "p1", 1, 2000).await;
 
-    let m = product_margins(&pool, "t1", &mart()).await.expect("marj okunmali");
+    let m = product_margins(&pool, "t1", &mart())
+        .await
+        .expect("marj okunmali");
     // VOID tutarı hasılat değil giderdir; hacim ve ciroya dahil edilir.
     assert_eq!(m[0].units_sold, 2);
     assert_eq!(m[0].revenue_cents, 4000);
@@ -329,7 +352,9 @@ async fn kombinasyon_destek_esiginin_altinda_listelemez() {
     line(&pool, "t1", "o1", "p1", 1, 1000).await;
     line(&pool, "t1", "o1", "p2", 1, 500).await;
 
-    let combos = combinations(&pool, "t1", &mart(), 2).await.expect("okunmali");
+    let combos = combinations(&pool, "t1", &mart(), 2)
+        .await
+        .expect("okunmali");
     assert!(combos.is_empty(), "tek siparis esigi gecmemeli");
 }
 
@@ -342,7 +367,9 @@ async fn kombinasyon_urun_adlarini_kiracili_getirir() {
     line(&pool, "t1", "o1", "p1", 1, 1000).await;
     line(&pool, "t1", "o1", "p2", 1, 500).await;
 
-    let combos = combinations(&pool, "t1", &mart(), 1).await.expect("okunmali");
+    let combos = combinations(&pool, "t1", &mart(), 1)
+        .await
+        .expect("okunmali");
     assert_eq!(combos.len(), 1);
     // Kimlik değil insan-okur ad gösterilir.
     let adlar = [&combos[0].product_a_name, &combos[0].product_b_name];
@@ -370,7 +397,9 @@ async fn kombinasyon_tarih_araligini_honourlar() {
     line(&pool, "t1", "o1", "p2", 1, 500).await;
 
     let aralik: AnalyticsRange = Some(("2026-04-01".to_string(), "2026-04-30".to_string()));
-    let combos = combinations(&pool, "t1", &aralik, 1).await.expect("okunmali");
+    let combos = combinations(&pool, "t1", &aralik, 1)
+        .await
+        .expect("okunmali");
     // Mart siparisi Nisan araligina girmemeli.
     assert!(combos.is_empty());
 }

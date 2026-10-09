@@ -23,10 +23,7 @@ use sqlx::{Row, SqliteConnection};
 /// Neden hata yükseliyor: satır okunamazsa `None` dönmek "eşik yok" demek
 /// olurdu; oysa eşiği **bilmiyoruz**. Eşiği bilmeden onay kararı vermek, eşiği
 /// yok saymaktan farksızdır (AGENTS.md §3.4).
-pub async fn esik_oku(
-    conn: &mut SqliteConnection,
-    tenant_id: &str,
-) -> Result<Option<i64>, String> {
+pub async fn esik_oku(conn: &mut SqliteConnection, tenant_id: &str) -> Result<Option<i64>, String> {
     let satir = sqlx::query("SELECT amount_cents FROM approval_thresholds WHERE tenant_id = ?")
         .bind(tenant_id)
         .fetch_optional(&mut *conn)
@@ -120,14 +117,20 @@ mod tests {
     async fn indirim_yuzeyi_kayit_yoksa_sabite_duser() {
         let mut conn = conn().await;
         assert_eq!(
-            esik_oku_indirim_icin(&mut conn, "tenant_yok").await.expect("okunur"),
+            esik_oku_indirim_icin(&mut conn, "tenant_yok")
+                .await
+                .expect("okunur"),
             varsayilan_esik(),
             "mevcut indirim guvenligi dusmemeli"
         );
 
-        esik_ayarla(&mut conn, "tenant_yok", 250_000).await.expect("yazilir");
+        esik_ayarla(&mut conn, "tenant_yok", 250_000)
+            .await
+            .expect("yazilir");
         assert_eq!(
-            esik_oku_indirim_icin(&mut conn, "tenant_yok").await.expect("okunur"),
+            esik_oku_indirim_icin(&mut conn, "tenant_yok")
+                .await
+                .expect("okunur"),
             250_000,
             "kayit varsa db ustun gelir"
         );
@@ -136,8 +139,12 @@ mod tests {
     #[tokio::test]
     async fn esik_kiraci_bazinda_kaydedilir() {
         let mut conn = conn().await;
-        esik_ayarla(&mut conn, "tenant_a", 250_000).await.expect("yazilir");
-        esik_ayarla(&mut conn, "tenant_b", 50_000).await.expect("yazilir");
+        esik_ayarla(&mut conn, "tenant_a", 250_000)
+            .await
+            .expect("yazilir");
+        esik_ayarla(&mut conn, "tenant_b", 50_000)
+            .await
+            .expect("yazilir");
 
         assert_eq!(
             esik_oku(&mut conn, "tenant_a").await.expect("okunur"),
@@ -157,26 +164,33 @@ mod tests {
     #[tokio::test]
     async fn esik_ayni_kiracida_guncellenir() {
         let mut conn = conn().await;
-        esik_ayarla(&mut conn, "tenant_a", 100_000).await.expect("yazilir");
-        esik_ayarla(&mut conn, "tenant_a", 900_000).await.expect("guncellenir");
+        esik_ayarla(&mut conn, "tenant_a", 100_000)
+            .await
+            .expect("yazilir");
+        esik_ayarla(&mut conn, "tenant_a", 900_000)
+            .await
+            .expect("guncellenir");
 
         assert_eq!(
             esik_oku(&mut conn, "tenant_a").await.expect("okunur"),
             Some(900_000)
         );
 
-        let satir_sayisi: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM approval_thresholds WHERE tenant_id = ?")
-            .bind("tenant_a")
-            .fetch_one(&mut conn)
-            .await
-            .expect("sayilir");
+        let satir_sayisi: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM approval_thresholds WHERE tenant_id = ?")
+                .bind("tenant_a")
+                .fetch_one(&mut conn)
+                .await
+                .expect("sayilir");
         assert_eq!(satir_sayisi, 1, "guncelleme yeni satir acmamali");
     }
 
     #[tokio::test]
     async fn sifirlama_yuzeyleri_kapatir() {
         let mut conn = conn().await;
-        esik_ayarla(&mut conn, "tenant_a", 1_000).await.expect("yazilir");
+        esik_ayarla(&mut conn, "tenant_a", 1_000)
+            .await
+            .expect("yazilir");
         esik_sifirla(&mut conn, "tenant_a").await.expect("silinir");
 
         assert_eq!(esik_oku(&mut conn, "tenant_a").await.expect("okunur"), None);
@@ -186,8 +200,18 @@ mod tests {
     async fn sifir_ve_negatif_esik_birime_kilitlenir() {
         let mut conn = conn().await;
 
-        assert_eq!(esik_ayarla(&mut conn, "tenant_a", 0).await.expect("yazilir"), 1);
-        assert_eq!(esik_ayarla(&mut conn, "tenant_b", -50_000).await.expect("yazilir"), 1);
+        assert_eq!(
+            esik_ayarla(&mut conn, "tenant_a", 0)
+                .await
+                .expect("yazilir"),
+            1
+        );
+        assert_eq!(
+            esik_ayarla(&mut conn, "tenant_b", -50_000)
+                .await
+                .expect("yazilir"),
+            1
+        );
 
         assert_eq!(
             esik_oku(&mut conn, "tenant_a").await.expect("okunur"),

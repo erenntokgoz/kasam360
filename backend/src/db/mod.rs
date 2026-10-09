@@ -39,11 +39,9 @@ pub type DbPool = Pool<Sqlite>;
 /// bir tohum değeriyle asla karışmaz ve kiracı kimliği
 /// şema ile senkron kalır.
 pub(crate) async fn merkez_tenant_id(pool: &DbPool) -> Result<String, sqlx::Error> {
-    sqlx::query_scalar::<_, String>(
-        "SELECT id FROM tenants WHERE name = 'Kasam360 Merkez İşletme'",
-    )
-    .fetch_one(pool)
-    .await
+    sqlx::query_scalar::<_, String>("SELECT id FROM tenants WHERE name = 'Kasam360 Merkez İşletme'")
+        .fetch_one(pool)
+        .await
 }
 
 /// Kiracı çözülemediğinde veri dönüşümünde kullanılan rezerv
@@ -232,11 +230,10 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // G2 · P0: fabrika öntanımlı PIN'lerle ilk giriş değişimi zorunlu.
     // Mevcut kurulumlarda kolon yoksa eklenir; satırlar 0 kalır
     // (tohumlama `seed_default_users` içinde fabrika PIN'i saptar).
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE users ADD COLUMN must_change_pin INTEGER NOT NULL DEFAULT 0;",
-    )
-    .execute(&pool)
-    .await;
+    let _ =
+        sqlx::raw_sql("ALTER TABLE users ADD COLUMN must_change_pin INTEGER NOT NULL DEFAULT 0;")
+            .execute(&pool)
+            .await;
 
     // G2 · P0: outbox dispatcher sütunları. `CREATE TABLE IF NOT EXISTS`
     // mevcut tabloyu yükseltemediği için ALTER ile eklenir.

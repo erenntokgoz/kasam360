@@ -19,7 +19,7 @@
 use crate::db::DbPool;
 use crate::management_commands::{audit_actor, record_audit};
 use crate::rbac::{self, Role};
-use crate::services::audit_service::{AuditLock, category};
+use crate::services::audit_service::{category, AuditLock};
 use crate::services::branch_service::{self, Branch};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -140,14 +140,8 @@ pub async fn create_branch(
     let (actor_id, actor_role) = audit_actor(caller_id, "MASTER");
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    let branch = branch_service::create(
-        &mut tx,
-        &tid,
-        &new_branch_id(),
-        &name,
-        address.as_deref(),
-    )
-    .await?;
+    let branch =
+        branch_service::create(&mut tx, &tid, &new_branch_id(), &name, address.as_deref()).await?;
 
     record_audit(
         &mut tx,
@@ -196,14 +190,8 @@ pub async fn update_branch(
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     let previous_name = branch_service::load(&mut tx, &tid, &bid).await?.name;
-    let branch = branch_service::update(
-        &mut tx,
-        &tid,
-        &bid,
-        name.as_deref(),
-        address.as_deref(),
-    )
-    .await?;
+    let branch =
+        branch_service::update(&mut tx, &tid, &bid, name.as_deref(), address.as_deref()).await?;
 
     record_audit(
         &mut tx,
@@ -337,8 +325,12 @@ mod tests {
         let cross = resolve_target_tenant(Some("OWNER"), Some("tnt_kendi"), Some("tnt_baska"));
         assert!(cross.is_err(), "cross-tenant şube okuması açık kalmış");
 
-        let cross_manager = resolve_target_tenant(Some("MANAGER"), Some("tnt_kendi"), Some("tnt_baska"));
-        assert!(cross_manager.is_err(), "müdür cross-tenant okuması açık kalmış");
+        let cross_manager =
+            resolve_target_tenant(Some("MANAGER"), Some("tnt_kendi"), Some("tnt_baska"));
+        assert!(
+            cross_manager.is_err(),
+            "müdür cross-tenant okuması açık kalmış"
+        );
     }
 
     #[test]
@@ -351,7 +343,8 @@ mod tests {
     fn master_hedef_tenant_secebilir() {
         // MASTER'ın oturum tenant'ı platform varsayılanıdır; yönettiği işletmeyi
         // `tenant_id` ile seçer.
-        let selected = resolve_target_tenant(Some("MASTER"), Some("DEFAULT_TENANT"), Some("tnt_hedef"));
+        let selected =
+            resolve_target_tenant(Some("MASTER"), Some("DEFAULT_TENANT"), Some("tnt_hedef"));
         assert_eq!(selected.unwrap(), "tnt_hedef");
 
         let fallback = resolve_target_tenant(Some("MASTER"), Some("tnt_hedef"), None);
