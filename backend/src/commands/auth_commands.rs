@@ -121,7 +121,7 @@ async fn user_dto_with_modules(
 }
 
 /// Authenticates an exact, provisioned login identifier.  Names and roles are
-/// deliberately not identifiers: neither is stable nor secret.
+/// bilinçli olarak kimlik belirteci değildir: ne kararlıdır ne de gizlidir.
 pub async fn authenticate_by_identifier(
     pool: &DbPool,
     identifier: &str,
@@ -132,7 +132,7 @@ pub async fn authenticate_by_identifier(
         return Err("Geçersiz kimlik bilgileri".to_string());
     }
 
-    // Kaba kuvvet kilidi DB'dedir (Faz 15 B2). Kapsam kimlik metninden türetilir;
+    // Kaba kuvvet kilidi DB'dedir. Kapsam kimlik metninden türetilir;
     // küçük/büyük harf farkı iki ayrı kilit sayılmasın diye normalize edilir.
     let kapsam = hesap_kapsami(identifier);
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -212,8 +212,8 @@ pub async fn authenticate_by_identifier(
     user_dto_with_modules(pool, &row).await
 }
 
-/// PIN entry remains supported for restaurant workstations.  PINs are checked
-/// against salted Argon2 hashes when available, with safe fallback to provisioned PINs.
+/// Restoran iş istasyonları için PIN girişi desteklenir. PIN'ler tuzlanmış
+/// Argon2 özetleriyle karşılaştırılır, gerekirse güvenli varsayılana düşülür.
 /// PIN ile kimlik doğrulama — Restoran çalışma istasyonları için.
 /// Multi-tenant izolasyonu: Eğer tenant_id belirtilmişse, öncelikle o işletmeye ait personel aranır.
 pub async fn authenticate_by_pin(
@@ -457,7 +457,7 @@ pub async fn change_self_pin(
     // doğrulama hiç çalışmıyordu: `user_id` bilen bir çağıran (arayüz alanı
     // boş bırakıldığında `undefined` gönderir) mevcut PIN'i bilmeden yeni PIN
     // yazabiliyordu. Parametre tipi `Option` kaldı çünkü IPC sözleşmesi
-    // değişirse arayüz kırılır; tipin `String` olması Faz 17'de arayüzle
+    // değişirse arayüz kırılır; tipin `String` olması arayüzle
     // birlikte yapılacak (bkz. docs/FAZ-15-PLAN.md).
     let cur_pin = mevcut_pin_zorunlu(current_pin.as_deref())?;
 

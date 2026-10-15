@@ -172,7 +172,7 @@ pub async fn void_order(
     let remaining: i64 = count_row.try_get("count").map_err(|e| e.to_string())?;
 
     if remaining == 0 {
-        // Faz 8: iptal masayı boşaltıyorsa açık rezervasyon kaydı da kapanır.
+        // İptal masayı boşaltıyorsa açık rezervasyon kaydı da kapanır.
         let _ = crate::services::reservation_service::close_open_for_table(
             &mut tx,
             &tenant_id,

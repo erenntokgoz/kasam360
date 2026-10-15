@@ -1,7 +1,7 @@
-//! Credential primitives used by the desktop authentication commands.
+//! Masaüstü kimlik doğrulama komutları tarafından kullanılan kimlik temelleri.
 //!
-//! The database stores only an Argon2 PHC string.  Raw PINs/passwords must
-//! never be selected from, or returned by, an IPC command.
+//! Veritabanı yalnızca Argon2 PHC dizesi saklar. Ham PIN veya parolalar asla
+//! bir IPC komutundan seçilemez veya döndürülemez.
 
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},

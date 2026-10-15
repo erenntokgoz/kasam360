@@ -1,4 +1,4 @@
-//! Faz 16 — dış aktör Tauri komutları.
+//! Dış aktör Tauri komutları.
 //!
 //! Bu katman **yalnız yetki sınar ve servise delegasyon yapar**; iş mantığı
 //! `services/external360` içindedir. Böylece iş mantığı komut altyapısı olmadan

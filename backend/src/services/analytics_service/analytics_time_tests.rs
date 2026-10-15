@@ -1,4 +1,4 @@
-//! Faz 10 analitik testleri — yoğun saat, hedef, rakip fiyat, void oranı.
+//! Analitik testleri — yoğun saat, hedef, rakip fiyat, void oranı.
 
 use sqlx::SqlitePool;
 

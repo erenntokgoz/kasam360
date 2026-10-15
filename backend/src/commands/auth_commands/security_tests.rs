@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Faz 15 B1/B2 regresyon testleri — `auth_commands` için.
+// Kimlik doğrulama güvenlik regresyon testleri — `auth_commands` için.
 //
 // Kilit artık process-global statik değil, `login_attempts` tablosundadır. Bu iki
 // şeyi birden kazanır: yeniden başlatma kilidi silmez ve testler birbirini

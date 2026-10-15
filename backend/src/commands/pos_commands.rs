@@ -250,7 +250,7 @@ pub async fn submit_order(
     }
 
     // 2. Insert parent order first (satisfying FK constraint on order_items)
-    // Garson kimliği: siparişi açan kişidir. Garson KPI'sı (Faz 11) bu kolonu
+    // Garson kimliği: siparişi açan kişidir. Garson KPI'sı bu kolonu
     // okur; yazılmadığı sürece karnesi hep boş döner. `tables.waiter_id` önce
     // denir, yoksa komutu çağıran `actor_id` kullanılır (müdür açtıysa
     // masadaki garson kaydedilir, kişi bazlı kırılım doğru kalır).
@@ -277,7 +277,7 @@ pub async fn submit_order(
         .await
         .map_err(|e| e.to_string())?;
 
-    // 3. Insert child order_items with valid FK reference
+    // 3. Geçerli FK referansıyla alt order_items kayıtlarını ekle
     for p_item in prepared_items {
         sqlx::query("INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_cents, tax_rate_bp, subtotal_cents, tax_amount_cents, total_cents, modifiers, waiter_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&p_item.id)
@@ -299,7 +299,7 @@ pub async fn submit_order(
             .map_err(|e| e.to_string())?;
     }
 
-    // Faz 8: masada açık bir rezervasyon varsa kayıt `SEATED` ile kapatılır.
+    // Masada açık bir rezervasyon varsa kayıt `SEATED` ile kapatılır.
     // Eski davranışta rezervasyon kaydı hiç oluşmadığı için rezerve masaya
     // sipariş açıldığında "müşteri geldi" gerçeği kayboluyordu. Çağrı toplam
     // hesabından **önce** yapılır; aşağıdaki UPDATE `current_total`'ı doğru yazar.

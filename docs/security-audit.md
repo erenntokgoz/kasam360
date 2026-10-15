@@ -1,7 +1,7 @@
 ﻿# KASAM360 — Security Audit (G7 · Item 26)
 
 Son guncelleme: 2026-10-09
-Kaynak: AGENTS.md §9 (13 P0 Kilid), Faz 15/16.5/17/18
+Kaynak: AGENTS.md (13 P0 Kilit Denetimi)
 
 ## Kapatilan Aciklar (15)
 
@@ -23,7 +23,7 @@ Kaynak: AGENTS.md §9 (13 P0 Kilid), Faz 15/16.5/17/18
 | 14 | Compensation commands (void/refund onay kapilari) | Cözüldü |
 | 15 | Guard macro (require_any/require_owner) | Cözüldü |
 
-## Kalan Bilinen Aciklar (Faz 18)
+## Kalan Bilinen Güvenlik İyileştirmeleri
 
 - Theoretical vs Actual COGS fark raporu
 - Multi-branch isolation (cross-branch transfer)

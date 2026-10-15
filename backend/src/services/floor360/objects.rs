@@ -1,4 +1,4 @@
-//! Faz 13 · Mimari obje yazımı ve hazır şablon uygulaması.
+//! Mimari obje yazımı ve hazır şablon uygulaması.
 //!
 //! Neden ayrı dosya: `layout.rs` okuma + düzen yazımıyla uğraşırken 500
 //! satır sınırını aştı. Obje yaşam döngüsü (oluştur, sil, şablonla yerleştir)

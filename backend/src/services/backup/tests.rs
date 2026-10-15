@@ -11,7 +11,11 @@ use std::str::FromStr;
 async fn pool() -> sqlx::SqlitePool {
     // VACUUM INTO bir dosyaya yazabilmek için dosya tabanlı havuz gerekir;
     // bellek içi havuz `VACUUM INTO 'file:...'` ile dosya oluşturamaz.
-    let dir = std::env::temp_dir().join(format!("kasam360_backup_pool_{}_{}", std::process::id(), uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!(
+        "kasam360_backup_pool_{}_{}",
+        std::process::id(),
+        uuid::Uuid::new_v4()
+    ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let db_path = dir.join("test.db");

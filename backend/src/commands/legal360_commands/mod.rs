@@ -1,4 +1,4 @@
-//! Faz 14 Tauri komutlarının ortak güvenlik katmanı.
+//! Yasal ve kampanya Tauri komutlarının ortak güvenlik katmanı.
 //!
 //! Bu katman **yalnız yetki sınar ve servise delegasyon yapar**; iş mantığı
 //! `services/legal360` içindedir. Böylece iş mantığı komut altyapısı olmadan

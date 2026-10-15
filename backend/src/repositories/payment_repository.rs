@@ -41,7 +41,7 @@ impl PaymentRepository {
     /// (ikinci gerçek) yaratılmaz.
     ///
     /// `tenant_id` neden parametre: seçenek fiyat farkı istemciden değil
-    /// `modifier_options`'tan okunur (faz 4) ve bu okuma tenant'a göre
+    /// `modifier_options`'tan okunur ve bu okuma tenant'a göre
     /// filtrelenmelidir.
     pub async fn calculate_server_truth(
         conn: &mut sqlx::SqliteConnection,
@@ -103,7 +103,7 @@ impl PaymentRepository {
                 }
             };
 
-            // Fiyat tek yerden türetilir (faz 4): donmuş pricing modifier'ı zaten
+            // Fiyat tek yerden türetilir: donmuş pricing modifier'ı zaten
             // içerir, üzerine eklenmez — eklenirse aynı ekstra iki kez ücretlenir.
             // Donmuş pricing yoksa seçeneklerin **veritabanı** pricing eklenir;
             // istemcinin bildirdiği `priceCents` değeri kullanılmaz.
@@ -242,7 +242,7 @@ impl PaymentRepository {
                     .await
                     .map_err(|e| e.to_string())?;
 
-                // Faz 8: masa tahsilat sonrası boşalır ve varsa açık rezervasyon
+                // Masa tahsilat sonrası boşalır ve varsa açık rezervasyon
                 // kaydı kapanır. Önceden yalnız `status = 'RESERVED'` masalar
                 // boşaltılıyordu; dolu masada tahsilat sonrası masa `OCCUPIED`
                 // kalıyor ve salon planı yanlış gösteriyordu. Ayrıca
@@ -279,7 +279,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .expect("bellek içi veritabanı");
-        // Faz 4: fiyat ve donmuş kalem okumaları tenant'a göre filtrelenir;
+        // Fiyat ve donmuş kalem okumaları tenant'a göre filtrelenir;
         // `order_items` → `orders` zinciri de kurulmalı.
         sqlx::raw_sql(
             "CREATE TABLE products (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, price_cents INTEGER NOT NULL, tax_rate_bp INTEGER NOT NULL);

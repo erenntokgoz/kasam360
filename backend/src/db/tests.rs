@@ -38,7 +38,7 @@ async fn tables_rebuild_preserves_each_tenant_and_foreign_keys() {
     migrate_tables_current_total_to_integer(&pool)
         .await
         .unwrap();
-    // A second initialization must be a no-op.
+    // İkinci bir başlatma işlemi etkisiz olmalıdır (idempotent).
     migrate_tables_current_total_to_integer(&pool)
         .await
         .unwrap();

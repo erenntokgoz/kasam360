@@ -1,4 +1,4 @@
-//! `modifier_service` testleri (Faz 4).
+//! `modifier_service` testleri.
 //!
 //! Kapsam: kural testleri. "Şablonda 'Az' seçeneği var" gibi **içerik**
 //! testleri yazılmaz; bunlar SPEC'te olmayan hazır içerik uydurur. Testler
@@ -330,9 +330,14 @@ async fn urune_grup_baglanir_ve_pos_gorunumu_dogru_doner() {
         .await
         .expect("seçenek eklenir");
 
-    set_product_groups(&mut conn, TENANT_A, "prd_1", &[group_id.clone()])
-        .await
-        .expect("bağlanır");
+    set_product_groups(
+        &mut conn,
+        TENANT_A,
+        "prd_1",
+        std::slice::from_ref(&group_id),
+    )
+    .await
+    .expect("bağlanır");
 
     let ids = product_group_ids(&mut conn, TENANT_A, "prd_1")
         .await
@@ -375,7 +380,7 @@ async fn urun_grup_baglantisi_kume_ile_degisir() {
     );
 
     // Küme semantiği: gönderilmeyen grup düşer.
-    set_product_groups(&mut conn, TENANT_A, "prd_1", &[g2.clone()])
+    set_product_groups(&mut conn, TENANT_A, "prd_1", std::slice::from_ref(&g2))
         .await
         .expect("tek grup");
     assert_eq!(
@@ -578,7 +583,7 @@ async fn donmus_fiyat_yoksa_urun_fiyatina_modifier_eklenir() {
 
 #[tokio::test]
 async fn category_id_kolonu_eklenmeden_once_yazan_veri_okunur() {
-    // Faz 4 migration'ının güvenliği: kolon eklenmeden önce yazılmış grup
+    // Ürün opsiyon migration'ının güvenliği: kolon eklenmeden önce yazılmış grup
     // satırları (category_id olmadan) okunabilir kalmalı.
     let pool = pool().await;
     sqlx::query(

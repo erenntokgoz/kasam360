@@ -77,8 +77,8 @@ pub fn checked_add(a: Cents, b: Cents) -> Result<Cents, String> {
 
 /// listedeki tüm kuruşları kontrollü toplar.
 ///
-/// Boş liste sıfır döndürür (toplam yok, hata yok). Empty-list case is not a
-/// silent zero — it is a defined aggregate of zero elements.
+/// Boş liste sıfır döndürür (toplam yok, hata yok). Boş liste durumu sessiz
+/// sıfır değildir — sıfır elemanın tanımlı toplamıdır.
 pub fn checked_sum(values: &[Cents]) -> Result<Cents, String> {
     let mut total: i64 = 0;
     for v in values {

@@ -1,4 +1,4 @@
-//! Faz 12 · Tedarikçi ve satın alma testleri.
+//! Tedarikçi ve satın alma testleri.
 //!
 //! Kapsam: tedarikçi fiyat karşılaştırmasının en ucuzu işaretlemesi, negatif
 //! alış fiyatının reddi, teslim almanın FIFO partisi açması, fiyatı girilmemiş

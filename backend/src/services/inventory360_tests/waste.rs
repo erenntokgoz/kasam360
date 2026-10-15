@@ -1,4 +1,4 @@
-//! Faz 12 · Fire ve kör sayım testleri.
+//! Fire ve kör sayım testleri.
 //!
 //! Kapsam: FIFO'dan düşen gerçek maliyet, stoğu aşan firede bilinmeyen maliyet,
 //! geçersiz gerekçenin reddi, kör sayımda beklenen miktarın gizlenmesi, kapanışta

@@ -1,4 +1,4 @@
-//! Faz 12 komut katmanı regresyon testleri.
+//! Menü ve envanter komut katmanı regresyon testleri.
 //!
 //! Kapsam dışı bırakılırsa üç sessiz açık geri gelir:
 //!   * bayrak kapalıyken komut 403 yerine 200 dönebilir (bayt kapısı),

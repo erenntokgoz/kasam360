@@ -64,7 +64,7 @@ pub async fn get_daily_summary(
         let Some(method) = method else {
             continue;
         };
-        // totalAmount in audit_ledger payload is stored as integer cents — read directly.
+        // audit_ledger yükündeki totalAmount tamsayı kuruş olarak saklanır — doğrudan okunur.
         let amount_cents: i64 = r.try_get("amount").map_err(|e| e.to_string())?;
         payment_methods.insert(method, amount_cents);
     }

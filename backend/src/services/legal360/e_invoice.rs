@@ -4,7 +4,7 @@
 //! makinesidir, GİB'ye giden istek değildir. AGENTS.md §3.1 harici bulutu
 //! yasaklar; dolayısıyla "gönderim" burada yalnız kaydın `SENT` durumuna
 //! geçmesidir ve `payload` gönderilecek belgeyi tutar. Gerçek entegrasyon
-//! ayrı bir fazın konusudur ve aynı yasağı taşır.
+//! ayrı bir entegrasyonun konusudur ve aynı yasağı taşır.
 //!
 //! KDV aritmetiği **tam sayıdır**. `orders.total_cents` KDV dahil toplamdır,
 //! dolayısıyla KDV toplamdan **geri** çözülür:

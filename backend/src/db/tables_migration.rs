@@ -1,13 +1,11 @@
 use super::{tracing_fallback_log, DbPool};
 use sqlx::{Acquire, Row};
 
-/// Upgrades legacy `tables` definitions without losing tenant ownership.
+/// Kiracı mülkiyetini kaybetmeden eski `tables` tanımlarını yükseltir.
 ///
-/// SQLite cannot alter a column type, therefore a table rebuild is required. The
-/// original migration rebuilt only six columns and silently discarded
-/// `tenant_id`. This migration treats `tenant_id` as first-class data, copies it
-/// when present, assigns the historical default only to schemas that predate
-/// tenancy, and recreates explicit indexes/triggers from sqlite_master.
+/// SQLite sütun türünü doğrudan değiştiremediği için tablonun yeniden kurulması gerekir.
+/// Bu göç `tenant_id` bilgisini birinci sınıf veri olarak ele alır, mevcutsa kopyalar
+/// ve indeks/tetikleyicileri sqlite_master üzerinden yeniden kurar.
 ///
 /// `tenant_id` hedef tanımında varsayılan **taşımaz**. Neden: bir kolon
 /// tanımında varsayılan kalmaya devam ederse, `tenant_id` bind etmeyen
@@ -70,8 +68,8 @@ pub(crate) async fn migrate_tables_current_total_to_integer(
                 .is_some()
     });
 
-    // A missing tenant_id is also an upgrade condition: an INTEGER-only legacy
-    // schema would otherwise survive initialization but fail all tenant-scoped
+    // Eksik tenant_id de bir yükseltme koşuludur: yalnızca INTEGER içeren eski
+    // şema aksi halde başlangıcı geçer ancak kiracı kapsamlı tüm işlemlerde hata verir
     // queries. Refuse to rebuild malformed tables rather than drop unknown data.
     for required in [
         "id",
@@ -115,8 +113,8 @@ pub(crate) async fn migrate_tables_current_total_to_integer(
     .fetch_all(pool)
     .await?;
 
-    // PRAGMA foreign_keys is connection-scoped and cannot be changed inside a
-    // transaction. Hold one connection for the complete 12-step rebuild.
+    // PRAGMA foreign_keys bağlantı kapsamındadır ve işlem içinde değiştirilemez.
+    // 12 adımlı yeniden kurulum boyunca tek bir bağlantı tutulur.
     let mut connection = pool.acquire().await?;
     sqlx::query("PRAGMA foreign_keys = OFF")
         .execute(&mut *connection)
@@ -124,7 +122,7 @@ pub(crate) async fn migrate_tables_current_total_to_integer(
     let result = async {
         let mut tx = connection.begin().await?;
 
-        // Faz 13 kroki geometrisi yeniden kurulumda da korunur. Bu kolonlar
+        // Kroki geometrisi yeniden kurulumda da korunur. Bu kolonlar
         // legacy şemada yoktur; varsa kopyalanır, yoksa hedef tanımda hiç
         // bulunmaz. Aksi halde bir kroki çizilmiş bir salon, tables rebuild'i
         // sonrası geometrisini sessizce kaybederdi (AGENTS.md §2: veri
@@ -227,8 +225,8 @@ pub(crate) async fn migrate_tables_current_total_to_integer(
     }
     .await;
 
-    // Restore enforcement even if the transaction failed; any error is returned
-    // after restoration so a failed upgrade never leaves this connection lax.
+    // İşlem başarısız olsa bile kısıtlamayı geri yükle; böylece başarısız bir
+    // yükseltme bu bağlantıyı asla kısıtlamasız bırakmaz.
     let restore_result = sqlx::query("PRAGMA foreign_keys = ON")
         .execute(&mut *connection)
         .await;

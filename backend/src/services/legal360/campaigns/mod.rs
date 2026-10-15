@@ -3,13 +3,13 @@
 //! Neden kural JSON olarak saklanıyor: kampanya türleri çok (saat aralığı,
 //! kategori, ürün, minimum sepet, sabit tutar) ve her biri ayrı tablo
 //! kolonu olsaydı yeni kampanya türü şema migration'ı gerektirirdi. Kural
-//! metni aynı zamanda **denetlenebilir**: şablonlar (`db/faz14.rs`) ve
+//! metni aynı zamanda **denetlenebilir**: şablonlar (`db/campaign_seeds.rs`) ve
 //! kullanıcı kampanyaları aynı çözücüden geçer, ayrışma yakalanır.
 //!
 //! Kural **tipli** çözülür: `serde_json::from_str` hatası `Err` olarak yükselir.
 //! `deny_unknown_fields` şart: bilinmeyen alan yok sayılırsa yazım hatası sessiz
 //! bir **etkisiz kurala** dönüşür ve kampanya hiç indirim uygulamadan çalışır.
-//! Bu, `db/faz14.rs` şablon testinin yakalamak için yazıldığı sessiz hatadır.
+//! Bu, `db/campaign_seeds.rs` şablon testinin yakalamak için yazıldığı sessiz hatadır.
 //!
 //! Kural alan adları **yılan biçimindedir** (`discount_percent`). `camelCase`
 //! burada yanlış olurdu: şema metni Rust alan adlarıyla birebir aynı olmalıdır,

@@ -1,4 +1,4 @@
-//! Cari ekstre ve tediye makbuzu komutları (Faz 9).
+//! Cari ekstre ve tediye makbuzu komutları.
 //!
 //! Neden imza: iki komut da içeriği veritabanından türetir. İstemciden gelen
 //! tutar veya metin kabul edilmez; aksi hâlde uydurma mali belge basılabilirdi.

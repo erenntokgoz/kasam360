@@ -1,12 +1,12 @@
-//! Fiş veri katmanı (Faz 7).
+//! Fiş veri katmanı.
 //!
-//! Neden ayrı servis: Faz 6'daki şube servisinin izi. Komut katmanı RBAC, tenant
+//! Neden ayrı servis: Şube servisinin izi. Komut katmanı RBAC, tenant
 //! çözümlemesi ve denetim kaydıyla ilgilenir; SQL kuralları burada tek yerde
 //! durur ve bellek içi SQLite ile doğrudan test edilir.
 //!
 //! # Tek finansal gerçeklik
 //!
-//! Faz 7 öncesi fiş **iki paralel kaynaktan** türetiliyordu: `orders` tablosundaki
+//! Önceden fiş **iki paralel kaynaktan** türetiliyordu: `orders` tablosundaki
 //! `PAID` satırları ve `events` tablosundaki `SALE_SETTLED` kayıtları. Aynı satış
 //! iki listede iki kez görünebiliyor, alt toplam/KDV `total * 100 / 110` gibi
 //! **uydurma** bir formülle dolduruluyordu ve ödeme bulunamadığında yöntem "Nakit"
@@ -320,7 +320,7 @@ async fn load_items(
     Ok(items)
 }
 
-/// Hesap Defteri'nin finansal hareket listesi (Faz 7).
+/// Hesap Defteri'nin finansal hareket listesi.
 ///
 /// Hareket türleri:
 /// - `SALE_PAYMENT`: tahsilat → **fiş vardır** (`receipt_id` = tahsilat kimliği)

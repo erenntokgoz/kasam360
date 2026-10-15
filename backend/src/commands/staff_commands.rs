@@ -1,4 +1,4 @@
-//! Faz 11 B5 — Personel 360° Tauri komutları.
+//! Personel 360° Tauri komutları.
 //!
 //! Her komut üç kapıdan geçer: rol (RBAC), tenant (zorunlu), bağlam (fail-closed).
 //! `tenant_id` `Option` olarak gelir; `require_tenant_scope` çağıranı reddeder.

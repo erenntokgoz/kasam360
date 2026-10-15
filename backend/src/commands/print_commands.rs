@@ -1,4 +1,4 @@
-//! Faz 7 — Veritabanı kaynaklı termal basım komutları.
+//! Veritabanı kaynaklı termal basım komutları.
 //!
 //! Neden ayrı modül: `commands.rs` 500 satır sınırını aştığı için fiş dışı
 //! basımlar (Z-Rapor, kasa fişi, adisyon/void fişi) burada toplanır.

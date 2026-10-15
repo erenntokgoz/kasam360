@@ -9,7 +9,7 @@
 //! toplamı, kasa çıkışı, gün sonu) ve bunların bugün onayı yoktur. Satır yoksa
 //! `None` dönmek bu yüzeyleri mevcut davranışta bırakır. `varsayilan_esik()`
 //! (500 TL) her işletmede zorlanırsa gün sonu ve kasa çıkışı onay jetonu
-//! ister; jeton üreten arayüz Faz 17'de olduğu için patron günü kapatamaz.
+//! ister; jeton üreten arayüz entegrasyonu sağlandığı için patron günü kapatamaz.
 //! Kullanılamayan bir güvenlik kapatması, hiç konmamış bir kapatmadan kötüdür.
 //!
 //! **Neden indirim farklı:** `DISCOUNT` yüzeyinde eşik zaten kod içindeydi ve

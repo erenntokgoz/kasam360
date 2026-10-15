@@ -1,4 +1,4 @@
-//! Faz 11 testleri — ortak fixture'lar ve alt modüller.
+//! Personel testleri — ortak fixture'lar ve alt modüller.
 //!
 //! Dosya 500 satır sınırını aşmasın diye konu alanına göre bölündü. Her test
 //! gerçek SQLite şeması üzerinde çalışır ve **hesabın tutarlılığını**

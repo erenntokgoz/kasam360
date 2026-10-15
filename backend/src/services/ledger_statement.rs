@@ -1,4 +1,4 @@
-//! Cari ekstre ve 80mm termal tediye makbuzu (Faz 9).
+//! Cari ekstre ve 80mm termal tediye makbuzu.
 //!
 //! Neden ayrı dosya: hesap defteri motoru 500 satirlik tavana ulastiginda
 //! yeni yuzeyler ayni dosyaya eklenemez. Ekstre ve makbuz kendi yuzeyleriyle

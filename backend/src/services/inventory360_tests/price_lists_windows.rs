@@ -1,4 +1,4 @@
-//! Faz 12 · Fiyat listesi ve menü penceresi testleri.
+//! Fiyat listesi ve menü penceresi testleri.
 //!
 //! Kapsam: fiyat listesinin ürün fiyatını eğmesi, dinamik kuralın listede de
 //! üstünlüğü, yabancı kalemin listeye sızamaması, öğle penceresinin üründe

@@ -1,4 +1,4 @@
-//! Faz 14 testlerinin ortak veri tabanı ve bağlantı yardımcıları.
+//! Yasal ve kampanya testlerinin ortak veri tabanı ve bağlantı yardımcıları.
 //!
 //! Yardımcılar ayrı dosyada tutulur: altı test modülü aynı şemayı ve aynı
 //! bağlantı havuzunu kullanır. Şema tek yerde olmazsa bir modül güncellendiğinde

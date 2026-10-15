@@ -1,4 +1,4 @@
-//! Faz 14 servis testleri.
+//! Yasal ve kampanya servis testleri.
 //!
 //! Altı modül aynı şemayı ve aynı yardımcıları kullanır; dosya adları komut
 //! modülleriyle birebir eşleşir (`legal_commands.rs` -> `legal_tests.rs`).

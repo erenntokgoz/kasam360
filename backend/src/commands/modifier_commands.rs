@@ -1,11 +1,11 @@
 //! Modifier (seçenek & ekstra) yönetim komutları.
 //!
 //! Bu komutlar `CategoryForm` ve `ProductForm` içindeki "Seçenekler & Ekstralar"
-//! alanlarından çağrılır. Faz 4 öncesinde bağımsız bir OWNER sekmesi
+//! alanlarından çağrılır. Önceden bağımsız bir OWNER sekmesi
 //! (`OwnerModifiersTab`) vardı; veri ve komutlar aynıdır, yalnız yönetim
 //! yüzeyi forma gömüldü.
 //!
-//! Güvenlik (Faz 4 düzeltmesi): her komut `tenant_id` ile filtreler.
+//! Güvenlik: her komut `tenant_id` ile filtreler.
 //! Önceden `get_modifier_groups` tüm işletmelerin gruplarını döndürüyor,
 //! `delete_modifier_group` ise yalnız `id` üzerinden siliyordu — çapraz işletme
 //! veri sızıntısı ve veri kaybı mümkündü.
@@ -175,7 +175,7 @@ pub async fn delete_modifier_group(
 
 /// Ürünün bağlı olduğu modifier gruplarını **değiştirir** (küme semantiği).
 ///
-/// Faz öncesinde bu bağlantı kurulamıyordu: `product_modifier_groups` tablosu
+/// Önceden bu bağlantı kurulamıyordu: `product_modifier_groups` tablosu
 /// şemada vardı ama hiçbir komut yazmadığı için POS'ta modifier penceresi
 /// hiç açılmıyordu.
 #[tauri::command]

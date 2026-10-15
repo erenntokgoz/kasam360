@@ -1,6 +1,6 @@
 //! Owner gösterge panelinin (dashboard) özet verisi.
 //!
-//! Neden yeniden yazıldı (Faz 5): komut `tenant_id` almıyordu ve
+//! Neden yeniden yazıldı: komut `tenant_id` almıyordu ve
 //! `popular_categories` alanı **sabit sayılarla** (`Ana Yemekler: 12`,
 //! `İçecekler: 8`) dolduruluyordu. Bu hem çapraz işletme sızıntısı hem de
 //! AGENTS.md'nin uydurma veri yasağını ihlal ediyordu. Artık kategori

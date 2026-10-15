@@ -1,30 +1,26 @@
-//! Veritabanı açılışı, şema uygulama ve migration yordamlar
+//! Veritabanı açılışı, şema uygulama ve migration yordamları
 //!
-//! Dosya 500 satır sınırını aşmasın diye modüle bölündü:
+//! Modül yapısı:
 //! tables_migration (masa kuruş/tenant yeniden kurumu), seeds (Argon2
-//! tohumlama ve PIN migration'ları), faz12 (86'd ve raf ömrü sütunları) ve
+//! tohumlama ve PIN migration'ları), inventory_migration (86'd ve raf ömrü sütunları),
+//! floor_plan_migration (kroki yerleşimi), campaign_seeds (kampanya şablonları) ve
 //! tests ayrı dosyalardadır.
 
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
 
-mod faz12;
-// Faz 13 migration'ı servis testleri tarafından da doğrudanagrılır
-// (salon şemasının hizmet testi içinde kurulabilmesi için), bu yüzden
-// `pub(crate)`.
-pub(crate) mod faz13;
-// Faz 14 yalnız sistem kampanya şablonlarını tohorlar; şemanın kendisi
-// `schema.sql` içinde `CREATE TABLE IF NOT EXISTS` ile kurulur.
-mod faz14;
+mod campaign_seeds;
+pub(crate) mod floor_plan_migration;
+mod inventory_migration;
 mod migrate;
 mod seeds;
 mod tables_migration;
 
 #[cfg(test)]
-mod faz12_tests;
+mod floor_plan_migration_tests;
 #[cfg(test)]
-mod faz13_tests;
+mod inventory_migration_tests;
 #[cfg(test)]
 mod tests;
 
@@ -51,7 +47,7 @@ pub(crate) async fn merkez_tenant_id(pool: &DbPool) -> Result<String, sqlx::Erro
 const BILINMEYEN_KIRACI: &str = "tnt_unknown";
 
 // Alt modüllerdeki yordamlar init_db ve testler tarafından kullanılır.
-pub(crate) use faz14::seed_campaign_templates;
+pub(crate) use campaign_seeds::seed_campaign_templates;
 pub(crate) use seeds::{
     migrate_platform_admin_pins_to_argon2, migrate_user_pins_to_argon2, seed_default_users,
 };
@@ -105,7 +101,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
             .await;
         }
     }
-    // Faz 11: garson karnesi kalem bazlı kırılım okur. Mevcut kurulumlarda
+    // Garson karnesi kalem bazlı kırılım okur. Mevcut kurulumlarda
     // `order_items` tablosu bu kolon olmadan oluşmuş olabilir; CREATE TABLE IF
     // NOT EXISTS var olan tabloyu değiştirmediği için ALTER gerekir.
     let _ = sqlx::raw_sql("ALTER TABLE order_items ADD COLUMN waiter_id TEXT;")
@@ -267,7 +263,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     .execute(&pool)
     .await;
 
-    // Faz 3 — anlık PIN onayı: `approvals` tablosu "kim onayladı" kaydı ve tek
+    // Anlık PIN onayı: `approvals` tablosu "kim onayladı" kaydı ve tek
     // kullanımlık jeton deposu haline geldi. CREATE TABLE IF NOT EXISTS eski
     // tanımı yükseltemediği için sütunlar burada idempotent eklenir.
     let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN approved_by_role TEXT;")
@@ -295,7 +291,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     .await;
     let _ = sqlx::raw_sql("CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_token ON approvals(token_hash) WHERE token_hash IS NOT NULL;").execute(&pool).await;
 
-    // Faz 4 — modifier gömme: `modifier_groups.category_id` kategori şablonunu
+    // Modifier gömme: `modifier_groups.category_id` kategori şablonunu
     // taşır. NULL = serbest grup. Eklenebilir çünkü mevcut satırlar NULL kalır;
     // hiçbir modifier verisi taşınmaz veya silinmez.
     let _ = sqlx::raw_sql("ALTER TABLE modifier_groups ADD COLUMN category_id TEXT;")
@@ -341,20 +337,20 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     .execute(&pool)
     .await;
 
-    // The table rebuild is deliberately after the base DDL. `CREATE TABLE IF NOT
-    // EXISTS` cannot upgrade an old tables definition, so this is the authoritative
-    // upgrade path for both cents and tenant ownership.
+    // Tablo yeniden kurumu bilinçli olarak temel DDL sonrasındadır. `CREATE TABLE IF NOT
+    // EXISTS` eski bir tablo tanımını yükseltemeyeceğinden, hem kuruş cinsine geçiş
+    // hem de kiracı mülkiyeti için yetkili yükseltme yoludur.
     migrate_tables_current_total_to_integer(&pool).await?;
 
-    // Faz 12 — 86'd ve raf ömrü. `products` sütunları eklenebilir (mevcut
+    // Envanter göçü — 86'd ve raf ömrü. `products` sütunları eklenebilir (mevcut
     // satırlar etkilenmez), ancak `inventory_batches.tenant_id` üzerindeki
     // kolon varsayılanı sessiz havuz birleşmesi ürettiği için tablo
     // yeniden kurulur.
-    faz12::migrate_products_for_86d(&pool).await?;
-    faz12::migrate_inventory_batches_for_shelf_life(&pool).await?;
-    faz12::migrate_stock_movements_for_products(&pool).await?;
-    faz13::migrate_floor_plan_layout(&pool).await?;
-    // Faz 14 — yasal takvim ve kampanya şablonları. Şema `schema.sql` içinde
+    inventory_migration::migrate_products_for_86d(&pool).await?;
+    inventory_migration::migrate_inventory_batches_for_shelf_life(&pool).await?;
+    inventory_migration::migrate_stock_movements_for_products(&pool).await?;
+    floor_plan_migration::migrate_floor_plan_layout(&pool).await?;
+    // Yasal takvim ve kampanya şablonları. Şema `schema.sql` içinde
     // kurulur; burada yalnız on sistem şablonu tohumlanır (idempotent).
     seed_campaign_templates(&pool).await?;
 

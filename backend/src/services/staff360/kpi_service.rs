@@ -1,4 +1,4 @@
-//! Faz 11 B4 — personel KPI.
+//! Personel KPI servisi.
 //!
 //! Kaynak: `order_items.waiter_id` (garsonun sattığı kalemler) ve
 //! `orders.cashier_id` (kapanan sipariş). Her iki alan da B1'de yazılmaya

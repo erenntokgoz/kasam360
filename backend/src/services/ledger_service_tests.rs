@@ -1,4 +1,4 @@
-//! Net bakiye motoru testleri (Faz 9).
+//! Net bakiye motoru testleri.
 //!
 //! Kapsam: beş hesap türünün her biri için ayrı test + sessiz hata testi.
 //! Her test tek bir kuralı kanıtlar; "motor çalışıyor" genellemesi yapılmaz.

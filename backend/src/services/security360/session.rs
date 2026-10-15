@@ -226,7 +226,7 @@ pub async fn zorunlu_kil(conn: &mut SqliteConnection, tenant_id: &str) -> Result
         .await
         .map_err(|e| e.to_string())?;
 
-    // Satır yoksa zorunlu değildir: arayüz Faz 17'de jeton göndermeye başlayana
+    // Satır yoksa zorunlu değildir: arayüz oturum jetonunu gönderene kadar
     // kadar mevcut davranış korunur. Yanlışlıkla `true` dönmek, jeton
     // göndermeyen her çağrıyı kılar.
     Ok(satir.is_some_and(|s| s.get::<i64, _>("is_enforced") == 1))
@@ -310,7 +310,7 @@ pub async fn oturum_rolu(conn: &mut SqliteConnection, oturum: &Session) -> Resul
 /// Yüksek riskli komutların aktör çözümlemesi: kimlik **ve** rol (D1).
 ///
 /// Oturum doğrulandıysa ikisi de oturumdan gelir; doğrulanmadıysa çağıranın
-/// bildirdiği değerler kullanılır (arayüz Faz 17'de oturum göndermeye başlayınca
+/// bildirdiği değerler kullanılır (arayüz oturum göndermeye başlayınca
 /// `zorunlu_kil_ayarla` ile zorunlu hale gelir).
 ///
 /// Bu yordam komutlardan ayrı tutulur çünkü Tauri komutları `State` taşıdığı

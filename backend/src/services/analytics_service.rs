@@ -1,4 +1,4 @@
-//! Faz 10 analitik servisi — giriş noktası.
+//! Analitik servisi — giriş noktası.
 //!
 //! Hesap mantığı iki modüle bölünmüştür; bu dosya yalnız birleştirir ve
 //! dışarıya açtığı yüzeyi tanımlar. Böylece hiçbiri 500 satır sınırını aşmaz.

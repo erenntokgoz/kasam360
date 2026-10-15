@@ -1,4 +1,4 @@
-//! Faz 12 · Menü & stok derinleştirme servisleri.
+//! Menü ve stok derinleştirme servisleri.
 //!
 //! Kapsam: birim çevrim, yarı mamul reçete, tedarikçi karşılaştırma, raf ömrü,
 //! fire ve kör sayım, fiyat listesi/dinamik tarife/fiyat dondurma/86'd.
@@ -76,13 +76,13 @@ pub(crate) fn optional_f64(
         .map_err(|e| e.to_string())
 }
 
-/// Faz 12 yazma işlemlerinin tamamı bu kategoriyle denetim defterine düşer.
+/// Menü ve stok yazma işlemlerinin tamamı bu kategoriyle denetim defterine düşer.
 ///
 /// Neden yeni `STOK` kategorisi açılmıyor: `audit_service::category::ALL` donmuş bir
 /// kümedir ve `is_valid("STOK")` false olduğu bir testle korunuyor. Mali etkisi
 /// olan stok hareketleri (fire, sayım farkı, reçete maliyeti) `FINANS`, menü
 /// görünürlüğünü etkileyen değişiklikler (86'd, fiyat) `MENU` altında tutulur.
-/// Böylece kategori kümesi değişmeden fazın tüm yazma yolları denetlenebilir.
+/// Böylece kategori kümesi değişmeden tüm yazma yolları denetlenebilir.
 pub mod audit_category {
     pub const MALIYET: &str = "FINANS";
     pub const MENU: &str = "MENU";

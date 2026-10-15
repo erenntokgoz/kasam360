@@ -238,7 +238,7 @@ pub async fn list_campaigns(
 ///
 /// Bu tek sorgu `tenant_id` filtresi **uygulamaz** ve bu bilinçlidir:
 /// `campaign_templates` bir işletme verisi değil, uygulama kataloğudur
-/// (bkz. `db/faz14.rs`). Kiracı filtresi eklendiği anda her işletme kendi
+/// (bkz. `db/campaign_seeds.rs`). Kiracı filtresi eklendiği anda her işletme kendi
 /// on kopyasını görmeye başlar ve şablonlar kopar. Katalog tablosunda kiracı
 /// verisi **yoktur**; bu yüzden sızıntı da yoktur.
 pub async fn list_campaign_templates(

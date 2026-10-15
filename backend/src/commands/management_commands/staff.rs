@@ -30,7 +30,7 @@ pub async fn get_staff(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     // Pasife alınmış personel listelenmez: kayıt silinmez ama işletme panosunda
-    // görünmez. Yeniden canlandırma bu fazın kapsamı dışında.
+    // görünmez. Yeniden canlandırma kapsam dışıdır.
     let rows = sqlx::query("SELECT id, name, role, tenant_id FROM users WHERE tenant_id = ? AND is_active = 1 ORDER BY name ASC")
         .bind(&tenant_id).fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
     let staff = rows

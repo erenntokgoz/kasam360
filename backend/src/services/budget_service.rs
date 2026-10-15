@@ -1,4 +1,4 @@
-//! Bütçe ve tekrarlayan gider motoru (Faz 9 — Spec §2.3 "dürüst kasa
+//! Bütçe ve tekrarlayan gider motoru (Spec §2.3 "dürüst kasa
 //! mutabakatı, açılış bakiyeleri sihirbazı, bütçe uyarıları, tekrarlayan
 //! işlemler (kira, stopaj)").
 //!

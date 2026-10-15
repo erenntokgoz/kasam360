@@ -169,7 +169,7 @@ create_compensation_refund(
 
 ---
 
-## 7. Frontend Entegrasyonu (Faz 17)
+## 7. Frontend Entegrasyonu
 
 - **10 saniyelik Undo**: Kullanıcı ödeme/void yaptıktan sonra 10 saniye içinde
   "Geri Al" butonu görünür. Bu, `create_compensation_void` /

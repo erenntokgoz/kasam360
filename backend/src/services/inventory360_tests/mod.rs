@@ -1,4 +1,4 @@
-﻿//! Faz 12 servis regresyon testleri.
+﻿//! Menü ve stok servis regresyon testleri.
 //!
 //! Kapsam daraltılırsa sessiz sıfırlama ve çapraz kiracı sızıntısı geri gelir.
 //! Testler özellikle `0` dönmesi gereken yerde `None`/`Err` döndüğünü

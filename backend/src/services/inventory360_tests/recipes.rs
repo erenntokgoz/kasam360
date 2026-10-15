@@ -1,4 +1,4 @@
-//! Faz 12 · Reçete maliyeti testleri.
+//! Reçete maliyeti testleri.
 //!
 //! Kapsam: randıman ve fire payı, malzeme fiyatı bilinmediğinde `0` yerine
 //! bilinmiyor (`None`) sayılması, ikinci aktif reçetenin reddi, özyinelemeli alt
@@ -283,10 +283,7 @@ async fn ikinci_aktif_recete_reddedilir() {
         "yabancı görünmez"
     );
     let ele_gecirme = deactivate_recipe(&mut conn, KIRACI_A, &b_recetesi.id).await;
-    assert!(
-        matches!(ele_gecirme, Err(_)),
-        "yabancı reçete pasife alınamaz"
-    );
+    assert!(ele_gecirme.is_err(), "yabancı reçete pasife alınamaz");
     let yabanci_maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &b_recetesi.id).await;
     assert!(
         matches!(yabanci_maliyet, Err(ref hata) if hata.starts_with("NOT_FOUND")),
@@ -433,11 +430,7 @@ async fn aktif_recete_maliyeti_urun_kimligiyle_cozulur() {
         .await
         .expect("maliyet cozulmeli");
     let maliyet = cozulen.expect("aktif recete cozulmeli");
-    assert_eq!(
-        maliyet.recipe_id.is_empty(),
-        false,
-        "recete kimligi dolu olmali"
-    );
+    assert!(!maliyet.recipe_id.is_empty(), "recete kimligi dolu olmali");
     assert_eq!(maliyet.materials_cost_cents, Some(40_000));
     assert_eq!(maliyet.standard_cost_cents, Some(40_000));
     assert_eq!(maliyet.unit_cost_cents, Some(4_000));

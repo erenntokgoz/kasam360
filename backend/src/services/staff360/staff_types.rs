@@ -1,4 +1,4 @@
-//! Faz 11 B3 — personel tipleri.
+//! Personel tipleri.
 //!
 //! Not kuralı: tarih alanları bilinmiyorsa `null` gelir, boş string `""` değil.
 //! Boş string ile `null` karışırsa ekranda "bilinmiyor" ile "0" ayrımı kaybolur.

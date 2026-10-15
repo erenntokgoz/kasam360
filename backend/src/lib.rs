@@ -76,7 +76,7 @@ pub fn run() {
             commands::get_active_tickets,
             commands::get_floor_plan,
             commands::move_table,
-            // Faz 13: Kroki çizim. `get_floor_plan` ile karıştırılmamalı —
+            // Kroki çizim. `get_floor_plan` ile karıştırılmamalı —
             // o komut kart görünümünün işletim verisini verir, bunlar kroki
             // geometrisini okur ve yazar.
             commands::floor_plan_commands::get_floor_layout,
@@ -118,9 +118,9 @@ pub fn run() {
             commands::update_table_name,
             commands::get_daily_summary,
             commands::get_receipts,
-            // Faz 15 B3 (D3): çift onay eşiği kiracı bazında yönetilir.
+            // Çift onay eşiği kiracı bazında yönetilir.
             // Eşiği değiştirmek yalnız işletme sahibine açıktır; okuma sahip ve
-            // müdüre açıktır. Arayüz Faz 17'de, komutlar şimdiden hazır.
+            // müdüre açıktır. Komutlar hazırdır.
             commands::threshold_commands::get_approval_threshold,
             commands::threshold_commands::set_approval_threshold,
             commands::threshold_commands::reset_approval_threshold,
@@ -130,11 +130,11 @@ pub fn run() {
             commands::create_compensation_refund,
             commands::get_audit_logs,
             commands::print_receipt,
-            // Faz 7: Hesap Defteri finansal hareketleri. Fiş, ayrı ekranın
+            // Hesap Defteri finansal hareketleri. Fiş, ayrı ekranın
             // konusu olmaktan çıkıp harekete bağlı bağlantıya dönüştü.
             commands::get_financial_movements,
             commands::get_active_order_id,
-            // Faz 7: fiş dışı basımları keyfi JSON değil, veritabanından okunur.
+            // Fiş dışı basımları keyfi JSON değil, veritabanından okunur.
             print_commands::print_z_report,
             print_commands::print_day_z_report,
             print_commands::print_cash_slip,
@@ -148,7 +148,7 @@ pub fn run() {
             branch_commands::create_branch,
             branch_commands::update_branch,
             branch_commands::archive_branch,
-            // Faz 3: anlık PIN onayı. Kuyruk komutları (`request_approval`,
+            // Anlık PIN onayı. Kuyruk komutları (`request_approval`,
             // `get_pending_approvals`, `process_approval`) kaldırıldı: onay
             // anında PIN ile alınır, kuyrukta bekletilmez.
             approval_commands::verify_manager_pin,
@@ -172,7 +172,7 @@ pub fn run() {
             platform_commands::update_tenant_modules,
             // Cihaz komutları alt modülde (`platform_commands::devices`). `generate_handler!`
             // `__cmd__` makrolarını hedef modülün **kendi yolunda** arar; yalnız `pub use`
-            // yeniden dışa aktarımı yetmez, bu yüzden tam yol yazılır (Faz 14'te
+            // yeniden dışa aktarımı yetmez, bu yüzden tam yol yazılır (yasal modülde
             // `legal360_commands` için aynı zorunluluk vardı).
             platform_commands::devices::get_devices,
             platform_commands::devices::record_device_heartbeat,
@@ -187,7 +187,7 @@ pub fn run() {
             management_commands::staff::get_staff,
             management_commands::staff::create_staff_member,
             management_commands::staff::delete_staff_member,
-            // Faz 4: modifier yönetimi bağımsız sekmeden kalktı; komutlar
+            // Modifier yönetimi: komutlar
             // CategoryForm/ProductForm yüzeyinden çağrılıyor ve yaşamaya devam ediyor.
             modifier_commands::get_modifier_groups,
             modifier_commands::create_modifier_group,
@@ -195,7 +195,7 @@ pub fn run() {
             modifier_commands::delete_modifier_group,
             modifier_commands::set_product_modifier_groups,
             modifier_commands::get_product_modifier_group_ids,
-            // Faz 5: tek rapor merkezi. `get_daily_summary`, `get_receipts` ve
+            // Tek rapor merkezi. `get_daily_summary`, `get_receipts` ve
             // `get_shift_history` tenant'sız kaldığı için bu kapıdan geçemez.
             report_commands::get_sales_report,
             report_commands::get_shift_report,
@@ -235,7 +235,7 @@ pub fn run() {
             ledger_commands::get_recurring_expenses,
             ledger_commands::get_directory_statement,
             ledger_commands::print_payment_receipt,
-            // Faz 11: Personel 360°. Maaş tutarı görmek yalnız OWNER'a açıktır;
+            // Personel 360°. Maaş tutarı görmek yalnız OWNER'a açıktır;
             // kapılar `commands::staff_commands` içinde `rbac` ile uygulanır.
             commands::staff_commands::list_staff_profiles,
             commands::staff_commands::save_staff_profile,
@@ -257,7 +257,7 @@ pub fn run() {
             commands::staff_commands::distribute_tip_pool,
             commands::staff_commands::get_staff_kpi,
             commands::staff_commands::get_suspicious_activity,
-            // Faz 12: Envanter 360°. Reçete ve raf ömrü komutları kendi feature
+            // Envanter 360°. Reçete ve raf ömrü komutları kendi feature
             // bayrağı kapalıyken 404 döner; bayrak kontrolü komutun ilk adımıdır.
             // Yollar tanım alt modülüne göre yazılır: `#[tauri::command]` gizli
             // `__cmd__` modülünü üretir ve bu modül `pub use` ile taşınamaz.
@@ -285,7 +285,7 @@ pub fn run() {
             inventory360_commands::supplier_commands::create_purchase_order_command,
             inventory360_commands::supplier_commands::receive_purchase_order_command,
             inventory360_commands::shelf_life_commands::get_expiry_report,
-            // Faz 16 — dış aktörler (dosya tabanlı takas; yeni port yok).
+            // Dış aktörler entegrasyonu (dosya tabanlı takas; yeni port yok).
             commands::external360_commands::qr_customer_session_open,
             commands::external360_commands::qr_customer_session_revoke,
             commands::external360_commands::qr_menu_build,
@@ -313,7 +313,7 @@ pub fn run() {
             inventory360_commands::waste_commands::close_stock_count_command,
             inventory360_commands::waste_commands::get_stock_count_command,
             inventory360_commands::waste_commands::list_stock_counts_command,
-            // Faz 14: Yasal & Özel Gün. İzin listelerinde MASTER yoktur:
+            // Yasal ve Özel Günler. İzin listelerinde MASTER yoktur:
             // platform hesabı işletmenin ruhsat, poliçe veya vergi belgesine
             // erişemez. Yazma yalnız OWNER'dır (prim, KDV ve indirim para
             // etkisidir); kupon uygulama komutu MANAGER'a açıktır çünkü

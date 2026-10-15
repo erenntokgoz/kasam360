@@ -1,4 +1,4 @@
-//! Faz 11 — Personel 360° servisleri.
+//! Personel 360° servisleri.
 
 pub mod kpi_service;
 pub mod payroll_service;

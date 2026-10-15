@@ -1,4 +1,4 @@
-//! Net bakiye komutu (Faz 9).
+//! Net bakiye komutu.
 //!
 //! Neden ayrı komut: ekran beş hesap türünü ayrı kartlar hâlinde gösterirken
 //! toplamı kendisi topluyordu. Toplama motorun (`ledger_service::net_balance`)

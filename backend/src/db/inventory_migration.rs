@@ -1,7 +1,7 @@
 use super::{tracing_fallback_log, DbPool};
 use sqlx::{Acquire, Row};
 
-/// Faz 12 · `stock_movements` tablosunu ürün bazlı düzeltmelere açar.
+/// `stock_movements` tablosunu ürün bazlı düzeltmelere açar.
 ///
 /// Neden tablo yeniden kurma gerekiyor: `inventory_item_id NOT NULL` idi ve yalnız
 /// eski `inventory_items` tablosunu (REAL tabanlı, ayrı sistem) işaret ediyordu.
@@ -148,7 +148,7 @@ pub async fn migrate_stock_movements_for_products(pool: &DbPool) -> Result<(), s
     Ok(())
 }
 
-/// Faz 12 · 86'd sütunlarını `products` tablosuna ekler.
+/// 86'd sütunlarını `products` tablosuna ekler.
 ///
 /// Neden ayrı kolon: `products.is_active` "ürün satışa sunulmuyor" demektir
 /// (sezon dışı, kalıcı olarak menüden kaldırılmış). 86'd ise "stok bitti,
@@ -176,7 +176,7 @@ pub(crate) async fn migrate_products_for_86d(pool: &DbPool) -> Result<(), sqlx::
     Ok(())
 }
 
-/// Faz 12 · `inventory_batches` tablosunu raf ömrü ve teslim izlenebilirliği
+/// `inventory_batches` tablosunu raf ömrü ve teslim izlenebilirliği
 /// için yeniden kurar.
 ///
 /// Neden tablo yeniden kurma gerekiyor: SQLite bir kolonun `NOT NULL` ya da

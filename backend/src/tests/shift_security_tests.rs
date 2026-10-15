@@ -1,6 +1,6 @@
-//! Faz 11 B1 — mevcut ihlatlerin kapatılması için regresyon testleri.
+//! Vardiya güvenlik regresyon testleri.
 //!
-//! Kapsam (docs/FAZ-11-PLAN.md §2.3):
+//! Kapsam:
 //! - V1: `get_active_shift` sorgusu tenant filtresizdi -> cross-tenant kasa sızıntısı
 //! - V2: `get_open_shifts` sorgusu tenant filtresizdi -> cross-tenant vardiya sızıntısı
 //! - V3: `waiter_clock_in` RBAC çağırmıyor ve tenant bağlamıyordu
@@ -89,9 +89,8 @@ async fn active_shift_sql(
     .fetch_optional(p)
     .await
     .map_err(|e| e.to_string())?;
-    Ok(row
-        .map(|r| r.try_get::<String, _>("id").map_err(|e| e.to_string()))
-        .transpose()?)
+    row.map(|r| r.try_get::<String, _>("id").map_err(|e| e.to_string()))
+        .transpose()
 }
 
 async fn open_shifts_sql(p: &sqlx::SqlitePool, tenant: &str) -> Result<Vec<String>, String> {

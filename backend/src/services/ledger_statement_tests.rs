@@ -1,4 +1,4 @@
-//! Cari ekstre ve tediye makbuzu testleri (Faz 9).
+//! Cari ekstre ve tediye makbuzu testleri.
 //!
 //! Kapsam: yön işareti, açılış bakiyesi, kiracı izolasyonu, kronolojik sıra,
 //! sessiz hata yasağı ve 80mm sütun genişliği.
@@ -372,7 +372,7 @@ fn format_cents_uses_turkish_thousands_separator() {
     assert_eq!(format_cents(5), "0.05 TL");
     assert_eq!(format_cents(87_500), "875.00 TL");
     assert_eq!(format_cents(1_234_567), "12.345.67 TL");
-    assert_eq!(format_cents(1_000_000_00), "1.000.000.00 TL");
+    assert_eq!(format_cents(100_000_000), "1.000.000.00 TL");
     assert_eq!(
         format_cents(-30_000),
         "-300.00 TL",

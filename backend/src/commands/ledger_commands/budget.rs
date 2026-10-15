@@ -1,4 +1,4 @@
-//! Bütçe ve tekrarlayan gider komutları (Faz 9).
+//! Bütçe ve tekrarlayan gider komutları.
 //!
 //! Neden ayrı dosya: `ledger_commands.rs` 500 satır tavanını aşıyordu; bu
 //! komutlar hesap defterinin yeni yüzeyleri ve motorla birebir eşleşiyor.

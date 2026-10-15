@@ -1,4 +1,4 @@
-//! Veresiye masa kapatma testleri (Faz 9).
+//! Veresiye masa kapatma testleri.
 //!
 //! Kritik kural: veresiye kapatmak KASAYA DOKUNMAZ. Masanın hesabı borçlu kalır,
 //! para kasada değil müşterinin bakiyesindedir. Kasa hareketi üreten bir masa

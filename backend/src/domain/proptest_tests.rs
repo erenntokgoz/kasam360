@@ -89,9 +89,9 @@ fn ulid_prefixes_distinct() {
 
 #[test]
 fn tenant_isolation_returns_err() {
-    let r: Result<(), String> = Err("TENANT_REQUIRED: tenant_id is required".to_string());
+    let msg = "TENANT_REQUIRED: tenant_id is required";
+    let r: Result<(), &str> = Err(msg);
     assert!(r.is_err());
-    let msg = r.unwrap_err();
     assert!(msg.starts_with("TENANT_REQUIRED"));
 }
 

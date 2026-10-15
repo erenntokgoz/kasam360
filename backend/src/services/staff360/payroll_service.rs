@@ -1,4 +1,4 @@
-//! Faz 11 B4 — bordro hesabı (5 model).
+//! Personel bordro hesabı (5 model).
 //!
 //! Modeller: FIXED, COMMISSION, TIP, HOURLY, PROFIT_SHARE. Her model gerçek
 //! tablodan okur; hiçbiri tahminle çalışmaz. Hesaplanamayan bileşen

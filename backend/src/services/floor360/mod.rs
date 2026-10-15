@@ -1,4 +1,4 @@
-//! Faz 13 · Kroki düzen servisi.
+//! Kroki düzen servisi.
 //!
 //! Katmanlar:
 //! - `types`    → sözleşme + doğrulama kuralları (tek doğruluk kaynağı)

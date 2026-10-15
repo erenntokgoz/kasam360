@@ -1,4 +1,4 @@
-//! Faz 10 analitik testleri — BCG, medyan, ürün marjı, kombinasyon.
+//! Analitik testleri — BCG, medyan, ürün marjı, kombinasyon.
 //!
 //! Her test kendi izole in-memory veritabanını kurar; ortak fixture yoktur.
 //! Böylece bir testin tabloyu değiştirmesi diğerini sessizce bozmaz.
@@ -384,7 +384,6 @@ async fn kombinasyon_veri_yoksa_bos_doner() {
         .await
         .expect("okunmali");
     assert!(combos.is_empty());
-    assert!(combos.first().is_none());
 }
 
 #[tokio::test]

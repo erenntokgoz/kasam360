@@ -35,7 +35,7 @@ fn context(sequence_hint: i64) -> AuditContext {
 }
 
 /// KVKK maskeleme **yazma noktasında** çalışır: diske giden satır maskelenmiş
-/// olmalıdır (Faz 15 B3).
+/// olmalıdır (Kimlik gizleme politikası).
 ///
 /// Saf fonksiyon testi yetmez — maske katmanı `AuditContext::new` içine
 /// yerleştirilmiştir ve burada o bağlantı kanıtlanır: ham veri SQLite'a

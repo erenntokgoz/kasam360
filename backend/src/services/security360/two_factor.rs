@@ -9,7 +9,7 @@
 //! bulutu yasaklar. TOTP tek cihazda üretilir, 30 saniyelik pencerelerde
 //! ilerler ve çevrimdışı doğrulanır.
 //!
-//! **Girişe zorunluluk ve arayüz Faz 17'de.** Buradaki servis kapalı durumdadır:
+//! **Girişe zorunluluk ve arayüz entegrasyonu tamamlanana kadar** buradaki servis kapalı durumdadır:
 //! `must_use_2fa` bayrağı okunur ve döndürülür, ancak giriş yolunu kesmez.
 //! Kesme kararı arayüz hazır olmadan alınırsa kullanıcı giriş ekranında
 //! kilitlenir ve çıkışı kalmaz.
@@ -31,7 +31,7 @@ pub const TOTP_ADIM_SN: i64 = 30;
 pub const TOTP_PENCERE: i64 = 1;
 
 /// TOTP sırrı (base32). Gerçek kurulumda kullanıcıya gösterilir; arayüz
-/// Faz 17'de. Uzunluk 32 karakter = 160 bit.
+/// Arayüz entegrasyonu için. Uzunluk 32 karakter = 160 bit.
 const SIRR_UZUNLUK: usize = 32;
 
 /// Base32 alfabesi (RFC 4648). `0/1/I/O` yok: kullanıcı bunları `O/I`
@@ -140,7 +140,7 @@ pub async fn kayit_ac(
     // Neden doğrulama satırı **burada** yazılmıyor: kullanıcı sırrı kaydetmeyi
     // unutmuş olabilir. Kayıt, tek başına "2FA hazır" demek değildir; hazır
     // olan şey `kayit_dogrula`dan geçen kayıttır. Yazarsak kullanıcı hiç kod
-    // girmeden 2FA etkin görünür ve girişte kilitlenir (arayüz Faz 17'de
+    // girmeden 2FA etkin görünür ve girişte kilitlenir (arayüzde
     // çıkışı olmayan kilit).
     let anlik_kod = kod_uret(&sirr, simdi_sn());
     Ok(TwoFactorRegistration {
@@ -292,7 +292,7 @@ pub async fn dogrulanmis_mi(
 ///
 /// **Sır kalıcı tabloda saklanmaz**, bu yüzden giriş anındaki doğrulama
 /// üretilemez. Doğrulama yalnız kayıt penceresinde (`kayit_dogrula`) ve o
-/// anda elimizde bulunan sırla yapılabilir. Giriş anında doğrulama Faz 17'de
+/// anda elimizde bulunan sırla yapılabilir. Giriş anında doğrulama arayüzde
 /// arayüzle birlikte ele alınacak; o aşamada sır saklama kararı (kilit
 /// kasası) yeniden değerlendirilir.
 pub fn kodu_dogrula(sirr: &str, girilen_kod: &str, zaman_sn: i64) -> bool {

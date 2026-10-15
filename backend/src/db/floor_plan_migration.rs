@@ -1,14 +1,14 @@
-//! Faz 13 · Kroki çizim şema migration'ı.
+//! Kroki çizim şema migration'ı.
 //!
 //! Neden ayrı dosya: `init_db` 500 satır sınırında kalmalı; kroki şeması
-//! (masa geometrisi + bölümler + mimari objeler) Faz 13'ün tamamıdır ve
+//! (masa geometrisi + bölümler + mimari objeler) kroki yapısının tamamıdır ve
 //! başka fazların şemasıyla karışmamalıdır.
 
 use crate::db::DbPool;
 
 /// Kroki şemasını kuran migration.
 ///
-/// Neden basit `ALTER TABLE ADD COLUMN` (Faz 12 deseni): masa geometrisi
+/// Neden basit `ALTER TABLE ADD COLUMN`: masa geometrisi
 /// beş **yeni** kolondur ve hepsinin varsayılanı vardır. Tabloyu yeniden
 /// kurmaya gerek yoktur; yeniden kurmak `orders` ve `reservations` gibi
 /// `tables`'a yönelen iki yabancı anahtarı riske atar.

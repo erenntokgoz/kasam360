@@ -111,9 +111,18 @@ const MENU_KAYNAKLARI: [(&str, &str); 4] = [
         "category.rs",
         include_str!("../commands/management_commands/category.rs"),
     ),
-    ("product.rs", include_str!("../commands/management_commands/product.rs")),
-    ("staff.rs", include_str!("../commands/management_commands/staff.rs")),
-    ("mod.rs", include_str!("../commands/management_commands/mod.rs")),
+    (
+        "product.rs",
+        include_str!("../commands/management_commands/product.rs"),
+    ),
+    (
+        "staff.rs",
+        include_str!("../commands/management_commands/staff.rs"),
+    ),
+    (
+        "mod.rs",
+        include_str!("../commands/management_commands/mod.rs"),
+    ),
 ];
 
 /// SQL kaçışlı dizeleri: `sqlx::query("...")` ve `query_scalar("...")` kalıpları.
@@ -133,7 +142,7 @@ fn sql_ifadeleri(kaynak: &str) -> Vec<String> {
         }
         let mut son = String::new();
         let mut kapali = false;
-        while let Some((_, ic)) = chars.next() {
+        for (_, ic) in chars.by_ref() {
             if ic == '"' {
                 kapali = true;
                 break;

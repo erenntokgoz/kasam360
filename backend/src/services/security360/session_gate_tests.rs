@@ -23,7 +23,7 @@ async fn kullanici(conn: &mut SqliteConnection, id: &str, rol: &str, aktif: i64)
 
 #[tokio::test]
 async fn varsayilanda_oturum_zorunlu_degil() {
-    // Arayüz Faz 17'de jeton gönderene kadar mevcut davranış korunur.
+    // Arayüz jeton gönderene kadar mevcut davranış korunur.
     let mut conn = conn().await;
     assert!(!zorunlu_kil(&mut conn, "tenant_a").await.expect("okunur"));
     assert!(oturum_kapisi(&mut conn, None, "tenant_a")

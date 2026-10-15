@@ -5,7 +5,7 @@
 //! `&mut SqliteConnection` alır, yani **komutsuz testlenebilir**; Tauri sarmalayıcıları
 //! yalnızca yetki + denetim ekler. `ledger_commands` vekiliyle aynı desen.
 //!
-//! Güvenlik kararları (Faz 15 B1):
+//! Güvenlik kararları (Cihaz yönetimi):
 //!   * `record_device_heartbeat` **yetkisizdi**: herhangi bir çağıran herhangi
 //!     bir cihazın atış zamanını yazabiliyordu. Artık rol kapısı ve kiracı
 //!     sınırı var; hedef bulunamazsa `NOT_FOUND` döner (sessiz `Ok` değil).

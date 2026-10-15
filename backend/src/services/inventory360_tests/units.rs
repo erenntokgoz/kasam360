@@ -1,4 +1,4 @@
-//! Faz 12 · Birim çevrimi testleri.
+//! Birim çevrimi testleri.
 //!
 //! Kapsam: çevrim yolunun bulunması, komşu adımlarla zincirlenmesi, ters yönün
 //! ayrı kayıtla açılması ve çapraz kiracı reddi.
@@ -91,10 +91,7 @@ async fn birim_cevrim_komşu_adimlarla_zincirlenir() {
     // Zincirleme ters yönü kendiliğinden yaratmaz: tanımsız yön hataya düşmeye
     // devam eder, yoksa stok ile tüketim sessizce ters yönde karşılaştırılır.
     let ters = convert_quantity(&mut conn, KIRACI_A, "mg", "kg", 2_000_000.0).await;
-    assert!(
-        matches!(ters, Err(_)),
-        "tek yönlü tanımdan ters yol türemez"
-    );
+    assert!(ters.is_err(), "tek yönlü tanımdan ters yol türemez");
     assert_eq!(
         list_unit_conversions(&mut conn, KIRACI_A)
             .await
@@ -151,7 +148,7 @@ async fn baska_kiracinin_cevrimi_kullanilamaz() {
     // Tanımı olmayan işletme A'nın tanımını da göremeli: çevrim yolu işletmeye
     // özeldir, paylaşılan bir sözlük değildir.
     let izinsiz = convert_quantity(&mut conn, KIRACI_C, "kg", "g", 2.0).await;
-    assert!(matches!(izinsiz, Err(_)), "başkasının çevrimi kullanılamaz");
+    assert!(izinsiz.is_err(), "başkasının çevrimi kullanılamaz");
     // Aynı işletme çifti iki işletmede iki farklı oran: hangisinin uygulandığı
     // ancak kiracı filtresiyle ayırt edilebilir.
     let a_sonuc = convert_quantity(&mut conn, KIRACI_A, "kg", "g", 2.0)
@@ -180,10 +177,7 @@ async fn baska_kiracinin_cevrimi_kullanilamaz() {
         .await
         .unwrap();
     let b_sonrası = convert_quantity(&mut conn, KIRACI_B, "kg", "g", 2.0).await;
-    assert!(
-        matches!(b_sonrası, Err(_)),
-        "silinince B yine yolsuz kalmalı"
-    );
+    assert!(b_sonrası.is_err(), "silinince B yine yolsuz kalmalı");
     let a_sonrası = convert_quantity(&mut conn, KIRACI_A, "kg", "g", 2.0)
         .await
         .unwrap();

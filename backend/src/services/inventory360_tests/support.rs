@@ -1,4 +1,4 @@
-//! Faz 12 testlerinin ortak veri tabanı ve bağlantı yardımcıları.
+//! Menü ve stok testlerinin ortak veri tabanı ve bağlantı yardımcıları.
 //!
 //! Yardımcılar ayrı dosyada tutulur: altı test modülü aynı şemayı ve aynı
 //! bağlantı havuzunu kullanır. Şema tek yerde olmazsa bir modül güncellendiğinde
@@ -40,7 +40,7 @@ pub async fn conn_of(pool: &sqlx::Pool<sqlx::Sqlite>) -> SqliteConnection {
     pool.acquire().await.expect("baglanti alinmali").detach()
 }
 
-/// Test ürünü. `stock_quantity` bilinçli olarak yazılmaz: Faz 12 servisleri
+/// Test ürünü. `stock_quantity` bilinçli olarak yazılmaz: Envanter servisleri
 /// stoğu `inventory_batches` partilerinden okur, ürün satırındaki eski kolon
 /// ikinci bir doğruluk kaynağı yaratırdı.
 pub async fn urun_ekle(

@@ -1,4 +1,4 @@
-//! Faz 11 B4 — şüpheli işlem radarı.
+//! Şüpheli işlem radarı.
 //!
 //! Tasarım kuralı: **eşik altı uyarı üretilmez.** Az örneklemli veriden
 //! çıkan "anormallik" iftira olur; bir garsonun 2 iptali %100 oran görünür

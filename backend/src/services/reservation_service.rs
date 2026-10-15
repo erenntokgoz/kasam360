@@ -1,4 +1,4 @@
-//! Faz 8 — Rezervasyon veri katmanı.
+//! Rezervasyon veri katmanı.
 //!
 //! Neden ayrı servis: `commands.rs` 500 satır sınırını aştığı için rezervasyonun
 //! SQL kuralları burada toplanır ve bellek içi SQLite ile doğrudan test edilir.

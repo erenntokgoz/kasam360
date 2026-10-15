@@ -1,4 +1,4 @@
-//! `reservation_service` testleri (Faz 8).
+//! `reservation_service` testleri.
 //!
 //! Kapsam karar kurallarıdır:
 //! 1. **Yalnız boş masa:** `OCCUPIED`/`RESERVED` masaya rezervasyon yazılamaz.

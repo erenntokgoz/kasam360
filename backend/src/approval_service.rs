@@ -1,4 +1,4 @@
-//! Anlık PIN onayı çekirdeği (Faz 3).
+//! Anlık PIN onayı çekirdeği.
 //!
 //! Kural: void / indirim / ikram işlemleri MASTER hariç **her** işlem sahibi
 //! için anlık PIN onayına tabidir. Onay iki adımdan oluşur:

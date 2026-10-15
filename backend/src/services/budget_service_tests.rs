@@ -1,4 +1,4 @@
-//! Bütçe ve tekrarlayan gider testleri (Faz 9).
+//! Bütçe ve tekrarlayan gider testleri.
 //!
 //! Kapsam: limit karşılaştırması, %80 uyarı eşiği, ay filtresi, kiracı
 //! izolasyonu, ay sonu sıkıştırma ve `AGENTS.md §3.4` sessiz hata yasağı.

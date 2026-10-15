@@ -51,7 +51,7 @@ pub async fn open_shift(
     // yazılır (AGENTS.md §3.3).
     let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
 
-    // Check if open shift exists
+    // Açık vardiya var mı kontrol et
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?",
     )

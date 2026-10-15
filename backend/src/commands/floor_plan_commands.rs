@@ -1,4 +1,4 @@
-//! Faz 13 · Kroki çizim Tauri komutları.
+//! Kroki çizim Tauri komutları.
 //!
 //! Bu katman **yalnız üç iş yapar**: yetkiyi sınar, kilidi alır, servise
 //! delegasyon yapar. Yerleşim kuralları `services::floor360` içindedir.

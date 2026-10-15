@@ -1,4 +1,4 @@
-//! P&L çift sayım testleri (Faz 9).
+//! P&L çift sayım testleri.
 //!
 //! Kapsam: peşin satış, veresiye tahsilatı, **çift sayım yolu**, kiracı
 //! izolasyonu, dönem filtresi ve sessiz hata yasağı.

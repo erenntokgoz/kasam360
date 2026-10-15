@@ -1,4 +1,4 @@
-//! Faz 10 analitik servisi — BCG ve kombinasyon bölümü (SPEC §34, §25).
+//! Analitik servisi — BCG ve kombinasyon bölümü (SPEC §34, §25).
 //!
 //! Tüm sorgular `tenant_id` ile filtrelenir; hiçbir para değeri float olarak
 //! taşınmaz. Maliyet yalnız FIFO `inventory_batches.unit_cost_cents` kaynağından

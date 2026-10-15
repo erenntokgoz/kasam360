@@ -1,4 +1,4 @@
-//! Faz 14 · Yasal takvim, kampanya, sigorta, telif ve e-Arşiv servisleri.
+//! Yasal takvim, kampanya, sigorta, telif ve e-Arşiv servisleri.
 //!
 //! Bu katman komutlardan bağımsızdır: iş mantığı burada yaşar, Tauri komutu
 //! yalnız yetki sınayıp buraya delegasyon yapar. Böylece her kural Tauri

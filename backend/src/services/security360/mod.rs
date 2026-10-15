@@ -1,4 +1,4 @@
-//! Faz 15 — giriş güvenliği: kaba kuvvet kilidi ve kimlik politikası.
+//! Giriş güvenliği: kaba kuvvet kilidi ve kimlik politikası.
 //!
 //! Neden servis katmanı: `auth_commands` Tauri `State` taşıdığı için
 //! doğrudan test edilemez. Buradaki yordamlar `&mut SqliteConnection` alır,

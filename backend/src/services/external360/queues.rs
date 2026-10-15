@@ -3,7 +3,7 @@
 //! Neden sahte sağlayıcı: AGENTS.md §3.1 harici bulutu yasaklıyor; gerçek Meta
 //! API ya da SMTP sunucusuna **bağlanılamaz**. Sahte sağlayıcı ağa çıkmadan
 //! gerçek entegrasyonun istediği durum makinesini (kuyruk → gönderim → teslim /
-//! hata) çalıştırır; Faz 17'de sağlayıcı değişir, veri modeli değişmez.
+//! hata) çalıştırır; sağlayıcı değişse de veri modeli değişmez.
 //!
 //! **En kritik kural: sahte gönderim gerçekmiş gibi işaretlenmez.** Her satır
 //! `provider_flag = 'FAKE'` taşır ve testler bunu doğrular. Bu bayrak olmazsa
@@ -28,7 +28,7 @@ pub struct IslemeSonucu {
 /// Sahte WhatsApp sağlayıcısı.
 ///
 /// Niden `fn` ve neden çıktı üretmiyor: gerçek sağlayıcı bir yanıt kimliği
-/// döndürür (Meta `wamid`). Sahte sağlayıcı da aynı alanı doldurur ki Faz 17'de
+/// döndürür (Meta `wamid`). Sahte sağlayıcı da aynı alanı doldurur ki arayüzde
 /// veri modeli değişmesin. **Bu fonksiyon ağa çıkmaz** ve çıkmayacak biçimde
 /// yazılmıştır: burada gerçek bir istemci çağrısı bulunsa AGENTS.md §3.1 ihlal
 /// edilmiş olurdu.

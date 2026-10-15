@@ -1,4 +1,4 @@
-//! Finansal rapor komutları (Faz 9): P&L ve dışa aktarım.
+//! Finansal rapor komutları: P&L ve dışa aktarım.
 //!
 //! Neden ayrı dosya: `expenses.rs` 500 satır tavanına ulaşmıştı. Hesaplama
 //! mantığı zaten `services::pnl_service` içindedir; bu dosya yalnız yetki,

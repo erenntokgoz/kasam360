@@ -86,7 +86,7 @@ impl AuditContext {
         if !category::is_valid(category) {
             return Err(format!("UNKNOWN_AUDIT_CATEGORY: '{}'", category));
         }
-        // Maskeleme **yazma noktasında** yapılır (Faz 15 B3). Arayüzde
+        // Maskeleme **yazma noktasında** yapılır (Kimlik gizleme politikası). Arayüzde
         // maskelemek işe yaramaz: veri o arada diske yazılmış olur ve sonradan
         // gizlemek kaydı geri döndürülemez hale getirmez. `new` tek yazma
         // noktası olduğu için buraya yerleştirmek yeterlidir.

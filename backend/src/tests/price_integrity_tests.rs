@@ -1,4 +1,4 @@
-//! Faz 4 fiyat bütünlüğü testleri.
+//! Fiyat bütünlüğü testleri.
 //!
 //! Kapsam: modifier fiyatının **tek doğruluk kaynağı** veritabanıdır. İki
 //! gerçek para hatası bu testlerle kilitlenir:
@@ -33,7 +33,7 @@ async fn pool() -> sqlx::SqlitePool {
         .execute(&pool)
         .await
         .expect("şema uygulanır");
-    // Faz 4 migration'ının test karşılığı.
+    // Fiyat migration'ının test karşılığı.
     sqlx::raw_sql("ALTER TABLE modifier_groups ADD COLUMN category_id TEXT;")
         .execute(&pool)
         .await

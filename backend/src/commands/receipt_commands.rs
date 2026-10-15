@@ -72,9 +72,9 @@ pub struct ReceiptDto {
     pub has_items: bool,
 }
 
-/// Fiş listesi — **tahsilat kaydından** türetilir (Faz 7).
+/// Fiş listesi — **tahsilat kaydından** türetilir.
 ///
-/// Neden servis: Faz 6'daki şube kilidine benzer şekilde veri katmanı
+/// Neden servis: Şube kilidine benzer şekilde veri katmanı
 /// (`services::receipt_service`) tek kaynağı ve tenant izolasyonunu taşır.
 /// Fişin varlığı siparişten değil **tahsilattan** gelir; böylece aynı satış iki
 /// listede iki kez görünmez ve uydurma KDV hesabı ortadan kalkar.
@@ -137,7 +137,7 @@ pub async fn get_receipt_details(
     crate::services::receipt_service::find(&mut conn, &tenant, &receipt_id).await
 }
 
-/// Hesap Defteri finansal hareketleri (Faz 7).
+/// Hesap Defteri finansal hareketleri.
 ///
 /// Hareket satırı fiş taşıyabilir ya da taşımayabilir; `receipt_id` boşsa
 /// arayüz açıkça "Fiş yok" durumunu gösterir. Fiş, ayrı bir ekranın konusu
@@ -213,7 +213,7 @@ pub struct FinancialMovementDto {
     pub fiscal_receipt_no: Option<String>,
 }
 
-/// Termal fiş basımı — **yalnız kayıtlı tahsilat için** (Faz 7).
+/// Termal fiş basımı — **yalnız kayıtlı tahsilat için**.
 ///
 /// Neden imza değişti: komut rol ve tenant almayan, kendisine gönderilen
 /// keyfi JSON'u basıyordu. Bu, hem yetkisiz fiş basımına hem de **uydurma

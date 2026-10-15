@@ -1,4 +1,4 @@
-//! Faz 10 analitik veri modelleri.
+//! Analitik veri modelleri.
 //!
 //! Neden ayrı dosya: DTO'lar hem servisin hem komut katmanının ortak
 //! sözleşmesidir; servis dosyası 500 satır sınırına yaklaşmasın diye

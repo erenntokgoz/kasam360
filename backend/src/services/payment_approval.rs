@@ -124,11 +124,11 @@ pub async fn consume_discount_approval(
 ///
 /// **Neden indirim onayı varsa bu yüzey atlanır:** tek bir jeton tek bir
 /// işleme bağlıdır (`operation` kapsam denetiminde yer alır). İndirimli ve
-/// yüksek tutarlı bir ödemede iki ayrı onay gerekir; arayüz Faz 17'de iki
+/// yüksek tutarlı bir ödemede iki ayrı onay gerekir; arayüzde iki
 /// jeton alanı olmadan ikisini aynı anda göndermek mümkün değildir. İndirim
 /// onayı zaten müdür/sahip tarafından verilmiş olduğundan ikinci kez onay
 /// istemek patronu kasada bekletirdi. Tek jetonla iki onayı birleştirmek
-/// kapsam denetimini anlamsızlaştırırdı. Bilinen sınır, Faz 17'de iki alanlı
+/// kapsam denetimini anlamsızlaştırırdı. Bilinen sınır, arayüzde iki alanlı
 /// akışla kapatılacak.
 #[allow(clippy::too_many_arguments)]
 pub async fn consume_total_approval(

@@ -1,4 +1,4 @@
-//! `print_commands` testleri (Faz 7).
+//! `print_commands` testleri.
 //!
 //! Basım komutları Tauri `State` taşıdığı için doğrudan çağrılamaz; bu yüzden
 //! testler **veri kaynağı ve kapı** mantığını doğrular: basım yalnız tenant'ın

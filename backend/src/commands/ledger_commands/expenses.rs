@@ -2,7 +2,7 @@
 //!
 //! Bu dosya ledger_commands.rs 500 satır tavanını aştığı için bölündü.
 //!
-//! Güvenlik kapıları (Faz 9): rol kapısı, fail-closed kiracı çözümü,
+//! Güvenlik kapıları: rol kapısı, fail-closed kiracı çözümü,
 //! tarih aralığının yarım kabul edilmemesi, para okumalarında hata yükseltme
 //! (`AGENTS.md §3.4`), her yazma işleminde `audit_ledger` kaydı.
 

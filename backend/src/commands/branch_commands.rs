@@ -1,13 +1,13 @@
 //! Şube komutları.
 //!
-//! Yetki modeli (AGENTS.md §6, Faz 6):
+//! Yetki modeli (AGENTS.md §6):
 //! - **Şube ekle / güncelle / arşivle yalnız MASTER'ın.** İşletme sahibi şube
 //!   yönetmez; patron panelinde şube sekmesi yoktur (yalnız geçiş dropdown'ı).
 //! - **Şube listeleme** işletme sahibi ve müdüre açıktır, ama yalnız **kendi
 //!   tenant'ının** şubelerini görür. Bu okuma şube geçişi için gereklidir;
 //!   yazma yetkisi taşımaz.
 //!
-//! Faz 6 öncesi bu dosyada hiç RBAC kapısı yoktu ve `tenant_id` çağırandan
+//! Önceden bu dosyada hiç RBAC kapısı yoktu ve `tenant_id` çağırandan
 //! geliyordu: herhangi bir oturum başka bir işletmenin şubelerini okuyabiliyor
 //! ve şube oluşturabiliyordu. Artık kapı fail-closed, tenant zorunlu ve tüm SQL
 //! kuralları `services::branch_service` içinde.

@@ -1,4 +1,4 @@
-//! Faz 12 · Raf ömrü testleri.
+//! Raf ömrü testleri.
 //!
 //! Kapsam: dolmuş partinin risk tutarıyla raporlanması, uyarı penceresi,
 //! tarihi yazılmamış partinin "bilinmiyor" sayılması, boşalan partinin
@@ -105,7 +105,7 @@ async fn uyari_penceresindeki_parti_ayri_gosterilir() {
         ShelfLifePolicyInput {
             product_id: "prd_1".to_string(),
             shelf_life_days: 45,
-            warning_days: Some(60.min(44)),
+            warning_days: Some(44),
             storage_instruction: None,
             is_active: Some(true),
         },
@@ -402,10 +402,9 @@ async fn baska_kiracinin_partisine_tarih_yazilamaz() {
         .expect_err("bozuk tarih reddedilmeli");
     assert!(bicim.contains("YYYY-AA-GG"), "neden belirtilmeli: {bicim}");
 
-    let benim = set_batch_expiry(&mut conn, T, "bat_benim", &gun(10))
+    set_batch_expiry(&mut conn, T, "bat_benim", &gun(10))
         .await
         .expect("kendi partisine tarih yazilmali");
-    assert_eq!(benim, (), "yazma komutu bir deger dondurmaz");
 
     // Yabancı işletmenin raporu kendi riskini görür, bizim partimizi görmez.
     let rapor = expiring_batches(&mut conn, T2)

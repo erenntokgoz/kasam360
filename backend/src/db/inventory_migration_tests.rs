@@ -1,10 +1,12 @@
-//! Faz 12 migration regresyonları.
+//! Envanter şema göçü regresyon testleri.
 //!
 //! Kapsam dışı bırakılırsa sessiz tenant birleşmesi geri gelir: `inventory_batches`
 //! üzerindeki `DEFAULT 'DEFAULT_TENANT'`, `tenant_id` bind edilmeyen her parti
 //! yazımını ortak havuza indiriyordu. Testler bu sütunun kaybolduğunu kanıtlar.
 
-use crate::db::faz12::{migrate_inventory_batches_for_shelf_life, migrate_products_for_86d};
+use crate::db::inventory_migration::{
+    migrate_inventory_batches_for_shelf_life, migrate_products_for_86d,
+};
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::Row;
 

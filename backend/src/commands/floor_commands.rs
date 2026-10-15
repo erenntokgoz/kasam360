@@ -17,7 +17,7 @@ pub struct FloorPlanData {
     pub opened_at: Option<String>,
     #[serde(rename = "waiterId")]
     pub waiter_id: Option<String>,
-    /// Running total for the table in integer cents. 0 means no active order.
+    /// Masa için tamsayı kuruş cinsinden yürüyen toplam. 0 aktif sipariş olmadığını belirtir.
     #[serde(rename = "currentTotal")]
     pub current_total: i64,
 }
@@ -66,7 +66,7 @@ pub async fn move_table(
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    // Tenant çözümlemesi: masa taşıma kiracı sınırını aşamaz. Bu komut Faz 8
+    // Tenant çözümlemesi: masa taşıma kiracı sınırını aşamaz. Bu komut rezervasyon
     // öncesi `WHERE id=?` filtresiyle çalışıyordu; başka bir işletmenin masası
     // taşınabiliyor ve o işletmenin rezervasyonu sessizce eziliyordu.
     let tenant = require_tenant_id(tenant_id.as_deref())?;
@@ -287,14 +287,14 @@ pub async fn merge_tables(
     crate::services::reservation_service::assert_no_open_reservation(&mut tx, &tenant, &target_id)
         .await?;
 
-    // Move all open orders from source to target
+    // Kaynak masadan hedef masaya tüm açık siparişleri taşı
     sqlx::query("UPDATE orders SET table_id = ? WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')")
         .bind(&target_id).bind(&source_id).bind(&tenant)
         .execute(&mut *tx).await.map_err(|e| e.to_string())?;
 
-    // Move all order_items if needed (they reference order_id, so no change needed)
+    // Sipariş kalemleri order_id'ye referans verdiği için değişime gerek yoktur
 
-    // Free the source table
+    // Kaynak masayı serbest bırak
     sqlx::query("UPDATE tables SET status = 'AVAILABLE', current_total = 0, waiter_id = NULL, opened_at = NULL WHERE id = ? AND tenant_id = ?")
         .bind(&source_id).bind(&tenant)
         .execute(&mut *tx).await.map_err(|e| e.to_string())?;

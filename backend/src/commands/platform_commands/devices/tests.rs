@@ -1,4 +1,4 @@
-//! Cihaz komutlarının yetki, kapsam ve kimlik testleri (Faz 15 B1).
+//! Cihaz komutlarının yetki, kapsam ve kimlik testleri (Cihaz güvenliği).
 //!
 //! Testler komut yerine mantık yordamlarını çağırır; Tauri `State` test
 //! ortamında kurulamaz. Bu yüzden `list_devices`, `record_heartbeat`,

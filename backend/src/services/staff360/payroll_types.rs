@@ -1,4 +1,4 @@
-//! Faz 11 B4 — maaş, bahşiş, KPI ve şüpheli işlem tipleri.
+//! Maaş, bahşiş, KPI ve şüpheli işlem tipleri.
 //!
 //! Maaş gizliliği kuralı (AGENTS.md §3.2): `PAYROLL_MANAGER_VIEW` yetkisi
 //! olmayan çağıran için tutarlar `None` döner. Sıfır **değil** `None` çünkü

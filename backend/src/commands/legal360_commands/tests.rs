@@ -1,4 +1,4 @@
-//! Faz 14 komut katmanı regresyon testleri.
+//! Yasal ve kampanya komut katmanı regresyon testleri.
 //!
 //! Kapsam dışı bırakılırsa üç sessiz açık geri gelir:
 //!   * MASTER yetki listesine yanlışlıkla eklenir ve işletmenin belgesini görür,
@@ -47,7 +47,7 @@ fn yazma_kapisi_yalnizca_sahiptir() {
 #[test]
 fn master_platform_hesabi_yasal_module_giremez() {
     // AGENTS.md §6: MASTER POS/Floor/KDS dışında da işletme içi kayıtlara
-    // bakmaz. Bu test, Faz 14'e yeni bir komut eklerken MASTER'ın izin
+    // bakmaz. Bu test, yeni bir yasal komut eklerken MASTER'ın izin
     // listesine sızmasını yakalar.
     let hata = rbac::require_any("Master Admin", &OKUMA_ROLU).unwrap_err();
     assert!(hata.starts_with("UNAUTHORIZED"), "{hata}");
@@ -87,17 +87,17 @@ fn oturumsuz_cagri_default_tenanta_dusmez() {
 
 #[test]
 fn denetim_kategorileri_donusmaz_kume_ayittir() {
-    // Yeni denetim kategorisi acmak, zincir dogrulamasini degistirir; Faz 14
+    // Yeni denetim kategorisi acmak, zincir dogrulamasini degistirir; yasal modül
     // mevcut iki kategoriyi kullanir.
     assert_eq!(
         KATEGORI_FINANS,
         crate::services::audit_service::category::FINANS,
-        "Faz 14 finans kategorisini yeniden tanimlamamali"
+        "Finans kategorisi yeniden tanimlanmamali"
     );
     assert_eq!(
         KATEGORI_MENU,
         crate::services::audit_service::category::MENU,
-        "Faz 14 menu kategorisini yeniden tanimlamamali"
+        "Menu kategorisi yeniden tanimlanmamali"
     );
     assert!(
         crate::services::audit_service::category::is_valid(KATEGORI_FINANS),

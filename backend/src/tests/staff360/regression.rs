@@ -7,7 +7,7 @@ use super::*;
 async fn mudur_maas_tutarini_gormez_gizli_doner() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
-    let _ = staff_service::upsert_profile(
+    staff_service::upsert_profile(
         &p,
         "tenant_a",
         "usr_boss",
@@ -72,7 +72,7 @@ async fn mudur_maas_tutarini_yazamaz_kayit_korunur() {
             notes: None,
         };
     // Patron mevcut maaşı belirler.
-    let _ = staff_service::upsert_profile(&p, "tenant_a", "usr_boss", true, &profil(45_000, 0))
+    staff_service::upsert_profile(&p, "tenant_a", "usr_boss", true, &profil(45_000, 0))
         .await
         .expect("patron yazabilmeli");
 
@@ -93,7 +93,7 @@ async fn mudur_maas_tutarini_yazamaz_kayit_korunur() {
 async fn mudur_tutarsiz_profili_ad_dan_yazabilir() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
-    let _ = staff_service::upsert_profile(
+    staff_service::upsert_profile(
         &p,
         "tenant_a",
         "usr_boss",

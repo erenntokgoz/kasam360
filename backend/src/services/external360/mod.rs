@@ -1,7 +1,7 @@
-//! Faz 16 — dış aktör servisi.
+//! Dış aktör entegrasyon servisi.
 //!
 //! Erişim modeli kararı (C-8): dış aktörler **ağa çıkmaz**, takas dosya
-//! üzerinden yapılır. Gerekçe `migrations/schema.sql` içindeki Faz 16 başlığında.
+//! üzerinden yapılır. Gerekçe `migrations/schema.sql` içindeki ilgili başlıkta.
 //!
 //! Katman sözleşmesi: bu modül iş mantığı taşır ve yalnız `&mut SqliteConnection`
 //! alır; Tauri `State` taşımadığı için test edilebilir. Komut katmanı yalnız yetki

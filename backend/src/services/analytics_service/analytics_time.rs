@@ -1,4 +1,4 @@
-//! Faz 10 analitik servisi — zaman, hedef, rakip fiyat ve iptal bölümü.
+//! Analitik servisi — zaman, hedef, rakip fiyat ve iptal bölümü.
 //!
 //! Bu dosya `analytics_product.rs` ile birlikte `analytics_service` modülünü
 //! oluşturur; ikisi de aynı 500 satır sınırına uyar.

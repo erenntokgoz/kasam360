@@ -1,4 +1,4 @@
-//! `report_service` testleri (Faz 5).
+//! `report_service` testleri.
 //!
 //! Kapsam karar kurallarıdır: **tenant izolasyonu**, tarih aralığı filtresi,
 //! kuruş bütünlüğü ve "kim onayladı" bilgisinin taşınması. İçerik uyduran

@@ -1,4 +1,4 @@
-//! `receipt_service` testleri (Faz 7).
+//! `receipt_service` testleri.
 //!
 //! Kapsam karar kurallarıdır:
 //! 1. **Tek finansal gerçeklik:** fiş yalnız tahsilat kaydından türetilir; sipariş
@@ -351,7 +351,7 @@ async fn kalem_yoksa_alt_toplam_ve_kdv_uretilmez() {
     let receipts = list(&mut conn, TENANT_A, 50).await.expect("liste okunur");
     let receipt = &receipts[0];
 
-    // Faz 6 öncesi burada `total * 100 / 110` ile KDV uyduruluyordu.
+    // Önceden burada `total * 100 / 110` ile KDV uyduruluyordu.
     assert!(!receipt.has_items);
     assert_eq!(receipt.subtotal_cents, 0);
     assert_eq!(receipt.tax_total_cents, 0);

@@ -1,4 +1,4 @@
-//! Kâr/zarar (P&L) motoru (Faz 9).
+//! Kâr/zarar (P&L) motoru.
 //!
 //! ## Çift sayım kuralı
 //!

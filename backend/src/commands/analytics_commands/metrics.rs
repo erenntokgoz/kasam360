@@ -1,4 +1,4 @@
-//! Faz 10 komut katmanı: rapor merkezi analitikleri (SPEC §34, §25).
+//! Rapor merkezi analitikleri (SPEC §34, §25).
 //!
 //! Bu katman yalnız yetki, kiracı sınırı ve doğrulama yapar; hesaplama
 //! `analytics_service` içindedir. Böylece servis saf SQL/logic kalır, komut ise

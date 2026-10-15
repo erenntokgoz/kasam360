@@ -1,4 +1,4 @@
-//! Hesap Defteri güvenlik kapısı testleri (Faz 9).
+//! Hesap Defteri güvenlik kapısı testleri.
 //!
 //! Kapsam: rol kapısı, fail-closed kiracı, tarih aralığı, kiracılar arası
 //! bakiye sızıntısı ve `AGENTS.md §3.4` "finansal sessiz hata" yasağı.

@@ -1,4 +1,4 @@
-//! Faz 12 Tauri komutlarının ortak güvenlik katmanı.
+//! Menü ve envanter Tauri komutlarının ortak güvenlik katmanı.
 //!
 //! Bu katman **yalnız yetki sınar ve servise delegasyon yapar**; iş mantığı
 //! `services/inventory360` içindedir. Böylece iş mantığı komut altyapısı olmadan

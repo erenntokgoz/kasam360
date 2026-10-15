@@ -21,7 +21,7 @@ pub struct CartItemDto {
         default
     )]
     pub unit_price: i64,
-    /// Deprecated: Faz 17'de kaldırılacak, yerine `tax_rate_bp` gelecek.
+    /// Kullanımdan kalkacak: yerine `tax_rate_bp` kullanılacak.
     /// Hesap backend'deneldiği için client'tan okunmaz; geriye uyumluluk için kalır.
     #[serde(rename = "taxRate", alias = "tax_rate", default)]
     pub tax_rate: Option<i64>,
@@ -233,7 +233,7 @@ pub async fn process_payment(
 
     // Aktif siparişi temizle ve masayı AVAILABLE olarak ayarla
     if let Some(table_id) = &payload.customer_ref {
-        // Faz 8: masa boşaltılıyorsa açık rezervasyon kaydı da kapatılır.
+        // Masa boşaltılıyorsa açık rezervasyon kaydı da kapatılır.
         // Yazma tenant filtresizdi; başka bir işletmenin masası bu yolla
         // boşaltılabiliyordu (AGENTS.md §3.3 ihlali).
         let _ = crate::services::reservation_service::close_open_for_table(
@@ -414,7 +414,7 @@ pub async fn process_split_payment(
         }
 
         if let Some(table_id) = effective_table_id {
-            // Faz 8: tam tahsilatta masa boşalıyorsa açık rezervasyon kaydı da
+            // Tam tahsilatta masa boşalıyorsa açık rezervasyon kaydı da
             // kapanır; yazmalar tenant filtresizdi.
             let _ = crate::services::reservation_service::close_open_for_table(
                 &mut tx,

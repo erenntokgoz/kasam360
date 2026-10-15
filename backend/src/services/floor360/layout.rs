@@ -1,4 +1,4 @@
-//! Faz 13 · Kroki düzenini okuma ve yazma.
+//! Kroki düzenini okuma ve yazma.
 //!
 //! Yazma disiplini: her yazma `BEGIN IMMEDIATE` + denetim kilidi altında
 //! çalışır ve **atomiktir**. Tek bir masa ya da obje reddedilirse düzenin

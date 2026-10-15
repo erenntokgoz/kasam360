@@ -1,11 +1,11 @@
-//! Faz 13 · Kroki çizim migration regresyonları.
+//! Kroki çizim şema göçü regresyon testleri.
 //!
 //! Kapsam dışı bırakılırsa iki sessiz hata geri gelir:
 //!   1. `floor_zones.tenant_id` üzerinde `DEFAULT 'DEFAULT_TENANT'` durursa
 //!      bind edilmemiş bir bölüm diğer işletmelerin salonunda görünür.
 //!   2. `tables` rebuild'i kroki geometrisini sessizce düşürür.
 
-use crate::db::faz13::migrate_floor_plan_layout;
+use crate::db::floor_plan_migration::migrate_floor_plan_layout;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::Row;
 

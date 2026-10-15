@@ -59,7 +59,7 @@ fn kiraci_coz(tenant_id: Option<&str>) -> Result<String, String> {
 
 /// Ürüne bağlı modifier grupları ve seçenekleri (POS seçim penceresi).
 ///
-/// Faz 4 düzeltmesi: komut `tenant_id` ile sınırlandı. Önceden ürün `id`'si tek
+/// Güvenlik düzeltmesi: komut `tenant_id` ile sınırlandı. Önceden ürün `id`'si tek
 /// başına yeterliydi, dolayısıyla başka işletmenin ürününe bağlı gruplar
 /// okunabiliyordu; ayrıca seçenekler grup başına ayrı sorguyla (N+1) alınıyordu.
 ///
@@ -88,7 +88,7 @@ pub async fn get_product_modifiers(
 /// bir oturum başka bir işletmenin masasını boşaltabiliyor, "RESERVED" olmayan
 /// bir değer yazabiliyor ve şemadaki CHECK'i yalnız SQLite yakalıyordu.
 ///
-/// Faz 8 kuralları:
+/// Rezervasyon kuralları:
 /// - **Yalnız izin verilen üç durum:** `AVAILABLE`, `RESERVED`, `OCCUPIED`.
 /// - **Tenant zorunlu** ve hedef masa bu kiracıya ait olmalı.
 /// - **RBAC:** masa durumu yalnız garson, müdür ve işletme sahibi tarafından

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::db::DbPool;
 use crate::services::audit_service::{self, AuditContext, AuditLock, AuditService};
 
-/// Anlık PIN onayı isteği (Faz 3).
+/// Anlık PIN onayı isteği.
 ///
 /// `pin` alanı yalnız bu çağrıda bulunur ve ne loglanır ne saklanır; doğrulama
 /// sonucu tek kullanımlık `approvalToken` ile döner.

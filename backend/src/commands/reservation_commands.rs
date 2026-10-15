@@ -1,4 +1,4 @@
-//! Faz 8 — Rezervasyon komutları.
+//! Rezervasyon komutları.
 //!
 //! Yetki modeli (AGENTS.md §6):
 //! - Rezervasyon yazma (**rezerve et / kaldır / müşteri geldi / gelmedi**)

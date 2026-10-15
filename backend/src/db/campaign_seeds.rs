@@ -1,6 +1,6 @@
-//! Faz 14 · Yasal & özel gün şema tohumlaması.
+//! Yasal ve özel gün şema tohumlaması.
 //!
-//! Neden ayrı dosya: `init_db` 500 satır sınırında kalmalı. Faz 14'ün yedi
+//! Neden ayrı dosya: `init_db` 500 satır sınırında kalmalı. Yasal modülün yedi
 //! tablosu `migrations/schema.sql` içinde `CREATE TABLE IF NOT EXISTS` ile
 //! kurulur (yeni tablo olduğu için `ALTER TABLE` migration'ı gerekmez), ama
 //! **içerik** tohumlanması gerekir: sistem kampanya şablonları.

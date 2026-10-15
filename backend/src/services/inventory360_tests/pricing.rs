@@ -1,4 +1,4 @@
-//! Faz 12 · Dinamik kural, fiyat dondurma, toplu zam ve 86'd testleri.
+//! Dinamik kural, fiyat dondurma, toplu zam ve 86'd testleri.
 //!
 //! Kapsam: dinamik kural saat kapısı, gece yarısını aşan kural, dondurmanın
 //! indirimden üstünlüğü, zam içeren kaydın reddi, toplu zamda donmuş ürünün
@@ -470,16 +470,10 @@ async fn atlanan_urun_satis_disi_birakilir() {
         .fetch_one(&mut conn)
         .await
         .expect("urun okunmali");
-    assert_eq!(
-        satir
-            .try_get::<bool, _>("is_active")
-            .expect("kolon okunmali"),
-        true
-    );
-    assert_eq!(
-        satir.try_get::<bool, _>("is_86").expect("kolon okunmali"),
-        true
-    );
+    assert!(satir
+        .try_get::<bool, _>("is_active")
+        .expect("kolon okunmali"));
+    assert!(satir.try_get::<bool, _>("is_86").expect("kolon okunmali"));
 
     // Stoğa dönünce 86 kalkmalı, kalıcı menü bayrağına dokunulmamalı.
     set_product_86d(
@@ -497,15 +491,10 @@ async fn atlanan_urun_satis_disi_birakilir() {
             .fetch_one(&mut conn)
             .await
             .expect("urun okunmali");
-    assert_eq!(
-        geri.try_get::<bool, _>("is_active")
-            .expect("kolon okunmali"),
-        true
-    );
-    assert_eq!(
-        geri.try_get::<bool, _>("is_86").expect("kolon okunmali"),
-        false
-    );
+    assert!(geri
+        .try_get::<bool, _>("is_active")
+        .expect("kolon okunmali"));
+    assert!(!geri.try_get::<bool, _>("is_86").expect("kolon okunmali"));
     assert_eq!(
         geri.try_get::<Option<String>, _>("stockout_reason")
             .expect("kolon okunmali"),
@@ -532,9 +521,8 @@ async fn yabanci_isletmenin_urunu_86_yapilamaz() {
         .fetch_one(&mut conn)
         .await
         .expect("urun okunmali");
-    assert_eq!(
-        satir.try_get::<bool, _>("is_86").expect("kolon okunmali"),
-        false,
+    assert!(
+        !satir.try_get::<bool, _>("is_86").expect("kolon okunmali"),
         "cagri basarisiz olsa da kiraci satiri degismemeli"
     );
 

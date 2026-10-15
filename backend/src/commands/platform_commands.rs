@@ -571,9 +571,9 @@ pub async fn get_platform_audit_logs(
     Ok(logs)
 }
 
-/// Verify the exact canonical SHA-256 chain written by AuditService.  A bad
-/// row is reported to the caller; verification never mutates the ledger and
-/// never returns a hash value.
+/// AuditService tarafından yazılan kanonik SHA-256 zincirini doğrula. Bozuk
+/// satır çağırana bildirilir; doğrulama asla defteri değiştirmez ve
+/// asla hash değeri döndürmez.
 #[tauri::command]
 pub async fn verify_audit_ledger_integrity(
     caller_role: String,

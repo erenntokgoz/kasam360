@@ -1,4 +1,4 @@
-//! Net bakiye motoru (Faz 9 — Spec §2.3 "Net bakiye motoru: kayıt yığmak
+//! Net bakiye motoru (Cari hareketler — Spec §2.3 "Net bakiye motoru: kayıt yığmak
 //! yerine birleştirme (AR−AP)").
 //!
 //! Neden ayrı servis: Hesap Defteri ekranı beş ayrı hesap türünü (Tedarikçi /

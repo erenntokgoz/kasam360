@@ -1,4 +1,4 @@
-//! Faz 11 B4 — bahşiş havuzu ve dağıtımı.
+//! Bahşiş havuzu ve dağıtımı.
 //!
 //! Finansal kural (AGENTS.md §3.4): havuz toplamı hata halinde 0'a dönmez.
 //! Dağıtımda kuruş kaybı olmaz: toplam bölünürken kalan kuruş, deterministik

@@ -1,4 +1,4 @@
-//! Patron Şahsi hareketleri (Faz 9).
+//! Patron Şahsi hareketleri.
 //!
 //! ## Patron Şahsi neden ayrı bir komut
 //!
