@@ -1,384 +1,198 @@
-# KASAM360 — AGENTS.md (Proje Anayasası v2.0)
+# KASAM360 — Proje Anayasası (v3.0)
 
-> Bu doküman KASAM360 reposunda çalışan tüm AI agent'lar için en üst otoritedir. Uydurma, varsayım, kanıtsız kural değişikliği YASAK.
-
----
-
-## 1. PROJE KİMLİĞİ
-
-- KASAM360: Restoran/Kafe/Bar için Local-First POS + ERP
-- Repo: github.com/erenntokgoz/kasam360
-- Yapı: desktop/ (React+Vite+TS) + backend/ (Tauri+Rust+SQLite) + mobile/ (boş)
-- Vizyon: "En salak kullanıcı 10 saniyede öğrenir; motor Toast/Micros'u ezer."
+> Bu doküman KASAM360 kod tabanında çalışan tüm geliştiriciler ve yapay zeka ajanları için nihai ve bağlayıcı otoritedir. Varsayıma dayalı geliştirme, kanıtsız kural esnetme ve anayasa dışı kod üretimi kesinlikle YASAKTIR.
 
 ---
 
-## 2. SOURCE OF TRUTH (Değiştirilemez)
+## 1. PROJE KİMLİĞİ VE MİMARİ
 
-- Para: Tüm tutarlar INTEGER kuruş (*_cents). Float YASAK.
-- Kimlik: Argon2id PHC hash. Düz metin YASAK.
-- FIFO: inventory_batches üzerinden gerçek parti/lot. Sahte %35 formülü YASAK.
-- Audit: audit_ledger SHA-256 zinciri. UPDATE/DELETE YASAK.
-- ID: Prefixed ULID (ord_, txn_, dir_, usr_). AUTOINCREMENT YASAK.
-- Multi-tenant: Her sorguda tenant_id ZORUNLU.
-
----
-
-## 3. KESİN YASAKLAR
-
-### 3.1. Kod
-- Prodüksiyonda panic!, unwrap(), expect(), todo!() YASAK
-- TypeScript'te any YASAK
-- Filtresiz SQL YASAK
-- audit_ledger UPDATE/DELETE YASAK
-- main.rs'te mükerrer IPC YASAK (kasam360_core::run() delegasyonu)
-- Google Cloud / harici bulut YASAK
-- Donanım çağrıları blocking YASAK (async kuyruk + 2sn timeout)
-
-### 3.2. UI (AI Slop)
-- Emoji UI'da YASAK (✨🚀🔥⭐💡🎯👋💪🧠🪄)
-- Klişe copy YASAK ("Hoş geldin", "Muhteşem", "Oops", "Powered by AI")
-- Gradient YASAK (primary buton hariç: dikey 180°, marka rengi açık→koyu)
-- Undraw/Storyset/Popsy illüstrasyon YASAK
-- Fake sparkline / anlamsız SVG wave YASAK
-- Ham SHA-256 hash UI'da YASAK (log içinde, "🛡️ Mühürlü" rozeti)
-- Karışık ikon kütüphanesi YASAK (sadece Lucide + Phosphor)
-- Ham Tailwind ekranlarda YASAK (design system)
-- Beyaz zemin + siyah yazı YASAK (glass olacak)
-- Turuncu buton YASAK
-- İngilizce metin YASAK (kod değişkenleri hariç)
-
-### 3.3. Mimari
-- tenant_id filtresiz sorgu YASAK
-- Cross-tenant veri sızıntısı YASAK
-- Feature flag kapalıyken route açık YASAK (404 dönmeli)
-
-### 3.4. Finansal Sessiz Hata (Ek kural)
-- Finansal toplamlarda `unwrap_or(0)`, `unwrap_or_default()`, `unwrap_or_else(|| 0)` YASAK
-- Gerekçe: SQL hatası sıfıra dönüşünce P&L "zarar yok" der ve **hatasız** görünür.
-  Yanlış rapor, hata mesajından daha tehlikelidir: patron gerçeği yanlış görür.
-- Zorunlu yazım: `.map_err(|e| e.to_string())?` — hata yukarı taşınır, komut `Err` döner.
-- `try_get(...).unwrap_or_default()` / `unwrap_or(0)` de aynı yasağa tabidir: kolon eksikse
-  satır sessizce 0'a dönüşür. `try_get` sonucu `?` ile yükseltilir.
-- Kapsam: `debts`, `debt_payments`, `general_expenses`, `receipts`, `orders`,
-  `cash_movements`, `shifts`, `budget_limits`, `recurring_expenses` üzerinden
-  gelen her para/tutar/sayaç okuması.
-- Test: hata senaryosu `Err` döndüğünü kanıtlamalı, `0` dönmediğini de.
+- **Tanım:** Restoran, Kafe, Bar ve Benzeri İşletmeler İçin Yerel Öncelikli (Local-First) Yeni Nesil POS & İşletme Yönetim Sistemi (ERP).
+- **Temel Prensip:** İnternet kopsa dahi kesintisiz satış, yerel SQLite üzerinde tam veri bütünlüğü, sıfır veri kaybı, milisaniyelik tepki süresi.
+- **Dizin Yapısı:**
+  - `backend/`: Rust + Tauri 2 + SQLite (sqlx) + Argon2id. Yüksek güvenlikli çekirdek motor ve 189 doğrulanmış IPC komutu.
+  - `desktop/`: React 18 + Vite + TypeScript + Tailwind CSS v4 + Zustand + Lucide Icons. Yeni nesil akıcı cam (Clean Glass) tasarım sistemi.
+  - `docs/`: Mimari ve güvenlik şartnameleri (`security-audit.md`, `offline-conflict-policy.md`).
 
 ---
 
-## 4. LIQUID GLASS / APPLE HIG ANAYASASI
+## 2. DEĞİŞTİRİLEMEZ TEMEL İLKELER (SOURCE OF TRUTH)
 
-### 4.1. Felsefe
-- Referans: Apple iOS 27 + macOS 27 + visionOS
-- "Her şey havada yüzer" (sidebar, topbar, kart, modal — min 16px boşluk)
-- AI slop sıfır tolerans
+1. **Finansal Kesinlik (INTEGER Cents):**
+   - Tüm para tutarları veri tabanında, servislerde ve IPC kontratlarında tamsayı kuruş (`*_cents`, `INTEGER`) olarak saklanır ve işlenir.
+   - Finansal hesaplamalarda `f32` / `f64` (float) kullanımı KESİNLİKLE YASAKTIR.
+   - Arayüzde kuruş, `formatMoney(cents)` yordamı ile yerelleştirilmiş para formatına ("1.250,50 TL") çevrilerek gösterilir.
 
-### 4.2. Renk Paleti (Apple System Colors — oturaklı, doygun değil)
+2. **Finansal Sessiz Hata Yasağı (Fail-Closed):**
+   - Finansal toplamlarda ve bakiye sorgularında `unwrap_or(0)`, `unwrap_or_default()`, `unwrap_or_else(|| 0)` kullanımı YASAKTIR.
+   - Bir sorgu veya hesaplama hata verirse sistem bunu sıfır kabul edip sessizce yutamaz; hata yukarı taşınmalı (`?`) ve işlem reddedilmelidir.
 
-Dark Mode:
-bg-base:      #0B0C0E
-bg-surface:   #16171A
-bg-elevated:  #1F2024
-border:       #26272B
-border-strong:#34353A
+3. **Kimlik Güvenliği (Argon2id PHC):**
+   - Tüm kullanıcı parolaları ve PIN kodları Argon2id PHC özeti olarak saklanır. Düz metin (plaintext) şifre saklamak, loglamak veya IPC ile döndürmek KESİNLİKLE YASAKTIR.
 
-text-primary:   #F5F5F7
-text-secondary: rgba(245, 245, 247, 0.64)
-text-tertiary:  rgba(245, 245, 247, 0.40)
-text-quaternary:rgba(245, 245, 247, 0.24)
+4. **Kayıt ve Denetim Bütünlüğü (Audit Ledger):**
+   - `audit_ledger` tablosu SHA-256 zinciriyle mühürlenmiş eklemeli (append-only) bir finansal ve operasyonel kayıt defteridir.
+   - `audit_ledger` üzerinde `UPDATE` ve `DELETE` çalıştırmak kesinlikle YASAKTIR (DB seviyesinde tetikleyici ile kilitlidir).
 
-brand:        #0A84FF
-brand-hover:  #409CFF
+5. **Gerçek FIFO Stok Takibi:**
+   - Stok maliyetlendirmesi `inventory_batches` tablosundaki gerçek parti/lot girişleri üzerinden ilk-giren-ilk-çıkar (FIFO) ile yapılır. Sahte tahmini oranlar kullanılamaz.
 
-success:      #30D158
-warning:      #FF9F0A
-danger:       #FF453A
-info:         #64D2FF
-purple:       #BF5AF2
-pink:         #FF375F
-yellow:       #FFD60A
+6. **Ön Ekli ULID Kimlikleri:**
+   - Tüm birincil anahtarlar sıralı ve ön ekli ULID formatındadır (`ord_...`, `txn_...`, `usr_...`, `tbl_...`, `bat_...`). Sayısal AUTOINCREMENT kimlikler kullanılmaz.
 
-Light Mode:
-bg-base:      #FAFAFA
-bg-surface:   #FFFFFF
-bg-elevated:  #F5F5F7
-border:       #E5E5EA
-border-strong:#D1D1D6
+7. **Tam Kiracı Yalıtımı (Multi-Tenant Isolation):**
+   - Çok kiracılı mimaride her veritabanı sorgusu mutlaka `tenant_id` filtresi taşımak zorundadır. Kiracısız (`tenant_id` içermeyen) SELECT, UPDATE, DELETE sorguları YASAKTIR.
 
-text-primary:   #0A0B0F
-text-secondary: rgba(10, 11, 15, 0.64)
-text-tertiary:  rgba(10, 11, 15, 0.40)
-text-quaternary:rgba(10, 11, 15, 0.24)
+---
 
-brand:        #007AFF
-brand-hover:  #0066CC
+## 3. KOD YAZIM STANDARTLARI VE İSİMLENDİRME
 
-success:      #34C759
-warning:      #FF9500
-danger:       #FF3B30
-info:         #32ADE6
-purple:       #AF52DE
-pink:         #FF2D55
-yellow:       #FFCC00
+### 3.1. Dosya İsimlendirme Kuralları
+- **Rust Kaynak Dosyaları:** Kesinlikle küçük harf ve alt çizgi (`snake_case.rs`). Örneğin: `inventory_migration.rs`, `floor_plan_commands.rs`.
+- **React Bileşenleri:** Kesinlikle PascalCase (`PascalCase.tsx`). Örneğin: `PaymentModal.tsx`, `SidebarNav.tsx`.
+- **TypeScript Modülleri ve Yardımcılar:** Kesinlikle camelCase (`camelCase.ts`). Örneğin: `formatMoney.ts`, `authStore.ts`.
+- **Dokümantasyon:** Küçük harf ve tire (`kebab-case.md`).
+- **Yasaklı İsimler:** Dosya veya klasör adlarında aşama numaraları, gereksiz kod adları veya marka isimleri kullanılamaz.
 
-Kural: Bu değerlerin dışında renk YASAK. Yeni renk gerekirse önce AGENTS.md güncellenir.
+### 3.2. Dil ve Yorum Standartları
+- **Kod Tanımlayıcıları:** Fonksiyon, değişken, tip, enum ve struct adları evrensel standart gereği İngilizce yazılır (`processPayment`, `calculateTotalCents`, `OrderState`).
+- **Kod Yorumları ve Dokümantasyon:** Tüm yorum satırları, modül başlıkları ve docstring'ler Türkçe yazılır. Yorumlar kodun "ne" yaptığını değil, "neden" o kararın verildiğini ve güvenlik gerekçelerini açıklar.
+- **Karakter Kodlaması:** Tüm dosyalar UTF-8 (BOM'suz) formatında tutulur.
 
-### 4.3. Glass Katmanları (5 seviye)
+### 3.3. Kod Kalitesi ve Güvenlik Sınırları
+- Prodüksiyon backend kodunda `panic!`, `unwrap()`, `expect()`, `todo!()` YASAKTIR.
+- Frontend TypeScript kodunda `any` tipi kullanımı YASAKTIR.
+- Dosya boyutu limiti 500 satırdır; aşan dosyalar mantıksal alt modüllere bölünür.
+- Tüm IPC çağrıları Tauri `generate_handler!` sözleşmesine ve 189 komutluk backend arayüzüne birebir uymak zorundadır.
 
-Dark Mode:
---glass-thin:    rgba(255, 255, 255, 0.03);
---glass-regular: rgba(255, 255, 255, 0.05);
---glass-thick:   rgba(255, 255, 255, 0.08);
---glass-heavy:   rgba(22, 23, 26, 0.68);
---glass-ultra:   rgba(31, 32, 36, 0.85);
+---
 
-Light Mode:
---glass-thin:    rgba(255, 255, 255, 0.40);
---glass-regular: rgba(255, 255, 255, 0.60);
---glass-thick:   rgba(255, 255, 255, 0.75);
---glass-heavy:   rgba(255, 255, 255, 0.85);
---glass-ultra:   rgba(255, 255, 255, 0.92);
+## 4. FRONTEND TASARIM STRATEJİSİ (CLEAN GLASS DESIGN SYSTEM)
 
-### 4.4. Cam Fiziği (ZORUNLU)
+KASAM360 arayüzü; restoran, kafe ve barların yoğun, tempolu ve düşük ışıklı ortamlarında gözü yormayan, hata payını sıfıra indiren, derinlikli ve akıcı bir görsel dille tasarlanmıştır.
 
-backdrop-filter: blur(40px) saturate(180%);
--webkit-backdrop-filter: blur(40px) saturate(180%);
+### 4.1. Tasarım Felsefesi
+- **Derinlik ve Saydamlık:** Arayüz katmanları havada asılı duran zarif cam yüzeyler (Floating Glass) olarak modellenir.
+- **Sıfır AI Slop:** Rastgele parıltı emojileri (✨🚀🔥), anlamsız dalga SVG'leri, klişe karşılama metinleri ("Hoş geldiniz!", "Yapay zeka ile güçlendirildi") KESİNLİKLE YASAKTIR.
+- **Dokunsal Ergonomi:** Kasa ve servis ekranlarında dokunmatik hedefler minimum 48px boyutunda, butonlar net tıklama hissi veren geri bildirimle donatılmıştır.
+- **Tipografik Netlik:** Rakamlar ve tutarlar her zaman `font-variant-numeric: tabular-nums` ile hizalı gösterilir.
 
-border: 1px solid var(--border);
-border-top-color: rgba(255, 255, 255, 0.14);
+### 4.2. Renk Paleti
 
-box-shadow:
-  inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
-  inset 0 -1px 0 0 rgba(0, 0, 0, 0.20),
-  0 20px 60px -10px rgba(0, 0, 0, 0.45),
-  0 0 0 1px rgba(0, 0, 0, 0.35);
+#### Koyu Tema (Dark Mode - Varsayılan)
+- **Zemin Tabanı (bg-base):** `#0B0C0E`
+- **Yüzey Katmanı (bg-surface):** `#16171A`
+- **Yükseltilmiş Yüzey (bg-elevated):** `#1F2024`
+- **Sınır Çizgileri (border):** `#26272B`
+- **Belirgin Sınır (border-strong):** `#34353A`
+- **Birincil Metin (text-primary):** `#F5F5F7`
+- **İkincil Metin (text-secondary):** `rgba(245, 245, 247, 0.64)`
+- **Üçüncül Metin (text-tertiary):** `rgba(245, 245, 247, 0.40)`
+- **Vurgu / Marka (brand):** `#0A84FF`
+- **Vurgu Hover:** `#409CFF`
+- **Başarı (success):** `#30D158`
+- **Uyarı (warning):** `#FF9F0A`
+- **Tehlike (danger):** `#FF453A`
+- **Bilgi (info):** `#64D2FF`
 
-### 4.5. Ambiyans (Arka Plan)
+#### Açık Tema (Light Mode)
+- **Zemin Tabanı (bg-base):** `#FAFAFA`
+- **Yüzey Katmanı (bg-surface):** `#FFFFFF`
+- **Yükseltilmiş Yüzey (bg-elevated):** `#F5F5F7`
+- **Sınır Çizgileri (border):** `#E5E5EA`
+- **Belirgin Sınır (border-strong):** `#D1D1D6`
+- **Birincil Metin (text-primary):** `#0A0B0F`
+- **İkincil Metin (text-secondary):** `rgba(10, 11, 15, 0.64)`
+- **Vurgu / Marka (brand):** `#007AFF`
+- **Başarı (success):** `#34C759`
+- **Uyarı (warning):** `#FF9500`
+- **Tehlike (danger):** `#FF3B30`
 
-Zemin düz olamaz. Her ekranın arkasında 2 radyal blob olmalı:
-
-Dark:
-body {
-  background: var(--bg-base);
-  background-image:
-    radial-gradient(ellipse 80% 60% at 15% 0%,
-      rgba(10, 132, 255, 0.08), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 100% 100%,
-      rgba(191, 90, 242, 0.06), transparent 60%);
+### 4.3. Cam Malzeme Fiziği (Glass Spec)
+```css
+/* Çok katmanlı cam zemin standardı */
+.glass-surface {
+  background: rgba(22, 23, 26, 0.68);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top-color: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.20),
+    0 20px 40px -15px rgba(0, 0, 0, 0.5);
 }
+```
 
-Light:
-body {
-  background: var(--bg-base);
-  background-image:
-    radial-gradient(ellipse 80% 60% at 15% 0%,
-      rgba(0, 122, 255, 0.05), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 100% 100%,
-      rgba(175, 82, 222, 0.04), transparent 60%);
-}
-
-Kural: Ambiyans olmadan cam görünmez. Blob'lar zorunlu.
-
-### 4.6. Tokenlar
-
-- Radius: sadece 4, 8, 12, 16, 20, 24 (başka değer YASAK)
-- Gölge: 4 seviye (shadow-sm, shadow-md, shadow-lg, shadow-xl)
-- Font: SF Pro / Inter Tight, sadece 400, 500, 600 (700 YASAK)
-- Font boyutları:
-  text-title-1: 28px / 600 / -0.02em
-  text-title-2: 22px / 600 / -0.01em
-  text-headline: 17px / 600 / -0.02em
-  text-body: 17px / 400 / -0.01em
-  text-callout: 16px / 400 / 0
-  text-subheadline: 15px / 400 / 0
-  text-footnote: 13px / 400 / 0
-  text-caption-1: 12px / 400 / 0
-  text-caption-2: 11px / 500 / 0.01em
-- Animasyon: 100, 150, 250, 400ms — 2 easing:
-  cubic-bezier(0.32, 0.72, 0, 1) (default)
-  cubic-bezier(0.4, 0, 0.2, 1) (snappy)
-- İkon: Lucide + Phosphor, 1.5px stroke
-- Sayılar: font-variant-numeric: tabular-nums (fiyat, KDV, toplam)
-
-### 4.7. Dark + Light Mode
-
-Her ekran ikisini de destekler. "Dark yeter" YASAK. Tema toggle üst sağda. Sistem tercihi varsayılan.
-
-### 4.8. Sayfa Yapısı
-
-- Login + PIN: Tam ekran (sidebar yok)
-- Diğer tüm ekranlar: FloatingSidebar (72px, 16px havada) + FloatingTopBar (16px havada) + ContentArea
-- Modal: GlassModal (backdrop-blur 60px, ultra seviye)
+### 4.4. Arayüz Düzeni ve Kabuk (App Shell)
+- **Giriş ve PIN Ekranı:** Tam ekran odaklı, gereksiz navigasyon barı içermeyen temiz cam panel.
+- **Operasyon Ekranları:** Solda yüzen ikon/menü çubuğu (`FloatingSidebar`, 72px), üstte durum ve bildirim alanı (`FloatingTopBar`), merkezde dinamik modül alanı (`ContentArea`).
+- **Modal ve İletişim Pencereleri:** Yüksek bulanıklıklı cam arka plan (`backdrop-blur-xl`), yumuşak yaylanma animasyonu.
 
 ---
 
-## 5. KLASÖR YAPISI
+## 5. ROLLER VE YETKİ MATRİSİ (RBAC)
 
-kasam360/
-├── AGENTS.md
-├── packages/contracts/              Rust→TS tip üretimi (ts-rs)
-├── desktop/
-│   ├── src/
-│   │   ├── design-system/
-│   │   │   ├── tokens/              colors, spacing, radius, shadows, motion, typography
-│   │   │   ├── primitives/          Box, Text, Icon, Stack, Inline
-│   │   │   ├── surfaces/            GlassSurface, FloatingSidebar, FloatingTopBar, GlassModal
-│   │   │   ├── buttons/             Primary, Secondary, Ghost, Danger
-│   │   │   ├── inputs/              GlassInput, GlassSelect, GlassTextarea
-│   │   │   ├── feedback/            DynamicIslandToast, GlassTooltip, LoadingDots
-│   │   │   └── layout/              AppShell, ContentArea, PageContainer
-│   │   ├── screens/                 auth, pos, floor, kds, cashier, ledger, staff, menu, reports, owner, platform, settings
-│   │   ├── stores/                  Zustand (auth, cart, floor, cashier)
-│   │   ├── services/                soundService, printService, hardwareService, featureFlagService
-│   │   └── tests/emulators/         Fiziki POS/ÖKC simülatörü (İZOLE — prod kodunu kirletmez)
-├── backend/src/                     commands, services, repositories, domain, id_generator.rs
-├── backend/migrations/schema.sql
-└── mobile/                          boş (.gitkeep)
+Sistemde tanımlı 6 temel rol bulunmaktadır:
+
+| Rol | Varsayılan PIN | Yetki Kapsamı |
+|---|---|---|
+| **MASTER** | `1111` | Platform yönetimi, kiracı oluşturma, lisanslama, global feature flag'ler. POS/Kasa/KDS ekranlarına giremez; doğrudan platform paneline yönlendirilir. |
+| **OWNER** | `2222` | İşletme sahibi. Tüm finansal raporlar, P&L, personel maaşları, bütçe ve menü yönetimi. |
+| **MANAGER** | `3333` | Vardiya açma/kapama, iptal ve ikram PIN onayı, masa taşıma/birleştirme, operasyonel raporlar. Maaş tutarlarını göremez. |
+| **CASHIER** | `4444` | Kasa işlemleri, tahsilat, parçalı ödeme, gün sonu raporu, fiş basımı. |
+| **WAITER** | `5555` | Masa düzeni, sipariş alma, mutfağa iletme, adisyon yazdırma. Tahsilat veya iptal yapamaz. |
+| **KITCHEN** | `6666` | Mutfak Ekranı (KDS). Bekleyen siparişleri görme, hazırlama ve teslim durumuna geçirme. |
 
 ---
 
-## 6. ROLLER VE YETKİ SINIRLARI
+## 6. ÖZELLİK BAYRAKLARI (FEATURE FLAGS)
 
-Rol        Kod    Yetki
-MASTER     1111   Platform, tenant, feature flags, şube
-OWNER      2222   İşletme sahibi, tüm işlemler
-MANAGER    3333   Vardiya, onay, kısmi rapor
-CASHIER    4444   Kasa, ödeme, vardiya
-WAITER     5555   Masa, sipariş
-KITCHEN    6666   KDS, mutfak
+Sistemde tanımlı 11 özellik bayrağı bulunur. Bayrak kapalıysa ilgili arayüz rotası açılmaz, doğrudan 404/Erişim Engellendi durumuna düşer (fail-closed):
 
-- MASTER POS/Floor/KDS rotalarına giremez (PlatformScreen'e zorunlu yönlendirme)
-- Void/indirim/ikram → anlık PIN modalı (sekme değil)
-- Şube ekle/sil → sadece MASTER
-- Patron panelinde "Şubeler" sekmesi YOK (sadece geçiş dropdown)
-- Personel soft-delete (silme YASAK, pasife alınır)
-
----
-
-## 7. TEST PROTOKOLÜ (Her PR)
-
-cd backend && cargo check         # 0 hata, 0 uyarı
-cd backend && cargo test          # 100% pass
-cd desktop && npx tsc --noEmit    # 0 hata
-cd desktop && npx vitest run      # 100% pass
-
-Ek taramalar:
-grep -rP "[\x{1F300}-\x{1F9FF}]" desktop/src/   # Emoji → 0
-grep -rE "bg-gradient" desktop/src/              # Gradient → 0
-grep -rn "unwrap()\|expect(" backend/src/        # Prodüksiyon → 0
-grep -rn "tenant_id" backend/src/ | wc -l        # Her sorguda olmalı
-
-Bir kapı geçilmeden sonraki faza GEÇİLMEZ.
+- `feat_kds`: Açık (Mutfak Ekranı Modülü)
+- `feat_qr_menu`: Açık (Dış Müşteri Menü Dosyası ve Sipariş)
+- `feat_delivery`: Kapalı (Paket Servis Entegrasyonu)
+- `feat_caller_id`: Kapalı (Arayan Numara Gösterme)
+- `feat_table_order`: Açık (Masa Bazlı Sipariş Yönetimi)
+- `feat_seat_split`: Kapalı (Sandalye Bazlı Hesap Bölme)
+- `feat_recipe_bom`: Açık (Reçete ve Stok Düşüm Maliyeti)
+- `feat_dynamic_pricing`: Kapalı (Dinamik Fiyatlandırma ve Zaman Kuralları)
+- `feat_ledger_cari`: Açık (Hesap Defteri, Tedarikçi ve Cari Bakiye)
+- `feat_multi_branch`: Kapalı (Çoklu Şube Yönetimi)
+- `feat_loss_radar`: Açık (Fire, Şüpheli İşlem ve İptal Radarı)
 
 ---
 
-## 8. FEATURE FLAGS (11 Adet)
+## 7. KRİTİK GÜVENLİK VE BÜTÜNLÜK KİLİTLERİ
 
-feat_kds              AÇIK
-feat_qr_menu          AÇIK
-feat_delivery         KAPALI
-feat_caller_id        KAPALI
-feat_table_order      AÇIK
-feat_seat_split       KAPALI  (kod yok: `seat_number` hiçbir dosyada geçmiyor)
-feat_recipe_bom       AÇIK
-feat_dynamic_pricing  KAPALI
-feat_ledger_cari      AÇIK
-feat_multi_branch     KAPALI
-feat_loss_radar       AÇIK
-
-Override zinciri: tenant → branch (user override YOK). Kapalıysa route 404.
-
-Kural: bir bayrak **yalnız arkasında komut varsa** AÇIK olabilir. Kodu olmayan
-bayrak AÇık ilan edilirse arayüz hiçbir işe yaramayan bir yüzey gösterir ve
-kullanıcı çalışmayan bir düğmeyle karşılaşır. MASTER rolü muaf değildir;
-oturumun modül listesi tek kaynak, platform hesabının kendi işletmesi yoktur.
+1. **FIFO Maliyet Kilidi:** Sahte stok formülü yasaktır; her kalem `inventory_batches` üzerinden gerçek maliyetle eşleşir.
+2. **Çift Stok Düşümü Koruması:** Parçalı tahsilatta stok yalnızca sipariş anında veya ilk kapanışta bir kez düşülür; her ödeme adımında tekrar düşülemez.
+3. **Kasa Kart/Nakit Ayrımı:** Kasa kapatmada nakit ve kart toplamları ayrı tutulur, açığın hangi kanaldan olduğu şeffafça denetlenir.
+4. **Muteks Ayrımı:** Finansal ödeme işlemleri (`payment_mutex`) ile denetim defteri yazımları (`audit_mutex`) birbirinden bağımsız kilit mekanizmalarına sahiptir.
+5. **Fiyat Kayması Koruması:** Sipariş anındaki birim fiyat ve KDV oranı kaleme mühürlenir (`frozen_unit_price_cents`); menüde sonradan yapılan zam açık siparişi etkilemez.
+6. **Kaba Kuvvet Giriş Kilidi:** 5 kez hatalı PIN girildiğinde cihaz/kullanıcı bazında geçici süreyle kilitlenir.
+7. **Çapraz Kiracı PIN Engeli:** Başka bir kiracının PIN kodu ile oturum açılamaz.
+8. **Ödenmiş Sipariş İptal Yasağı:** `PAID` veya `CLOSED` durumundaki bir sipariş iptal edilemez; iade işlemi iade akışı üzerinden yürütülür.
+9. **Negatif Fiyat Engeli:** Ürün opsiyonları ve ekleri negatif fiyat taşıyamaz (indirim kalemleri hariç).
 
 ---
 
-## 9. 13 P0 GÜVENLİK KİLİDİ
+## 8. TEST VE DOĞRULAMA PROTOKOLÜ
 
-1. Sahte FIFO kaldır → gerçek parti/lot
-2. Parçalı ödemede çift stok düşümü engeli
-3. close_day açık sıfırlama sabotajı kaldır
-4. Kasa kart/nakit ayrımı
-5. KDS O(N) event taraması fix
-6. audit_mutex + payment_mutex ayrımı
-7. Fiyat kayması dondurma
-8. Parçalı ödeme bakiye formülü düzelt
-9. Cross-tenant PIN fallthrough kapat
-10. caller_role oturum doğrulaması
-11. void_order PAID/CLOSED yasak
-12. Negatif modifier fiyat engeli
-13. 5 hatalı PIN + busy_timeout(5000)
+Her kod değişikliğinden sonra aşağıdaki doğrulama adımları eksiksiz geçilmek zorundadır:
 
----
+1. **Backend Doğrulaması:**
+   ```powershell
+   cargo clippy --lib --tests -- -D warnings   # Sıfır hata, sıfır uyarı
+   cargo test --lib                          # 964 testin tamamı başarılı (100% pass)
+   cargo fmt --check                         # Standart Rust formatı
+   ```
 
-## 10. KOD YAZIM KURALLARI
+2. **Frontend Doğrulaması:**
+   ```powershell
+   npm run build                             # TypeScript derlemesi sıfır hata
+   ```
 
-- Yorumlar Türkçe (neden yapıldığı)
-- Identifiers İngilizce (mevcut convention)
-- Dosya boyutu: max 500 satır (aşarsa modüllere böl)
-- Bileşen boyutu: max 300 satır
-- Dosyalar UTF-8 (BOM'suz)
-- displayName + forwardRef her custom bileşende
-- Türkçe karakterler doğru kodlanacak (ı, ş, ğ, ü, ö, ç)
-- Yorum satırı "neden" der, "ne" demez.
-- **Dosya düzenleme SADECE Edit/Write tool ile.** PowerShell `Get-Content` /
-  `Set-Content` YASAK: shell varsayılan kodlaması cp1254'tür, dosyayı bu
-  kodlamayla okuyup UTF-8 olarak geri yazınca Türkçe karakterler bozulur
-  ("kaldırılmıyor" → "kaldýrýlmýyor") ve BOM eklenir (§10 UTF-8 kuralı çiğnenır).
-  PowerShell yalnız **ölçüm** komutları için kullanılabilir: `cargo test`,
-  `cargo check`, `cargo fmt --check`, `npx tsc --noEmit`, `npx vitest run`,
-  `git` komutları.
-
----
-
-## 11. AGENT ÇALIŞMA PROTOKOLÜ
-
-BEFORE CHANGE:
-- AGENTS.md ve ilgili domain kurallarını oku
-- Baseline: npx tsc --noEmit çalıştır
-
-DURING CHANGE:
-- Sadece istenen değişikliği yap
-- Kod yorumlarını Türkçe yaz
-- Yetki matrisini ihlal etme
-
-AFTER CHANGE:
-- Typecheck + cargo check + vitest çalıştır
-- Kanıt göster (konsol çıktısı)
-- AI slop taraması yap
-
-KANIT ZORUNLULUĞU:
-- Screenshot: Gerçek Chrome çıktısı (Gemini mockup YASAK)
-- Kod içeriği: Tam metin ("şu dizinde" YASAK)
-- Test çıktısı: PASS gösterilmesi
-- Her batch sonunda DUR, onay bekle
-- Batch onaylanmadan sonraki batch'e GEÇİLMEZ
-
-EKSİK İŞ YAPMA:
-- Agent verilen listedeki her maddeyi birebir uygular
-- "Yakın", "benzer", "yeterli" gibi ifadeler YASAK
-- Liste dışına çıkma, liste içinde kal
-- Emin değilsen DUR ve sor
-
----
-
-## 12. ÖZET — "YAPMA" LİSTESİ
-
-- Emoji, gradient, jargon
-- panic!, unwrap(), any
-- Filtresiz SQL, cross-tenant
-- Sahte FIFO, hash UI'da
-- Ham Tailwind, karışık ikon
-- İngilizce metin
-- "Dark yeter" (light da olacak)
-- Gemini mockup (gerçek Chrome)
-- "Şu dizinde" (tam içerik)
-- Batch atlama (her batch onay sonrası)
-- Liste dışına çıkma, madde atlama
-- #3B82F6 gibi generic AI mavisi (Apple #0A84FF kullan)
-- Saf siyah #000 / saf beyaz #FFF (sıcak tonlar kullan)
-- Neon/doygun renkler (Apple system colors kullan)
-
+3. **Kod Hijyeni Taramaları:**
+   - Kod tabanında hiçbir yerde harici marka adı, aşama numarası veya geçici geliştirme etiketi yer alamaz.
+   - UI kodunda kontrolsüz emoji veya ham Tailwind gradient kullanımı olamaz.
