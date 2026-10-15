@@ -213,7 +213,7 @@ pub async fn void_order(
         payload_val,
         now_iso.clone(),
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     // Jetonun tüketildiğinin izi ayrı bir güvenlik kaydı olarak yazılır: denetim
     // defterinde "onay verildi" ve "onay kullanıldı" ayrı ayrı görünür.
@@ -232,7 +232,7 @@ pub async fn void_order(
         }),
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &consumed_ctx)
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &consumed_ctx)
         .await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
@@ -411,7 +411,7 @@ pub async fn create_compensation_void(
         audit_payload,
         now_iso.clone(),
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &audit_ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &audit_ctx).await?;
 
     // Jeton tüketim kaydı
     let consumed_ctx = crate::services::audit_service::AuditContext::new(
@@ -429,7 +429,7 @@ pub async fn create_compensation_void(
         }),
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &consumed_ctx)
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &consumed_ctx)
         .await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;

@@ -494,7 +494,7 @@ pub async fn process_split_payment(
         ledger_payload,
         now_iso.clone(),
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &audit_ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &audit_ctx).await?;
 
     // WAL işlemini onayla
     tx.commit().await.map_err(|e| e.to_string())?;
@@ -678,7 +678,7 @@ pub async fn create_compensation_refund(
         comp_payload,
         now_iso.clone(),
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &audit_ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &audit_ctx).await?;
 
     let consumed_ctx = crate::services::audit_service::AuditContext::new(
         tenant_id,
@@ -695,7 +695,7 @@ pub async fn create_compensation_refund(
         }),
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &consumed_ctx)
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &consumed_ctx)
         .await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;

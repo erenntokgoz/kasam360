@@ -103,7 +103,7 @@ async fn kilit_yeniden_baslatmada_kalir() {
     // "Restart": havuzu kapat, aynı dosyadan yeni
     // havuz aç. Kilidin bellekte değil, tabloda
     // durduğunu kanıtlayan tek yol budur.
-    havuz.close();
+    havuz.close().await;
     drop(havuz);
     let ikinci = yeniden_ac(&dosya).await;
 
@@ -121,7 +121,7 @@ async fn kilit_yeniden_baslatmada_kalir() {
     // `close()` arka plan task'ı üzerinden
     // bağlantıları kapatır; task'ın
     // çalışması için kısa bir bekleme.
-    ikinci.close();
+    ikinci.close().await;
     std::thread::sleep(std::time::Duration::from_millis(300));
     drop(ikinci);
     dosya_sil(&dosya);
@@ -144,7 +144,7 @@ async fn kismi_sayac_yeniden_baslatmada_kalir() {
         }
     }
 
-    havuz.close();
+    havuz.close().await;
     drop(havuz);
     let ikinci = yeniden_ac(&dosya).await;
 
@@ -164,7 +164,7 @@ async fn kismi_sayac_yeniden_baslatmada_kalir() {
         );
     }
 
-    ikinci.close();
+    ikinci.close().await;
     std::thread::sleep(std::time::Duration::from_millis(300));
     drop(ikinci);
     dosya_sil(&dosya);
@@ -189,7 +189,7 @@ async fn basarili_sifirlama_yeniden_baslatmada_kalir() {
             .expect("sayaç temizlenir");
     }
 
-    havuz.close();
+    havuz.close().await;
     drop(havuz);
     let ikinci = yeniden_ac(&dosya).await;
 
@@ -206,7 +206,7 @@ async fn basarili_sifirlama_yeniden_baslatmada_kalir() {
         assert_eq!(durum.kalan_hak, Some(4));
     }
 
-    ikinci.close();
+    ikinci.close().await;
     std::thread::sleep(std::time::Duration::from_millis(300));
     drop(ikinci);
     dosya_sil(&dosya);

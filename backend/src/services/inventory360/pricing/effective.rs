@@ -21,7 +21,6 @@ pub(super) struct PricingRuleRow {
 /// HH:MM karsilastirmasi metin sirasiyla yapilabilir (9:30 < 10:00),
 /// bu yuzden ayristirma gerekmez. Gece yarisi asan kural (22:00-02:00)
 /// iki parcaya bolunur, aksi halde hic calismaz.
-
 fn rule_applies_now(rule: &PricingRuleRow, now_time: &str, now_date: &str, weekday: u32) -> bool {
     if !rule.is_active {
         return false;

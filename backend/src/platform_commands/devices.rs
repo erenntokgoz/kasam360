@@ -286,7 +286,7 @@ pub async fn register_device(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
     Ok(dto)
 }
 
@@ -322,7 +322,7 @@ pub async fn toggle_device_status(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
     Ok(dto)
 }
 
@@ -363,7 +363,7 @@ pub async fn delete_device(
         serde_json::json!({ "name": onceki_ad }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
     Ok(())
 }
 

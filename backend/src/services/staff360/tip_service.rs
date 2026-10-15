@@ -141,8 +141,7 @@ pub async fn distribute_pool(
     let mut out: Vec<TipAllocation> = Vec::with_capacity(agirlikli.len());
     for (idx, (user_id, agirlik, katsayi)) in agirlikli.iter().enumerate() {
         let pay = if idx == son_index {
-            let kalan = total - dagilan;
-            kalan
+            total - dagilan
         } else {
             // Kesmeden önce tabanı 100 ile çarp: yüzde 100'de en fazla 1 kuruş
             // yuvarlama farkı oluşabilir, kalan onu kapatır.

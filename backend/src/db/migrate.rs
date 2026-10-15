@@ -101,9 +101,9 @@ fn list_migration_files() -> Result<Vec<(i64, String, String)>, sqlx::Error> {
         return Ok(files);
     }
 
-    let entries = std::fs::read_dir(dir).map_err(|e| sqlx::Error::Io(e))?;
+    let entries = std::fs::read_dir(dir).map_err(sqlx::Error::Io)?;
     for entry in entries {
-        let entry = entry.map_err(|e| sqlx::Error::Io(e))?;
+        let entry = entry.map_err(sqlx::Error::Io)?;
         let path = entry.path();
         if path.extension().map(|e| e == "sql").unwrap_or(false) {
             let filename = entry.file_name().to_string_lossy().to_string();
@@ -112,7 +112,7 @@ fn list_migration_files() -> Result<Vec<(i64, String, String)>, sqlx::Error> {
             if parts.len() == 2 {
                 if let Ok(version) = parts[0].parse::<i64>() {
                     let name = parts[1].trim_end_matches(".sql").to_string();
-                    let sql = std::fs::read_to_string(&path).map_err(|e| sqlx::Error::Io(e))?;
+                    let sql = std::fs::read_to_string(&path).map_err(sqlx::Error::Io)?;
                     files.push((version, name, sql));
                 }
             }

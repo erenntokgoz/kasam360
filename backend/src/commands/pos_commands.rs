@@ -234,12 +234,7 @@ pub async fn submit_order(
         // yazılır. İstemcinin gönderdiği fiyat değeri kullanılmaz; aksi hâlde
         // fişte görünen ekstre ile tahsil edilen tutar ayrışırdı.
         let modifiers_json =
-            match authoritative_modifier_snapshot(&mut tx, &tenant_id, item.modifiers.as_ref())
-                .await?
-            {
-                Some(json) => Some(json),
-                None => None,
-            };
+            authoritative_modifier_snapshot(&mut tx, &tenant_id, item.modifiers.as_ref()).await?;
 
         prepared_items.push(PreparedOrderItem {
             id: format!("item_{}", Uuid::new_v4()),
@@ -367,7 +362,7 @@ pub async fn submit_order(
         audit_payload,
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 

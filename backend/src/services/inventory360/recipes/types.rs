@@ -240,9 +240,10 @@ pub async fn create_recipe(
     .await
     .map_err(|e| e.to_string())?;
     if aktif > 0 {
-        return Err(format!(
+        return Err(
             "CONFLICT: bu ürün için aktif reçete zaten var, önce mevcut reçeteyi pasife al"
-        ));
+                .to_string(),
+        );
     }
 
     // Bütün kalemler **önce** doğrulanır. Doğrulama INSERT'ten sonra

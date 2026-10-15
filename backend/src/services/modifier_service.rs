@@ -80,8 +80,7 @@ async fn options_of(
     // `group_id IN (...)` ile tek sorgu: grup başına N+1 sorgu yapılmaz.
     // `modifier_options`ın kendi `tenant_id` kolonu yoktur; sahiplik grup
     // üzerinden **sorgunun kendi içinde** doğrulanır (derinlik savunması).
-    let placeholders = std::iter::repeat("?")
-        .take(group_ids.len())
+    let placeholders = std::iter::repeat_n("?", group_ids.len())
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(

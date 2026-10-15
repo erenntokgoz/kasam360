@@ -6,7 +6,7 @@
 
 use crate::approval_service::{self, error, operation, ApprovalRequest};
 use crate::commands::void_commands::{require_void_approval, void_approval_request};
-use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
+use crate::services::audit_service::category;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::str::FromStr;
 
@@ -17,7 +17,6 @@ const ORDER_ID: &str = "ord_cvp_01";
 const TXN_ID: &str = "txn_cvp_01";
 const CASHIER: &str = "usr_cashier";
 const MANAGER: &str = "usr_manager";
-const OWNER: &str = "usr_owner";
 
 async fn pool() -> sqlx::SqlitePool {
     let options = SqliteConnectOptions::from_str("sqlite::memory:")
@@ -252,7 +251,7 @@ async fn refunds_cross_tenant_okuma_engellenir() {
 // ============================================================================
 
 #[tokio::test]
-async fn compensation_audit_ledger_FiNS_kategorisinde_yazilir() {
+async fn compensation_audit_ledger_fins_kategorisinde_yazilir() {
     use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
 
     let pool = pool().await;

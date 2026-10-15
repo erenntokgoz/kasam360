@@ -89,9 +89,8 @@ pub async fn create_purchase_order(
             .await
             .map_err(|e| e.to_string())?
             .ok_or_else(|| {
-                format!(
-                    "VALIDATION: bu ürün için tedarikçi fiyatı girilmemiş, sipariş fiyatı belirsiz"
-                )
+                "VALIDATION: bu ürün için tedarikçi fiyatı girilmemiş, sipariş fiyatı belirsiz"
+                    .to_string()
             })?,
         };
 

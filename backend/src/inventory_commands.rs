@@ -142,7 +142,7 @@ pub async fn adjust_stock(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -184,7 +184,7 @@ pub async fn create_inventory_item(
     .bind(&sku)
     .bind(initial_stock)
     .bind(&unit)
-    .bind(&min_stock_alert)
+    .bind(min_stock_alert)
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
@@ -204,7 +204,7 @@ pub async fn create_inventory_item(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 

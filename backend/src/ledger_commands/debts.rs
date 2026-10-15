@@ -252,7 +252,7 @@ pub async fn create_debt(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -431,7 +431,7 @@ pub async fn pay_debt(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 

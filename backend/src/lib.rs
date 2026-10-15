@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 pub mod analytics_commands;
 pub mod approval_commands;
 pub mod approval_service;

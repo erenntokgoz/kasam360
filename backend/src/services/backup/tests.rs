@@ -11,7 +11,7 @@ use std::str::FromStr;
 async fn pool() -> sqlx::SqlitePool {
     // VACUUM INTO bir dosyaya yazabilmek için dosya tabanlı havuz gerekir;
     // bellek içi havuz `VACUUM INTO 'file:...'` ile dosya oluşturamaz.
-    let dir = std::env::temp_dir().join(format!("kasam360_backup_pool_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("kasam360_backup_pool_{}_{}", std::process::id(), uuid::Uuid::new_v4()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let db_path = dir.join("test.db");
@@ -38,7 +38,7 @@ async fn pool() -> sqlx::SqlitePool {
 #[tokio::test]
 async fn backup_olustur_ve_checksum_dogrula() {
     let p = pool().await;
-    let dir = std::env::temp_dir().join("kasam360_backup_test");
+    let dir = std::env::temp_dir().join(format!("kasam360_backup_test_{}", uuid::Uuid::new_v4()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let dir_str = dir.to_str().unwrap();
@@ -59,7 +59,7 @@ async fn backup_olustur_ve_checksum_dogrula() {
 #[tokio::test]
 async fn backup_checksum_uymazsa_hata_doner() {
     let p = pool().await;
-    let dir = std::env::temp_dir().join("kasam360_backup_test2");
+    let dir = std::env::temp_dir().join(format!("kasam360_backup_test2_{}", uuid::Uuid::new_v4()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let dir_str = dir.to_str().unwrap();
@@ -95,7 +95,7 @@ async fn backup_olmayan_dosya_hata() {
 async fn backup_sifir_donusu_yok() {
     // AGENTS.md §3.4: hata senaryosu Err döner, 0 döndürmez.
     let p = pool().await;
-    let dir = std::env::temp_dir().join("kasam360_backup_test3");
+    let dir = std::env::temp_dir().join(format!("kasam360_backup_test3_{}", uuid::Uuid::new_v4()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let dir_str = dir.to_str().unwrap();

@@ -117,7 +117,7 @@ pub async fn move_table(
         payload,
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -161,7 +161,7 @@ pub async fn add_table(
         payload,
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
@@ -202,7 +202,7 @@ pub async fn remove_table(
         payload,
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
@@ -257,7 +257,7 @@ pub async fn update_table_name(
         payload,
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
@@ -317,7 +317,7 @@ pub async fn merge_tables(
         payload,
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())

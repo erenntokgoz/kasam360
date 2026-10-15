@@ -7,6 +7,7 @@ use sqlx::{Row, SqliteConnection};
 ///   1. Alt yarı mamul reçetesi varsa reçetenin birim maliyeti (özyinelemeli).
 ///   2. Stok partilerinin en güncel birim maliyeti.
 ///   3. Tedarikçi fiyatı (stoktan hiç girmemiş malzeme için).
+///
 /// Biri de yoksa None döner — sıfır değil.
 pub(super) async fn resolve_component_cost(
     conn: &mut SqliteConnection,

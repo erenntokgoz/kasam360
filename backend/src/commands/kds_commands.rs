@@ -162,7 +162,7 @@ pub async fn kds_update_ticket_status(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    crate::services::audit_service::AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 

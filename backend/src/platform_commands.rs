@@ -169,7 +169,7 @@ pub async fn create_tenant(
     let final_owner_email = owner_email
         .clone()
         .or_else(|| email.clone())
-        .unwrap_or_else(|| format!("owner@kasam360.com"));
+        .unwrap_or_else(|| "owner@kasam360.com".to_string());
     // Yönetici parolası verilmezse üretilir. Önceden `Kasam-{uuid[..8]}` idi: sabit
     // önek + 8 onaltılık karakter = **32 bit** entropi. Argon2 maliyeti bunu
     // telafi etmez, çünkü parolanın kendisi zayıftır.
@@ -269,7 +269,7 @@ pub async fn create_tenant(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *audit_conn, &audit_lock, &audit_ctx).await?;
+    AuditService::append(&mut audit_conn, &audit_lock, &audit_ctx).await?;
 
     Ok(TenantDto {
         id: tenant_id,
@@ -368,7 +368,7 @@ pub async fn update_tenant(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &audit_ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &audit_ctx).await?;
 
     Ok(TenantDto {
         id: row.try_get("id").unwrap_or_default(),
@@ -415,7 +415,7 @@ pub async fn suspend_tenant(
         serde_json::json!({ "changes": { "status": { "old": "ACTIVE", "new": "SUSPENDED" } } }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
     Ok(())
 }
 
@@ -449,7 +449,7 @@ pub async fn activate_tenant(
         serde_json::json!({ "changes": { "status": { "old": "SUSPENDED", "new": "ACTIVE" } } }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
     Ok(())
 }
 
@@ -504,7 +504,7 @@ pub async fn update_tenant_modules(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
     Ok(())
 }
@@ -619,7 +619,7 @@ pub async fn create_remote_session(
     let session_id = format!("sess_{}", &uuid::Uuid::new_v4().to_string()[..8]);
     let ticket = format!(
         "TICKET_{}",
-        &uuid::Uuid::new_v4().to_string()[..12].to_uppercase()
+        uuid::Uuid::new_v4().to_string()[..12].to_uppercase()
     );
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
@@ -644,7 +644,7 @@ pub async fn create_remote_session(
         payload,
         now_iso,
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
     Ok(serde_json::json!({
         "success": true,
@@ -701,7 +701,7 @@ pub async fn execute_it_action(
         payload,
         now_iso,
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
     Ok(serde_json::json!({
         "success": true,
@@ -838,7 +838,7 @@ pub async fn reset_user_password(
         serde_json::json!({ "targetUserId": user_id }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *tx, &audit_lock, &ctx).await?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -908,7 +908,7 @@ pub async fn change_user_pin(
         serde_json::json!({ "targetUserId": user_id, "method": "master_override" }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
     Ok(serde_json::json!({
         "success": true,
@@ -944,7 +944,7 @@ pub async fn regenerate_license_key(
         "INSERT INTO licenses (id, tenant_id, license_key, status) VALUES (?, ?, ?, 'ACTIVE')
          ON CONFLICT(id) DO UPDATE SET license_key = excluded.license_key",
     )
-    .bind(&uuid::Uuid::new_v4().to_string())
+    .bind(uuid::Uuid::new_v4().to_string())
     .bind(&tenant_id)
     .bind(&new_key)
     .execute(&mut *conn)
@@ -963,7 +963,7 @@ pub async fn regenerate_license_key(
         serde_json::json!({ "targetUserId": user_id }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut *conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
     Ok(serde_json::json!({
         "user_id": user_id,
