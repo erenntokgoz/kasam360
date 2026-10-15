@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+:root {
+  --brand: #0A84FF;
+  --brand-hover: #409CFF;
+}

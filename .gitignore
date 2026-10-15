@@ -8,6 +8,7 @@ backend/tauri.conf.json.lock
 
 # Node
 node_modules/
+desktop/node_modules/
 dist/
 dist-ssr/
 desktop/dist/
