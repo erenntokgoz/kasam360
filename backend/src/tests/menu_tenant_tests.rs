@@ -56,7 +56,7 @@ async fn pool() -> SqlitePool {
     let p = SqlitePool::connect("sqlite::memory:")
         .await
         .expect("hafiza");
-    sqlx::raw_sql(include_str!("../migrations/schema.sql"))
+    sqlx::raw_sql(include_str!("../../migrations/schema.sql"))
         .execute(&p)
         .await
         .expect("sema");
@@ -109,11 +109,11 @@ async fn olmayan_kayit_reddedilir() {
 const MENU_KAYNAKLARI: [(&str, &str); 4] = [
     (
         "category.rs",
-        include_str!("management_commands/category.rs"),
+        include_str!("../management_commands/category.rs"),
     ),
-    ("product.rs", include_str!("management_commands/product.rs")),
-    ("staff.rs", include_str!("management_commands/staff.rs")),
-    ("mod.rs", include_str!("management_commands/mod.rs")),
+    ("product.rs", include_str!("../management_commands/product.rs")),
+    ("staff.rs", include_str!("../management_commands/staff.rs")),
+    ("mod.rs", include_str!("../management_commands/mod.rs")),
 ];
 
 /// SQL kaçışlı dizeleri: `sqlx::query("...")` ve `query_scalar("...")` kalıpları.

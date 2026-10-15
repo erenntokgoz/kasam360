@@ -9,7 +9,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::Row;
 use std::str::FromStr;
 
-const SCHEMA: &str = include_str!("../migrations/schema.sql");
+const SCHEMA: &str = include_str!("../../migrations/schema.sql");
 const TENANT: &str = "tenant_a";
 const ORDER_ID: &str = "ord_01";
 const CASHIER: &str = "usr_cashier";

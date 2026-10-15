@@ -8,7 +8,7 @@ use super::*;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::str::FromStr;
 
-const SCHEMA: &str = include_str!("../migrations/schema.sql");
+const SCHEMA: &str = include_str!("../../migrations/schema.sql");
 
 const TENANT_A: &str = "tenant_a";
 const TENANT_B: &str = "tenant_b";

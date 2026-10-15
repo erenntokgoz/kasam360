@@ -544,5 +544,5 @@ pub async fn consume_token(
 }
 
 #[cfg(test)]
-#[path = "approval_service_tests.rs"]
+#[path = "tests/approval_service_tests.rs"]
 mod tests;

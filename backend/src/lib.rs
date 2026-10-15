@@ -7,12 +7,8 @@ pub mod auth;
 pub mod branch_commands;
 pub mod cashier_commands;
 pub mod commands;
-#[cfg(test)]
-mod compensation_tests;
 pub mod db;
 pub mod domain;
-#[cfg(test)]
-mod floor_lock_tests;
 pub mod id_generator;
 pub mod inventory360_commands;
 pub mod inventory_commands;
@@ -21,8 +17,6 @@ pub mod ledger_commands;
 pub mod legal360_commands;
 pub mod log;
 pub mod management_commands;
-#[cfg(test)]
-mod menu_tenant_tests;
 pub mod modifier_commands;
 pub mod platform_commands;
 pub mod print_commands;
@@ -32,9 +26,7 @@ pub mod repositories;
 pub mod reservation_commands;
 pub mod services;
 #[cfg(test)]
-mod shift_security_tests;
-#[cfg(test)]
-mod staff360_tests;
+mod tests;
 pub mod user_credentials;
 pub mod waiter_commands;
 

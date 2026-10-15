@@ -39,18 +39,18 @@ pub(crate) use pos_commands::authoritative_modifier_snapshot;
 #[cfg(test)]
 pub(crate) use void_commands::{require_void_approval, void_approval_request};
 #[cfg(test)]
-#[path = "commands_approval_tests.rs"]
+#[path = "tests/commands_approval_tests.rs"]
 mod approval_tests;
 
 #[cfg(test)]
-#[path = "price_integrity_tests.rs"]
+#[path = "tests/price_integrity_tests.rs"]
 mod price_integrity_tests;
 
 /// Kapısız komut regresyon testleri (`get_shift_summary`, `get_stations`,
 /// `create_station`, `update_kds_item_status`, `get_product_modifiers`,
 /// `get_table_ready_status`, `get_all_table_statuses`).
 #[cfg(test)]
-#[path = "unguarded_commands_tests.rs"]
+#[path = "tests/unguarded_commands_tests.rs"]
 mod unguarded_commands_tests;
 
 #[cfg(test)]

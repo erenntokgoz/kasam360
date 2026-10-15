@@ -13,7 +13,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::Row;
 use std::str::FromStr;
 
-const SCHEMA: &str = include_str!("../migrations/schema.sql");
+const SCHEMA: &str = include_str!("../../migrations/schema.sql");
 
 async fn pool() -> sqlx::SqlitePool {
     let options = SqliteConnectOptions::from_str("sqlite::memory:")

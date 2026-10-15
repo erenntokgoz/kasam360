@@ -23,7 +23,7 @@ async fn pool() -> SqlitePool {
     let p = SqlitePool::connect("sqlite::memory:")
         .await
         .expect("hafıza");
-    sqlx::raw_sql(include_str!("../../migrations/schema.sql"))
+    sqlx::raw_sql(include_str!("../../../migrations/schema.sql"))
         .execute(&p)
         .await
         .expect("şema");
