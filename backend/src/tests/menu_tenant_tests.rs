@@ -109,11 +109,11 @@ async fn olmayan_kayit_reddedilir() {
 const MENU_KAYNAKLARI: [(&str, &str); 4] = [
     (
         "category.rs",
-        include_str!("../management_commands/category.rs"),
+        include_str!("../commands/management_commands/category.rs"),
     ),
-    ("product.rs", include_str!("../management_commands/product.rs")),
-    ("staff.rs", include_str!("../management_commands/staff.rs")),
-    ("mod.rs", include_str!("../management_commands/mod.rs")),
+    ("product.rs", include_str!("../commands/management_commands/product.rs")),
+    ("staff.rs", include_str!("../commands/management_commands/staff.rs")),
+    ("mod.rs", include_str!("../commands/management_commands/mod.rs")),
 ];
 
 /// SQL kaçışlı dizeleri: `sqlx::query("...")` ve `query_scalar("...")` kalıpları.

@@ -498,5 +498,5 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "tests/print_commands_tests.rs"]
+#[path = "../tests/print_commands_tests.rs"]
 mod print_tests;

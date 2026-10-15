@@ -71,7 +71,7 @@ mod tests {
     }
 
     #[test]
-    fn kiraci bos_rededilir() {
+    fn kiraci_bos_reddedilir() {
         let result = require_tenant_branch_role(
             None,
             Some("br_000000000001"),

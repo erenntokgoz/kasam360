@@ -14,7 +14,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Row, SqliteConnection};
 use std::str::FromStr;
 
-const SEMA: &str = include_str!("../../../migrations/schema.sql");
+const SEMA: &str = include_str!("../../../../migrations/schema.sql");
 
 const TENANT_A: &str = "ten_a";
 const TENANT_B: &str = "ten_b";

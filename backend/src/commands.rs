@@ -4,21 +4,38 @@
 //! domain modüllerini tanımlar ve `pub use` ile eski isimleri korur; böylece
 //! `crate::commands::*` ve `tauri::generate_handler!` yolları değişmez.
 
+pub mod analytics_commands;
+pub mod approval_commands;
 pub mod audit_commands;
 pub mod auth_commands;
+pub mod branch_commands;
+pub mod cashier_commands;
 pub mod command_helpers;
 pub mod day_close_commands;
 pub mod external360_commands;
 pub mod floor_commands;
 pub mod floor_plan_commands;
+pub mod guard;
+pub mod inventory360_commands;
+pub mod inventory_commands;
 pub mod kds_commands;
+pub mod kitchen_commands;
+pub mod ledger_commands;
+pub mod legal360_commands;
+pub mod management_commands;
+pub mod modifier_commands;
 pub mod payment_commands;
+pub mod platform_commands;
 pub mod pos_commands;
+pub mod print_commands;
 pub mod receipt_commands;
+pub mod report_commands;
+pub mod reservation_commands;
 pub mod shift_commands;
 pub mod staff_commands;
 pub mod threshold_commands;
 pub mod void_commands;
+pub mod waiter_commands;
 
 pub use audit_commands::*;
 pub use auth_commands::*;

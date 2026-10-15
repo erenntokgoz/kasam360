@@ -1,34 +1,35 @@
 #![allow(clippy::too_many_arguments)]
 
-pub mod analytics_commands;
-pub mod approval_commands;
 pub mod approval_service;
 pub mod auth;
-pub mod branch_commands;
-pub mod cashier_commands;
 pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod id_generator;
-pub mod inventory360_commands;
-pub mod inventory_commands;
-pub mod kitchen_commands;
-pub mod ledger_commands;
-pub mod legal360_commands;
 pub mod log;
-pub mod management_commands;
-pub mod modifier_commands;
-pub mod platform_commands;
-pub mod print_commands;
 pub mod rbac;
-pub mod report_commands;
 pub mod repositories;
-pub mod reservation_commands;
 pub mod services;
 #[cfg(test)]
 mod tests;
 pub mod user_credentials;
-pub mod waiter_commands;
+
+pub use commands::analytics_commands;
+pub use commands::approval_commands;
+pub use commands::branch_commands;
+pub use commands::cashier_commands;
+pub use commands::inventory360_commands;
+pub use commands::inventory_commands;
+pub use commands::kitchen_commands;
+pub use commands::ledger_commands;
+pub use commands::legal360_commands;
+pub use commands::management_commands;
+pub use commands::modifier_commands;
+pub use commands::platform_commands;
+pub use commands::print_commands;
+pub use commands::report_commands;
+pub use commands::reservation_commands;
+pub use commands::waiter_commands;
 
 pub use db::{init_db, DbPool};
 
