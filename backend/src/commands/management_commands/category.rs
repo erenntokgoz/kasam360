@@ -14,11 +14,15 @@ use crate::db::DbPool;
 use crate::rbac::{self, Role};
 use crate::services::audit_service::{category, AuditLock};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct CategoryDto {
     pub id: String,
     pub name: String,
     pub display_order: i32,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub default_station: Option<String>,
 }
 
 #[tauri::command]
@@ -31,7 +35,7 @@ pub async fn get_management_categories(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT id, name, display_order FROM categories WHERE tenant_id = ? ORDER BY display_order ASC")
+    let rows = sqlx::query("SELECT id, name, display_order, icon, default_station FROM categories WHERE tenant_id = ? ORDER BY display_order ASC")
         .bind(&tenant_id)
         .fetch_all(&mut *conn)
         .await
@@ -45,6 +49,8 @@ pub async fn get_management_categories(
             display_order: row
                 .try_get::<i32, _>("display_order")
                 .map_err(|e| e.to_string())?,
+            icon: row.try_get("icon").ok(),
+            default_station: row.try_get("default_station").ok(),
         });
     }
     Ok(res)
@@ -55,6 +61,8 @@ pub async fn create_category(
     actor_role: String,
     name: String,
     display_order: i32,
+    icon: Option<String>,
+    default_station: Option<String>,
     actor_id: Option<String>,
     tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -66,6 +74,7 @@ pub async fn create_category(
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
+    let resolved_station = default_station.unwrap_or_else(|| "Sıcak".to_string());
 
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut *conn)
@@ -74,12 +83,14 @@ pub async fn create_category(
     let result: Result<CategoryDto, String> = async {
         let id = Uuid::new_v4().to_string();
         sqlx::query(
-            "INSERT INTO categories (id, tenant_id, name, display_order) VALUES (?, ?, ?, ?)",
+            "INSERT INTO categories (id, tenant_id, name, display_order, icon, default_station) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(&id)
         .bind(&tenant_id)
         .bind(&name)
         .bind(display_order)
+        .bind(&icon)
+        .bind(&resolved_station)
         .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
@@ -93,7 +104,7 @@ pub async fn create_category(
             category::MENU,
             "menu:category_created",
             &id,
-            serde_json::json!({ "name": name, "displayOrder": display_order }),
+            serde_json::json!({ "name": name, "displayOrder": display_order, "icon": icon, "defaultStation": resolved_station }),
         )
         .await?;
 
@@ -101,6 +112,8 @@ pub async fn create_category(
             id,
             name,
             display_order,
+            icon,
+            default_station: Some(resolved_station),
         })
     }
     .await;
@@ -126,6 +139,8 @@ pub async fn update_category(
     id: String,
     name: String,
     display_order: i32,
+    icon: Option<String>,
+    default_station: Option<String>,
     actor_id: Option<String>,
     tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -144,8 +159,8 @@ pub async fn update_category(
         .await
         .map_err(|e| e.to_string())?;
     let result: Result<CategoryDto, String> = async {
-        let previous: Option<(String, i32)> = sqlx::query_as(
-            "SELECT name, display_order FROM categories WHERE id = ? AND tenant_id = ?",
+        let previous: Option<(String, i32, Option<String>, Option<String>)> = sqlx::query_as(
+            "SELECT name, display_order, icon, default_station FROM categories WHERE id = ? AND tenant_id = ?",
         )
         .bind(&id)
         .bind(&tenant_id)
@@ -153,11 +168,16 @@ pub async fn update_category(
         .await
         .map_err(|e| e.to_string())?;
 
+        let resolved_station = default_station.or_else(|| previous.as_ref().and_then(|p| p.3.clone())).unwrap_or_else(|| "Sıcak".to_string());
+        let resolved_icon = icon.or_else(|| previous.as_ref().and_then(|p| p.2.clone()));
+
         sqlx::query(
-            "UPDATE categories SET name = ?, display_order = ? WHERE id = ? AND tenant_id = ?",
+            "UPDATE categories SET name = ?, display_order = ?, icon = ?, default_station = ? WHERE id = ? AND tenant_id = ?",
         )
         .bind(&name)
         .bind(display_order)
+        .bind(&resolved_icon)
+        .bind(&resolved_station)
         .bind(&id)
         .bind(&tenant_id)
         .execute(&mut *conn)
@@ -183,6 +203,14 @@ pub async fn update_category(
                         "old": previous.as_ref().map(|p| p.1),
                         "new": display_order,
                     },
+                    "icon": {
+                        "old": previous.as_ref().and_then(|p| p.2.clone()),
+                        "new": resolved_icon,
+                    },
+                    "defaultStation": {
+                        "old": previous.as_ref().and_then(|p| p.3.clone()),
+                        "new": resolved_station,
+                    },
                 }
             }),
         )
@@ -192,6 +220,8 @@ pub async fn update_category(
             id,
             name,
             display_order,
+            icon: resolved_icon,
+            default_station: Some(resolved_station),
         })
     }
     .await;

@@ -151,7 +151,7 @@ pub async fn close_day(
     // kiracı çağırdığında DEFAULT_TENANT'ın vardiyalarını da kapatıyordu, yani
     // bir işletmenin gün sonu komutu başka bir işletmenin kasasını devrederdi.
     let open_shifts = sqlx::query(
-        "SELECT id, expected_amount_cents, actual_amount_cents
+        "SELECT id, expected_amount_cents, actual_amount_cents, opened_at
          FROM shifts WHERE status = 'OPEN' AND tenant_id = ?",
     )
     .bind(&effective_tenant)
@@ -222,15 +222,28 @@ pub async fn close_day(
         let expected: i64 = shift
             .try_get("expected_amount_cents")
             .map_err(|e| e.to_string())?;
+        let opened_at: String = shift.try_get("opened_at").map_err(|e| e.to_string())?;
         let actual_opt: Option<i64> = shift
             .try_get("actual_amount_cents")
             .map_err(|e| e.to_string())?;
 
+        let calc = crate::commands::cashier_commands::calculate_expected_shift_balance(
+            &mut tx,
+            &effective_tenant,
+            &sid,
+            &opened_at,
+            None,
+            expected,
+        )
+        .await?;
+
         // Sayım girilmemişse fark **bilinmiyor**, sıfır değil. Kapatma yine
         // yapılır (vardiya sonsuza dek açık kalamaz) ama fark `NULL` yazılır;
         // sıfır yazmak "kasayı saydım, tutuyor" izlenimi verirdi.
-        let (actual, diff) =
-            crate::services::security360::money_gate::kapanis_farki(expected, actual_opt);
+        let (actual, diff) = crate::services::security360::money_gate::kapanis_farki(
+            calc.expected_balance,
+            actual_opt,
+        );
 
         sqlx::query(
             "UPDATE shifts SET status = 'CLOSED', closed_at = datetime('now'),

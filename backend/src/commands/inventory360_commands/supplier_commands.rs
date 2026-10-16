@@ -302,3 +302,17 @@ pub async fn receive_purchase_order_command(
         }
     }
 }
+
+#[tauri::command]
+pub async fn list_purchase_orders_command(
+    actor_role: String,
+    tenant_id: Option<String>,
+    status: Option<String>,
+    pool: State<'_, DbPool>,
+) -> Result<Vec<suppliers::PurchaseOrder>, String> {
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
+    let mut conn = acquire(&pool).await?;
+    let tenant_id = require_tenant(tenant_id.as_deref())?;
+
+    suppliers::list_purchase_orders(&mut conn, &tenant_id, status.as_deref()).await
+}

@@ -36,6 +36,9 @@ pub struct FinancialReport {
     pub total_revenue_cents: i64,
     pub total_sales_revenue_cents: i64,
     pub total_debt_collected_cents: i64,
+    pub total_cogs_cents: i64,
+    pub total_refunds_cents: i64,
+    pub gross_profit_cents: i64,
     pub total_expenses_cents: i64,
     pub net_profit_cents: i64,
     pub receivables_cents: i64,
@@ -125,6 +128,54 @@ pub async fn financial_report(
     let total_revenue_cents = total_sales_revenue_cents + total_debt_collected_cents;
 
     // ------------------------------------------------------------------
+    // 2.5. Satılan Malın Maliyeti (COGS) ve İadeler
+    // ------------------------------------------------------------------
+    let total_cogs_cents: i64 = match range {
+        Some((s, e)) => sqlx::query_scalar(
+            "SELECT COALESCE(SUM(CAST(json_extract(payload, '$.cogsTotalCents') AS INTEGER)), 0)
+             FROM audit_ledger
+             WHERE tenant_id = ? AND action = 'payment:settled_fifo' AND created_at >= ? AND created_at <= ?",
+        )
+        .bind(tenant_id)
+        .bind(s)
+        .bind(e)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|err| format!("COGS toplanamadı: {}", err))?,
+        None => sqlx::query_scalar(
+            "SELECT COALESCE(SUM(CAST(json_extract(payload, '$.cogsTotalCents') AS INTEGER)), 0)
+             FROM audit_ledger
+             WHERE tenant_id = ? AND action = 'payment:settled_fifo'",
+        )
+        .bind(tenant_id)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|err| format!("COGS toplanamadı: {}", err))?,
+    };
+
+    let total_refunds_cents: i64 = match range {
+        Some((s, e)) => sqlx::query_scalar(
+            "SELECT COALESCE(SUM(amount_cents), 0) FROM refunds
+             WHERE tenant_id = ? AND created_at >= ? AND created_at <= ?",
+        )
+        .bind(tenant_id)
+        .bind(s)
+        .bind(e)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|err| format!("İadeler toplanamadı: {}", err))?,
+        None => sqlx::query_scalar(
+            "SELECT COALESCE(SUM(amount_cents), 0) FROM refunds WHERE tenant_id = ?",
+        )
+        .bind(tenant_id)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|err| format!("İadeler toplanamadı: {}", err))?,
+    };
+
+    let gross_profit_cents = total_revenue_cents - total_refunds_cents - total_cogs_cents;
+
+    // ------------------------------------------------------------------
     // 3. Gider
     // ------------------------------------------------------------------
     let total_expenses_cents: i64 = match range {
@@ -147,7 +198,7 @@ pub async fn financial_report(
         .map_err(|err| format!("Genel gider toplanamadı: {}", err))?,
     };
 
-    let net_profit_cents = total_revenue_cents - total_expenses_cents;
+    let net_profit_cents = gross_profit_cents - total_expenses_cents;
 
     // ------------------------------------------------------------------
     // 4. Açık alacak / borç
@@ -265,6 +316,9 @@ pub async fn financial_report(
         total_revenue_cents,
         total_sales_revenue_cents,
         total_debt_collected_cents,
+        total_cogs_cents,
+        total_refunds_cents,
+        gross_profit_cents,
         total_expenses_cents,
         net_profit_cents,
         receivables_cents,

@@ -54,13 +54,11 @@ pub use void_commands::*;
 #[cfg(test)]
 pub(crate) use pos_commands::authoritative_modifier_snapshot;
 #[cfg(test)]
-pub(crate) use void_commands::{require_void_approval, void_approval_request};
-#[cfg(test)]
 #[path = "tests/commands_approval_tests.rs"]
 mod approval_tests;
 
 #[cfg(test)]
-#[path = "tests/price_integrity_tests.rs"]
+#[path = "tests/price_integrity_tests/mod.rs"]
 mod price_integrity_tests;
 
 /// Kapısız komut regresyon testleri (`get_shift_summary`, `get_stations`,

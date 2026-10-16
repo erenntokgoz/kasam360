@@ -144,7 +144,8 @@ CREATE TABLE IF NOT EXISTS categories (
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
     name TEXT NOT NULL,
     display_order INTEGER NOT NULL DEFAULT 0,
-    icon TEXT
+    icon TEXT,
+    default_station TEXT DEFAULT 'Sıcak'
 );
 
 CREATE TABLE IF NOT EXISTS products (
@@ -303,6 +304,7 @@ CREATE TABLE IF NOT EXISTS orders (
     status TEXT NOT NULL DEFAULT 'OPEN'
         CHECK (status IN ('OPEN', 'IN_PROGRESS', 'PAID', 'CANCELLED', 'VOID', 'COMPENSATED')),
     total_cents INTEGER NOT NULL DEFAULT 0 CHECK (total_cents >= 0),
+    guest_count INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     cashier_id TEXT,
@@ -325,7 +327,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 -- Tek sütunda tutulsaydı biri yazıldığında diğeri ezilirdi.
 -- `is_active`: personel silinmez, pasife alınır (AGENTS.md §6).
 -- `must_change_pin`: fabrika öntanımlı PIN ile tohumlanan hesaplar ilk
--- girişte PIN değiştirmek zorundadır (G2 · P0 güvenlik). Kullanıcı
+-- girişte PIN değiştirmek zorundadır (ilk giriş güvenlik kuralı). Kullanıcı
 -- PIN'ini değiştirdiğinde bayrak sıfırlanır.
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -574,6 +576,9 @@ CREATE TABLE IF NOT EXISTS order_items (
     order_id TEXT NOT NULL,
     product_id TEXT NOT NULL,
     quantity INTEGER NOT NULL DEFAULT 1,
+    paid_quantity INTEGER NOT NULL DEFAULT 0,
+    is_comp INTEGER NOT NULL DEFAULT 0,
+    course_number INTEGER NOT NULL DEFAULT 1,
     unit_price_cents INTEGER NOT NULL DEFAULT 0,
     tax_rate_bp INTEGER NOT NULL DEFAULT 0 CHECK (tax_rate_bp >= 0),
     subtotal_cents INTEGER NOT NULL DEFAULT 0 CHECK (subtotal_cents >= 0),

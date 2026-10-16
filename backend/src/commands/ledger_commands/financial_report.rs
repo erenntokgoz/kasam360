@@ -42,6 +42,9 @@ pub async fn get_financial_report(
 
     Ok(FinancialReportDto {
         total_revenue_cents: report.total_revenue_cents,
+        total_cogs_cents: report.total_cogs_cents,
+        total_refunds_cents: report.total_refunds_cents,
+        gross_profit_cents: report.gross_profit_cents,
         total_expenses_cents: report.total_expenses_cents,
         net_profit_cents: report.net_profit_cents,
         receivables_cents: report.receivables_cents,
@@ -139,6 +142,17 @@ pub async fn export_financial_report(
         "TOPLAM GELİR",
         report.total_revenue_cents,
     ));
+    rows.push(summary_row(
+        "Maliyet",
+        "Satılan Malın Maliyeti (COGS)",
+        report.total_cogs_cents,
+    ));
+    rows.push(summary_row(
+        "İade",
+        "Toplam İadeler",
+        report.total_refunds_cents,
+    ));
+    rows.push(summary_row("Kâr", "BRÜT KÂR", report.gross_profit_cents));
     rows.push(summary_row(
         "Gider",
         "TOPLAM GİDER",

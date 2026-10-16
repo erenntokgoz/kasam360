@@ -318,5 +318,5 @@ impl AuditService {
 }
 
 #[cfg(test)]
-#[path = "audit_service_tests.rs"]
+#[path = "audit_service_tests/mod.rs"]
 mod tests;

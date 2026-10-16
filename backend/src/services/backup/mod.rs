@@ -1,4 +1,4 @@
-//! Backup service (G6 · Item 23).
+//! Yedekleme servisi (Backup service).
 //!
 //! Gün sonu yedeklemesi: `VACUUM INTO`, SHA-256 checksum, zaman damgalı arşiv,
 //! startup chain verification, backup + restore testi.

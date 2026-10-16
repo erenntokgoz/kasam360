@@ -113,6 +113,28 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     .execute(&pool)
     .await;
 
+    // Yeni saha kolonları (Alman usulü parçalı ödeme, ikram, servis sırası, kuver ve istasyon).
+    let _ = sqlx::raw_sql(
+        "ALTER TABLE order_items ADD COLUMN paid_quantity INTEGER NOT NULL DEFAULT 0;",
+    )
+    .execute(&pool)
+    .await;
+    let _ = sqlx::raw_sql("ALTER TABLE order_items ADD COLUMN is_comp INTEGER NOT NULL DEFAULT 0;")
+        .execute(&pool)
+        .await;
+    let _ = sqlx::raw_sql(
+        "ALTER TABLE order_items ADD COLUMN course_number INTEGER NOT NULL DEFAULT 1;",
+    )
+    .execute(&pool)
+    .await;
+    let _ = sqlx::raw_sql("ALTER TABLE orders ADD COLUMN guest_count INTEGER NOT NULL DEFAULT 1;")
+        .execute(&pool)
+        .await;
+    let _ =
+        sqlx::raw_sql("ALTER TABLE categories ADD COLUMN default_station TEXT DEFAULT 'Sıcak';")
+            .execute(&pool)
+            .await;
+
     // P0: `staff_profiles.base_salary_cents` / `commission_percent` NOT NULL
     // idi. "Maaş henüz belirlenmedi" ile "maaş 0" aynı kutuya sıkıştığı için
     // müdürün profil kaydı patronun maaşını sessizce sıfırlıyordu. Kolon
@@ -183,6 +205,9 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
             order_id TEXT NOT NULL,
             product_id TEXT NOT NULL,
             quantity INTEGER NOT NULL,
+            paid_quantity INTEGER NOT NULL DEFAULT 0,
+            is_comp INTEGER NOT NULL DEFAULT 0,
+            course_number INTEGER NOT NULL DEFAULT 1,
             unit_price_cents INTEGER NOT NULL,
             tax_rate_bp INTEGER NOT NULL,
             subtotal_cents INTEGER NOT NULL,
@@ -192,6 +217,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
             modifiers TEXT,
             notes TEXT,
             status TEXT DEFAULT 'PENDING',
+            waiter_id TEXT,
             FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
             FOREIGN KEY (product_id) REFERENCES products(id)
         );",
@@ -199,126 +225,8 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     .execute(&pool)
     .await?;
 
-    // Plans tablosuna eksik sütunları güvenle ekle (idempotent)
-    let _ = sqlx::raw_sql("ALTER TABLE plans ADD COLUMN max_branches INTEGER NOT NULL DEFAULT 1;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE plans ADD COLUMN features TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE plans ADD COLUMN badge TEXT;")
-        .execute(&pool)
-        .await;
-
-    // Users tablosuna kimlik doğrulama sütunlarını güvenle ekle (idempotent)
-    let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN credential_hash TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN pin_hash TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN login_identifier TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE users ADD COLUMN email TEXT;")
-        .execute(&pool)
-        .await;
-    // G2 · P0: fabrika öntanımlı PIN'lerle ilk giriş değişimi zorunlu.
-    // Mevcut kurulumlarda kolon yoksa eklenir; satırlar 0 kalır
-    // (tohumlama `seed_default_users` içinde fabrika PIN'i saptar).
-    let _ =
-        sqlx::raw_sql("ALTER TABLE users ADD COLUMN must_change_pin INTEGER NOT NULL DEFAULT 0;")
-            .execute(&pool)
-            .await;
-
-    // G2 · P0: outbox dispatcher sütunları. `CREATE TABLE IF NOT EXISTS`
-    // mevcut tabloyu yükseltemediği için ALTER ile eklenir.
-    let _ = sqlx::raw_sql("ALTER TABLE outbox ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE outbox ADD COLUMN last_error TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE outbox ADD COLUMN dispatched_at DATETIME;")
-        .execute(&pool)
-        .await;
-
-    // MASTER platform hesabı da düz metin `pin` taşıyordu; Argon2 sütunu önce
-    // eklenir, yoksa migration'ın `SELECT ... pin_hash` ifadesi patlar.
-    let _ = sqlx::raw_sql("ALTER TABLE platform_admins ADD COLUMN pin_hash TEXT;")
-        .execute(&pool)
-        .await;
-
-    // Denetim defteri kategori ve hash sürümü sütunları. Sütunlar hash kanonik
-    // formunun parçası değildir (hash_version = 1 dondurulmuştur), bu yüzden mevcut
-    // satırların doğrulaması bozulmaz; eski satırlar SISTEM kategorisiyle işaretlenir.
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE audit_ledger ADD COLUMN category TEXT NOT NULL DEFAULT 'SISTEM';",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql(
-        "ALTER TABLE audit_ledger ADD COLUMN hash_version INTEGER NOT NULL DEFAULT 1;",
-    )
-    .execute(&pool)
-    .await;
-
-    // Anlık PIN onayı: `approvals` tablosu "kim onayladı" kaydı ve tek
-    // kullanımlık jeton deposu haline geldi. CREATE TABLE IF NOT EXISTS eski
-    // tanımı yükseltemediği için sütunlar burada idempotent eklenir.
-    let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN approved_by_role TEXT;")
-        .execute(&pool)
-        .await;
-    let _ =
-        sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN amount_cents INTEGER NOT NULL DEFAULT 0;")
-            .execute(&pool)
-            .await;
-    let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN token_hash TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN expires_at DATETIME;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE approvals ADD COLUMN consumed_at DATETIME;")
-        .execute(&pool)
-        .await;
-    // Jeton tekliği ve tenant başına rapor sorguları için indeksler.
-    let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_approvals_tenant_status ON approvals(tenant_id, status, created_at DESC);").execute(&pool).await;
-    let _ = sqlx::raw_sql(
-        "CREATE INDEX IF NOT EXISTS idx_approvals_resource ON approvals(tenant_id, resource_id);",
-    )
-    .execute(&pool)
-    .await;
-    let _ = sqlx::raw_sql("CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_token ON approvals(token_hash) WHERE token_hash IS NOT NULL;").execute(&pool).await;
-
-    // Modifier gömme: `modifier_groups.category_id` kategori şablonunu
-    // taşır. NULL = serbest grup. Eklenebilir çünkü mevcut satırlar NULL kalır;
-    // hiçbir modifier verisi taşınmaz veya silinmez.
-    let _ = sqlx::raw_sql("ALTER TABLE modifier_groups ADD COLUMN category_id TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_modifier_groups_tenant_category ON modifier_groups(tenant_id, category_id);").execute(&pool).await;
-    let _ = sqlx::raw_sql("CREATE INDEX IF NOT EXISTS idx_product_modifier_groups_product ON product_modifier_groups(product_id);").execute(&pool).await;
-
-    // Tenants tablosuna şirket/vergi/iletişim sütunlarını güvenle ekle (idempotent)
-    let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN contact_person TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN email TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN phone TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN tax_id TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN tax_office TEXT;")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::raw_sql("ALTER TABLE tenants ADD COLUMN address TEXT;")
-        .execute(&pool)
-        .await;
+    // Şema zenginleştirmeleri ve indeksler 0002_schema_enhancements.sql üzerinden
+    // sürümlü olarak çalıştırılır; her açılışta gereksiz ALTER TABLE çalıştırılmaz.
 
     // PIN düz metin depolanmaz: eski `users.pin` sütunu Argon2'e taşınır ve
     // kaldırılır. Aynı işlemde tenant içi PIN benzersizliğini taşıyan tekil indeks
@@ -393,7 +301,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     Ok(pool)
 }
 
-/// Minimal yapılandırılmış günlük (log) yardımcısı (eprintln yedeği — ekstra bağımlılık gerektirmez).
+/// Yapılandırılmış günlük (log) yardımcısı.
 fn tracing_fallback_log(module: &str, msg: &str) {
-    eprintln!("[INFO] {}: {}", module, msg);
+    tracing::info!("{}: {}", module, msg);
 }

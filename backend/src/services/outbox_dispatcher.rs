@@ -172,24 +172,24 @@ pub fn spawn_outbox_worker(pool: DbPool) -> tokio::task::JoinHandle<()> {
                     // işlenir. Gerçek bir harici uç (QR menü,
                     // muhasebe) eklenince bu kapatıcı değiştirilir;
                     // retry/dead_letter sözleşmesi aynı kalır.
-                    eprintln!(
-                        "[INFO] outbox::dispatcher: teslim edildi kiraci={kiraci} olay={olay}"
-                    );
+                    tracing::info!("outbox::dispatcher: teslim edildi kiraci={kiraci} olay={olay}");
                     Ok(())
                 }
             })
             .await;
             match ozet {
                 Ok(ozet) if ozet.islenen > 0 => {
-                    eprintln!(
-                        "[INFO] outbox::dispatcher: tur islenen={} teslim={} retry={} soluk_ileti={}",
-                        ozet.islenen, ozet.teslim_edilen,
-                        ozet.yeniden_denenecek, ozet.soluk_ileti
+                    tracing::info!(
+                        "outbox::dispatcher: tur islenen={} teslim={} retry={} soluk_ileti={}",
+                        ozet.islenen,
+                        ozet.teslim_edilen,
+                        ozet.yeniden_denenecek,
+                        ozet.soluk_ileti
                     );
                 }
                 Ok(_) => {}
                 Err(hata) => {
-                    eprintln!("[WARN] outbox::dispatcher: tur hatasi: {hata}");
+                    tracing::warn!("outbox::dispatcher: tur hatasi: {hata}");
                 }
             }
         }

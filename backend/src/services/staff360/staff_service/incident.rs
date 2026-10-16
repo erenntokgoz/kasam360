@@ -1,4 +1,4 @@
-﻿//! Tutanak servisi — personel olay kaydı ve listeleme.
+//! Tutanak servisi — personel olay kaydı ve listeleme.
 
 use sqlx::{Row, SqlitePool};
 

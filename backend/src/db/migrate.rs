@@ -72,16 +72,34 @@ pub async fn run_migrations(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
                 tx.commit().await?;
             }
             Err(e) => {
-                // Migration zaten uygulanmış (kolon zaten varsa) — idempotent.
-                tx.rollback().await?;
-                sqlx::query(&format!(
-                    "INSERT OR IGNORE INTO {MIGRATIONS_TABLE} (version, name) VALUES (?, ?)"
-                ))
-                .bind(version)
-                .bind(name)
-                .execute(pool)
-                .await?;
-                let _ = e; // Hata sessizce yutulur — migration zaten var.
+                let err_str = e.to_string();
+                let is_idempotent =
+                    err_str.contains("duplicate column name") || err_str.contains("already exists");
+
+                if is_idempotent {
+                    tx.rollback().await?;
+                    sqlx::query(&format!(
+                        "INSERT OR IGNORE INTO {MIGRATIONS_TABLE} (version, name) VALUES (?, ?)"
+                    ))
+                    .bind(version)
+                    .bind(name)
+                    .execute(pool)
+                    .await?;
+                    tracing::info!(
+                        "Migration version={} name={} idempotent olarak geçildi (zaten mevcut)",
+                        version,
+                        name
+                    );
+                } else {
+                    tx.rollback().await?;
+                    tracing::error!(
+                        "Migration başarısız: version={}, name={}, hata={}",
+                        version,
+                        name,
+                        e
+                    );
+                    return Err(e);
+                }
             }
         }
     }
@@ -94,14 +112,20 @@ pub async fn run_migrations(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
 /// Format: `{version:04}_{name}.sql` — örn: `0001_tax_rate_bp.sql`.
 /// Döndürür: `(version, name, sql_content)` üçlülüğü.
 fn list_migration_files() -> Result<Vec<(i64, String, String)>, sqlx::Error> {
-    let dir = std::path::Path::new(MIGRATIONS_DIR);
+    let dir_path = if std::path::Path::new("migrations").exists() {
+        std::path::Path::new("migrations")
+    } else if std::path::Path::new("backend/migrations").exists() {
+        std::path::Path::new("backend/migrations")
+    } else {
+        std::path::Path::new(MIGRATIONS_DIR)
+    };
     let mut files: Vec<(i64, String, String)> = Vec::new();
 
-    if !dir.exists() {
+    if !dir_path.exists() {
         return Ok(files);
     }
 
-    let entries = std::fs::read_dir(dir).map_err(sqlx::Error::Io)?;
+    let entries = std::fs::read_dir(dir_path).map_err(sqlx::Error::Io)?;
     for entry in entries {
         let entry = entry.map_err(sqlx::Error::Io)?;
         let path = entry.path();

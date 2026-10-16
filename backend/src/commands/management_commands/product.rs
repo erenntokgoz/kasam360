@@ -14,14 +14,32 @@ use crate::db::DbPool;
 use crate::rbac::{self, Role};
 use crate::services::audit_service::{category, AuditLock};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+fn default_management_tax_rate() -> Option<i64> {
+    Some(1000)
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ProductDto {
     pub id: String,
     pub category_id: String,
     pub name: String,
-    pub price_cents: i32,
+    pub price_cents: i64,
     pub image_url: Option<String>,
     pub is_active: bool,
+    #[serde(default)]
+    pub sku: Option<String>,
+    #[serde(default)]
+    pub barcode: Option<String>,
+    #[serde(default = "default_management_tax_rate")]
+    pub tax_rate_bp: Option<i64>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub is_86: bool,
+    #[serde(default)]
+    pub stockout_reason: Option<String>,
 }
 
 #[tauri::command]
@@ -34,7 +52,7 @@ pub async fn get_management_products(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT id, category_id, name, price_cents, image_url, is_active FROM products WHERE tenant_id = ? ORDER BY name ASC")
+    let rows = sqlx::query("SELECT id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason FROM products WHERE tenant_id = ? ORDER BY name ASC")
         .bind(&tenant_id)
         .fetch_all(&mut *conn)
         .await
@@ -47,12 +65,21 @@ pub async fn get_management_products(
             category_id: row.try_get("category_id").map_err(|e| e.to_string())?,
             name: row.try_get("name").map_err(|e| e.to_string())?,
             price_cents: row
-                .try_get::<i32, _>("price_cents")
+                .try_get::<i64, _>("price_cents")
                 .map_err(|e| e.to_string())?,
             image_url: row.try_get("image_url").ok(),
             is_active: row
                 .try_get::<bool, _>("is_active")
                 .map_err(|e| e.to_string())?,
+            sku: row.try_get("sku").ok(),
+            barcode: row.try_get("barcode").ok(),
+            tax_rate_bp: row
+                .try_get::<Option<i64>, _>("tax_rate_bp")
+                .unwrap_or(Some(1000)),
+            description: row.try_get("description").ok(),
+            color: row.try_get("color").ok(),
+            is_86: row.try_get::<bool, _>("is_86").unwrap_or(false),
+            stockout_reason: row.try_get("stockout_reason").ok(),
         });
     }
     Ok(res)
@@ -64,9 +91,16 @@ pub async fn create_product(
     actor_role: String,
     category_id: String,
     name: String,
-    price_cents: i32,
+    price_cents: i64,
     image_url: Option<String>,
     is_active: bool,
+    sku: Option<String>,
+    barcode: Option<String>,
+    tax_rate_bp: Option<i64>,
+    description: Option<String>,
+    color: Option<String>,
+    is_86: Option<bool>,
+    stockout_reason: Option<String>,
     actor_id: Option<String>,
     tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -78,6 +112,9 @@ pub async fn create_product(
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
+    let is_86_val = is_86.unwrap_or(false);
+    let tax_rate_val = tax_rate_bp.unwrap_or(1000);
+    let sku_val = sku.clone().unwrap_or_default();
 
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut *conn)
@@ -88,7 +125,7 @@ pub async fn create_product(
         // Kategori kimliği başka işletmeye aitse ürün o işletmenin menüsünde
         // görünür. INSERT öncesi sınanır.
         ensure_owned(&mut conn, "categories", &category_id, &tenant_id).await?;
-        sqlx::query("INSERT INTO products (id, tenant_id, category_id, name, price_cents, image_url, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO products (id, tenant_id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&id)
             .bind(&tenant_id)
             .bind(&category_id)
@@ -96,6 +133,13 @@ pub async fn create_product(
             .bind(price_cents)
             .bind(&image_url)
             .bind(is_active)
+            .bind(&sku_val)
+            .bind(&barcode)
+            .bind(tax_rate_val)
+            .bind(&description)
+            .bind(&color)
+            .bind(is_86_val)
+            .bind(&stockout_reason)
             .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
@@ -109,10 +153,27 @@ pub async fn create_product(
                 "categoryId": category_id,
                 "priceCents": price_cents,
                 "isActive": is_active,
+                "sku": sku_val,
+                "barcode": barcode,
+                "taxRateBp": tax_rate_val,
             }),
         ).await?;
 
-        Ok(ProductDto { id, category_id, name, price_cents, image_url, is_active })
+        Ok(ProductDto {
+            id,
+            category_id,
+            name,
+            price_cents,
+            image_url,
+            is_active,
+            sku: Some(sku_val),
+            barcode,
+            tax_rate_bp: Some(tax_rate_val),
+            description,
+            color,
+            is_86: is_86_val,
+            stockout_reason,
+        })
     }.await;
 
     match result {
@@ -137,9 +198,16 @@ pub async fn update_product(
     id: String,
     category_id: String,
     name: String,
-    price_cents: i32,
+    price_cents: i64,
     image_url: Option<String>,
     is_active: bool,
+    sku: Option<String>,
+    barcode: Option<String>,
+    tax_rate_bp: Option<i64>,
+    description: Option<String>,
+    color: Option<String>,
+    is_86: Option<bool>,
+    stockout_reason: Option<String>,
     actor_id: Option<String>,
     tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -152,6 +220,9 @@ pub async fn update_product(
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "products", &id, &tenant_id).await?;
+    let is_86_val = is_86.unwrap_or(false);
+    let tax_rate_val = tax_rate_bp.unwrap_or(1000);
+    let sku_val = sku.clone().unwrap_or_default();
 
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut *conn)
@@ -171,12 +242,19 @@ pub async fn update_product(
                 .await
                 .map_err(|e| e.to_string())?;
 
-        sqlx::query("UPDATE products SET category_id = ?, name = ?, price_cents = ?, image_url = ?, is_active = ? WHERE id = ? AND tenant_id = ?")
+        sqlx::query("UPDATE products SET category_id = ?, name = ?, price_cents = ?, image_url = ?, is_active = ?, sku = ?, barcode = ?, tax_rate_bp = ?, description = ?, color = ?, is_86 = ?, stockout_reason = ? WHERE id = ? AND tenant_id = ?")
             .bind(&category_id)
             .bind(&name)
             .bind(price_cents)
             .bind(&image_url)
             .bind(is_active)
+            .bind(&sku_val)
+            .bind(&barcode)
+            .bind(tax_rate_val)
+            .bind(&description)
+            .bind(&color)
+            .bind(is_86_val)
+            .bind(&stockout_reason)
             .bind(&id)
             .bind(&tenant_id)
             .execute(&mut *conn)
@@ -185,7 +263,7 @@ pub async fn update_product(
 
         let (previous_name, previous_price, previous_active) = previous
             .map(|(n, p, a)| (serde_json::json!(n), p, a))
-            .unwrap_or((serde_json::Value::Null, price_cents as i64, is_active));
+            .unwrap_or((serde_json::Value::Null, price_cents, is_active));
 
         record_audit(
             &mut conn, &lock, &tenant_id, &actor_id, &actor_role,
@@ -200,7 +278,21 @@ pub async fn update_product(
             }),
         ).await?;
 
-        Ok(ProductDto { id, category_id, name, price_cents, image_url, is_active })
+        Ok(ProductDto {
+            id,
+            category_id,
+            name,
+            price_cents,
+            image_url,
+            is_active,
+            sku: Some(sku_val),
+            barcode,
+            tax_rate_bp: Some(tax_rate_val),
+            description,
+            color,
+            is_86: is_86_val,
+            stockout_reason,
+        })
     }.await;
 
     match result {

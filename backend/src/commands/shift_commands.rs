@@ -19,15 +19,15 @@ pub struct ShiftDto {
     pub status: String,
     pub opened_at: String,
     pub closed_at: Option<String>,
-    pub expected_amount_cents: i32,
-    pub actual_amount_cents: Option<i32>,
-    pub difference_cents: Option<i32>,
+    pub expected_amount_cents: i64,
+    pub actual_amount_cents: Option<i64>,
+    pub difference_cents: Option<i64>,
 }
 
 #[tauri::command]
 pub async fn open_shift(
     cashier_id: String,
-    expected_amount_cents: i32,
+    expected_amount_cents: i64,
     tenant_id: Option<String>,
     actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -110,7 +110,7 @@ pub async fn open_shift(
 #[tauri::command]
 pub async fn close_shift(
     cashier_id: String,
-    actual_amount_cents: i32,
+    actual_amount_cents: i64,
     tenant_id: Option<String>,
     actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -135,7 +135,7 @@ pub async fn close_shift(
     let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
 
     // Find open shift
-    let row = sqlx::query("SELECT id, expected_amount_cents, tenant_id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
+    let row = sqlx::query("SELECT id, expected_amount_cents, opened_at, tenant_id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
         .bind(&cashier_id)
         .bind(&tenant_id)
         .fetch_optional(&mut *tx)
@@ -146,12 +146,18 @@ pub async fn close_shift(
     // `expected_amount_cents` para okumasıdır: AGENTS.md §3.4 gereği hata
     // yukarı taşınır, sıfıra düşmez. Kasa farkı sıfır kabul edilemez.
     let id: String = r.try_get("id").map_err(|e| e.to_string())?;
-    let expected: i32 = r
+    let expected: i64 = r
         .try_get("expected_amount_cents")
         .map_err(|e| e.to_string())?;
+    let opened_at: String = r.try_get("opened_at").map_err(|e| e.to_string())?;
     let shift_tenant: String = r.try_get("tenant_id").map_err(|e| e.to_string())?;
 
-    let difference = actual_amount_cents - expected;
+    let calc = crate::commands::cashier_commands::calculate_expected_shift_balance(
+        &mut tx, &tenant_id, &id, &opened_at, None, expected,
+    )
+    .await?;
+
+    let difference = actual_amount_cents - calc.expected_balance;
 
     sqlx::query("UPDATE shifts SET status = 'CLOSED', closed_at = datetime('now'), actual_amount_cents = ?, difference_cents = ? WHERE id = ?")
         .bind(actual_amount_cents)
@@ -175,7 +181,7 @@ pub async fn close_shift(
         serde_json::json!({
             "shiftId": id,
             "changes": {
-                "expectedAmountCents": { "old": expected, "new": actual_amount_cents },
+                "expectedAmountCents": { "old": calc.expected_balance, "new": actual_amount_cents },
             },
             "differenceCents": difference,
         }),
@@ -190,9 +196,9 @@ pub async fn close_shift(
         tenant_id,
         cashier_id,
         status: "CLOSED".into(),
-        opened_at: "".into(),
+        opened_at,
         closed_at: Some(chrono::Utc::now().to_rfc3339()),
-        expected_amount_cents: expected,
+        expected_amount_cents: calc.expected_balance,
         actual_amount_cents: Some(actual_amount_cents),
         difference_cents: Some(difference),
     })
@@ -360,10 +366,10 @@ pub async fn get_shift_history(
                     .try_get("expected_amount_cents")
                     .map_err(|e| e.to_string())?,
                 actual_amount_cents: r
-                    .try_get::<Option<i32>, _>("actual_amount_cents")
+                    .try_get::<Option<i64>, _>("actual_amount_cents")
                     .map_err(|e| e.to_string())?,
                 difference_cents: r
-                    .try_get::<Option<i32>, _>("difference_cents")
+                    .try_get::<Option<i64>, _>("difference_cents")
                     .map_err(|e| e.to_string())?,
             })
         })

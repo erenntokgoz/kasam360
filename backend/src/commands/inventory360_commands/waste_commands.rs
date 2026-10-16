@@ -308,3 +308,49 @@ pub async fn list_waste_records_command(
 
     waste::list_waste_records(&mut conn, &tenant_id, limit).await
 }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct StockVarianceReportDto {
+    pub stock_count_id: String,
+    pub status: String,
+    pub closed_at: Option<String>,
+    pub total_variance_cost_cents: i64,
+    pub lines: Vec<waste::StockCountLine>,
+}
+
+#[tauri::command]
+pub async fn get_stock_variance_report(
+    actor_role: String,
+    tenant_id: Option<String>,
+    stock_count_id: Option<String>,
+    pool: State<'_, DbPool>,
+) -> Result<StockVarianceReportDto, String> {
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
+    let mut conn = acquire(&pool).await?;
+    let tenant_id = require_tenant(tenant_id.as_deref())?;
+
+    let count = if let Some(id) = stock_count_id {
+        waste::get_stock_count(&mut conn, &tenant_id, &id).await?
+    } else {
+        let counts = waste::list_stock_counts(&mut conn, &tenant_id).await?;
+        counts
+            .into_iter()
+            .find(|c| c.status == "KAPALI")
+            .ok_or_else(|| "NOT_FOUND: Tamamlanmış/kapanmış sayım bulunamadı.".to_string())?
+    };
+
+    let total_variance_cost_cents: i64 = count
+        .lines
+        .iter()
+        .map(|l| l.variance_cost_cents.unwrap_or(0))
+        .sum();
+
+    Ok(StockVarianceReportDto {
+        stock_count_id: count.id,
+        status: count.status,
+        closed_at: count.closed_at,
+        total_variance_cost_cents,
+        lines: count.lines,
+    })
+}

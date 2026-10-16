@@ -14,7 +14,7 @@
 | Tip | Tanım | Çözüm |
 |-----|-------|-------|
 | **Masa kilidi** | Aynı masanın iki terminali aynı anda açık tutmak ister | OPTIMISTIC LOCK (`try_lock_table`) — 30 sn TTL |
-| **ID çakışması** | İki terminal aynı sipariş/fiş ID'sini üretir | `terminal_id` prefix (G4) |
+| **ID çakışması** | İki terminal aynı sipariş/fiş ID'sini üretir | `terminal_id` prefix |
 | **Sipariş çakışması** | İki terminal aynı sipariş ID'sine satır ekler | MERGE — çakışan kalemler `conflict_log` |
 | **Ödeme çakışması** | İki terminal aynı tutarı/ödeme kaydını yazar | LAST-WRITE-WINS (para otoritesi backend) |
 
@@ -61,7 +61,7 @@ Offline sırada iki terminal aynı `txn_id` ya da `order_id` üretebilir. UUID v
 
 ### Çözüm
 
-G4'te eklenen `id_generator::generate_terminal_id()` ile her terminal kendine
+`id_generator::generate_terminal_id()` ile her terminal kendine
 özel bir `dev_` prefix'li kimlik üretir. Tüm offline kayıtlar bu `terminal_id`
 ile etiketlenır:
 

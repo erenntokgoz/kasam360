@@ -1,4 +1,4 @@
-//! Backup service testleri (G6 · Item 23).
+//! Yedekleme servisi testleri.
 //!
 //! Kapsam: backup + restore, checksum doğrulama, zincir doğrulaması,
 //! sessiz sıfır dönüş yok (AGENTS.md §3.4).

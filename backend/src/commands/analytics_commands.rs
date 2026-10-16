@@ -32,6 +32,29 @@ fn require_tenant(tenant_id: Option<&str>) -> Result<String, String> {
         .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())
 }
 
+fn parse_flexible_date(s: &str, is_end_of_day: bool) -> Result<String, String> {
+    let trimmed = s.trim();
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(trimmed) {
+        return Ok(dt.format("%Y-%m-%d %H:%M:%S").to_string());
+    }
+    if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S") {
+        return Ok(naive.format("%Y-%m-%d %H:%M:%S").to_string());
+    }
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        let time = if is_end_of_day {
+            chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap_or_default()
+        } else {
+            chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap_or_default()
+        };
+        let dt = date.and_time(time);
+        return Ok(dt.format("%Y-%m-%d %H:%M:%S").to_string());
+    }
+    Err(format!(
+        "INVALID_ARGUMENT: Invalid date format '{}'. Expected YYYY-MM-DD or RFC3339",
+        trimmed
+    ))
+}
+
 fn require_range(from: Option<&str>, to: Option<&str>) -> Result<(String, String), String> {
     let from_raw = from
         .map(str::trim)
@@ -41,14 +64,14 @@ fn require_range(from: Option<&str>, to: Option<&str>) -> Result<(String, String
         .map(str::trim)
         .filter(|v| !v.is_empty())
         .ok_or_else(|| "INVALID_ARGUMENT: to is required".to_string())?;
-    let from_dt = chrono::DateTime::parse_from_rfc3339(from_raw)
-        .map_err(|_| "INVALID_ARGUMENT: from must be ISO-8601".to_string())?;
-    let to_dt = chrono::DateTime::parse_from_rfc3339(to_raw)
-        .map_err(|_| "INVALID_ARGUMENT: to must be ISO-8601".to_string())?;
-    if to_dt < from_dt {
+
+    let from_formatted = parse_flexible_date(from_raw, false)?;
+    let to_formatted = parse_flexible_date(to_raw, true)?;
+
+    if to_formatted < from_formatted {
         return Err("INVALID_ARGUMENT: to must not be before from".to_string());
     }
-    Ok((from_raw.to_string(), to_raw.to_string()))
+    Ok((from_formatted, to_formatted))
 }
 
 #[tauri::command]
@@ -69,7 +92,7 @@ pub async fn get_analytics_dashboard_data(
     let row = sqlx::query(
         "SELECT COALESCE(sum(total_cents), 0) as total, COUNT(*) as count \
          FROM orders WHERE tenant_id = ? AND status IN ('PAID', 'CLOSED') \
-           AND created_at >= ? AND created_at <= ?",
+           AND datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?)",
     )
     .bind(&tenant)
     .bind(&from)
@@ -95,7 +118,7 @@ pub async fn get_analytics_dashboard_data(
          JOIN products p ON p.id = oi.product_id AND p.tenant_id = ? \
          LEFT JOIN categories c ON c.id = p.category_id AND c.tenant_id = ? \
          WHERE o.tenant_id = ? AND o.status IN ('PAID', 'CLOSED') \
-           AND o.created_at >= ? AND o.created_at <= ? \
+           AND datetime(o.created_at) >= datetime(?) AND datetime(o.created_at) <= datetime(?) \
          GROUP BY c.id, COALESCE(c.name, 'Kategorisiz') \
          ORDER BY qty DESC LIMIT 10",
     )

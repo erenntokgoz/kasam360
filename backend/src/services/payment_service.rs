@@ -31,56 +31,11 @@ impl PaymentService {
             ));
         }
 
-        // 5. Sunucu tarafı toplam doğrulaması (öğe ve genel indirimler dahil).
-        let server_truth = PaymentRepository::calculate_server_truth(
-            conn,
-            tenant_id,
-            &payload.items,
-            payload.global_discount.as_ref(),
+        // 5. Sunucu tarafı toplam doğrulaması ve anlık PIN onayları.
+        let (server_truth, consumed_approval) = Self::validate_server_truth_and_approvals(
+            conn, audit_lock, tenant_id, actor_id, actor_role, payload,
         )
         .await?;
-        let server_total_cents = server_truth.total_cents;
-        let client_total_cents = payload.total_amount;
-        let total_delta = (server_total_cents - client_total_cents).abs();
-        if total_delta > 1 {
-            return Err(format!(
-                "TOTAL_MISMATCH: Server recalculated total {} cents differs from client total {} cents by {}.",
-                server_total_cents, client_total_cents, total_delta
-            ));
-        }
-
-        // 5.5 K2: sunucu hesabında indirim varsa anlık PIN onayı zorunludur.
-        // Onay tüketimi, ödeme satırı yazılmadan **önce** olur: onaysız ödeme
-        // denemesi kalıcı bir iz bırakmaz.
-        let consumed_approval = crate::services::payment_approval::consume_discount_approval(
-            conn,
-            audit_lock,
-            tenant_id,
-            actor_id,
-            actor_role,
-            &payload.transaction_id,
-            &server_truth,
-            payload.approval_token.as_deref(),
-        )
-        .await?;
-
-        // 5.6 D3: kiracı eşiği tanımladıysa ve ödeme toplamı eşiğe eşit veya
-        // üstündeyse ikinci bir onay gerekir. İndirim onayı tüketildiyse bu
-        // yüzey atlanır (tek jeton iki işleme bağlanamaz) — gerekçesi
-        // `consume_total_approval` dokümanında.
-        let consumed_total_approval = crate::services::payment_approval::consume_total_approval(
-            conn,
-            audit_lock,
-            tenant_id,
-            actor_id,
-            actor_role,
-            &payload.transaction_id,
-            server_total_cents,
-            payload.approval_token.as_deref(),
-            consumed_approval.is_some(),
-        )
-        .await?;
-        let consumed_approval = consumed_approval.or(consumed_total_approval);
 
         // 6. Değiştirilemez (immutable) Satış Olayı (Sale Event) + Outbox kaydı ekle.
         PaymentRepository::insert_sale_event(conn, payload, tenant_id).await?;
@@ -107,10 +62,39 @@ impl PaymentService {
         // `discountCents` patron ekranındaki "İndirim & İkram" filtresini besler:
         // indirim kodu `payment:settled_fifo` içinde taşındığı için filtre
         // ayrı bir işlem kodu aramaz.
+        let mut cash_amount_cents: i64 = 0;
+        let mut card_amount_cents: i64 = 0;
+        let mut meal_card_amount_cents: i64 = 0;
+        let mut veresiye_amount_cents: i64 = 0;
+
+        if let Some(ref splits) = payload.splits {
+            for s in splits {
+                match s.method.to_uppercase().as_str() {
+                    "CASH" | "NAKIT" => cash_amount_cents += s.amount,
+                    "CARD" | "KREDI_KARTI" | "CREDIT_CARD" => card_amount_cents += s.amount,
+                    "MEAL_CARD" | "YEMEK_KARTI" => meal_card_amount_cents += s.amount,
+                    "VERESIYE" => veresiye_amount_cents += s.amount,
+                    _ => card_amount_cents += s.amount,
+                }
+            }
+        } else {
+            match payload.method.to_uppercase().as_str() {
+                "CASH" | "NAKIT" => cash_amount_cents += payload.total_amount,
+                "CARD" | "KREDI_KARTI" | "CREDIT_CARD" => card_amount_cents += payload.total_amount,
+                "MEAL_CARD" | "YEMEK_KARTI" => meal_card_amount_cents += payload.total_amount,
+                "VERESIYE" => veresiye_amount_cents += payload.total_amount,
+                _ => card_amount_cents += payload.total_amount,
+            }
+        }
+
         let ledger_payload = serde_json::json!({
             "transactionId": payload.transaction_id,
             "method": payload.method,
             "totalAmount": payload.total_amount,
+            "cashAmountCents": cash_amount_cents,
+            "cardAmountCents": card_amount_cents,
+            "mealCardAmountCents": meal_card_amount_cents,
+            "veresiyeAmountCents": veresiye_amount_cents,
             "cogsTotalCents": total_cogs_cents,
             // Parti girişi olmayan ürünlerde gerçek maliyet bilinmiyor; COGS
             // eksik hesaplanır. Sayı gizlenmez, defterde görünür.
@@ -148,5 +132,71 @@ impl PaymentService {
         AuditService::append(conn, audit_lock, &ctx).await?;
 
         Ok((total_cogs_cents, now_iso))
+    }
+
+    /// Tekil ve parçalı ödemeler için ortak toplam doğrulaması ve anlık PIN onay tüketimi.
+    ///
+    /// Sunucu tarafından hesaplanan toplam ile istemcinin gönderdiği toplam karşılaştırılır
+    /// (TOTAL_MISMATCH). İndirim varsa onay zorunludur; kiracı tutar eşiği aşılmışsa
+    /// eşik onayı tüketilir.
+    pub async fn validate_server_truth_and_approvals(
+        conn: &mut sqlx::SqliteConnection,
+        audit_lock: &AuditLock<'_>,
+        tenant_id: &str,
+        actor_id: &str,
+        actor_role: &str,
+        payload: &PaymentPayloadDto,
+    ) -> Result<
+        (
+            crate::repositories::payment_repository::ServerTruth,
+            Option<crate::services::payment_approval::ConsumedApproval>,
+        ),
+        String,
+    > {
+        let server_truth = PaymentRepository::calculate_server_truth(
+            conn,
+            tenant_id,
+            &payload.items,
+            payload.global_discount.as_ref(),
+        )
+        .await?;
+
+        let server_total_cents = server_truth.total_cents;
+        let client_total_cents = payload.total_amount;
+        let total_delta = (server_total_cents - client_total_cents).abs();
+        if total_delta > 1 {
+            return Err(format!(
+                "TOTAL_MISMATCH: Server recalculated total {} cents differs from client total {} cents by {}.",
+                server_total_cents, client_total_cents, total_delta
+            ));
+        }
+
+        let consumed_approval = crate::services::payment_approval::consume_discount_approval(
+            conn,
+            audit_lock,
+            tenant_id,
+            actor_id,
+            actor_role,
+            &payload.transaction_id,
+            &server_truth,
+            payload.approval_token.as_deref(),
+        )
+        .await?;
+
+        let consumed_total_approval = crate::services::payment_approval::consume_total_approval(
+            conn,
+            audit_lock,
+            tenant_id,
+            actor_id,
+            actor_role,
+            &payload.transaction_id,
+            server_total_cents,
+            payload.approval_token.as_deref(),
+            consumed_approval.is_some(),
+        )
+        .await?;
+        let consumed_approval = consumed_approval.or(consumed_total_approval);
+
+        Ok((server_truth, consumed_approval))
     }
 }

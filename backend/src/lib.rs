@@ -31,9 +31,11 @@ pub use commands::report_commands;
 pub use commands::reservation_commands;
 pub use commands::waiter_commands;
 
+use tauri::Manager;
+
 pub use db::{init_db, DbPool};
 
-/// Aşama 2 - Tauri tarafından yönetilen global uygulama durumu.
+/// Tauri tarafından yönetilen global uygulama durumu.
 ///
 /// `payment_mutex`, tüm `process_payment` ve `process_split_payment` çağrılarını serileştirir.
 /// `audit_mutex`, denetim defteri (audit ledger) kayıtlarını serileştirir; menü ve ürün
@@ -45,37 +47,44 @@ pub struct AppState {
 }
 
 pub fn run() {
-    // G4 · Item 16: Structured logging (tracing + rolling file).
+    // Yapılandırılmış günlükleme (tracing + rolling file).
     // Loglama asla uygulamayı durdurmaz; hata olursa konsola fallback.
     crate::log::init();
 
-    let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-    let pool = rt.block_on(async {
-        let database_url =
-            std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://kasam360.db".to_string());
-        init_db(&database_url)
-            .await
-            .expect("Failed to initialize database")
-    });
+    let builder = tauri::Builder::default()
+        .setup(|app| {
+            tauri::async_runtime::block_on(async {
+                let database_url = std::env::var("DATABASE_URL")
+                    .unwrap_or_else(|_| "sqlite://kasam360.db".to_string());
+                let pool = init_db(&database_url)
+                    .await
+                    .map_err(|e| Box::new(std::io::Error::other(e.to_string())))?;
 
-    // G2 · P0: outbox dispatcher worker'ı (30 sn aralıkla
-    // PENDING olayları teslim eder, retry/dead_letter yönetir).
-    crate::services::outbox_dispatcher::spawn_outbox_worker(pool.clone());
+                // Outbox dispatcher worker'ı (30 sn aralıkla
+                // PENDING olayları teslim eder, retry/dead_letter yönetir).
+                let pool_outbox = pool.clone();
+                tauri::async_runtime::spawn(async move {
+                    crate::services::outbox_dispatcher::spawn_outbox_worker(pool_outbox);
+                });
 
-    tauri::Builder::default()
-        .manage(pool)
-        .manage(AppState {
-            payment_mutex: tokio::sync::Mutex::new(()),
-            audit_mutex: tokio::sync::Mutex::new(()),
-            table_locks: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+                app.manage(pool);
+                app.manage(AppState {
+                    payment_mutex: tokio::sync::Mutex::new(()),
+                    audit_mutex: tokio::sync::Mutex::new(()),
+                    table_locks: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+                });
+
+                Ok::<(), Box<dyn std::error::Error>>(())
+            })
         })
         .invoke_handler(tauri::generate_handler![
             commands::process_payment,
             commands::process_split_payment,
             commands::kds_update_ticket_status,
             commands::get_active_tickets,
-            commands::get_floor_plan,
-            commands::move_table,
+            commands::recall_kds_ticket,
+            commands::floor_commands::plan::get_floor_plan,
+            commands::floor_commands::table_ops::move_table,
             // Kroki çizim. `get_floor_plan` ile karıştırılmamalı —
             // o komut kart görünümünün işletim verisini verir, bunlar kroki
             // geometrisini okur ve yazar.
@@ -97,8 +106,8 @@ pub fn run() {
             commands::pos_get_products,
             commands::submit_order,
             commands::get_order_items,
-            commands::try_lock_table,
-            commands::unlock_table,
+            commands::floor_commands::lock::try_lock_table,
+            commands::floor_commands::lock::unlock_table,
             management_commands::category::get_management_categories,
             management_commands::category::create_category,
             management_commands::category::update_category,
@@ -113,9 +122,10 @@ pub fn run() {
             analytics_commands::metrics::set_monthly_target,
             analytics_commands::metrics::set_competitor_price,
             commands::auth_login,
-            commands::add_table,
-            commands::remove_table,
-            commands::update_table_name,
+            commands::floor_commands::table_ops::add_table,
+            commands::floor_commands::table_ops::remove_table,
+            commands::floor_commands::table_ops::update_table_name,
+            commands::floor_commands::transfer::transfer_order_item,
             commands::get_daily_summary,
             commands::get_receipts,
             // Çift onay eşiği kiracı bazında yönetilir.
@@ -125,8 +135,10 @@ pub fn run() {
             commands::threshold_commands::set_approval_threshold,
             commands::threshold_commands::reset_approval_threshold,
             commands::get_receipt_details,
-            commands::void_order,
-            commands::create_compensation_void,
+            commands::void_commands::order_void::void_order,
+            commands::void_commands::order_void::create_compensation_void,
+            commands::void_commands::item_void::void_order_item,
+            commands::void_commands::item_void::comp_order_item,
             commands::create_compensation_refund,
             commands::get_audit_logs,
             commands::print_receipt,
@@ -155,9 +167,10 @@ pub fn run() {
             cashier_commands::cash_in,
             cashier_commands::cash_out,
             cashier_commands::get_shift_summary,
+            cashier_commands::get_cash_movements,
             commands::get_shift_history,
             commands::close_day,
-            commands::merge_tables,
+            commands::floor_commands::table_ops::merge_tables,
             commands::get_live_orders,
             commands::get_open_shifts,
             waiter_commands::get_product_modifiers,
@@ -187,6 +200,7 @@ pub fn run() {
             management_commands::staff::get_staff,
             management_commands::staff::create_staff_member,
             management_commands::staff::delete_staff_member,
+            management_commands::staff::update_staff_member,
             // Modifier yönetimi: komutlar
             // CategoryForm/ProductForm yüzeyinden çağrılıyor ve yaşamaya devam ediyor.
             modifier_commands::get_modifier_groups,
@@ -284,6 +298,8 @@ pub fn run() {
             inventory360_commands::supplier_commands::compare_supplier_prices_command,
             inventory360_commands::supplier_commands::create_purchase_order_command,
             inventory360_commands::supplier_commands::receive_purchase_order_command,
+            inventory360_commands::supplier_commands::list_purchase_orders_command,
+            inventory360_commands::waste_commands::get_stock_variance_report,
             inventory360_commands::shelf_life_commands::get_expiry_report,
             // Dış aktörler entegrasyonu (dosya tabanlı takas; yeni port yok).
             commands::external360_commands::qr_customer_session_open,
@@ -345,7 +361,9 @@ pub fn run() {
             legal360_commands::e_invoice_commands::mark_e_invoice_accepted_command,
             legal360_commands::e_invoice_commands::mark_e_invoice_rejected_command,
             legal360_commands::e_invoice_commands::cancel_e_invoice_command,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        ]);
+
+    if let Err(err) = builder.run(tauri::generate_context!()) {
+        tracing::error!("Tauri uygulaması çalıştırılamadı: {err}");
+    }
 }

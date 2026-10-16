@@ -12,27 +12,39 @@ use crate::db::DbPool;
 use crate::rbac::{self, Role};
 use crate::services::audit_service::{category, AuditLock};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct StaffMemberDto {
     pub id: String,
     pub name: String,
     pub role: String,
     pub tenant_id: String,
+    #[serde(default)]
+    pub is_active: bool,
 }
 
 #[tauri::command]
 pub async fn get_staff(
     actor_role: String,
     tenant_id: Option<String>,
+    include_inactive: Option<bool>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<StaffMemberDto>, String> {
     rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    // Pasife alınmış personel listelenmez: kayıt silinmez ama işletme panosunda
-    // görünmez. Yeniden canlandırma kapsam dışıdır.
-    let rows = sqlx::query("SELECT id, name, role, tenant_id FROM users WHERE tenant_id = ? AND is_active = 1 ORDER BY name ASC")
-        .bind(&tenant_id).fetch_all(&mut *conn).await.map_err(|e| e.to_string())?;
+    let rows = if include_inactive.unwrap_or(false) {
+        sqlx::query("SELECT id, name, role, tenant_id, is_active FROM users WHERE tenant_id = ? ORDER BY name ASC")
+            .bind(&tenant_id)
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?
+    } else {
+        sqlx::query("SELECT id, name, role, tenant_id, is_active FROM users WHERE tenant_id = ? AND is_active = 1 ORDER BY name ASC")
+            .bind(&tenant_id)
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?
+    };
     let staff = rows
         .into_iter()
         .map(|r| {
@@ -41,6 +53,7 @@ pub async fn get_staff(
                 name: r.try_get("name").map_err(|e| e.to_string())?,
                 role: r.try_get("role").map_err(|e| e.to_string())?,
                 tenant_id: r.try_get("tenant_id").map_err(|e| e.to_string())?,
+                is_active: r.try_get::<bool, _>("is_active").unwrap_or(true),
             })
         })
         .collect::<Result<Vec<StaffMemberDto>, String>>()?;
@@ -114,6 +127,7 @@ pub async fn create_staff_member(
         name,
         role,
         tenant_id,
+        is_active: true,
     })
 }
 
@@ -180,4 +194,86 @@ pub async fn delete_staff_member(
     .await?;
 
     Ok(())
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn update_staff_member(
+    actor_role: String,
+    staff_id: String,
+    name: String,
+    role: String,
+    is_active: bool,
+    actor_id: Option<String>,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    app_state: tauri::State<'_, crate::AppState>,
+) -> Result<StaffMemberDto, String> {
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
+    if staff_id == "usr_master" {
+        return Err("UNAUTHORIZED: Master Admin hesabı güncellenemez.".into());
+    }
+    let tenant_id = require_tenant(tenant_id.as_deref())?;
+
+    let allowed_roles: Vec<&str> = vec!["MANAGER", "CASHIER", "WAITER", "KITCHEN"];
+    if !allowed_roles.contains(&role.as_str()) {
+        return Err(format!(
+            "Invalid role: {}. Allowed: {}",
+            role,
+            allowed_roles.join(", ")
+        ));
+    }
+
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+
+    // Fail-closed mülkiyet doğrulaması
+    ensure_owned(&mut conn, "users", &staff_id, &tenant_id).await?;
+
+    let previous: Option<(String, String, bool)> =
+        sqlx::query_as("SELECT name, role, is_active FROM users WHERE id = ? AND tenant_id = ?")
+            .bind(&staff_id)
+            .bind(&tenant_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    sqlx::query(
+        "UPDATE users SET name = ?, role = ?, is_active = ? WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(&name)
+    .bind(&role)
+    .bind(if is_active { 1 } else { 0 })
+    .bind(&staff_id)
+    .bind(&tenant_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    record_audit(
+        &mut conn,
+        &lock,
+        &tenant_id,
+        &actor_id,
+        &actor_role,
+        category::PERSONEL,
+        "staff:updated",
+        &staff_id,
+        serde_json::json!({
+            "name": name,
+            "role": role,
+            "isActive": is_active,
+            "previous": previous.map(|(n, r, a)| serde_json::json!({ "name": n, "role": r, "isActive": a })),
+        }),
+    )
+    .await?;
+
+    Ok(StaffMemberDto {
+        id: staff_id,
+        name,
+        role,
+        tenant_id,
+        is_active,
+    })
 }

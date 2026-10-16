@@ -485,5 +485,5 @@ impl FinancialMovement {
 }
 
 #[cfg(test)]
-#[path = "receipt_service_tests.rs"]
+#[path = "receipt_service_tests/mod.rs"]
 mod tests;

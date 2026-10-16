@@ -1,4 +1,4 @@
-//! G2 · P0 — `login_attempts` kalıcılığı.
+//! `login_attempts` kalıcılığı.
 //!
 //! Kaba kuvvet kilidi `login_attempts` tablosunda
 //! durduğu için uygulama yeniden başlasa da

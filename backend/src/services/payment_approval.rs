@@ -239,5 +239,5 @@ pub fn approver_roles_for(
 }
 
 #[cfg(test)]
-#[path = "payment_approval_tests.rs"]
+#[path = "payment_approval_tests/mod.rs"]
 mod tests;

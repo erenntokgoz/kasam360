@@ -170,18 +170,31 @@ pub async fn kds_update_ticket_status(
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct KdsOrderDto {
     pub id: String,
-    #[serde(rename = "orderNumber")]
     pub order_number: String,
-    #[serde(rename = "tableNumber")]
     pub table_number: Option<String>,
+    pub waiter_name: Option<String>,
     pub status: String,
     pub items: Vec<serde_json::Value>,
-    #[serde(rename = "createdAt")]
     pub created_at: String,
+    pub elapsed_seconds: i64,
     pub priority: String,
     pub notes: Option<String>,
+}
+
+fn parse_kds_created_at(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+        return Some(dt.with_timezone(&chrono::Utc));
+    }
+    if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+        return Some(chrono::DateTime::from_naive_utc_and_offset(
+            naive,
+            chrono::Utc,
+        ));
+    }
+    None
 }
 
 /// KDS aktif biletlerini listeler.
@@ -208,9 +221,10 @@ pub async fn get_active_tickets(
 
     let rows = sqlx::query(
         "
-        SELECT o.id, t.name as table_name, o.created_at, o.notes
+        SELECT o.id, t.name as table_name, u.name as waiter_name, o.created_at, o.notes
         FROM orders o
-        LEFT JOIN tables t ON o.table_id = t.id
+        LEFT JOIN tables t ON o.table_id = t.id AND t.tenant_id = o.tenant_id
+        LEFT JOIN users u ON t.waiter_id = u.id AND u.tenant_id = o.tenant_id
         WHERE o.status = 'IN_PROGRESS' AND o.tenant_id = ?
         ORDER BY o.created_at ASC
     ",
@@ -227,11 +241,12 @@ pub async fn get_active_tickets(
         let item_rows = sqlx::query("
             SELECT oi.id, oi.quantity, COALESCE(p.name, 'Ürün') as product_name, oi.station, oi.modifiers, oi.notes, oi.status
             FROM order_items oi
-            LEFT JOIN products p ON oi.product_id = p.id
-            WHERE oi.order_id = ?
+            LEFT JOIN products p ON oi.product_id = p.id AND p.tenant_id = oi.tenant_id
+            WHERE oi.order_id = ? AND oi.tenant_id = ?
             ORDER BY oi.id ASC
         ")
         .bind(&id)
+        .bind(&tenant_id)
         .fetch_all(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
@@ -268,7 +283,34 @@ pub async fn get_active_tickets(
             }
 
             let modifiers: Vec<String> = if let Some(m) = modifiers_str {
-                serde_json::from_str(&m).unwrap_or_default()
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&m) {
+                    match val {
+                        serde_json::Value::Array(arr) => arr
+                            .into_iter()
+                            .filter_map(|item| match item {
+                                serde_json::Value::String(s) => Some(s),
+                                serde_json::Value::Object(obj) => {
+                                    let name = obj.get("name")?.as_str()?.to_string();
+                                    let price_cents = obj
+                                        .get("priceCents")
+                                        .or_else(|| obj.get("price_cents"))
+                                        .and_then(|p| p.as_i64())
+                                        .unwrap_or(0);
+                                    if price_cents > 0 {
+                                        let tl = price_cents as f64 / 100.0;
+                                        Some(format!("{} (+{:.2} TL)", name, tl))
+                                    } else {
+                                        Some(name)
+                                    }
+                                }
+                                _ => None,
+                            })
+                            .collect(),
+                        _ => Vec::new(),
+                    }
+                } else {
+                    Vec::new()
+                }
             } else {
                 Vec::new()
             };
@@ -299,18 +341,20 @@ pub async fn get_active_tickets(
         };
 
         let created_at_str: String = r.try_get("created_at").unwrap_or_default();
-        let priority = if let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(&created_at_str)
-        {
-            let elapsed =
-                chrono::Utc::now().signed_duration_since(created_at.with_timezone(&chrono::Utc));
-            if elapsed.num_minutes() >= 15 {
-                "RUSH".to_string()
+        let (elapsed_seconds, priority) =
+            if let Some(created_at) = parse_kds_created_at(&created_at_str) {
+                let elapsed = (chrono::Utc::now() - created_at).num_seconds().max(0);
+                let prio = if elapsed >= 900 {
+                    "RUSH".to_string()
+                } else if elapsed >= 600 {
+                    "WARNING".to_string()
+                } else {
+                    "NORMAL".to_string()
+                };
+                (elapsed, prio)
             } else {
-                "NORMAL".to_string()
-            }
-        } else {
-            "NORMAL".to_string()
-        };
+                (0, "NORMAL".to_string())
+            };
 
         res.push(KdsOrderDto {
             id: id.clone(),
@@ -319,13 +363,100 @@ pub async fn get_active_tickets(
                 id.chars().take(4).collect::<String>().to_uppercase()
             ),
             table_number: r.try_get("table_name").ok(),
+            waiter_name: r.try_get("waiter_name").ok(),
             status: final_status,
             items,
             created_at: created_at_str,
+            elapsed_seconds,
             priority,
             notes: r.try_get("notes").ok(),
         });
     }
 
     Ok(res)
+}
+
+/// Yanlışlıkla kapatılan KDS biletini tekrar hazırlık aşamasına alır.
+#[tauri::command]
+pub async fn recall_kds_ticket(
+    order_id: String,
+    actor_id: String,
+    actor_role: String,
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    kds_kapisi(Some(&actor_role))?;
+    let tenant_id = tenant_id.trim().to_string();
+    if tenant_id.is_empty() {
+        return Err("UNAUTHORIZED: tenant_id is required".to_string());
+    }
+
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    let order_exists: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM orders WHERE id = ? AND tenant_id = ?")
+            .bind(&order_id)
+            .bind(&tenant_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    if order_exists.is_none() {
+        return Err("NOT_FOUND: Geri çağrılacak sipariş bulunamadı.".to_string());
+    }
+
+    sqlx::query(
+        "UPDATE orders SET status = 'IN_PROGRESS', updated_at = datetime('now') WHERE id = ? AND tenant_id = ?"
+    )
+    .bind(&order_id)
+    .bind(&tenant_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    sqlx::query(
+        "UPDATE order_items SET status = 'Preparing' WHERE order_id = ? AND tenant_id = ? AND status IN ('READY', 'COMPLETED', 'SERVED', 'Ready', 'Completed', 'Served')"
+    )
+    .bind(&order_id)
+    .bind(&tenant_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let event_id = format!("evt_kds_{}", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO events (event_id, tenant_id, aggregate_id, aggregate_type, event_type, payload, created_at) VALUES (?, ?, ?, 'KDS_TICKET', 'TICKET_RECALLED', ?, datetime('now'))"
+    )
+    .bind(&event_id)
+    .bind(&tenant_id)
+    .bind(&order_id)
+    .bind(serde_json::json!({
+        "orderId": &order_id,
+        "actorId": &actor_id,
+        "actorRole": &actor_role,
+        "action": "recall_ticket"
+    }).to_string())
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
+        "kds:ticket_recalled",
+        order_id.clone(),
+        serde_json::json!({
+            "orderId": order_id,
+            "status": "Preparing",
+        }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(true)
 }

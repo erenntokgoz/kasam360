@@ -306,6 +306,7 @@ mod tests {
             modifiers: None,
             note: None,
             discount,
+            ..Default::default()
         }
     }
 

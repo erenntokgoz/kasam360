@@ -1,4 +1,4 @@
-//! Property-based test (proptest) — G6 · Item 22.
+//! Mülk tabanlı testler (proptest).
 //!
 //! Kapsam:
 //! 1. Finansal: kuruş taşması (checked_sum Err döner, 0 döndürmez)

@@ -20,6 +20,6 @@ pub use catalog::{
     Supplier, SupplierInput, SupplierPriceRow, SupplierProductInput,
 };
 pub use orders::{
-    create_purchase_order, receive_purchase_order, PurchaseOrder, PurchaseOrderInput,
-    PurchaseOrderLineInput,
+    create_purchase_order, list_purchase_orders, receive_purchase_order, PurchaseOrder,
+    PurchaseOrderInput, PurchaseOrderLineInput,
 };

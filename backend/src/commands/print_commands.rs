@@ -11,78 +11,8 @@
 use sqlx::Row;
 
 use crate::db::DbPool;
-use crate::rbac::{self, Role};
-
-/// Bugünün **yerel** tarihi (SQL ifadesi).
-///
-/// Neden `localtime`: SQLite `date('now')` **UTC** tarihini döner. Gece yarısını
-/// geçmiş bir işletmede "bugünün hesap defteri" dünkü tarihi basar.
-pub(crate) const BUGUN_SQL: &str = "date('now', 'localtime')";
-
-/// İş gününün **UTC karşılığı** olan yerel gün başı (SQL ifadesi).
-///
-/// Neden dört adım: `created_at` kolonları `CURRENT_TIMESTAMP` ile **UTC**
-/// yazılır, bu yüzden sınır da UTC olmalıdır — ama "bugünün cirosu" ifadesi
-/// **yerel** günü kasteder. Sıralama `now` (UTC) → `localtime` (yerel) →
-/// `start of day` (yerel gece yarısı) → `utc` (o anın UTC karşılığı) zincirini
-/// izler ve `created_at` ile aynı zaman diliminde karşılaştırılabilir bir tam
-/// zaman damgası verir.
-///
-/// Neden `date(...)` değil de `datetime(...)`: `date()` yalnız `GG.AA.YYYY`
-/// döner ve bir zaman damgasıyla sözlüksel karşılaştırıldığında UTC "dün"e
-/// düşen kayıtları dışarıda bırakır — yerel sabahın ilk saatleri bugünün
-/// cirosuna girmezdi.
-pub(crate) const GUN_BASI_SQL: &str = "datetime('now', 'localtime', 'start of day', 'utc')";
-
-/// Veritabanında UTC saklanan zaman damgasını yerel okunur biçime çevirir.
-///
-/// Neden çevrim şart: SQLite `CURRENT_TIMESTAMP` ve `datetime('now')`
-/// saat dilimi taşımayan `YYYY-MM-DD HH:MM:SS` yazar ve bu **UTC**'dir.
-/// Olduğu gibi basılırsa, 23:30 yerelde basılan fiş "20:30" gösterir ve
-/// gece yarısını geçen tarihte müşteriye **dünkü** tarihli fiş verilir.
-///
-/// Bilinmeyen biçim **uydurulmaz**, olduğu gibi basılır: boş bir tarih
-/// yerine kaynağın ne yazdığı görünür.
-pub(crate) fn utc_yerel_goster(metin: &str) -> String {
-    let ayrik = metin.trim();
-    // Saat dilimi yok: kaynak UTC'dir, öyle yorumlanır.
-    if let Ok(an) = chrono::NaiveDateTime::parse_from_str(ayrik, "%Y-%m-%d %H:%M:%S") {
-        return an
-            .and_utc()
-            .with_timezone(&chrono::Local)
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
-    }
-    if let Ok(an) = chrono::DateTime::parse_from_rfc3339(ayrik) {
-        return an
-            .with_timezone(&chrono::Local)
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
-    }
-    ayrik.to_string()
-}
-
-/// Kuruşu tam sayıdan biçimlendirir; float aritmetiği kullanılmaz.
-fn fmt_cents(cents: i64) -> String {
-    let sign = if cents < 0 { "-" } else { "" };
-    let absolute = if cents < 0 { -cents } else { cents };
-    format!("{}{},{:02} TL", sign, absolute / 100, absolute % 100)
-}
-
-fn require_tenant(tenant_id: Option<&str>) -> Result<String, String> {
-    tenant_id
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-        .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())
-}
-
-/// Fiş basımı yapabilecek roller. Kasa ve müdür tahsilat fişi basabilir; mutfak
-/// ve garson basamaz.
-fn require_receipt_printer(role: Option<&str>) -> Result<(), String> {
-    rbac::require_any_present(role, &[Role::Owner, Role::Manager, Role::Cashier])?;
-    Ok(())
-}
+pub(crate) mod helpers;
+pub(crate) use helpers::*;
 
 fn print_header(title: &str, subtitle: &str) {
     println!("\n================================================");

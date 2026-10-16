@@ -66,7 +66,7 @@ pub async fn set_product_86d_command(
     pool: State<'_, DbPool>,
     app_state: State<'_, crate::AppState>,
 ) -> Result<bool, String> {
-    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager, Role::Kitchen])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let mut conn = acquire(&pool).await?;

@@ -82,6 +82,12 @@ pub struct MonthlyFinancialTrendDto {
 pub struct FinancialReportDto {
     #[serde(rename = "totalRevenueCents")]
     pub total_revenue_cents: i64,
+    #[serde(rename = "totalCogsCents", default)]
+    pub total_cogs_cents: i64,
+    #[serde(rename = "totalRefundsCents", default)]
+    pub total_refunds_cents: i64,
+    #[serde(rename = "grossProfitCents", default)]
+    pub gross_profit_cents: i64,
     #[serde(rename = "totalExpensesCents")]
     pub total_expenses_cents: i64,
     #[serde(rename = "netProfitCents")]

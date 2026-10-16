@@ -13,7 +13,7 @@ pub use category::{create_category, delete_category, get_management_categories, 
 pub use product::{
     create_product, delete_product, get_management_products, update_product, update_product_status,
 };
-pub use staff::{create_staff_member, delete_staff_member, get_staff};
+pub use staff::{create_staff_member, delete_staff_member, get_staff, update_staff_member};
 
 use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
 

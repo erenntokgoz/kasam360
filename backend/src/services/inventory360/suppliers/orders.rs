@@ -270,3 +270,49 @@ pub async fn receive_purchase_order(
 
     Ok(toplam_maliyet)
 }
+
+/// Tedarikçi satın alma siparişlerini listeler (opsiyonel durum filtresiyle).
+pub async fn list_purchase_orders(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    status: Option<&str>,
+) -> Result<Vec<PurchaseOrder>, String> {
+    let rows = if let Some(st) = status {
+        sqlx::query(
+            "SELECT id, supplier_id, order_number, status, total_cents, expected_at, notes
+             FROM purchase_orders
+             WHERE tenant_id = ? AND status = ?
+             ORDER BY created_at DESC",
+        )
+        .bind(tenant_id)
+        .bind(st)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?
+    } else {
+        sqlx::query(
+            "SELECT id, supplier_id, order_number, status, total_cents, expected_at, notes
+             FROM purchase_orders
+             WHERE tenant_id = ?
+             ORDER BY created_at DESC",
+        )
+        .bind(tenant_id)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?
+    };
+
+    let mut list = Vec::new();
+    for r in rows {
+        list.push(PurchaseOrder {
+            id: r.try_get("id").map_err(|e| e.to_string())?,
+            supplier_id: r.try_get("supplier_id").map_err(|e| e.to_string())?,
+            order_number: r.try_get("order_number").map_err(|e| e.to_string())?,
+            status: r.try_get("status").map_err(|e| e.to_string())?,
+            total_cents: r.try_get("total_cents").map_err(|e| e.to_string())?,
+            expected_at: r.try_get("expected_at").ok(),
+            notes: r.try_get("notes").ok(),
+        });
+    }
+    Ok(list)
+}

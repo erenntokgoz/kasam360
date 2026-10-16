@@ -56,7 +56,7 @@ pub(crate) async fn seed_default_users(pool: &DbPool) -> Result<(), sqlx::Error>
 
         let hash = crate::user_credentials::hash_pin(pin).map_err(sqlx::Error::Protocol)?;
         // `must_change_pin = 1`: fabrika PIN'leriyle kurulan hesaplar
-        // ilk girişte PIN değiştirmek zorundadır (G2 · P0 güvenlik).
+        // ilk girişte PIN değiştirmek zorundadır (ilk giriş güvenlik kuralı).
         sqlx::query(
             "INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active, must_change_pin)
              VALUES (?, ?, ?, ?, ?, 1, 1)",

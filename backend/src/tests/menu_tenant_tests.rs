@@ -218,6 +218,7 @@ fn menu_dto_lari_yerinde() {
         id: "cat_1".into(),
         name: "Kahve".into(),
         display_order: 1,
+        ..Default::default()
     };
     assert_eq!(kategori.id, "cat_1");
     let urun = crate::management_commands::product::ProductDto {
@@ -227,6 +228,7 @@ fn menu_dto_lari_yerinde() {
         price_cents: 4500,
         image_url: None,
         is_active: true,
+        ..Default::default()
     };
     assert_eq!(urun.price_cents, 4500);
     let personel = StaffMemberDto {
@@ -234,6 +236,7 @@ fn menu_dto_lari_yerinde() {
         name: "Ayşe".into(),
         role: "WAITER".into(),
         tenant_id: "tenant_a".into(),
+        is_active: true,
     };
     assert_eq!(personel.tenant_id, "tenant_a");
 }

@@ -1,4 +1,4 @@
-﻿# KASAM360 — Security Audit (G7 · Item 26)
+# KASAM360 — Security Audit (G7 · Item 26)
 
 Son guncelleme: 2026-10-09
 Kaynak: AGENTS.md (13 P0 Kilit Denetimi)
@@ -34,8 +34,6 @@ Kaynak: AGENTS.md (13 P0 Kilit Denetimi)
 - Sadakat & hediye karti
 - e-Arşiv gerçek entegratör (GİB API)
 - ÖKC/fiscal gerçek protokol
-
-Detay: docs/FAZ-18-BACKLOG.md
 
 ## Red Team Senaryolari (test edilmis)
 

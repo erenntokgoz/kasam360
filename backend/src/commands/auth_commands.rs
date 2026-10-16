@@ -12,7 +12,7 @@ use crate::services::security360::login_lockout::{
 };
 
 #[cfg(test)]
-#[path = "auth_commands/security_tests.rs"]
+#[path = "auth_commands/security_tests/mod.rs"]
 mod tests;
 
 /// MASTER oturumunun taşıdığı kiracı alanı.
@@ -81,7 +81,7 @@ pub(crate) fn mevcut_pin_zorunlu(current_pin: Option<&str>) -> Result<String, St
         .ok_or_else(|| "UNAUTHORIZED: PIN değiştirmek için mevcut PIN gereklidir".to_string())
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct UserDto {
     pub id: String,
     pub role: String,
@@ -89,6 +89,8 @@ pub struct UserDto {
     pub tenant_id: String,
     #[serde(rename = "activeModules", skip_serializing_if = "Option::is_none")]
     pub active_modules: Option<Vec<String>>,
+    #[serde(rename = "mustChangePin", alias = "must_change_pin", default)]
+    pub must_change_pin: bool,
 }
 
 async fn user_dto_with_modules(
@@ -99,6 +101,10 @@ async fn user_dto_with_modules(
     // satır varsayılan kiracıya düşer ve oturum başka
     // bir işletmenin kimliğiyle açılır (AGENTS.md §3.3).
     let tenant_id: String = row.try_get("tenant_id").map_err(|e| e.to_string())?;
+    let must_change_pin: bool = row
+        .try_get::<i64, _>("must_change_pin")
+        .map(|v| v != 0)
+        .unwrap_or(false);
     let module_rows =
         sqlx::query("SELECT module_id FROM tenant_modules WHERE tenant_id = ? AND is_active = 1")
             .bind(&tenant_id)
@@ -117,6 +123,7 @@ async fn user_dto_with_modules(
         name: row.try_get("name").map_err(|e| e.to_string())?,
         tenant_id,
         active_modules: Some(active_modules),
+        must_change_pin,
     })
 }
 
@@ -169,6 +176,7 @@ pub async fn authenticate_by_identifier(
                 name: row.try_get("name").unwrap_or_default(),
                 tenant_id: PLATFORM_TENANT.to_string(),
                 active_modules: Some(master_modules()),
+                must_change_pin: false,
             });
         }
     }
@@ -276,6 +284,7 @@ pub async fn authenticate_by_pin(
                 name: row.try_get("name").unwrap_or_default(),
                 tenant_id: effective_tenant.to_string(),
                 active_modules: Some(master_modules()),
+                must_change_pin: false,
             });
         }
     }
@@ -289,7 +298,7 @@ pub async fn authenticate_by_pin(
         Some(found) => {
             basari_sifirla(&mut conn, &kapsam).await?;
             drop(conn);
-            // G2 · P0: fabrika öntanımlı PIN ile iş istasyonuna
+            // Fabrika öntanımlı PIN ile iş istasyonuna
             // giriş yasaktır; kullanıcı PIN'ini değiştirene kadar
             // reddedilir. `change_self_pin` mevcut PIN'i doğruladığı
             // için döngü oluşmaz: fabrika PIN'i biliniyor, değiştir
@@ -400,7 +409,7 @@ pub(crate) async fn pin_degisim_tx(
         .await
         .map_err(|e| e.to_string())?;
 
-    // G2 · P0: PIN değişince ilk giriş zorlaması biter.
+    // PIN değişince ilk giriş zorlaması biter.
     // Aynı transaction içinde yazılır: PIN değişmiş,
     // zorlama hâlâ açık görünmez (ve tersi hiçbir
     // zaman yaşanmaz).
@@ -458,7 +467,7 @@ pub async fn change_self_pin(
     // boş bırakıldığında `undefined` gönderir) mevcut PIN'i bilmeden yeni PIN
     // yazabiliyordu. Parametre tipi `Option` kaldı çünkü IPC sözleşmesi
     // değişirse arayüz kırılır; tipin `String` olması arayüzle
-    // birlikte yapılacak (bkz. docs/FAZ-15-PLAN.md).
+    // birlikte yapılacak.
     let cur_pin = mevcut_pin_zorunlu(current_pin.as_deref())?;
 
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
