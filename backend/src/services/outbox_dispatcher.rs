@@ -159,8 +159,8 @@ async fn yenile_veya_soluk_ileti(
 /// çalışır — uygulama başlatılır başlatılmaz teslimat kuyruğu
 /// boşaltılır. Hata döngüyü kıraca değildir:tek tur hatalıysa
 /// günlüğe yazılır, sonraki tur yeniden denenir.
-pub fn spawn_outbox_worker(pool: DbPool) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+pub fn spawn_outbox_worker(pool: DbPool) -> tauri::async_runtime::JoinHandle<()> {
+    tauri::async_runtime::spawn(async move {
         let mut aralik = tokio::time::interval(Duration::from_secs(DISPATCH_INTERVAL_SN));
         loop {
             aralik.tick().await;

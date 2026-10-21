@@ -300,9 +300,8 @@ async fn load_items(
     let mut items = Vec::with_capacity(rows.len());
     for row in rows {
         let modifiers_raw: Option<String> = row.try_get("modifiers").ok();
-        let modifiers = modifiers_raw
-            .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
-            .unwrap_or_default();
+        let modifiers =
+            crate::commands::command_helpers::parse_order_item_modifiers(modifiers_raw.as_deref());
         items.push(ReceiptItemDto {
             id: row.try_get("id").unwrap_or_default(),
             product_id: row.try_get("product_id").unwrap_or_default(),

@@ -184,15 +184,23 @@ pub struct KdsOrderDto {
     pub notes: Option<String>,
 }
 
-fn parse_kds_created_at(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+pub(crate) fn parse_kds_created_at(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    let s = s.trim();
     if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
         return Some(dt.with_timezone(&chrono::Utc));
     }
-    if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
-        return Some(chrono::DateTime::from_naive_utc_and_offset(
-            naive,
-            chrono::Utc,
-        ));
+    for fmt in &[
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S%.f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S%.f",
+    ] {
+        if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(s, fmt) {
+            return Some(chrono::DateTime::from_naive_utc_and_offset(
+                naive,
+                chrono::Utc,
+            ));
+        }
     }
     None
 }
@@ -205,31 +213,21 @@ fn parse_kds_created_at(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
 /// olmayan bir çağrı bilet listesini okuyabiliyordu ve
 /// kiracı filtresi başka bir işletmenin biletlerini de
 /// getiriyordu (çapraz kiracı sızıntısı, AGENTS.md §3.3).
-#[tauri::command]
-pub async fn get_active_tickets(
-    tenant_id: String,
-    actor_role: Option<String>,
-    pool: tauri::State<'_, DbPool>,
+pub async fn execute_get_active_tickets(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
 ) -> Result<Vec<KdsOrderDto>, String> {
-    kds_kapisi(actor_role.as_deref())?;
-    let tenant_id = tenant_id.trim().to_string();
-    if tenant_id.is_empty() {
-        return Err("UNAUTHORIZED: tenant_id is required".to_string());
-    }
-
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-
     let rows = sqlx::query(
         "
         SELECT o.id, t.name as table_name, u.name as waiter_name, o.created_at, o.notes
         FROM orders o
         LEFT JOIN tables t ON o.table_id = t.id AND t.tenant_id = o.tenant_id
         LEFT JOIN users u ON t.waiter_id = u.id AND u.tenant_id = o.tenant_id
-        WHERE o.status = 'IN_PROGRESS' AND o.tenant_id = ?
+        WHERE o.status IN ('OPEN', 'IN_PROGRESS') AND o.tenant_id = ?
         ORDER BY o.created_at ASC
     ",
     )
-    .bind(&tenant_id)
+    .bind(tenant_id)
     .fetch_all(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
@@ -242,11 +240,11 @@ pub async fn get_active_tickets(
             SELECT oi.id, oi.quantity, COALESCE(p.name, 'Ürün') as product_name, oi.station, oi.modifiers, oi.notes, oi.status
             FROM order_items oi
             LEFT JOIN products p ON oi.product_id = p.id AND p.tenant_id = oi.tenant_id
-            WHERE oi.order_id = ? AND oi.tenant_id = ?
+            WHERE oi.order_id = ? AND oi.tenant_id = ? AND UPPER(COALESCE(oi.status, 'PENDING')) NOT IN ('CANCELLED', 'VOID')
             ORDER BY oi.id ASC
         ")
         .bind(&id)
-        .bind(&tenant_id)
+        .bind(tenant_id)
         .fetch_all(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
@@ -282,38 +280,9 @@ pub async fn get_active_tickets(
                 any_preparing = true;
             }
 
-            let modifiers: Vec<String> = if let Some(m) = modifiers_str {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&m) {
-                    match val {
-                        serde_json::Value::Array(arr) => arr
-                            .into_iter()
-                            .filter_map(|item| match item {
-                                serde_json::Value::String(s) => Some(s),
-                                serde_json::Value::Object(obj) => {
-                                    let name = obj.get("name")?.as_str()?.to_string();
-                                    let price_cents = obj
-                                        .get("priceCents")
-                                        .or_else(|| obj.get("price_cents"))
-                                        .and_then(|p| p.as_i64())
-                                        .unwrap_or(0);
-                                    if price_cents > 0 {
-                                        let tl = price_cents as f64 / 100.0;
-                                        Some(format!("{} (+{:.2} TL)", name, tl))
-                                    } else {
-                                        Some(name)
-                                    }
-                                }
-                                _ => None,
-                            })
-                            .collect(),
-                        _ => Vec::new(),
-                    }
-                } else {
-                    Vec::new()
-                }
-            } else {
-                Vec::new()
-            };
+            let modifiers = crate::commands::command_helpers::parse_order_item_modifiers(
+                modifiers_str.as_deref(),
+            );
 
             items.push(serde_json::json!({
                 "id": ir.try_get::<String, _>("id").unwrap_or_default(),
@@ -376,7 +345,23 @@ pub async fn get_active_tickets(
     Ok(res)
 }
 
-/// Yanlışlıkla kapatılan KDS biletini tekrar hazırlık aşamasına alır.
+#[tauri::command]
+pub async fn get_active_tickets(
+    tenant_id: String,
+    actor_role: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<KdsOrderDto>, String> {
+    kds_kapisi(actor_role.as_deref())?;
+    let tenant_id = tenant_id.trim().to_string();
+    if tenant_id.is_empty() {
+        return Err("UNAUTHORIZED: tenant_id is required".to_string());
+    }
+
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    execute_get_active_tickets(&mut conn, &tenant_id).await
+}
+
+/// Yanlışlıkla kapatılan KDS biletini tekrar hazırlık durumuna alır.
 #[tauri::command]
 pub async fn recall_kds_ticket(
     order_id: String,

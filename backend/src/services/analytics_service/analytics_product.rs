@@ -16,16 +16,32 @@ pub(crate) const REVENUE_CORE: &str = "FROM orders o
      JOIN order_items oi ON oi.order_id = o.id AND oi.tenant_id = o.tenant_id
      JOIN products p ON p.id = oi.product_id AND p.tenant_id = o.tenant_id
      LEFT JOIN categories c ON c.id = p.category_id AND c.tenant_id = o.tenant_id
-    WHERE o.tenant_id = ?1 AND o.status IN ('PAID','VOID')";
+    WHERE o.tenant_id = ?1 AND o.status = 'PAID'";
 
 /// Tarih filtresi SQL parçası. Aralık verilmemişse içinde bulunulan ay seçilir:
 /// "tüm zaman" raporu, hedefler ve stokla birlikte okunduğunda anlamsızlaşır.
+/// Güvenli ISO doğrulaması: yalnız geçerli ISO tarih karakterleri (0-9, -, :, T, Z, +, .) kabul edilir.
 pub(crate) fn date_filter(range: &AnalyticsRange) -> (String, String) {
+    let is_safe_iso = |s: &str| {
+        !s.is_empty()
+            && s.len() <= 35
+            && s.chars()
+                .all(|c| c.is_ascii_digit() || matches!(c, '-' | ':' | 'T' | ' ' | 'Z' | '+' | '.'))
+    };
     match range {
-        Some((from, to)) => (
-            format!(" AND o.created_at >= '{from}'"),
-            format!(" AND o.created_at <= '{to}'"),
-        ),
+        Some((from, to)) => {
+            let from_part = if is_safe_iso(from) {
+                format!(" AND o.created_at >= '{from}'")
+            } else {
+                String::new()
+            };
+            let to_part = if is_safe_iso(to) {
+                format!(" AND o.created_at <= '{to}'")
+            } else {
+                String::new()
+            };
+            (from_part, to_part)
+        }
         None => (
             " AND o.created_at >= date('now','start of month')".to_string(),
             String::new(),
@@ -99,7 +115,7 @@ pub async fn product_margins(
 
 /// FIFO ortalama birim maliyet. Ürün başına tek satır döner; tükenmiş parti
 /// ortalamayı bozmaz, yalnız `NULL` (bilinmeyen maliyet) üretir.
-async fn average_unit_costs(
+pub(crate) async fn average_unit_costs(
     pool: &SqlitePool,
     tenant_id: &str,
 ) -> Result<Vec<(String, Option<i64>)>, String> {
@@ -108,7 +124,7 @@ async fn average_unit_costs(
         // kendi sahte tablosunu kurdugu icin hatali kolon adi yalnizca uretimde
         // patlardi ve testler yesil kalirdi.
         "SELECT b.product_id,
-                CAST(SUM(b.initial_quantity * b.unit_cost_cents)
+                CAST(SUM(b.remaining_quantity * b.unit_cost_cents)
                      / NULLIF(SUM(b.remaining_quantity), 0) AS INTEGER) AS avg_cost
            FROM inventory_batches b
           WHERE b.tenant_id = ?1
@@ -121,16 +137,39 @@ async fn average_unit_costs(
     .await
     .map_err(|e| e.to_string())?;
 
-    let mut out = Vec::with_capacity(rows.len());
+    let mut map: std::collections::HashMap<String, Option<i64>> =
+        std::collections::HashMap::with_capacity(rows.len());
     for r in rows {
-        out.push((
-            r.try_get::<String, _>("product_id")
-                .map_err(|e| e.to_string())?,
-            r.try_get::<Option<i64>, _>("avg_cost")
-                .map_err(|e| e.to_string())?,
-        ));
+        let pid: String = r.try_get("product_id").map_err(|e| e.to_string())?;
+        let avg_cost: Option<i64> = r.try_get("avg_cost").map_err(|e| e.to_string())?;
+        map.insert(pid, avg_cost);
     }
-    Ok(out)
+
+    // Partisi olmayan veya maliyeti çözülememiş ürünler için reçete maliyetini çöz
+    let products: Vec<String> = sqlx::query_scalar("SELECT id FROM products WHERE tenant_id = ?1")
+        .bind(tenant_id)
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
+
+    if let Ok(mut conn) = pool.acquire().await {
+        for pid in products {
+            if map.get(&pid).copied().flatten().is_none() {
+                if let Ok(Some(recipe_cost)) =
+                    crate::services::inventory360::recipes::cost_for_active_recipe(
+                        &mut conn, tenant_id, &pid,
+                    )
+                    .await
+                {
+                    if let Some(unit_cost) = recipe_cost.unit_cost_cents {
+                        map.insert(pid, Some(unit_cost));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(map.into_iter().collect())
 }
 
 /// Medyan: tek sayıda eleman tam orta, çift sayıda iki ortanın atılmış ortalaması.
@@ -252,7 +291,7 @@ pub async fn combinations(
              ON b.order_id = a.order_id AND b.tenant_id = a.tenant_id
             AND b.product_id > a.product_id
            JOIN orders o ON o.id = a.order_id AND o.tenant_id = a.tenant_id
-          WHERE a.tenant_id = ?1 AND o.status IN ('PAID','VOID'){from}{to}
+          WHERE a.tenant_id = ?1 AND o.status = 'PAID'{from}{to}
           GROUP BY a.product_id, b.product_id
           HAVING COUNT(*) >= {}
           ORDER BY support DESC, a.product_id, b.product_id
@@ -260,13 +299,12 @@ pub async fn combinations(
         min_support.max(1)
     );
 
-    let total_orders: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM orders WHERE tenant_id = ?1 AND status IN ('PAID','VOID')",
-    )
-    .bind(tenant_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let total_orders: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM orders WHERE tenant_id = ?1 AND status = 'PAID'")
+            .bind(tenant_id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     let rows = sqlx::query(&sql)
         .bind(tenant_id)

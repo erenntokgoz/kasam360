@@ -148,3 +148,49 @@ async fn radar_gunluk_onay_yogunlugunu_yakinlar() {
         onay.measured
     );
 }
+
+#[tokio::test]
+async fn radar_void_order_ve_complimentary_onay_turlerini_yakalar() {
+    let p = pool().await;
+    kullanici(&p, "tenant_a", "usr_1", "Ayşe", "CASHIER").await;
+    for gun in 1..=4 {
+        for i in 0..4 {
+            let apr_id = format!("apr_v_{gun}_{i}");
+            sqlx::query(
+                "INSERT INTO approvals (id, tenant_id, request_type, resource_id, requester_id, status, payload, created_at)
+                 VALUES (?1,'tenant_a','VOID_ORDER',?2,'usr_1','APPROVED','{}', ?3)",
+            )
+            .bind(&apr_id)
+            .bind(format!("ord_v_{gun}_{i}"))
+            .bind(format!("2026-03-0{gun} 10:00:00"))
+            .execute(&p)
+            .await
+            .expect("void onay");
+        }
+        for i in 0..3 {
+            let apr_id = format!("apr_c_{gun}_{i}");
+            sqlx::query(
+                "INSERT INTO approvals (id, tenant_id, request_type, resource_id, requester_id, status, payload, created_at)
+                 VALUES (?1,'tenant_a','COMPLIMENTARY',?2,'usr_1','APPROVED','{}', ?3)",
+            )
+            .bind(&apr_id)
+            .bind(format!("ord_c_{gun}_{i}"))
+            .bind(format!("2026-03-0{gun} 11:00:00"))
+            .execute(&p)
+            .await
+            .expect("complimentary onay");
+        }
+    }
+    let bayrak = suspicious_service::radar(&p, "tenant_a", "2026-03-01", "2026-03-31")
+        .await
+        .expect("radar");
+    let onay = bayrak
+        .iter()
+        .find(|b| b.rule.contains("onay"))
+        .expect("onay bayrağı yakalanmalı");
+    assert!(
+        onay.measured.contains("7 onay/gun"),
+        "VOID_ORDER ve COMPLIMENTARY onayları radar tarafından toplanmalı: {}",
+        onay.measured
+    );
+}

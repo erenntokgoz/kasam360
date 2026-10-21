@@ -299,7 +299,7 @@ async fn kiraci_sizinti_yoktur() {
 }
 
 #[tokio::test]
-async fn iptal_siparis_ciraya_dahil_hesaplanir() {
+async fn iptal_siparis_ciraya_dahil_edilmez() {
     let pool = test_pool().await;
     product(&pool, "t1", "p1", "Kahve", "c1", 2000).await;
     batch(&pool, "t1", "p1", 5.0, 5.0, 100).await;
@@ -314,9 +314,9 @@ async fn iptal_siparis_ciraya_dahil_hesaplanir() {
     let m = product_margins(&pool, "t1", &mart())
         .await
         .expect("marj okunmali");
-    // VOID tutarı hasılat değil giderdir; hacim ve ciroya dahil edilir.
-    assert_eq!(m[0].units_sold, 2);
-    assert_eq!(m[0].revenue_cents, 4000);
+    // VOID siparişler ciroya ve satış adedine dahil edilmez (yalnız void_loss_rate içinde takip edilir).
+    assert_eq!(m[0].units_sold, 1);
+    assert_eq!(m[0].revenue_cents, 2000);
 }
 
 // ---------------------------------------------------------------------------

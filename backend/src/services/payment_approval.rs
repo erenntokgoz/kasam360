@@ -40,7 +40,9 @@ fn discount_percent(server_truth: &ServerTruth) -> i64 {
     if server_truth.gross_cents <= 0 || server_truth.discount_cents <= 0 {
         return 0;
     }
-    ((server_truth.discount_cents as f64 / server_truth.gross_cents as f64) * 100.0).round() as i64
+    let disc = server_truth.discount_cents as i128;
+    let gross = server_truth.gross_cents as i128;
+    (((disc * 100) + (gross / 2)) / gross) as i64
 }
 
 /// Sunucu hesabındaki indirim için anlık PIN onayı jetonunu tüketir.

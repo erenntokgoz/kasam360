@@ -232,7 +232,7 @@ pub async fn get_table_ready_status(
         "
         SELECT e.payload FROM events e
         JOIN orders o ON e.aggregate_id = o.id
-        WHERE o.table_id = ? AND o.tenant_id = ? AND o.status = 'IN_PROGRESS'
+        WHERE o.table_id = ? AND o.tenant_id = ? AND o.status IN ('OPEN', 'IN_PROGRESS')
         AND e.event_type = 'TICKET_STATUS_UPDATED'
         ORDER BY e.created_at DESC LIMIT 1
     ",
@@ -283,7 +283,7 @@ pub async fn get_all_table_statuses(
     let rows = sqlx::query(
         "SELECT o.table_id, e.payload FROM events e
          JOIN orders o ON e.aggregate_id = o.id
-         WHERE o.tenant_id = ? AND o.status = 'IN_PROGRESS'
+         WHERE o.tenant_id = ? AND o.status IN ('OPEN', 'IN_PROGRESS')
          AND e.event_type = 'TICKET_STATUS_UPDATED'
          ORDER BY e.created_at ASC",
     )

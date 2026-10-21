@@ -2,7 +2,7 @@
 //!
 //! Neden ayrı dosya: `init_db` 500 satır sınırında kalmalı; kroki şeması
 //! (masa geometrisi + bölümler + mimari objeler) kroki yapısının tamamıdır ve
-//! başka fazların şemasıyla karışmamalıdır.
+//! başka tabloların şemasıyla karışmamalıdır.
 
 use crate::db::DbPool;
 

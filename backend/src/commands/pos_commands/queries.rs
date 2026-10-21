@@ -38,7 +38,14 @@ pub async fn get_order_items(
 ) -> Result<Vec<CartItemDto>, String> {
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    execute_get_order_items(&mut conn, &table_id, &tenant).await
+}
 
+pub async fn execute_get_order_items(
+    conn: &mut sqlx::SqliteConnection,
+    table_id: &str,
+    tenant: &str,
+) -> Result<Vec<CartItemDto>, String> {
     let items = sqlx::query(
         "SELECT oi.*, p.name as product_name, p.category_id as product_category_id, p.barcode as product_barcode \
          FROM order_items oi \
@@ -47,8 +54,8 @@ pub async fn get_order_items(
          WHERE o.table_id = ? AND o.tenant_id = ? AND o.status IN ('OPEN', 'IN_PROGRESS') AND oi.status != 'CANCELLED' \
          ORDER BY o.created_at ASC, oi.id ASC"
     )
-    .bind(&table_id)
-    .bind(&tenant)
+    .bind(table_id)
+    .bind(tenant)
     .fetch_all(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;

@@ -116,8 +116,8 @@ pub async fn calculate_expected_shift_balance(
     // 2. Kasa giriş ve çıkışları
     let movements_row = sqlx::query(
         "SELECT 
-            COALESCE(SUM(CASE WHEN movement_type = 'IN' THEN amount_cents ELSE 0 END), 0) as total_in,
-            COALESCE(SUM(CASE WHEN movement_type = 'OUT' THEN amount_cents ELSE 0 END), 0) as total_out
+            COALESCE(SUM(CASE WHEN movement_type IN ('IN', 'CASH_IN') THEN amount_cents ELSE 0 END), 0) as total_in,
+            COALESCE(SUM(CASE WHEN movement_type IN ('OUT', 'CASH_OUT') THEN amount_cents ELSE 0 END), 0) as total_out
          FROM cash_movements
          WHERE shift_id = ? AND tenant_id = ?",
     )

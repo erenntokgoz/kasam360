@@ -292,9 +292,9 @@ pub async fn dogrulanmis_mi(
 ///
 /// **Sır kalıcı tabloda saklanmaz**, bu yüzden giriş anındaki doğrulama
 /// üretilemez. Doğrulama yalnız kayıt penceresinde (`kayit_dogrula`) ve o
-/// anda elimizde bulunan sırla yapılabilir. Giriş anında doğrulama arayüzde
-/// arayüzle birlikte ele alınacak; o aşamada sır saklama kararı (kilit
-/// kasası) yeniden değerlendirilir.
+/// anda elimizde bulunan sırla yapılabilir. Giriş anında doğrulama
+/// arayüzle birlikte ele alınacak; sır saklama kararı (kilit kasası)
+/// burada değerlendirilir.
 pub fn kodu_dogrula(sirr: &str, girilen_kod: &str, zaman_sn: i64) -> bool {
     let temiz = girilen_kod.trim();
     if temiz.len() != 6 || !temiz.chars().all(|c| c.is_ascii_digit()) {

@@ -93,3 +93,65 @@ async fn kpi_ters_tarih_araligini_reddeder() {
     let sonuc = kpi_service::kpi(&p, "tenant_a", "2026-03-31", "2026-03-01", None).await;
     assert!(sonuc.is_err(), "ters aralık \"0 satış\" gibi görünmemeli");
 }
+
+#[tokio::test]
+async fn kpi_cift_ciro_ve_acik_siparis_sayilmaz() {
+    let p = pool().await;
+    kasa(&p, "tenant_a", "tbl_1").await;
+    urun(&p, "tenant_a", "a").await;
+    kullanici(&p, "tenant_a", "usr_w", "Garson Mehmet", "WAITER").await;
+
+    // 1. Sipariş: PAID, hem cashier_id hem waiter_id aynı kişi (usr_w).
+    // Tutar: 20_000 kuruş. Eski hatada sipariş + kalem toplanıp 40_000 çıkıyordu.
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_paid",
+        "usr_w",
+        "usr_w",
+        20_000,
+        "PAID",
+        "2026-03-10 12:00:00",
+    )
+    .await;
+
+    // 2. Sipariş: IN_PROGRESS (30_000 kuruş) - ciroya katılmamalı.
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_inprog",
+        "usr_w",
+        "usr_w",
+        30_000,
+        "IN_PROGRESS",
+        "2026-03-10 12:30:00",
+    )
+    .await;
+
+    // 3. Sipariş: OPEN (15_000 kuruş) - ciroya katılmamalı.
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_open",
+        "usr_w",
+        "usr_w",
+        15_000,
+        "OPEN",
+        "2026-03-10 12:45:00",
+    )
+    .await;
+
+    let kpi = kpi_service::kpi(&p, "tenant_a", "2000-01-01", "2100-01-01", Some("usr_w"))
+        .await
+        .expect("KPI okunmalı");
+
+    assert_eq!(kpi.len(), 1);
+    assert_eq!(
+        kpi[0].gross_sales_cents, 20_000,
+        "Ciro tam 1x sayılmalı, açık siparişler eklenmemeli"
+    );
+    assert_eq!(
+        kpi[0].item_count, 1,
+        "Yalnız PAID siparişin kalemi sayılmalı"
+    );
+}

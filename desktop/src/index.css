@@ -1,6 +1,149 @@
 @import "tailwindcss";
 
-:root {
-  --brand: #0A84FF;
-  --brand-hover: #409CFF;
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-canvas: #0F172A;
+  --bg-panel: #1E293B;
+  --bg-card: #1E293B;
+  --bg-subtle: #0F172A;
+  --bg-hover: #334155;
+  --border: #334155;
+  --border-subtle: #1E293B;
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+
+  --accent-amber: #F59E0B;
+  --accent-amber-hover: #D97706;
+  --accent-amber-soft: rgba(245, 158, 11, 0.14);
+  --accent-amber-border: rgba(245, 158, 11, 0.40);
+
+  --accent-emerald: #10B981;
+  --accent-emerald-hover: #059669;
+  --accent-emerald-soft: rgba(16, 185, 129, 0.14);
+  --accent-emerald-border: rgba(16, 185, 129, 0.40);
+
+  --accent-red: #EF4444;
+  --accent-red-hover: #DC2626;
+  --accent-red-soft: rgba(239, 68, 68, 0.14);
+  --accent-red-border: rgba(239, 68, 68, 0.40);
+
+  --accent-blue: #38BDF8;
+  --accent-blue-soft: rgba(56, 189, 248, 0.14);
+  --accent-blue-border: rgba(56, 189, 248, 0.40);
+
+  --accent-violet: #A78BFA;
+  --accent-violet-soft: rgba(167, 139, 250, 0.14);
+  --accent-violet-border: rgba(167, 139, 250, 0.40);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-canvas: #F8FAFC;
+  --bg-panel: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #F1F5F9;
+  --bg-hover: #F1F5F9;
+  --border: #E2E8F0;
+  --border-subtle: #F1F5F9;
+
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+
+  --accent-amber: #D97706;
+  --accent-amber-hover: #B45309;
+  --accent-amber-soft: rgba(217, 119, 6, 0.10);
+  --accent-amber-border: rgba(217, 119, 6, 0.32);
+
+  --accent-emerald: #059669;
+  --accent-emerald-hover: #047857;
+  --accent-emerald-soft: rgba(5, 150, 105, 0.10);
+  --accent-emerald-border: rgba(5, 150, 105, 0.32);
+
+  --accent-red: #DC2626;
+  --accent-red-hover: #B91C1C;
+  --accent-red-soft: rgba(220, 38, 38, 0.10);
+  --accent-red-border: rgba(220, 38, 38, 0.32);
+
+  --accent-blue: #0284C7;
+  --accent-blue-soft: rgba(2, 132, 199, 0.10);
+  --accent-blue-border: rgba(2, 132, 199, 0.32);
+
+  --accent-violet: #7C3AED;
+  --accent-violet-soft: rgba(124, 58, 237, 0.10);
+  --accent-violet-border: rgba(124, 58, 237, 0.32);
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dokunsal Donanım Tuşları (Tactile Matte Hardware) */
+.tactile-btn {
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08), 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  transition: background-color 100ms ease, border-color 100ms ease, transform 60ms ease, opacity 100ms ease;
+}
+.tactile-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+}
+.tactile-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Termal Fiş Önizleme Stili */
+.receipt-paper {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  background-color: #FAF9F5;
+  color: #111827;
+  border: 1px solid #D1D5DB;
+}
+
+/* Titreşim Animasyonu */
+@keyframes tactile-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.animate-shake {
+  animation: tactile-shake 220ms ease-in-out;
+}
+
+/* İnce Kaydırma Çubuğu */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-hover);
 }

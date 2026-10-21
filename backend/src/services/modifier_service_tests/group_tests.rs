@@ -262,16 +262,21 @@ async fn urun_grup_baglantisi_kume_ile_degisir() {
     seed_product(&pool, TENANT_A, "prd_1", "cat_1", 30000).await;
     let mut conn = conn_of(&pool).await;
 
-    let g1 = create_group(&mut conn, TENANT_A, "G1", false, 0, None, None)
+    let grp_a = create_group(&mut conn, TENANT_A, "Grup A", false, 0, None, None)
         .await
-        .expect("g1");
-    let g2 = create_group(&mut conn, TENANT_A, "G2", false, 0, None, None)
+        .expect("grp_a");
+    let grp_b = create_group(&mut conn, TENANT_A, "Grup B", false, 0, None, None)
         .await
-        .expect("g2");
+        .expect("grp_b");
 
-    set_product_groups(&mut conn, TENANT_A, "prd_1", &[g1.clone(), g2.clone()])
-        .await
-        .expect("iki grup");
+    set_product_groups(
+        &mut conn,
+        TENANT_A,
+        "prd_1",
+        &[grp_a.clone(), grp_b.clone()],
+    )
+    .await
+    .expect("iki grup");
     assert_eq!(
         product_group_ids(&mut conn, TENANT_A, "prd_1")
             .await
@@ -281,14 +286,14 @@ async fn urun_grup_baglantisi_kume_ile_degisir() {
     );
 
     // Küme semantiği: gönderilmeyen grup düşer.
-    set_product_groups(&mut conn, TENANT_A, "prd_1", std::slice::from_ref(&g2))
+    set_product_groups(&mut conn, TENANT_A, "prd_1", std::slice::from_ref(&grp_b))
         .await
         .expect("tek grup");
     assert_eq!(
         product_group_ids(&mut conn, TENANT_A, "prd_1")
             .await
             .unwrap(),
-        vec![g2]
+        vec![grp_b]
     );
 }
 

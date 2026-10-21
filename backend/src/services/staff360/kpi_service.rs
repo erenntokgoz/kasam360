@@ -36,27 +36,32 @@ pub async fn kpi(
                         SELECT COUNT(*) FROM order_items oi
                           JOIN orders o ON o.id = oi.order_id AND o.tenant_id = oi.tenant_id
                          WHERE oi.tenant_id = u.tenant_id AND oi.waiter_id = u.id
-                           AND o.status IN ('PAID','IN_PROGRESS','OPEN')
+                           AND o.status = 'PAID'
                            AND o.created_at >= ?2 AND o.created_at <= ?3
                       ), 0) AS item_count,
                       COALESCE((
                         SELECT SUM(oi.total_cents) FROM order_items oi
                           JOIN orders o ON o.id = oi.order_id AND o.tenant_id = oi.tenant_id
                          WHERE oi.tenant_id = u.tenant_id AND oi.waiter_id = u.id
-                           AND o.status IN ('PAID','IN_PROGRESS','OPEN')
+                           AND o.status = 'PAID'
                            AND o.created_at >= ?2 AND o.created_at <= ?3
                       ), 0) AS kalem_cirosu,
                       COALESCE((
                         SELECT COUNT(*) FROM orders o
                          WHERE o.tenant_id = u.tenant_id AND o.cashier_id = u.id
-                           AND o.status IN ('PAID','IN_PROGRESS','OPEN')
+                           AND o.status = 'PAID'
                            AND o.created_at >= ?2 AND o.created_at <= ?3
                       ), 0) AS order_count,
                       COALESCE((
                         SELECT SUM(o.total_cents) FROM orders o
                          WHERE o.tenant_id = u.tenant_id AND o.cashier_id = u.id
-                           AND o.status IN ('PAID','IN_PROGRESS','OPEN')
+                           AND o.status = 'PAID'
                            AND o.created_at >= ?2 AND o.created_at <= ?3
+                           AND NOT EXISTS (
+                             SELECT 1 FROM order_items oi
+                              WHERE oi.order_id = o.id AND oi.tenant_id = o.tenant_id
+                                AND oi.waiter_id = o.cashier_id
+                           )
                       ), 0) AS siparis_cirosu,
                       COALESCE((
                         SELECT COUNT(*) FROM orders o

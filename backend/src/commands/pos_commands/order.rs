@@ -9,7 +9,7 @@ use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct SubmitOrderPayloadDto {
     #[serde(rename = "orderId")]
     pub order_id: String,
@@ -17,6 +17,8 @@ pub struct SubmitOrderPayloadDto {
     pub table_id: String,
     pub items: Vec<CartItemDto>,
     pub notes: Option<String>,
+    #[serde(rename = "waiterId", default)]
+    pub waiter_id: Option<String>,
 }
 
 /// Seçenek snapshot'ını **veritabanı fiyatlarıyla** yeniden yazar.
@@ -86,6 +88,45 @@ pub async fn submit_order(
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
+    let (order_id, total_cents) =
+        execute_submit_order(&mut tx, &tenant_id, &payload, actor_id.as_deref()).await?;
+
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
+    let audit_payload = serde_json::json!({
+        "orderId": order_id,
+        "tableId": payload.table_id,
+        "totalCents": total_cents,
+        "itemCount": payload.items.len(),
+    });
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant_id.clone(),
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
+        "order:submitted",
+        order_id,
+        audit_payload,
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+pub async fn execute_submit_order(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+    payload: &SubmitOrderPayloadDto,
+    actor_id: Option<&str>,
+) -> Result<(String, i64), String> {
+    let waiter_id = payload
+        .waiter_id
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .or(actor_id);
+
     // 1. Calculate authoritative totals and prepared items
     struct PreparedOrderItem {
         id: String,
@@ -114,7 +155,7 @@ pub async fn submit_order(
 
         // Fiyatlandırma motorundan dinamik/efektif fiyatı ve 86'd durumunu çöz
         let effective_pricing = crate::services::inventory360::pricing::effective_price(
-            &mut tx, &tenant_id, product_id, None,
+            &mut *conn, tenant_id, product_id, None,
         )
         .await
         .map_err(|e| format!("Product pricing failed: {}", e))?;
@@ -126,19 +167,20 @@ pub async fn submit_order(
         }
 
         let row = sqlx::query(
-            "SELECT p.tax_rate_bp, p.is_active, c.default_station \
+            "SELECT p.tax_rate_bp, p.is_active, p.is_86, c.default_station \
              FROM products p \
              LEFT JOIN categories c ON c.id = p.category_id AND c.tenant_id = p.tenant_id \
              WHERE p.id = ? AND p.tenant_id = ?",
         )
         .bind(product_id)
-        .bind(&tenant_id)
-        .fetch_one(&mut *tx)
+        .bind(tenant_id)
+        .fetch_one(&mut *conn)
         .await
         .map_err(|e| format!("Product not found: {}", e))?;
 
         let is_active: bool = row.try_get("is_active").unwrap_or(true);
-        if !is_active {
+        let is_86: bool = row.try_get("is_86").unwrap_or(false);
+        if !is_active || is_86 {
             return Err(
                 "PRODUCT_86D: Ürün geçici olarak tükendi (86'd) ve siparişe eklenemez".to_string(),
             );
@@ -150,8 +192,8 @@ pub async fn submit_order(
         let qty = item.quantity;
 
         let item_unit_price = crate::services::modifier_service::resolve_unit_price(
-            &mut tx,
-            &tenant_id,
+            &mut *conn,
+            tenant_id,
             (price_cents, db_tax_rate_bp),
             item.modifiers.as_ref(),
             None,
@@ -163,7 +205,7 @@ pub async fn submit_order(
         total_cents += item_total;
 
         let modifiers_json =
-            authoritative_modifier_snapshot(&mut tx, &tenant_id, item.modifiers.as_ref()).await?;
+            authoritative_modifier_snapshot(&mut *conn, tenant_id, item.modifiers.as_ref()).await?;
 
         let item_notes = item.note.clone().or_else(|| payload.notes.clone());
         let item_course = item.course_number.unwrap_or(1);
@@ -189,8 +231,8 @@ pub async fn submit_order(
         "SELECT id, total_cents FROM orders WHERE table_id=? AND tenant_id=? AND status IN ('OPEN', 'IN_PROGRESS') ORDER BY created_at DESC LIMIT 1"
     )
     .bind(&payload.table_id)
-    .bind(&tenant_id)
-    .fetch_optional(&mut *tx)
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
@@ -200,8 +242,8 @@ pub async fn submit_order(
             sqlx::query("UPDATE orders SET total_cents = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?")
                 .bind(new_total)
                 .bind(&order_id)
-                .bind(&tenant_id)
-                .execute(&mut *tx)
+                .bind(tenant_id)
+                .execute(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?;
             order_id
@@ -213,13 +255,15 @@ pub async fn submit_order(
                 payload.order_id.clone()
             };
             sqlx::query(
-                "INSERT INTO orders (id, table_id, status, total_cents, created_at, updated_at, tenant_id) VALUES (?, ?, 'OPEN', ?, datetime('now'), datetime('now'), ?)"
+                "INSERT INTO orders (id, table_id, status, total_cents, tenant_id, created_at, notes, cashier_id) VALUES (?, ?, 'IN_PROGRESS', ?, ?, datetime('now'), ?, ?)"
             )
             .bind(&ord_id)
             .bind(&payload.table_id)
             .bind(total_cents)
-            .bind(&tenant_id)
-            .execute(&mut *tx)
+            .bind(tenant_id)
+            .bind(&payload.notes)
+            .bind(waiter_id)
+            .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
             ord_id
@@ -245,9 +289,9 @@ pub async fn submit_order(
         .bind(&item.modifiers_json)
         .bind(&item.notes)
         .bind(&item.station)
-        .bind(&actor_id)
-        .bind(&tenant_id)
-        .execute(&mut *tx)
+        .bind(waiter_id)
+        .bind(tenant_id)
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
     }
@@ -257,8 +301,8 @@ pub async fn submit_order(
         "SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')"
     )
     .bind(&payload.table_id)
-    .bind(&tenant_id)
-    .fetch_one(&mut *tx)
+    .bind(tenant_id)
+    .fetch_one(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
@@ -266,17 +310,25 @@ pub async fn submit_order(
         "UPDATE tables SET status = 'OCCUPIED', current_total = ?, opened_at = COALESCE(opened_at, datetime('now')), waiter_id = COALESCE(waiter_id, ?) WHERE id = ? AND tenant_id = ?",
     )
     .bind(current_table_total)
-    .bind(&actor_id)
+    .bind(waiter_id)
     .bind(&payload.table_id)
-    .bind(&tenant_id)
-    .execute(&mut *tx)
+    .bind(tenant_id)
+    .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
+
+    let _ = crate::services::reservation_service::seat_for_order(
+        &mut *conn,
+        tenant_id,
+        &payload.table_id,
+        "POS",
+    )
+    .await?;
 
     // 5. Append event & outbox
     let event_id = crate::id_generator::generate_id("evt");
     let event_payload = serde_json::json!({
-        "orderId": payload.order_id,
+        "orderId": &effective_order_id,
         "tableId": payload.table_id,
         "items": payload.items,
         "notes": payload.notes,
@@ -285,43 +337,21 @@ pub async fn submit_order(
 
     sqlx::query("INSERT INTO events (event_id, tenant_id, aggregate_id, aggregate_type, event_type, payload, created_at) VALUES (?, ?, ?, 'ORDER', 'ORDER_SUBMITTED', ?, datetime('now'))")
         .bind(&event_id)
-        .bind(&tenant_id)
-        .bind(&payload.order_id)
+        .bind(tenant_id)
+        .bind(&effective_order_id)
         .bind(event_payload.to_string())
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
 
     let outbox_id = crate::id_generator::generate_id("obx");
     sqlx::query("INSERT INTO outbox (id, tenant_id, event_id, status, created_at) VALUES (?, ?, ?, 'PENDING', datetime('now'))")
         .bind(&outbox_id)
-        .bind(&tenant_id)
+        .bind(tenant_id)
         .bind(&event_id)
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
 
-    let now_iso = chrono::Utc::now().to_rfc3339();
-    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
-    let audit_payload = serde_json::json!({
-        "orderId": payload.order_id,
-        "tableId": payload.table_id,
-        "totalCents": total_cents,
-        "itemCount": payload.items.len(),
-    });
-    let ctx = crate::services::audit_service::AuditContext::new(
-        tenant_id.clone(),
-        actor_id,
-        actor_role,
-        crate::services::audit_service::category::SIPARIS_MASA,
-        "order:submitted",
-        payload.order_id.clone(),
-        audit_payload,
-        now_iso,
-    )?;
-    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-
-    Ok(true)
+    Ok((effective_order_id, total_cents))
 }

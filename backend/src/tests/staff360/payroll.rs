@@ -310,3 +310,64 @@ async fn ayni_donem_bordro_yeniden_hesaplanabilir() {
     .expect("brüt");
     assert_eq!(brut, 30_000, "güncel maaş uygulanmamış");
 }
+
+#[tokio::test]
+async fn komisyon_cift_ciro_ve_acik_siparis_sayilmaz() {
+    let p = pool().await;
+    kasa(&p, "tenant_a", "tbl_1").await;
+    urun(&p, "tenant_a", "a").await;
+    kullanici(&p, "tenant_a", "usr_comm", "Garson Ali", "WAITER").await;
+
+    payroll_service::set_rule(
+        &p,
+        "tenant_a",
+        &PayrollRuleInput {
+            user_id: "usr_comm".into(),
+            model: "COMMISSION".into(),
+            base_salary_cents: 0,
+            commission_percent: 10,
+            hourly_rate_cents: 0,
+            tip_multiplier_percent: 100,
+            profit_share_percent: 0,
+        },
+    )
+    .await
+    .expect("kural");
+
+    // 1. Sipariş: PAID, 20_000 kuruş (cashier_id == waiter_id == usr_comm)
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_p1",
+        "usr_comm",
+        "usr_comm",
+        20_000,
+        "PAID",
+        "2026-03-10 12:00:00",
+    )
+    .await;
+
+    // 2. Sipariş: IN_PROGRESS, 50_000 kuruş - ciroya katılmamalı
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_p2",
+        "usr_comm",
+        "usr_comm",
+        50_000,
+        "IN_PROGRESS",
+        "2026-03-11 12:00:00",
+    )
+    .await;
+
+    let runs = payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+        .await
+        .expect("bordro");
+
+    assert_eq!(runs.len(), 1);
+    let amounts = runs[0].amounts.as_ref().expect("tutarlar");
+    // Satış tam 20_000 olmalı; %10 komisyon = 2000 kuruş.
+    // 2x sayılmış olsaydı 40_000 -> 4000 çıkardı; IN_PROGRESS katılsaydı 7000+ çıkardı.
+    assert_eq!(amounts.gross_cents, 2000, "Komisyon 20_000'in %10'u olmalı");
+    assert_eq!(amounts.net_cents, 2000);
+}

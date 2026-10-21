@@ -5,7 +5,6 @@
 
 use sqlx::{Row, SqlitePool};
 
-use super::analytics_product::REVENUE_CORE;
 use super::analytics_types::{
     AnalyticsRange, CompetitorPriceGap, MonthlyTargetStatus, PeakHourBucket, VoidLossRate,
 };
@@ -28,7 +27,7 @@ pub async fn peak_hours(
                 SUM(oi.total_cents) AS revenue_cents
            FROM orders o
            JOIN order_items oi ON oi.order_id = o.id AND oi.tenant_id = o.tenant_id
-          WHERE o.tenant_id = ?1 AND o.status IN ('PAID','VOID'){from}{to}
+          WHERE o.tenant_id = ?1 AND o.status = 'PAID'{from}{to}
           GROUP BY hour
           ORDER BY hour",
     );
@@ -84,7 +83,7 @@ pub async fn monthly_target_status(
                       JOIN products p ON p.id = oi.product_id AND p.tenant_id = o.tenant_id
                       LEFT JOIN categories c ON c.id = p.category_id AND c.tenant_id = o.tenant_id
                      WHERE o.tenant_id = ?1
-                       AND o.status IN ('PAID','VOID')
+                       AND o.status = 'PAID'
                        AND strftime('%Y-%m', o.created_at) = ?2
                        AND (t.category = 'ALL' OR c.name = t.category)
                 ), 0) AS actual_cents
@@ -199,7 +198,11 @@ pub async fn void_loss_rate(
            + COALESCE(SUM(CASE WHEN o.status = 'PAID' THEN oi.total_cents ELSE 0 END), 0) AS total_cents,
            COUNT(DISTINCT CASE WHEN o.status = 'VOID' THEN o.id END) AS voided_orders,
            COUNT(DISTINCT o.id) AS total_orders
-         {REVENUE_CORE}{from}{to}",
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id AND oi.tenant_id = o.tenant_id
+         JOIN products p ON p.id = oi.product_id AND p.tenant_id = o.tenant_id
+         LEFT JOIN categories c ON c.id = p.category_id AND c.tenant_id = o.tenant_id
+        WHERE o.tenant_id = ?1 AND o.status IN ('PAID', 'VOID'){from}{to}",
     );
     let r = sqlx::query(&sql)
         .bind(tenant_id)

@@ -12,6 +12,8 @@
 pub mod analytics_product;
 #[cfg(test)]
 mod analytics_product_tests;
+#[cfg(test)]
+mod analytics_regression_tests;
 pub mod analytics_time;
 #[cfg(test)]
 mod analytics_time_tests;

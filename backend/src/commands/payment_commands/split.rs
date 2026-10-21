@@ -31,9 +31,7 @@ pub async fn process_split_payment(
         .actor_id
         .as_deref()
         .or(payload.cashier_id.as_deref())
-        .unwrap_or("SYSTEM_POS")
-        .to_string();
-    let actor_id = actor_id.as_str();
+        .ok_or_else(|| "UNAUTHORIZED: actor_id is required".to_string())?;
     let tenant_id = resolve_payment_tenant(&mut tx, &payload).await?;
 
     // 1. Etki eşitsizliği (Idempotency) kontrolü

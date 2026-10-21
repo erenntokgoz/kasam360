@@ -107,6 +107,82 @@ pub async fn open_shift(
     })
 }
 
+pub async fn execute_close_shift(
+    conn: &mut sqlx::SqliteConnection,
+    audit_lock: &crate::services::audit_service::AuditLock<'_>,
+    cashier_id: &str,
+    actual_amount_cents: i64,
+    tenant_id: &str,
+    actor_role: Option<&str>,
+) -> Result<ShiftDto, String> {
+    // Find open shift
+    let row = sqlx::query("SELECT id, expected_amount_cents, opened_at, tenant_id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
+        .bind(cashier_id)
+        .bind(tenant_id)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let r = row.ok_or("Aktif açık vardiya bulunamadı (No active open shift found)")?;
+    // `expected_amount_cents` para okumasıdır: AGENTS.md §3.4 gereği hata
+    // yukarı taşınır, sıfıra düşmez. Kasa farkı sıfır kabul edilemez.
+    let id: String = r.try_get("id").map_err(|e| e.to_string())?;
+    let expected: i64 = r
+        .try_get("expected_amount_cents")
+        .map_err(|e| e.to_string())?;
+    let opened_at: String = r.try_get("opened_at").map_err(|e| e.to_string())?;
+    let shift_tenant: String = r.try_get("tenant_id").map_err(|e| e.to_string())?;
+
+    let calc = crate::commands::cashier_commands::calculate_expected_shift_balance(
+        conn, tenant_id, &id, &opened_at, None, expected,
+    )
+    .await?;
+
+    let difference = actual_amount_cents - calc.expected_balance;
+
+    sqlx::query("UPDATE shifts SET status = 'CLOSED', closed_at = datetime('now'), actual_amount_cents = ?, difference_cents = ? WHERE id = ?")
+        .bind(actual_amount_cents)
+        .bind(difference)
+        .bind(&id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Kasa kapanışı "Eski Değer → Yeni Değer" sütununun en kritik kaydıdır:
+    // beklenen ile sayılan tutar ve fark burada görünür olur.
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    let (_, audit_actor_role) = audit_actor(None, actor_role.map(|s| s.to_string()));
+    let ctx = crate::services::audit_service::AuditContext::new(
+        shift_tenant,
+        cashier_id.to_string(),
+        audit_actor_role,
+        crate::services::audit_service::category::FINANS,
+        "shift:closed",
+        id.clone(),
+        serde_json::json!({
+            "shiftId": id,
+            "changes": {
+                "expectedAmountCents": { "old": calc.expected_balance, "new": actual_amount_cents },
+            },
+            "differenceCents": difference,
+        }),
+        now_iso,
+    )?;
+    crate::services::audit_service::AuditService::append(conn, audit_lock, &ctx).await?;
+
+    Ok(ShiftDto {
+        id,
+        tenant_id: tenant_id.to_string(),
+        cashier_id: cashier_id.to_string(),
+        status: "CLOSED".into(),
+        opened_at,
+        closed_at: Some(chrono::Utc::now().to_rfc3339()),
+        expected_amount_cents: calc.expected_balance,
+        actual_amount_cents: Some(actual_amount_cents),
+        difference_cents: Some(difference),
+    })
+}
+
 #[tauri::command]
 pub async fn close_shift(
     cashier_id: String,
@@ -134,74 +210,18 @@ pub async fn close_shift(
     // devresini yazabilir (AGENTS.md §3.3).
     let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
 
-    // Find open shift
-    let row = sqlx::query("SELECT id, expected_amount_cents, opened_at, tenant_id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
-        .bind(&cashier_id)
-        .bind(&tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let r = row.ok_or("Aktif açık vardiya bulunamadı (No active open shift found)")?;
-    // `expected_amount_cents` para okumasıdır: AGENTS.md §3.4 gereği hata
-    // yukarı taşınır, sıfıra düşmez. Kasa farkı sıfır kabul edilemez.
-    let id: String = r.try_get("id").map_err(|e| e.to_string())?;
-    let expected: i64 = r
-        .try_get("expected_amount_cents")
-        .map_err(|e| e.to_string())?;
-    let opened_at: String = r.try_get("opened_at").map_err(|e| e.to_string())?;
-    let shift_tenant: String = r.try_get("tenant_id").map_err(|e| e.to_string())?;
-
-    let calc = crate::commands::cashier_commands::calculate_expected_shift_balance(
-        &mut tx, &tenant_id, &id, &opened_at, None, expected,
+    let res = execute_close_shift(
+        &mut tx,
+        &audit_lock,
+        &cashier_id,
+        actual_amount_cents,
+        &tenant_id,
+        actor_role.as_deref(),
     )
     .await?;
 
-    let difference = actual_amount_cents - calc.expected_balance;
-
-    sqlx::query("UPDATE shifts SET status = 'CLOSED', closed_at = datetime('now'), actual_amount_cents = ?, difference_cents = ? WHERE id = ?")
-        .bind(actual_amount_cents)
-        .bind(difference)
-        .bind(&id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Kasa kapanışı "Eski Değer → Yeni Değer" sütununun en kritik kaydıdır:
-    // beklenen ile sayılan tutar ve fark burada görünür olur.
-    let now_iso = chrono::Utc::now().to_rfc3339();
-    let (_, actor_role) = audit_actor(None, actor_role);
-    let ctx = crate::services::audit_service::AuditContext::new(
-        shift_tenant,
-        cashier_id.clone(),
-        actor_role,
-        crate::services::audit_service::category::FINANS,
-        "shift:closed",
-        id.clone(),
-        serde_json::json!({
-            "shiftId": id,
-            "changes": {
-                "expectedAmountCents": { "old": calc.expected_balance, "new": actual_amount_cents },
-            },
-            "differenceCents": difference,
-        }),
-        now_iso,
-    )?;
-    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
-
     tx.commit().await.map_err(|e| e.to_string())?;
-
-    Ok(ShiftDto {
-        id,
-        tenant_id,
-        cashier_id,
-        status: "CLOSED".into(),
-        opened_at,
-        closed_at: Some(chrono::Utc::now().to_rfc3339()),
-        expected_amount_cents: calc.expected_balance,
-        actual_amount_cents: Some(actual_amount_cents),
-        difference_cents: Some(difference),
-    })
+    Ok(res)
 }
 
 /// Aktif vardiya, **yalnız bu kiracının** kasiyerine aitse döner.

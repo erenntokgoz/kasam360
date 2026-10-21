@@ -120,17 +120,19 @@ impl PaymentRepository {
             let gross_cents = item_unit_price * quantity;
             let mut discount_amount_cents: i64 = 0;
 
-            // Kalem bazlı indirim tutarını hesapla (yüzdelik veya sabit tutar)
+            // Kalem bazlı indirim tutarını hesapla (yüzdelik veya sabit tutar) - tam sayı kuruş aritmetiği (i128)
             if let Some(disc) = &item.discount {
                 let disc_type = disc.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                let disc_val = disc.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                if disc_val > 0.0 {
+                let disc_val: i64 = disc
+                    .get("value")
+                    .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f.round() as i64)))
+                    .unwrap_or(0);
+                if disc_val > 0 {
                     if disc_type == "PERCENTAGE" {
-                        let pct = disc_val.min(100.0);
-                        discount_amount_cents =
-                            ((gross_cents as f64) * (pct / 100.0)).round() as i64;
+                        let pct = disc_val.clamp(0, 100) as i128;
+                        discount_amount_cents = (((gross_cents as i128) * pct + 50) / 100) as i64;
                     } else if disc_type == "FIXED_AMOUNT" {
-                        discount_amount_cents = (disc_val.round() as i64).min(gross_cents);
+                        discount_amount_cents = (disc_val as i128).min(gross_cents as i128) as i64;
                     }
                 }
             }
@@ -148,16 +150,19 @@ impl PaymentRepository {
         let mut grand_total_cents = subtotal_all_cents + tax_all_cents;
         let mut global_discount_cents: i64 = 0;
 
-        // Sepet geneli (global) indirim tutarını uygula
+        // Sepet geneli (global) indirim tutarını uygula - tam sayı kuruş aritmetiği (i128)
         if let Some(g_disc) = global_discount {
             let disc_type = g_disc.get("type").and_then(|v| v.as_str()).unwrap_or("");
-            let disc_val = g_disc.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            if disc_val > 0.0 {
+            let disc_val: i64 = g_disc
+                .get("value")
+                .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f.round() as i64)))
+                .unwrap_or(0);
+            if disc_val > 0 {
                 global_discount_cents = if disc_type == "PERCENTAGE" {
-                    let pct = disc_val.min(100.0);
-                    ((grand_total_cents as f64) * (pct / 100.0)).round() as i64
+                    let pct = disc_val.clamp(0, 100) as i128;
+                    (((grand_total_cents as i128) * pct + 50) / 100) as i64
                 } else {
-                    (disc_val.round() as i64).min(grand_total_cents)
+                    (disc_val as i128).min(grand_total_cents as i128) as i64
                 };
                 grand_total_cents = (grand_total_cents - global_discount_cents).max(0);
             }
@@ -224,7 +229,7 @@ impl PaymentRepository {
     ) -> Result<(), String> {
         if let Some(o_id) = order_id {
             let order_row = sqlx::query(
-                "SELECT table_id FROM orders WHERE id = ? AND status = 'OPEN' AND tenant_id = ?",
+                "SELECT table_id FROM orders WHERE id = ? AND status IN ('OPEN', 'IN_PROGRESS') AND tenant_id = ?",
             )
             .bind(o_id)
             .bind(tenant_id)

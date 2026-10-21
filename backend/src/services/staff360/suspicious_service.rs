@@ -113,7 +113,7 @@ async fn approval_radar(
            FROM approvals a
            JOIN users u ON u.id = a.requester_id AND u.tenant_id = a.tenant_id
           WHERE a.tenant_id = ?1 AND a.status = 'APPROVED'
-            AND a.request_type IN ('DISCOUNT', 'VOID', 'GIFT')
+            AND a.request_type IN ('DISCOUNT', 'VOID', 'VOID_ORDER', 'GIFT', 'COMPLIMENTARY', 'REFUND')
             AND a.created_at >= ?2 AND a.created_at <= ?3
           GROUP BY a.requester_id, u.name
          HAVING COUNT(DISTINCT date(a.created_at)) >= ?4",

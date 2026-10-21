@@ -357,9 +357,14 @@ async fn own_sales_cents(
     .map_err(|e| format!("calisan satis toplami okunamadi: {e}"))?;
 
     let siparis: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(total_cents), 0) FROM orders
-          WHERE tenant_id = ?1 AND cashier_id = ?2
-            AND status = 'PAID' AND created_at >= ?3 AND created_at <= ?4",
+        "SELECT COALESCE(SUM(o.total_cents), 0) FROM orders o
+          WHERE o.tenant_id = ?1 AND o.cashier_id = ?2
+            AND o.status = 'PAID' AND o.created_at >= ?3 AND o.created_at <= ?4
+            AND NOT EXISTS (
+              SELECT 1 FROM order_items oi
+               WHERE oi.order_id = o.id AND oi.tenant_id = o.tenant_id
+                 AND oi.waiter_id = o.cashier_id
+            )",
     )
     .bind(tenant_id)
     .bind(user_id)

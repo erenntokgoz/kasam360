@@ -62,10 +62,7 @@ pub fn run() {
 
                 // Outbox dispatcher worker'ı (30 sn aralıkla
                 // PENDING olayları teslim eder, retry/dead_letter yönetir).
-                let pool_outbox = pool.clone();
-                tauri::async_runtime::spawn(async move {
-                    crate::services::outbox_dispatcher::spawn_outbox_worker(pool_outbox);
-                });
+                crate::services::outbox_dispatcher::spawn_outbox_worker(pool.clone());
 
                 app.manage(pool);
                 app.manage(AppState {

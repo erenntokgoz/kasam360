@@ -24,7 +24,7 @@ use uuid::Uuid;
 /// bağlantı kapanırken kaybolur; restart sonrası
 /// kalıcılık ancak kalıcı bir dosyada ölçülebilir.
 async fn dosya_havuzu() -> (SqlitePool, std::path::PathBuf) {
-    let dosya = std::env::temp_dir().join(format!("kasam360_g2_lockout_{}.db", Uuid::new_v4()));
+    let dosya = std::env::temp_dir().join(format!("kasam360_login_lockout_{}.db", Uuid::new_v4()));
     let url = format!("sqlite://{}", dosya.to_string_lossy().replace('\\', "/"));
     let secenek = SqliteConnectOptions::from_str(&url)
         .expect("gecerli secenekler")

@@ -21,18 +21,12 @@ pub struct VoidOrderItemPayloadDto {
     pub approval_token: Option<String>,
 }
 
-#[tauri::command]
-pub async fn void_order_item(
-    payload: VoidOrderItemPayloadDto,
-    tenant_id: String,
-    pool: tauri::State<'_, DbPool>,
-    state: tauri::State<'_, crate::AppState>,
+pub async fn execute_void_order_item(
+    conn: &mut sqlx::SqliteConnection,
+    audit_lock: &crate::services::audit_service::AuditLock<'_>,
+    tenant_id: &str,
+    payload: &VoidOrderItemPayloadDto,
 ) -> Result<bool, String> {
-    let _payment_lock = state.payment_mutex.lock().await;
-    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-
-    let tenant_id = require_tenant_id(Some(&tenant_id))?;
     let actor_role = crate::rbac::canonical_role(&payload.actor_role)
         .ok_or_else(|| "UNAUTHORIZED: Bilinmeyen rol".to_string())?;
 
@@ -51,8 +45,8 @@ pub async fn void_order_item(
          WHERE oi.id = ? AND oi.tenant_id = ?",
     )
     .bind(&payload.item_id)
-    .bind(&tenant_id)
-    .fetch_optional(&mut *tx)
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
@@ -80,19 +74,15 @@ pub async fn void_order_item(
     }
 
     let approval_request = void_approval_request(
-        &tenant_id,
+        tenant_id,
         &payload.item_id,
         item_total_cents,
         &payload.actor_id,
         actor_role.as_str(),
     );
 
-    let approver = require_void_approval(
-        &mut tx,
-        &approval_request,
-        payload.approval_token.as_deref(),
-    )
-    .await?;
+    let approver =
+        require_void_approval(conn, &approval_request, payload.approval_token.as_deref()).await?;
 
     sqlx::query(
         "UPDATE order_items \
@@ -103,8 +93,8 @@ pub async fn void_order_item(
     .bind(&payload.reason)
     .bind(&payload.reason)
     .bind(&payload.item_id)
-    .bind(&tenant_id)
-    .execute(&mut *tx)
+    .bind(tenant_id)
+    .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
@@ -116,10 +106,10 @@ pub async fn void_order_item(
          WHERE id = ? AND tenant_id = ?",
     )
     .bind(&order_id)
-    .bind(&tenant_id)
+    .bind(tenant_id)
     .bind(&order_id)
-    .bind(&tenant_id)
-    .execute(&mut *tx)
+    .bind(tenant_id)
+    .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
@@ -130,16 +120,16 @@ pub async fn void_order_item(
          WHERE id = ? AND tenant_id = ?",
     )
     .bind(&table_id)
-    .bind(&tenant_id)
+    .bind(tenant_id)
     .bind(&table_id)
-    .bind(&tenant_id)
-    .execute(&mut *tx)
+    .bind(tenant_id)
+    .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
     let now_iso = chrono::Utc::now().to_rfc3339();
     let audit_ctx = crate::services::audit_service::AuditContext::new(
-        tenant_id.clone(),
+        tenant_id.to_string(),
         payload.actor_id.clone(),
         actor_role.as_str().to_string(),
         category::SIPARIS_MASA,
@@ -155,15 +145,15 @@ pub async fn void_order_item(
         }),
         now_iso.clone(),
     )?;
-    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &audit_ctx).await?;
+    crate::services::audit_service::AuditService::append(conn, audit_lock, &audit_ctx).await?;
 
     let consumed_ctx = crate::services::audit_service::AuditContext::new(
-        tenant_id,
+        tenant_id.to_string(),
         approver.approver_id.clone(),
         approver.approver_role.as_str().to_string(),
         category::GUVENLIK,
         "approval:consumed",
-        payload.item_id,
+        payload.item_id.clone(),
         serde_json::json!({
             "operation": crate::approval_service::operation::VOID,
             "amountCents": item_total_cents,
@@ -172,11 +162,26 @@ pub async fn void_order_item(
         }),
         now_iso,
     )?;
-    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &consumed_ctx)
-        .await?;
+    crate::services::audit_service::AuditService::append(conn, audit_lock, &consumed_ctx).await?;
 
-    tx.commit().await.map_err(|e| e.to_string())?;
     Ok(true)
+}
+
+#[tauri::command]
+pub async fn void_order_item(
+    payload: VoidOrderItemPayloadDto,
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<bool, String> {
+    let _payment_lock = state.payment_mutex.lock().await;
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    let tenant_id = require_tenant_id(Some(&tenant_id))?;
+    let res = execute_void_order_item(&mut tx, &audit_lock, &tenant_id, &payload).await?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(res)
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

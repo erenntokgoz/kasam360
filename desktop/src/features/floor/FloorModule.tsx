@@ -1,0 +1,223 @@
+import React, { useEffect, useState } from 'react';
+import { ShoppingBag, Calendar, MapPin, Grid } from 'lucide-react';
+import { useFloorStore } from '../../stores/floorStore';
+import { usePosStore } from '../../stores/posStore';
+import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
+import type { FloorTable } from '../../types/floor';
+import { TableCardGrid } from './TableCardGrid';
+import { FloorBlueprint } from './FloorBlueprint';
+import { TableSlideOver } from './TableSlideOver';
+import { ReservationModal } from './ReservationModal';
+import { Button } from '../../ui/Button';
+
+export const FloorModule: React.FC = () => {
+  const {
+    zones,
+    tables,
+    selectedZoneId,
+    selectedTableId,
+    viewMode,
+    isKrokiEditMode,
+    isSlideOverOpen,
+    loadFloorPlan,
+    setSelectedZoneId,
+    openTableSlideOver,
+    closeTableSlideOver,
+    setViewMode,
+    setKrokiEditMode,
+    updateTablePosition,
+    saveFloorLayout,
+    moveTable,
+    mergeTables,
+    addReservation,
+    checkReservationLocks,
+  } = useFloorStore();
+
+  const { openOrderForTable, openWalkinOrder } = usePosStore();
+  const { setActiveModule, openModal } = useUIStore();
+  const { user } = useAuthStore();
+
+  const [isResModalOpen, setIsResModalOpen] = useState(false);
+
+  useEffect(() => {
+    loadFloorPlan();
+    const interval = setInterval(() => {
+      checkReservationLocks();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [loadFloorPlan, checkReservationLocks]);
+
+  const isOwnerOrManager = user?.role === 'OWNER' || user?.role === 'MANAGER' || user?.role === 'MASTER';
+
+  // Seçili bölgeye göre masaları filtrele
+  const filteredTables = selectedZoneId
+    ? tables.filter((t) => t.zoneId === selectedZoneId)
+    : tables;
+
+  const currentSelectedTable = tables.find((t) => t.id === selectedTableId) || null;
+
+  const handleOpenTable = (table: FloorTable, guestCount: number) => {
+    openOrderForTable(table.id, table.tableNumber, guestCount);
+    setActiveModule('POS');
+  };
+
+  const handleInspectTable = (table: FloorTable) => {
+    openTableSlideOver(table.id);
+  };
+
+  const handleWalkin = () => {
+    openWalkinOrder();
+    setActiveModule('POS');
+  };
+
+  const handleGoToPosFromDrawer = (table: FloorTable) => {
+    closeTableSlideOver();
+    openOrderForTable(table.id, table.tableNumber, table.occupiedSeats || 2);
+    setActiveModule('POS');
+  };
+
+  const handlePayFromDrawer = (table: FloorTable) => {
+    openOrderForTable(table.id, table.tableNumber, table.occupiedSeats || 2);
+    openModal('payment');
+  };
+
+  return (
+    <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden select-none">
+      {/* Üst Operasyon Barı */}
+      <div className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        {/* Sol: Bölge Filtreleri */}
+        <div className="flex items-center gap-1.5 overflow-x-auto">
+          <Button
+            variant={selectedZoneId === null ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={() => setSelectedZoneId(null)}
+            className="!min-h-[38px] tabular-nums"
+          >
+            Tümü ({tables.length})
+          </Button>
+          {zones.map((zone) => {
+            const count = tables.filter((t) => t.zoneId === zone.id).length;
+            const isSelected = selectedZoneId === zone.id;
+            return (
+              <Button
+                key={zone.id}
+                variant={isSelected ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => setSelectedZoneId(zone.id)}
+                className="!min-h-[38px] tabular-nums"
+              >
+                {zone.name} ({count})
+              </Button>
+            );
+          })}
+        </div>
+
+        {/* Sağ: Görünüm Şalteri, Tezgah Satışı ve Rezervasyon */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="p-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('CARDS');
+                setKrokiEditMode(false);
+              }}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
+                viewMode === 'CARDS'
+                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Grid className="w-3.5 h-3.5" />
+              <span>Kart Görünümü</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('KROKI')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
+                viewMode === 'KROKI'
+                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              <span>Salon Krokisi</span>
+            </button>
+          </div>
+
+          {/* Kroki Düzenleme Butonu (Yalnızca kroki görünümünde ve yetkili kullanıcıda) */}
+          {viewMode === 'KROKI' && isOwnerOrManager ? (
+            <Button
+              variant={isKrokiEditMode ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => setKrokiEditMode(!isKrokiEditMode)}
+              className="!min-h-[38px]"
+            >
+              {isKrokiEditMode ? 'Düzenlemeyi Bitir' : 'Krokiyi Düzenle'}
+            </Button>
+          ) : null}
+
+          {/* Hızlı Tezgah Satışı */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleWalkin}
+            className="!min-h-[38px]"
+          >
+            <ShoppingBag className="w-4 h-4 text-[var(--accent-amber)]" />
+            <span>Tezgah Satışı</span>
+          </Button>
+
+          {/* Yeni Rezervasyon */}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setIsResModalOpen(true)}
+            className="!min-h-[38px]"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>+ Rezervasyon</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Görünüm Alanı: Kart Izgarası veya 2D Kroki */}
+      {viewMode === 'CARDS' ? (
+        <TableCardGrid
+          tables={filteredTables}
+          onOpenTable={handleOpenTable}
+          onInspectTable={handleInspectTable}
+        />
+      ) : (
+        <FloorBlueprint
+          tables={filteredTables}
+          isEditMode={isKrokiEditMode}
+          onTablePositionChange={updateTablePosition}
+          onSaveLayout={saveFloorLayout}
+          onOpenTable={handleOpenTable}
+          onInspectTable={handleInspectTable}
+        />
+      )}
+
+      {/* Sağdan Açılan Masa Çekmecesi */}
+      <TableSlideOver
+        isOpen={isSlideOverOpen}
+        table={currentSelectedTable}
+        allTables={tables}
+        onClose={closeTableSlideOver}
+        onGoToPos={handleGoToPosFromDrawer}
+        onPayTable={handlePayFromDrawer}
+        onMoveTable={moveTable}
+        onMergeTable={mergeTables}
+      />
+
+      {/* Rezervasyon Ekleme Modalı */}
+      <ReservationModal
+        isOpen={isResModalOpen}
+        onClose={() => setIsResModalOpen(false)}
+        tables={tables}
+        onSaveReservation={addReservation}
+      />
+    </section>
+  );
+};

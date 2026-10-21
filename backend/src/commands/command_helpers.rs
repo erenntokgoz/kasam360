@@ -57,3 +57,39 @@ pub(crate) fn require_tenant_id(tenant_id: Option<&str>) -> Result<String, Strin
         .map(str::to_string)
         .ok_or_else(|| "UNAUTHORIZED: tenant_id is required".to_string())
 }
+
+/// `order_items.modifiers` JSON'unu hem `Vec<String>` hem de `Vec<serde_json::Value>`
+/// formatında destekleyerek ayrıştırır.
+pub fn parse_order_item_modifiers(modifiers_raw: Option<&str>) -> Vec<String> {
+    let Some(raw) = modifiers_raw else {
+        return Vec::new();
+    };
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(raw) {
+        match val {
+            serde_json::Value::Array(arr) => arr
+                .into_iter()
+                .filter_map(|item| match item {
+                    serde_json::Value::String(s) => Some(s),
+                    serde_json::Value::Object(obj) => {
+                        let name = obj.get("name")?.as_str()?.to_string();
+                        let price_cents = obj
+                            .get("priceCents")
+                            .or_else(|| obj.get("price_cents"))
+                            .and_then(|p| p.as_i64())
+                            .unwrap_or(0);
+                        if price_cents > 0 {
+                            let tl = price_cents as f64 / 100.0;
+                            Some(format!("{} (+{:.2} TL)", name, tl))
+                        } else {
+                            Some(name)
+                        }
+                    }
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    }
+}

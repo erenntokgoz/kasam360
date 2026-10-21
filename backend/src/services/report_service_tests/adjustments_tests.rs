@@ -223,3 +223,74 @@ async fn aralik_gun_sayisi_yalniz_gozlem_icin_hesaplanir() {
     );
     assert_eq!(range("bozuk", "bozuk").days(), 1);
 }
+
+#[tokio::test]
+async fn adjustments_report_compensation_refund_ve_stok_waste_yakalar() {
+    let pool = pool().await;
+    seed_tenant(&pool, TENANT_A).await;
+
+    // 1. compensation:refund eylemi (amountCents taşır)
+    seed_audit(
+        &pool,
+        TENANT_A,
+        1,
+        "compensation:refund",
+        "ord_cr1",
+        "usr_cashier",
+        &serde_json::json!({
+            "orderId": "ord_cr1",
+            "amountCents": 15000,
+            "reason": "soğuk yemek telafisi",
+            "approverId": "usr_mgr",
+            "approverRole": "MANAGER"
+        }),
+        "2026-03-05 14:00:00",
+    )
+    .await;
+
+    // 2. stok:waste_recorded eylemi (totalCostCents taşır)
+    seed_audit(
+        &pool,
+        TENANT_A,
+        2,
+        "stok:waste_recorded",
+        "wst_01",
+        "usr_chef",
+        &serde_json::json!({
+            "wasteId": "wst_01",
+            "totalCostCents": 8500,
+            "reason": "tarihi geçmiş süt",
+            "approverId": "usr_mgr",
+            "approverRole": "MANAGER"
+        }),
+        "2026-03-05 15:00:00",
+    )
+    .await;
+
+    let mut conn = conn_of(&pool).await;
+    let report = adjustments_report(&mut conn, TENANT_A, &range(ARALIK.0, ARALIK.1))
+        .await
+        .expect("rapor okunur");
+
+    assert_eq!(report.rows.len(), 2);
+
+    let refund = report
+        .rows
+        .iter()
+        .find(|r| r.kind == "REFUND")
+        .expect("REFUND satırı bulunmalı");
+    assert_eq!(refund.amount_cents, 15000);
+    assert_eq!(refund.reason, "soğuk yemek telafisi");
+    assert_eq!(refund.approver_id, "usr_mgr");
+    assert_eq!(refund.approver_role, "MANAGER");
+
+    let waste = report
+        .rows
+        .iter()
+        .find(|r| r.kind == "WASTE")
+        .expect("WASTE satırı bulunmalı");
+    assert_eq!(waste.amount_cents, 8500);
+    assert_eq!(waste.reason, "tarihi geçmiş süt");
+    assert_eq!(waste.approver_id, "usr_mgr");
+    assert_eq!(waste.approver_role, "MANAGER");
+}

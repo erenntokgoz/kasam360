@@ -44,70 +44,214 @@ impl InventoryService {
                 .get("id")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| format!("STOCK: kalem {} için ürün kimliği eksik", item.id))?;
-            let mut remaining_demand = item.quantity as f64;
+            let sold_quantity = item.quantity as f64;
 
-            // En eski partileri kronolojik sırayla çek (FIFO prensibi)
-            let batch_rows = sqlx::query(
-                "SELECT id, remaining_quantity, unit_cost_cents \
-                 FROM inventory_batches \
-                 WHERE tenant_id = ? AND product_id = ? AND remaining_quantity > 0 \
-                 ORDER BY received_at ASC, id ASC",
+            // Önce bu ürün için aktif bir reçete var mı kontrol et
+            let active_recipe = sqlx::query(
+                "SELECT id, output_quantity, yield_percent \
+                 FROM recipes \
+                 WHERE tenant_id = ? AND product_id = ? AND is_active = 1",
             )
             .bind(tenant_id)
             .bind(product_id)
-            .fetch_all(&mut *conn)
+            .fetch_optional(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
 
             let mut item_cogs_cents: i64 = 0;
             let mut batch_allocations = Vec::new();
+            let rule_name: &str;
 
-            for b in batch_rows {
-                if remaining_demand <= 0.0 {
-                    break;
-                }
-                // Kolon okumaları sessizce varsayılana düşürülmez: `unit_cost_cents`
-                // NULL ise maliyet 0 olur ve kâr olduğundan çok görünür.
-                let b_id: String = b.try_get("id").map_err(|e| e.to_string())?;
-                let b_rem: f64 = b.try_get("remaining_quantity").map_err(|e| e.to_string())?;
-                let b_cost: i64 = b.try_get("unit_cost_cents").map_err(|e| e.to_string())?;
+            if let Some(recipe_row) = active_recipe {
+                rule_name = "FIFO_BOM_RECIPE";
+                let recipe_id: String = recipe_row.try_get("id").map_err(|e| e.to_string())?;
+                let output_quantity: f64 = recipe_row
+                    .try_get("output_quantity")
+                    .map_err(|e| e.to_string())?;
+                let yield_percent: f64 = recipe_row
+                    .try_get("yield_percent")
+                    .map_err(|e| e.to_string())?;
 
-                let take = remaining_demand.min(b_rem);
-                let cost = (take * b_cost as f64).round() as i64;
-                item_cogs_cents += cost;
-                remaining_demand -= take;
+                let yield_factor = if yield_percent <= 0.0 {
+                    1.0
+                } else {
+                    yield_percent / 100.0
+                };
+                let out_qty = if output_quantity <= 0.0 {
+                    1.0
+                } else {
+                    output_quantity
+                };
+                let recipe_scale = (sold_quantity / out_qty) / yield_factor;
 
-                sqlx::query(
-                    "UPDATE inventory_batches SET remaining_quantity = remaining_quantity - ? \
-                     WHERE tenant_id = ? AND id = ?",
+                let recipe_items = sqlx::query(
+                    "SELECT component_product_id, quantity, waste_percent \
+                     FROM recipe_items \
+                     WHERE tenant_id = ? AND recipe_id = ? \
+                     ORDER BY created_at ASC, id ASC",
                 )
-                .bind(take)
                 .bind(tenant_id)
-                .bind(&b_id)
-                .execute(&mut *conn)
+                .bind(&recipe_id)
+                .fetch_all(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?;
 
-                batch_allocations.push(serde_json::json!({
-                    "batchId": b_id,
-                    "quantity": take,
-                    "unitCostCents": b_cost,
-                    "totalCostCents": cost
-                }));
-            }
+                for ri in recipe_items {
+                    let comp_product_id: String = ri
+                        .try_get("component_product_id")
+                        .map_err(|e| e.to_string())?;
+                    let comp_qty: f64 = ri.try_get("quantity").map_err(|e| e.to_string())?;
+                    let waste_pct: f64 = ri.try_get("waste_percent").map_err(|e| e.to_string())?;
 
-            // Partilerden karşılanamayan bakiye: satış engellenmez (POS'ta satış
-            // her zaman alınabilir) ama miktar sıfır maliyetle geçiştirilmez;
-            // ayrı sayılır ve olaya yazılır.
-            if remaining_demand > 0.0 {
-                total_deficit += remaining_demand;
-                batch_allocations.push(serde_json::json!({
-                    "batchId": "UNTRACKED_DEFICIT",
-                    "quantity": remaining_demand,
-                    "unitCostCents": null,
-                    "totalCostCents": null,
-                    "reason": "Bu ürün için parti girişi yok; gerçek maliyet bilinmiyor."
-                }));
+                    let waste_factor = if waste_pct >= 100.0 {
+                        0.01
+                    } else {
+                        1.0 - (waste_pct / 100.0)
+                    };
+                    let mut comp_remaining_demand = (comp_qty / waste_factor) * recipe_scale;
+
+                    let batch_rows = sqlx::query(
+                        "SELECT id, remaining_quantity, unit_cost_cents \
+                         FROM inventory_batches \
+                         WHERE tenant_id = ? AND product_id = ? AND remaining_quantity > 0 \
+                         ORDER BY received_at ASC, id ASC",
+                    )
+                    .bind(tenant_id)
+                    .bind(&comp_product_id)
+                    .fetch_all(&mut *conn)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                    for b in batch_rows {
+                        if comp_remaining_demand <= 0.0 {
+                            break;
+                        }
+                        let b_id: String = b.try_get("id").map_err(|e| e.to_string())?;
+                        let b_rem: f64 =
+                            b.try_get("remaining_quantity").map_err(|e| e.to_string())?;
+                        let b_cost: i64 =
+                            b.try_get("unit_cost_cents").map_err(|e| e.to_string())?;
+
+                        let take = comp_remaining_demand.min(b_rem);
+                        let cost = (take * b_cost as f64).round() as i64;
+                        item_cogs_cents += cost;
+                        comp_remaining_demand -= take;
+
+                        sqlx::query(
+                            "UPDATE inventory_batches SET remaining_quantity = remaining_quantity - ? \
+                             WHERE tenant_id = ? AND id = ?",
+                        )
+                        .bind(take)
+                        .bind(tenant_id)
+                        .bind(&b_id)
+                        .execute(&mut *conn)
+                        .await
+                        .map_err(|e| e.to_string())?;
+
+                        batch_allocations.push(serde_json::json!({
+                            "componentProductId": comp_product_id,
+                            "batchId": b_id,
+                            "quantity": take,
+                            "unitCostCents": b_cost,
+                            "totalCostCents": cost
+                        }));
+                    }
+
+                    if comp_remaining_demand > 0.0 {
+                        total_deficit += comp_remaining_demand;
+                        batch_allocations.push(serde_json::json!({
+                            "componentProductId": comp_product_id,
+                            "batchId": "UNTRACKED_DEFICIT",
+                            "quantity": comp_remaining_demand,
+                            "unitCostCents": null,
+                            "totalCostCents": null,
+                            "reason": "Reçete bileşeni için parti girişi yok; gerçek maliyet bilinmiyor."
+                        }));
+                    }
+
+                    // Bileşenin stok miktarını düş
+                    sqlx::query(
+                        "UPDATE products SET stock_quantity = COALESCE(stock_quantity, 0) - ? \
+                         WHERE id = ? AND tenant_id = ? AND is_active = 1",
+                    )
+                    .bind(comp_qty * recipe_scale)
+                    .bind(&comp_product_id)
+                    .bind(tenant_id)
+                    .execute(&mut *conn)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                }
+            } else {
+                rule_name = "FIFO_DETERMINISTIC_BATCH";
+                let mut remaining_demand = sold_quantity;
+
+                // En eski partileri kronolojik sırayla çek (FIFO prensibi)
+                let batch_rows = sqlx::query(
+                    "SELECT id, remaining_quantity, unit_cost_cents \
+                     FROM inventory_batches \
+                     WHERE tenant_id = ? AND product_id = ? AND remaining_quantity > 0 \
+                     ORDER BY received_at ASC, id ASC",
+                )
+                .bind(tenant_id)
+                .bind(product_id)
+                .fetch_all(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
+
+                for b in batch_rows {
+                    if remaining_demand <= 0.0 {
+                        break;
+                    }
+                    let b_id: String = b.try_get("id").map_err(|e| e.to_string())?;
+                    let b_rem: f64 = b.try_get("remaining_quantity").map_err(|e| e.to_string())?;
+                    let b_cost: i64 = b.try_get("unit_cost_cents").map_err(|e| e.to_string())?;
+
+                    let take = remaining_demand.min(b_rem);
+                    let cost = (take * b_cost as f64).round() as i64;
+                    item_cogs_cents += cost;
+                    remaining_demand -= take;
+
+                    sqlx::query(
+                        "UPDATE inventory_batches SET remaining_quantity = remaining_quantity - ? \
+                         WHERE tenant_id = ? AND id = ?",
+                    )
+                    .bind(take)
+                    .bind(tenant_id)
+                    .bind(&b_id)
+                    .execute(&mut *conn)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                    batch_allocations.push(serde_json::json!({
+                        "batchId": b_id,
+                        "quantity": take,
+                        "unitCostCents": b_cost,
+                        "totalCostCents": cost
+                    }));
+                }
+
+                if remaining_demand > 0.0 {
+                    total_deficit += remaining_demand;
+                    batch_allocations.push(serde_json::json!({
+                        "batchId": "UNTRACKED_DEFICIT",
+                        "quantity": remaining_demand,
+                        "unitCostCents": null,
+                        "totalCostCents": null,
+                        "reason": "Bu ürün için parti girişi yok; gerçek maliyet bilinmiyor."
+                    }));
+                }
+
+                // Ürünlerden stok miktarını düş (kiracı filtresi zorunlu)
+                sqlx::query(
+                    "UPDATE products SET stock_quantity = COALESCE(stock_quantity, 0) - ? \
+                     WHERE id = ? AND tenant_id = ? AND is_active = 1",
+                )
+                .bind(item.quantity)
+                .bind(product_id)
+                .bind(tenant_id)
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
             }
 
             total_cogs_cents += item_cogs_cents;
@@ -117,20 +261,8 @@ impl InventoryService {
                 "quantity": item.quantity,
                 "totalCostCents": item_cogs_cents,
                 "batches": batch_allocations,
-                "rule": "FIFO_DETERMINISTIC_BATCH"
+                "rule": rule_name
             }));
-
-            // Ürünlerden stok miktarını düş (kiracı filtresi zorunlu)
-            sqlx::query(
-                "UPDATE products SET stock_quantity = COALESCE(stock_quantity, 0) - ? \
-                 WHERE id = ? AND tenant_id = ? AND is_active = 1",
-            )
-            .bind(item.quantity)
-            .bind(product_id)
-            .bind(tenant_id)
-            .execute(&mut *conn)
-            .await
-            .map_err(|e| e.to_string())?;
         }
 
         let fifo_payload = serde_json::json!({

@@ -166,77 +166,7 @@ pub async fn move_table(
 
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 
-    crate::services::reservation_service::assert_no_open_reservation(&mut tx, &tenant, &from_id)
-        .await?;
-    crate::services::reservation_service::assert_no_open_reservation(&mut tx, &tenant, &to_id)
-        .await?;
-
-    // Hedef masa dolu ise taşıma yapılamaz; birleştirme (merge) gereklidir.
-    let target_status: Option<String> =
-        sqlx::query_scalar("SELECT status FROM tables WHERE id = ? AND tenant_id = ?")
-            .bind(&to_id)
-            .bind(&tenant)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-
-    if target_status.as_deref() == Some("OCCUPIED") {
-        return Err("TARGET_OCCUPIED: Hedef masa dolu, lütfen merge_tables kullanın".to_string());
-    }
-
-    // Kaynak masanın garson ve açılış bilgilerini al
-    let source_info: Option<(Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT waiter_id, opened_at FROM tables WHERE id = ? AND tenant_id = ?")
-            .bind(&from_id)
-            .bind(&tenant)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-
-    let (src_waiter, src_opened) = source_info.unwrap_or((None, None));
-
-    // Siparişleri aktar
-    sqlx::query(
-        "UPDATE orders SET table_id = ? \
-         WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')",
-    )
-    .bind(&to_id)
-    .bind(&from_id)
-    .bind(&tenant)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    // Hedef masayı aç, garson ve açılış bilgilerini taşı, yürüyen toplamı güncelle
-    sqlx::query(
-        "UPDATE tables \
-         SET status = 'OCCUPIED', \
-             waiter_id = COALESCE(?, waiter_id), \
-             opened_at = COALESCE(?, opened_at, datetime('now')), \
-             current_total = (SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')) \
-         WHERE id = ? AND tenant_id = ?",
-    )
-    .bind(&src_waiter)
-    .bind(&src_opened)
-    .bind(&to_id)
-    .bind(&tenant)
-    .bind(&to_id)
-    .bind(&tenant)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    // Kaynak masayı serbest bırak ve sıfırla
-    sqlx::query(
-        "UPDATE tables \
-         SET status = 'AVAILABLE', current_total = 0, waiter_id = NULL, opened_at = NULL \
-         WHERE id = ? AND tenant_id = ?",
-    )
-    .bind(&from_id)
-    .bind(&tenant)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
+    execute_move_table(&mut tx, &tenant, &from_id, &to_id).await?;
 
     let now_iso = chrono::Utc::now().to_rfc3339();
     let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
@@ -257,6 +187,87 @@ pub async fn move_table(
     crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub async fn execute_move_table(
+    conn: &mut sqlx::SqliteConnection,
+    tenant: &str,
+    from_id: &str,
+    to_id: &str,
+) -> Result<(), String> {
+    crate::services::reservation_service::assert_no_open_reservation(&mut *conn, tenant, from_id)
+        .await?;
+    crate::services::reservation_service::assert_no_open_reservation(&mut *conn, tenant, to_id)
+        .await?;
+
+    // Hedef masa dolu ise taşıma yapılamaz; birleştirme (merge) gereklidir.
+    let target_status: Option<String> =
+        sqlx::query_scalar("SELECT status FROM tables WHERE id = ? AND tenant_id = ?")
+            .bind(to_id)
+            .bind(tenant)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    if target_status.as_deref() == Some("OCCUPIED") {
+        return Err("TARGET_OCCUPIED: Hedef masa dolu, lütfen merge_tables kullanın".to_string());
+    }
+
+    // Kaynak masanın garson ve açılış bilgilerini al
+    let source_info: Option<(Option<String>, Option<String>)> =
+        sqlx::query_as("SELECT waiter_id, opened_at FROM tables WHERE id = ? AND tenant_id = ?")
+            .bind(from_id)
+            .bind(tenant)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    let (src_waiter, src_opened) = source_info.unwrap_or((None, None));
+
+    // Siparişleri aktar
+    sqlx::query(
+        "UPDATE orders SET table_id = ? \
+         WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')",
+    )
+    .bind(to_id)
+    .bind(from_id)
+    .bind(tenant)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Hedef masayı aç, garson ve açılış bilgilerini taşı, yürüyen toplamı güncelle
+    sqlx::query(
+        "UPDATE tables \
+         SET status = 'OCCUPIED', \
+             waiter_id = COALESCE(?, waiter_id), \
+             opened_at = COALESCE(?, opened_at, datetime('now')), \
+             current_total = (SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')) \
+         WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(&src_waiter)
+    .bind(&src_opened)
+    .bind(to_id)
+    .bind(tenant)
+    .bind(to_id)
+    .bind(tenant)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Kaynak masayı serbest bırak ve sıfırla
+    sqlx::query(
+        "UPDATE tables \
+         SET status = 'AVAILABLE', current_total = 0, waiter_id = NULL, opened_at = NULL \
+         WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(from_id)
+    .bind(tenant)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+
     Ok(())
 }
 

@@ -8,6 +8,7 @@
 //! şema ve bağlantıyı taşır, kalan modüller yalnız kendi alanının
 //! regresyonlarını yazar.
 
+mod fifo_bom;
 mod price_lists_windows;
 mod pricing;
 mod recipes;

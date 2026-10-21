@@ -313,7 +313,7 @@ pub async fn adjustments_report(
     let rows = sqlx::query(
         "SELECT action, resource_id, actor_id, actor_role, timestamp, payload \
          FROM audit_ledger \
-         WHERE tenant_id = ? AND action IN ('order:voided', 'payment:refund', 'stock:waste') \
+         WHERE tenant_id = ? AND action IN ('order:voided', 'compensation:refund', 'payment:refund', 'stok:waste_recorded', 'stock:waste') \
            AND timestamp >= ? AND timestamp <= ? \
          ORDER BY timestamp DESC",
     )
@@ -341,29 +341,39 @@ pub async fn adjustments_report(
         let payload: serde_json::Value =
             serde_json::from_str(&payload_text).unwrap_or(serde_json::Value::Null);
 
-        let (kind, amount_key) = match action.as_str() {
+        let (kind, amount_cents) = match action.as_str() {
             "order:voided" => {
                 seen_void = true;
-                ("VOID", "orderTotalCents")
+                let amt = payload
+                    .get("orderTotalCents")
+                    .and_then(|v| v.as_i64())
+                    .ok_or_else(|| {
+                        "VOID kaydında 'orderTotalCents' tutarı okunamadı.".to_string()
+                    })?;
+                ("VOID", amt)
             }
-            "payment:refund" => {
+            "compensation:refund" | "payment:refund" => {
                 seen_refund = true;
-                ("REFUND", "amountCents")
+                let amt = payload
+                    .get("amountCents")
+                    .and_then(|v| v.as_i64())
+                    .ok_or_else(|| "REFUND kaydında 'amountCents' tutarı okunamadı.".to_string())?;
+                ("REFUND", amt)
             }
-            _ => {
+            "stok:waste_recorded" | "stock:waste" => {
                 seen_waste = true;
-                ("WASTE", "amountCents")
+                let amt = payload
+                    .get("totalCostCents")
+                    .or_else(|| payload.get("amountCents"))
+                    .and_then(|v| v.as_i64())
+                    .ok_or_else(|| {
+                        "WASTE kaydında 'totalCostCents' veya 'amountCents' tutarı okunamadı."
+                            .to_string()
+                    })?;
+                ("WASTE", amt)
             }
+            _ => continue,
         };
-
-        // Tutar payload içinden gelir. Anahtar eksikse hata yükselir: `0`
-        // yazmak "bu hareket 0 tutarındı" uydurması olurdu. `refund` ve
-        // `waste` yazma yolları henüz olmadığı için payload anahtarı yoksa
-        // rapor hata döner; ekran "bu hareket için kayıt yok" gösterir.
-        let amount_cents = payload
-            .get(amount_key)
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| format!("{} kaydında '{}' tutarı okunamadı.", kind, amount_key))?;
         let approver_id = payload
             .get("approverId")
             .and_then(|v| v.as_str())

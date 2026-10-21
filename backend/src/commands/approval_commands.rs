@@ -27,7 +27,7 @@ pub struct VerifyManagerPinPayload {
     #[serde(default)]
     pub terminal_id: Option<String>,
     pub pin: String,
-    /// Oturum tenant'ı. Oturum token'ı olmadığı için bu fazda çağıran
+    /// Oturum tenant'ı. Oturum token'ı olmadığı için doğrudan çağıran
     /// tarafından gelir; onaylayan PIN yine de yalnız bu tenant içinde aranır.
     #[serde(default)]
     pub tenant_id: Option<String>,
