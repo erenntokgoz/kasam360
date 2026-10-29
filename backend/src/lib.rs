@@ -60,10 +60,6 @@ pub fn run() {
                     .await
                     .map_err(|e| Box::new(std::io::Error::other(e.to_string())))?;
 
-                // Outbox dispatcher worker'ı (30 sn aralıkla
-                // PENDING olayları teslim eder, retry/dead_letter yönetir).
-                crate::services::outbox_dispatcher::spawn_outbox_worker(pool.clone());
-
                 app.manage(pool);
                 app.manage(AppState {
                     payment_mutex: tokio::sync::Mutex::new(()),

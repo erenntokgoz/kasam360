@@ -1,16 +1,10 @@
 //! Outbox dispatcher — harici sistemlere olay teslimatı.
 //!
-//! `outbox` tablosuna `PENDING` olarak yazılan olaylar (sipariş,
-//! ödeme, FIFO parti) bu worker tarafından 30 saniyede bir
-//! taranır. Teslimat başarısız olursa kayıt `retry_count` ile
-//! yeniden denenir; `MAX_RETRY` üstünde `DEAD_LETTER` durumuna
-//! düşer ve kaybolmaz (AGENTS.md §2: audit zinciri gibi,
-//! outbox da sessiz kaybolan bir olay akışı değildir).
+//! Gerçek teslimat kanalı bağlanana kadar olaylar `PENDING` kalır.
+//! Günlüğe yazmak teslimat sayılmaz; aksi halde olay kaybolur.
 //!
 //! Neden servis katmanı: dispatcher `tauri::State` taşımadan
-//! sınanabilir; worker döngüsü (`spawn_outbox_worker`) üretim
-//! sürecinde bir kez başlatılır, testlerde doğrudan
-//! `dispatch_pending` tetiklenir.
+//! sınanabilir; gerçek teslimat kanalı `dispatch_pending` çağırır.
 
 use std::future::Future;
 use std::time::Duration;
@@ -21,9 +15,6 @@ use crate::db::DbPool;
 
 /// Başarısız deneme üstünde kayıt ölü mektup kutusuna düşer.
 pub const MAX_RETRY: i64 = 3;
-
-/// Worker tetikleme aralığı (saniye).
-pub const DISPATCH_INTERVAL_SN: u64 = 30;
 
 /// Bir teslimat çağrısının üst sınırı (saniye).
 ///
@@ -150,50 +141,6 @@ async fn yenile_veya_soluk_ileti(
         ozet.yeniden_denenecek += 1;
     }
     Ok(())
-}
-
-/// 30 saniyede bir PENDING outbox'ı taramak üzere arka plan
-/// işçisini başlatır.
-///
-/// Neden ayrı iş: dispatcher Tauri komutlarından bağımsız
-/// çalışır — uygulama başlatılır başlatılmaz teslimat kuyruğu
-/// boşaltılır. Hata döngüyü kıraca değildir:tek tur hatalıysa
-/// günlüğe yazılır, sonraki tur yeniden denenir.
-pub fn spawn_outbox_worker(pool: DbPool) -> tauri::async_runtime::JoinHandle<()> {
-    tauri::async_runtime::spawn(async move {
-        let mut aralik = tokio::time::interval(Duration::from_secs(DISPATCH_INTERVAL_SN));
-        loop {
-            aralik.tick().await;
-            let ozet = dispatch_pending(&pool, |kiraci, olay| {
-                let kiraci = kiraci.to_string();
-                let olay = olay.to_string();
-                async move {
-                    // Yerel ön uç: olay yapılandırılmış günlüğe
-                    // işlenir. Gerçek bir harici uç (QR menü,
-                    // muhasebe) eklenince bu kapatıcı değiştirilir;
-                    // retry/dead_letter sözleşmesi aynı kalır.
-                    tracing::info!("outbox::dispatcher: teslim edildi kiraci={kiraci} olay={olay}");
-                    Ok(())
-                }
-            })
-            .await;
-            match ozet {
-                Ok(ozet) if ozet.islenen > 0 => {
-                    tracing::info!(
-                        "outbox::dispatcher: tur islenen={} teslim={} retry={} soluk_ileti={}",
-                        ozet.islenen,
-                        ozet.teslim_edilen,
-                        ozet.yeniden_denenecek,
-                        ozet.soluk_ileti
-                    );
-                }
-                Ok(_) => {}
-                Err(hata) => {
-                    tracing::warn!("outbox::dispatcher: tur hatasi: {hata}");
-                }
-            }
-        }
-    })
 }
 
 #[cfg(test)]
