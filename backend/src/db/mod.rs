@@ -193,6 +193,13 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // `_migrations` tablosunda version takibi yapar, calistirilmis
     // migration'ları tekrar calistirmez.
     migrate::run_migrations(&pool).await?;
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_inbox_source_sequence
+         ON sync_inbox(tenant_id, source_device_id, source_sequence)
+         WHERE source_sequence IS NOT NULL",
+    )
+    .execute(&pool)
+    .await?;
 
     // Eğer yoksa order_items tablosunu oluştur
     // `tenant_id` üzerinde varsayılan YOK: bind edilmemiş

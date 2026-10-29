@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS sync_inbox (
     operation_id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,
     source_device_id TEXT NOT NULL,
+    source_sequence INTEGER CHECK (source_sequence > 0),
     payload TEXT NOT NULL CHECK (json_valid(payload)),
     status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPLIED')),
     received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
