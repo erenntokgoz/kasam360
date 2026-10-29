@@ -182,7 +182,7 @@ pub async fn authenticate_by_identifier(
     }
 
     let row = sqlx::query(
-        "SELECT id, role, name, tenant_id, credential_hash FROM users WHERE is_active = 1 AND (login_identifier = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?)",
+        "SELECT id, role, name, tenant_id, credential_hash, must_change_pin FROM users WHERE is_active = 1 AND (login_identifier = ? COLLATE NOCASE OR email = ? COLLATE NOCASE OR id = ?)",
     )
     .bind(identifier)
     .bind(identifier)
@@ -298,30 +298,15 @@ pub async fn authenticate_by_pin(
         Some(found) => {
             basari_sifirla(&mut conn, &kapsam).await?;
             drop(conn);
-            // Fabrika öntanımlı PIN ile iş istasyonuna
-            // giriş yasaktır; kullanıcı PIN'ini değiştirene kadar
-            // reddedilir. `change_self_pin` mevcut PIN'i doğruladığı
-            // için döngü oluşmaz: fabrika PIN'i biliniyor, değiştir
-            // edilebiliyor, sonra normal giriş açılıyor.
-            // Kolon eksikse hata yükselir — varsayılan kiracıya
-            // sessiz düşülmez (AGENTS.md §3.3/§3.4).
-            let must_degis: i64 =
-                sqlx::query_scalar("SELECT must_change_pin FROM users WHERE id = ?")
-                    .bind(&found.id)
-                    .fetch_one(pool)
-                    .await
-                    .map_err(|e| e.to_string())?;
-            if must_degis != 0 {
-                return Err(
-                    "MUST_CHANGE_PIN: Güvenlik: ilk girişte PIN değiştirilmesi zorunludur."
-                        .to_string(),
-                );
-            }
-            let row = sqlx::query("SELECT id, role, name, tenant_id FROM users WHERE id = ?")
-                .bind(&found.id)
-                .fetch_one(pool)
-                .await
-                .map_err(|e| e.to_string())?;
+            // İlk girişte doğrulanmış kimlik döner, ancak arayüz
+            // `mustChangePin` kapanana kadar iş istasyonunu açmaz.
+            let row = sqlx::query(
+                "SELECT id, role, name, tenant_id, must_change_pin FROM users WHERE id = ?",
+            )
+            .bind(&found.id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| e.to_string())?;
             user_dto_with_modules(pool, &row).await
         }
         None => {

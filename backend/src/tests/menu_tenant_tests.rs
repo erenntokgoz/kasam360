@@ -102,6 +102,27 @@ async fn olmayan_kayit_reddedilir() {
     assert!(hata.starts_with("NOT_FOUND"), "beklenen hata: {hata}");
 }
 
+#[tokio::test]
+async fn dolu_kategori_urunleriyle_birlikte_silinmez() {
+    let p = pool().await;
+    sqlx::query(
+        "INSERT INTO categories (id, tenant_id, name) VALUES ('cat_a', 'tenant_a', 'Kahve')",
+    )
+    .execute(&p)
+    .await
+    .expect("kategori");
+    sqlx::query("INSERT INTO products (id, tenant_id, category_id, name) VALUES ('prd_a', 'tenant_a', 'cat_a', 'Filtre')")
+        .execute(&p)
+        .await
+        .expect("urun");
+    let mut conn = p.acquire().await.expect("baglanti");
+    let hata =
+        crate::management_commands::category::ensure_empty_category(&mut conn, "cat_a", "tenant_a")
+            .await
+            .expect_err("dolu kategori silinmemeli");
+    assert!(hata.starts_with("VALIDATION"), "{hata}");
+}
+
 // ---------------------------------------------------------------------------
 // Kaynak sözleşmesi: her SQL'de tenant_id
 // ---------------------------------------------------------------------------

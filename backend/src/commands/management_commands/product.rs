@@ -5,9 +5,9 @@
 //! islemi de ayni kiraciyi sinar; aksi halde urun baska isletmenin kategorisine
 //! baglanir ve menu orada gorunur.
 
+use crate::id_generator::generate_id;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use uuid::Uuid;
 
 use super::{audit_actor, ensure_owned, record_audit, require_tenant};
 use crate::db::DbPool;
@@ -121,7 +121,7 @@ pub async fn create_product(
         .await
         .map_err(|e| e.to_string())?;
     let result: Result<ProductDto, String> = async {
-        let id = Uuid::new_v4().to_string();
+        let id = generate_id("prd");
         // Kategori kimliği başka işletmeye aitse ürün o işletmenin menüsünde
         // görünür. INSERT öncesi sınanır.
         ensure_owned(&mut conn, "categories", &category_id, &tenant_id).await?;

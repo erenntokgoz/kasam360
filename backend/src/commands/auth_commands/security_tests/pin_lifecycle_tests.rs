@@ -3,11 +3,28 @@
 use super::*;
 use sqlx::Acquire;
 
-/// Fabrika öntanımlı PIN ile iş istasyonuna giriş
-/// reddedilir; bayrağı kapalı hesap aynı kiracıda
-/// normal girer.
 #[tokio::test]
-async fn fabrika_pin_ile_giris_reddedilir() {
+async fn hesap_girisi_de_pin_degisimini_zorlar() {
+    let pool = havuz().await;
+    let hash = crate::auth::hash_credential("ornek-parola").expect("hashlenir");
+    sqlx::query(
+        "INSERT INTO users (id, tenant_id, role, name, credential_hash, login_identifier, is_active, must_change_pin)
+         VALUES ('usr_cred', 'tnt_cred', 'OWNER', 'Test', ?, 'ornek', 1, 1)",
+    )
+    .bind(hash)
+    .execute(&pool)
+    .await
+    .expect("kullanici");
+    let oturum = authenticate_by_identifier(&pool, "ornek", "ornek-parola")
+        .await
+        .expect("hesap dogrulandi");
+    assert!(oturum.must_change_pin);
+}
+
+/// Fabrika PIN'i yalnız PIN değiştirme ekranını açar;
+/// bayrağı kapalı hesap iş istasyonuna girer.
+#[tokio::test]
+async fn fabrika_pin_ile_yalniz_degisim_ekrani_acilir() {
     let pool = havuz().await;
 
     // Fabrika PIN'li hesap (must_change_pin = 1).
@@ -33,18 +50,16 @@ async fn fabrika_pin_ile_giris_reddedilir() {
     .expect("kullanici yazilir");
     drop(conn);
 
-    let hata = authenticate_by_pin(&pool, "1111", Some("tnt_test"))
+    let ilk_giris = authenticate_by_pin(&pool, "1111", Some("tnt_test"))
         .await
-        .expect_err("fabrika PIN'i girmemeli");
-    assert!(
-        hata.starts_with("MUST_CHANGE_PIN"),
-        "hata MUST_CHANGE_PIN olmalı: {hata}"
-    );
+        .expect("PIN değişimi için kimlik dönmeli");
+    assert!(ilk_giris.must_change_pin);
 
     let oturum = authenticate_by_pin(&pool, "2222", Some("tnt_test"))
         .await
         .expect("bayrağı kapalı hesap girer");
     assert_eq!(oturum.id, "usr_owner_test");
+    assert!(!oturum.must_change_pin);
 }
 
 /// PIN değişimi ilk giriş zorlamasını bitirir:
@@ -66,10 +81,10 @@ async fn pin_degisim_tx_ilk_giris_zorlamasini_bitirir() {
     .expect("kullanici yazilir");
     drop(conn);
 
-    let hata = authenticate_by_pin(&pool, "2222", Some("tnt_pin"))
+    let ilk_giris = authenticate_by_pin(&pool, "2222", Some("tnt_pin"))
         .await
-        .expect_err("fabrika PIN'i girmemeli");
-    assert!(hata.starts_with("MUST_CHANGE_PIN"), "{hata}");
+        .expect("PIN değişimi için kimlik dönmeli");
+    assert!(ilk_giris.must_change_pin);
 
     // Kullanıcı kendi PIN'ini değiştirir: mevcut PIN
     // (fabrika öntanımlı) doğrulandı, yeni PIN yazılır,
@@ -88,6 +103,7 @@ async fn pin_degisim_tx_ilk_giris_zorlamasini_bitirir() {
         .await
         .expect("yeni PIN ile girer");
     assert_eq!(oturum.id, "usr_pin");
+    assert!(!oturum.must_change_pin);
 
     let hata = authenticate_by_pin(&pool, "2222", Some("tnt_pin"))
         .await

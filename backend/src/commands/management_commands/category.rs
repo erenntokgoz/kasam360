@@ -5,9 +5,9 @@
 //! filtre degildir; kimlikler global benzersiz olsa bile baska isletmenin
 //! kaydina isaret edebilir.
 
+use crate::id_generator::generate_id;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use uuid::Uuid;
 
 use super::{audit_actor, ensure_owned, record_audit, require_tenant};
 use crate::db::DbPool;
@@ -23,6 +23,24 @@ pub struct CategoryDto {
     pub icon: Option<String>,
     #[serde(default)]
     pub default_station: Option<String>,
+}
+
+pub(crate) async fn ensure_empty_category(
+    conn: &mut sqlx::SqliteConnection,
+    category_id: &str,
+    tenant_id: &str,
+) -> Result<(), String> {
+    let product_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM products WHERE category_id = ? AND tenant_id = ?")
+            .bind(category_id)
+            .bind(tenant_id)
+            .fetch_one(conn)
+            .await
+            .map_err(|e| e.to_string())?;
+    if product_count > 0 {
+        return Err("VALIDATION: Ürün içeren kategori silinemez. Önce ürünleri taşıyın.".into());
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -81,7 +99,7 @@ pub async fn create_category(
         .await
         .map_err(|e| e.to_string())?;
     let result: Result<CategoryDto, String> = async {
-        let id = Uuid::new_v4().to_string();
+        let id = generate_id("cat");
         sqlx::query(
             "INSERT INTO categories (id, tenant_id, name, display_order, icon, default_station) VALUES (?, ?, ?, ?, ?, ?)",
         )
@@ -270,16 +288,7 @@ pub async fn delete_category(
         .await
         .map_err(|e| e.to_string())?;
     let result: Result<(), String> = async {
-        // `category_id` tek başına filtre değildir: kategoriler kimlik global
-        // benzersiz olsa bile tenant'sız DELETE başka işletmenin ürünlerini
-        // silerdi. İki filtre birlikte zorunlu.
-        let removed_products =
-            sqlx::query("DELETE FROM products WHERE category_id = ? AND tenant_id = ?")
-                .bind(&id)
-                .bind(&tenant_id)
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
+        ensure_empty_category(&mut conn, &id, &tenant_id).await?;
 
         sqlx::query("DELETE FROM categories WHERE id = ? AND tenant_id = ?")
             .bind(&id)
@@ -288,8 +297,6 @@ pub async fn delete_category(
             .await
             .map_err(|e| e.to_string())?;
 
-        // Kategori silinince altındaki ürünler de silinir; kaç ürünün etkilendiği
-        // defterde görünmelidir, aksi halde menü kaydı izlenemez.
         record_audit(
             &mut conn,
             &lock,
@@ -301,7 +308,7 @@ pub async fn delete_category(
             &id,
             serde_json::json!({
                 "name": previous_name,
-                "removedProductCount": removed_products.rows_affected(),
+                "removedProductCount": 0,
             }),
         )
         .await?;
