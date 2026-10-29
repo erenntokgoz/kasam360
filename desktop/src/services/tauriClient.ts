@@ -57,16 +57,24 @@ async function handleMockIPC<T>(command: string, args: Record<string, unknown>):
   await new Promise((r) => setTimeout(r, 10));
 
   switch (command) {
-    case 'auth_login':
-    case 'auth_login_credentials': {
+    case 'auth_login': {
+      if (!import.meta.env.DEV) throw new Error('Giriş için masaüstü uygulaması gerekli.');
+      const pin = args.pin;
+      const match = typeof pin === 'string' ? /^([1-6])\1{3}$/.exec(pin) : null;
+      if (!match) throw new Error('Geçersiz PIN');
+      const role = ['MASTER', 'OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN'][Number(match[1]) - 1];
       return {
-        userId: 'usr_patron',
-        name: 'Eren Tokgöz',
-        role: 'OWNER',
-        tenantId: 'ten_01',
-        token: 'tok_demo_patron_360',
-      } as unknown as T;
+        id: `usr_demo_${role.toLowerCase()}`,
+        name: role,
+        role,
+        tenant_id: 'ten_01',
+        activeModules: ['feat_kds', 'feat_table_order', 'feat_recipe_bom', 'feat_ledger_cari'],
+        mustChangePin: false,
+      } as T;
     }
+
+    case 'auth_login_credentials':
+      throw new Error('Hesap girişi için masaüstü uygulaması gerekli.');
 
     case 'get_floor_plan':
     case 'get_floor_layout': {

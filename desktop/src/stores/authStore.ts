@@ -1,135 +1,88 @@
 import { create } from 'zustand';
 import type { UserRole, UserSession } from '../types/auth';
 import { invokeIPC } from '../services/tauriClient';
+import { useFeatureStore } from './featureStore';
 
 interface AuthStore {
   user: UserSession | null;
   isAuthenticated: boolean;
   isLocked: boolean;
-  isActivated: boolean;
   mustChangePin: boolean;
   loginError: string | null;
   loginWithPin: (pin: string) => Promise<boolean>;
   loginWithCredentials: (identifier: string, secret: string) => Promise<boolean>;
-  activateBranch: (email: string, secret: string, licenseKey: string) => Promise<boolean>;
   changeSelfPin: (currentPin: string, newPin: string) => Promise<boolean>;
   lock: () => void;
   unlock: () => void;
   logout: () => void;
 }
 
-const PIN_ROLE_MAP: Record<string, { role: UserRole; name: string; mustChange?: boolean }> = {
-  '1111': { role: 'MASTER', name: 'Sistem Yöneticisi', mustChange: true },
-  '2222': { role: 'OWNER', name: 'Eren Tokgöz (Patron)' },
-  '3333': { role: 'MANAGER', name: 'Ahmet Müdür' },
-  '4444': { role: 'CASHIER', name: 'Kasa Personeli' },
-  '5555': { role: 'WAITER', name: 'Garson Servis' },
-  '6666': { role: 'KITCHEN', name: 'Mutfak Şefi' },
-};
+interface AuthReply {
+  id: string;
+  name: string;
+  role: string;
+  tenant_id: string;
+  activeModules: string[];
+  mustChangePin: boolean;
+}
 
-export const useAuthStore = create<AuthStore>((set) => ({
-  user: {
-    userId: 'usr_patron_01',
-    name: 'Eren Tokgöz',
-    role: 'OWNER',
-    tenantId: 'ten_01',
-  },
-  isAuthenticated: true,
+const roles: UserRole[] = ['MASTER', 'OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN'];
+
+function readSession(reply: AuthReply): UserSession {
+  if (!reply || !reply.id || !reply.name || !reply.tenant_id ||
+      !roles.includes(reply.role as UserRole) || !Array.isArray(reply.activeModules)) {
+    throw new Error('Giriş yanıtı geçersiz.');
+  }
+  return {
+    userId: reply.id,
+    name: reply.name,
+    role: reply.role as UserRole,
+    tenantId: reply.tenant_id,
+    activeModules: reply.activeModules,
+    mustChangePin: reply.mustChangePin,
+  };
+}
+
+export const useAuthStore = create<AuthStore>((set, get) => ({
+  user: null,
+  isAuthenticated: false,
   isLocked: false,
-  isActivated: true,
   mustChangePin: false,
   loginError: null,
 
-  loginWithPin: async (pin: string) => {
+  loginWithPin: async (pin) => {
     try {
-      // IPC veya Rol Haritası
-      const mapped = PIN_ROLE_MAP[pin];
-      if (!mapped) {
-        set({ loginError: 'Geçersiz PIN kodu. Lütfen tekrar deneyin.' });
-        return false;
-      }
-
-      await invokeIPC('auth_login', { pin });
-
-      const session: UserSession = {
-        userId: `usr_${mapped.role.toLowerCase()}`,
-        name: mapped.name,
-        role: mapped.role,
-        tenantId: 'ten_01',
-        mustChangePin: mapped.mustChange,
-      };
-
-      set({
-        user: session,
-        isAuthenticated: true,
-        isLocked: false,
-        mustChangePin: !!mapped.mustChange,
-        loginError: null,
-      });
-
+      const reply = await invokeIPC<AuthReply>('auth_login', { pin });
+      const session = readSession(reply);
+      useFeatureStore.getState().setModules(session.activeModules ?? []);
+      set({ user: session, isAuthenticated: true, isLocked: false,
+        mustChangePin: !!session.mustChangePin, loginError: null });
       return true;
-    } catch {
-      set({ loginError: 'Giriş yapılamadı. Bağlantı veya PIN hatası.' });
+    } catch (error) {
+      set({ loginError: error instanceof Error ? error.message : String(error) });
       return false;
     }
   },
 
-  loginWithCredentials: async (identifier: string, secret: string) => {
+  loginWithCredentials: async (identifier, secret) => {
     try {
-      await invokeIPC('auth_login_credentials', { identifier, secret });
-
-      const session: UserSession = {
-        userId: 'usr_patron_01',
-        name: identifier.split('@')[0] || 'İşletme Sahibi',
-        role: 'OWNER',
-        tenantId: 'ten_01',
-      };
-
-      set({
-        user: session,
-        isAuthenticated: true,
-        isLocked: false,
-        mustChangePin: false,
-        loginError: null,
-      });
-
+      const reply = await invokeIPC<AuthReply>('auth_login_credentials', { identifier, secret });
+      const session = readSession(reply);
+      useFeatureStore.getState().setModules(session.activeModules ?? []);
+      set({ user: session, isAuthenticated: true, isLocked: false,
+        mustChangePin: !!session.mustChangePin, loginError: null });
       return true;
-    } catch {
-      set({ loginError: 'Geçersiz hesap bilgileri.' });
+    } catch (error) {
+      set({ loginError: error instanceof Error ? error.message : String(error) });
       return false;
     }
   },
 
-  activateBranch: async (email: string, secret: string, licenseKey: string) => {
+  changeSelfPin: async (currentPin, newPin) => {
+    const userId = get().user?.userId;
+    if (!userId) return false;
     try {
-      await invokeIPC('auth_activate_license', { email, secret, licenseKey });
-
-      const session: UserSession = {
-        userId: 'usr_patron_01',
-        name: email.split('@')[0] || 'İşletme Sahibi',
-        role: 'OWNER',
-        tenantId: 'ten_01',
-      };
-
-      set({
-        user: session,
-        isAuthenticated: true,
-        isLocked: false,
-        isActivated: true,
-        mustChangePin: false,
-        loginError: null,
-      });
-
-      return true;
-    } catch {
-      set({ loginError: 'Aktivasyon başarısız. Lisans anahtarını kontrol edin.' });
-      return false;
-    }
-  },
-
-  changeSelfPin: async (currentPin: string, newPin: string) => {
-    try {
-      await invokeIPC('change_self_pin', { currentPin, newPin });
+      await invokeIPC('change_self_pin', { userId, currentPin, newPin });
       set({ mustChangePin: false });
       return true;
     } catch {
@@ -139,12 +92,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
   lock: () => set({ isLocked: true }),
   unlock: () => set({ isLocked: false }),
-  logout: () =>
-    set({
-      user: null,
-      isAuthenticated: false,
-      isLocked: false,
-      mustChangePin: false,
-      loginError: null,
-    }),
+  logout: () => {
+    useFeatureStore.getState().setModules([]);
+    set({ user: null, isAuthenticated: false, isLocked: false,
+      mustChangePin: false, loginError: null });
+  },
 }));

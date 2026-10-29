@@ -15,7 +15,7 @@ import { PaymentModal } from '../features/payment/PaymentModal';
 import { ReceiptPreviewModal } from '../features/receipt/ReceiptPreviewModal';
 
 export const App: React.FC = () => {
-  const { isAuthenticated, isLocked, lock, user } = useAuthStore();
+  const { isAuthenticated, isLocked, mustChangePin, lock, user } = useAuthStore();
   const {
     activeModule,
     setActiveModule,
@@ -61,6 +61,7 @@ export const App: React.FC = () => {
   // Donanım Kısayolları (F1 - F5)
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
+      if (!isAuthenticated || isLocked || mustChangePin) return;
       if (e.key === 'F1') {
         e.preventDefault();
         setActiveModule('FLOOR');
@@ -81,7 +82,16 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleGlobalKeys);
     return () => window.removeEventListener('keydown', handleGlobalKeys);
-  }, [setActiveModule, user?.role]);
+  }, [setActiveModule, user?.role, isAuthenticated, isLocked, mustChangePin]);
+
+  if (!isAuthenticated || isLocked || mustChangePin) {
+    return (
+      <div className="h-screen w-screen bg-[var(--bg-canvas)]">
+        <LoginOverlay />
+        <MustChangePinModal />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] select-none">

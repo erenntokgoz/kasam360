@@ -13,8 +13,8 @@ export const LoginOverlay: React.FC = () => {
 
   const [authMethod, setAuthMethod] = useState<'PIN' | 'CRED'>('PIN');
   const [pinDigits, setPinDigits] = useState<string>('');
-  const [identifier, setIdentifier] = useState('eren@kasam360.com');
-  const [secret, setSecret] = useState('123456');
+  const [identifier, setIdentifier] = useState('');
+  const [secret, setSecret] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clockStr, setClockStr] = useState(formatDateTime());
   const [shake, setShake] = useState(false);
@@ -27,25 +27,24 @@ export const LoginOverlay: React.FC = () => {
   const shouldShow = !isAuthenticated || isLocked;
   if (!shouldShow) return null;
 
-  const handleDigit = async (d: string) => {
-    if (pinDigits.length >= 4) return;
-    const next = pinDigits + d;
-    setPinDigits(next);
+  const handleDigit = (d: string) => {
+    if (pinDigits.length < 8) setPinDigits((current) => current + d);
+  };
 
-    if (next.length === 4) {
-      setIsSubmitting(true);
-      const success = await loginWithPin(next);
-      setIsSubmitting(false);
-      if (success) {
+  const handlePinSubmit = async () => {
+    if (pinDigits.length < 4 || isSubmitting) return;
+    setIsSubmitting(true);
+    const success = await loginWithPin(pinDigits);
+    setIsSubmitting(false);
+    if (success) {
+      setPinDigits('');
+      resetIdleTimer();
+    } else {
+      setShake(true);
+      setTimeout(() => {
+        setShake(false);
         setPinDigits('');
-        resetIdleTimer();
-      } else {
-        setShake(true);
-        setTimeout(() => {
-          setShake(false);
-          setPinDigits('');
-        }, 500);
-      }
+      }, 500);
     }
   };
 
@@ -74,7 +73,7 @@ export const LoginOverlay: React.FC = () => {
       {/* Üst Satır */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs text-white bg-[var(--accent-amber)] shadow-sm">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs text-[var(--text-primary)] bg-[var(--accent-amber)] shadow-sm">
             360
           </div>
           <span className="font-bold text-base tracking-tight text-[var(--text-primary)]">KASAM360</span>
@@ -87,7 +86,7 @@ export const LoginOverlay: React.FC = () => {
           className="!min-h-[38px] !px-3"
           aria-label="Tema Değiştir"
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
+          {theme === 'dark' ? <Sun className="w-4 h-4 text-[var(--accent-amber)]" /> : <Moon className="w-4 h-4 text-[var(--text-tertiary)]" />}
           <span>{theme === 'dark' ? 'Açık Tema' : 'Koyu Tema'}</span>
         </Button>
       </div>
@@ -104,7 +103,7 @@ export const LoginOverlay: React.FC = () => {
               {isLocked ? 'Terminal Kilitli' : 'Personel Girişi'}
             </h1>
             <p className="text-xs mt-1 text-[var(--text-secondary)]">
-              Devam etmek için 4 haneli PIN kodunuzu girin
+              Devam etmek için 4-8 haneli PIN kodunuzu girin
             </p>
           </div>
 
@@ -148,7 +147,7 @@ export const LoginOverlay: React.FC = () => {
           {authMethod === 'PIN' ? (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-4 gap-2.5">
-                {[0, 1, 2, 3].map((idx) => {
+                {Array.from({ length: Math.max(4, pinDigits.length) }, (_, idx) => idx).map((idx) => {
                   const hasDigit = pinDigits.length > idx;
                   return (
                     <div
@@ -167,6 +166,10 @@ export const LoginOverlay: React.FC = () => {
                 onBackspace={handleBackspace}
                 buttonHeightClass="!min-h-[50px]"
               />
+              <Button type="button" variant="primary" size="lg" className="w-full"
+                onClick={handlePinSubmit} disabled={pinDigits.length < 4} isLoading={isSubmitting}>
+                PIN ile Giriş Yap
+              </Button>
             </div>
           ) : (
             <form onSubmit={handleCredSubmit} className="flex flex-col gap-3">
@@ -204,9 +207,7 @@ export const LoginOverlay: React.FC = () => {
 
       {/* Alt Bilgi Satırı */}
       <div className="flex flex-wrap items-center justify-between text-xs text-[var(--text-muted)] gap-2">
-        <span className="font-mono">
-          PIN: 2222 (Patron) · 3333 (Müdür) · 4444 (Kasiyer) · 5555 (Garson) · 6666 (Mutfak) · 1111 (İlk Giriş)
-        </span>
+        <span>İşletme PIN kodunuzu kullanın.</span>
         <span className="tabular-nums font-mono">{clockStr}</span>
       </div>
     </div>

@@ -5,6 +5,7 @@ export interface UserSession {
   name: string;
   role: UserRole;
   tenantId: string;
+  activeModules?: string[];
   token?: string;
   mustChangePin?: boolean;
 }
