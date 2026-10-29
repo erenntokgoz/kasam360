@@ -424,6 +424,13 @@ CREATE TABLE IF NOT EXISTS devices (
     last_heartbeat DATETIME
 );
 
+CREATE TABLE IF NOT EXISTS local_device_identity (
+    slot INTEGER PRIMARY KEY CHECK (slot = 1),
+    tenant_id TEXT NOT NULL,
+    device_id TEXT NOT NULL UNIQUE,
+    FOREIGN KEY (device_id) REFERENCES devices(id)
+);
+
 -- BRANCHES
 CREATE TABLE IF NOT EXISTS branches (
     id TEXT PRIMARY KEY,

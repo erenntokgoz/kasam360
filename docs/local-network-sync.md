@@ -10,7 +10,8 @@ Durum: Tasarım; çok cihazlı aktarım henüz uygulanmadı.
 
 - Her Tauri süreci kendi SQLite dosyasını açar. Cihazlar arası ağ dinleyicisi ve kayıt aktarımı yoktur.
 - `events` ve `outbox` tabloları vardır; satış olaylarının bir kısmı yazılır. Menü, stok, cari ve bütün adisyon değişiklikleri aynı olay sözleşmesinde değildir.
-- `devices` tablosu cihaz adı/durumu tutar; cihaz kimliği ve eşitleme konumu yerel süreçle ilişkilendirilmemiştir.
+- `devices` tablosu cihaz adı/durumu tutar; eşitleme konumu henüz yerel süreçle ilişkilendirilmemiştir.
+- `local_device_identity` artık kurulumun cihaz kaydını kalıcı tutabilir; kurulum ekranı ve ağ bağlantısı henüz bu yordamı çağırmaz.
 - Masa kilidi süreç belleğindedir; diğer cihaz tarafından görülemez.
 - Önceki outbox işçisi yalnızca log yazıp olayı teslim edilmiş sayıyordu. Bu işçi kaldırıldı; gerçek teslimat kanalı kurulana kadar kayıtlar `PENDING` kalır.
 - Önceki ödeme için “last-write-wins” kuralı kaldırıldı. Para hareketi üstüne yazılamaz.

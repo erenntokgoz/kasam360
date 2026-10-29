@@ -3,6 +3,7 @@ pub mod audit_service;
 pub mod backup;
 pub mod branch_service;
 pub mod budget_service;
+pub mod device_identity;
 pub mod external360;
 pub mod floor360;
 pub mod inventory360;
