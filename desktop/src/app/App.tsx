@@ -13,9 +13,10 @@ import { MustChangePinModal } from '../features/auth/MustChangePinModal';
 import { ShiftGateModal } from '../features/shift/ShiftGateModal';
 import { PaymentModal } from '../features/payment/PaymentModal';
 import { ReceiptPreviewModal } from '../features/receipt/ReceiptPreviewModal';
+import { canUseOperations } from './access';
 
 export const App: React.FC = () => {
-  const { isAuthenticated, isLocked, mustChangePin, lock, user } = useAuthStore();
+  const { isAuthenticated, isLocked, mustChangePin, lock, logout, user } = useAuthStore();
   const {
     activeModule,
     setActiveModule,
@@ -61,7 +62,7 @@ export const App: React.FC = () => {
   // Donanım Kısayolları (F1 - F5)
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
-      if (!isAuthenticated || isLocked || mustChangePin) return;
+      if (!isAuthenticated || isLocked || mustChangePin || !canUseOperations(user?.role)) return;
       if (e.key === 'F1') {
         e.preventDefault();
         setActiveModule('FLOOR');
@@ -89,6 +90,20 @@ export const App: React.FC = () => {
       <div className="h-screen w-screen bg-[var(--bg-canvas)]">
         <LoginOverlay />
         <MustChangePinModal />
+      </div>
+    );
+  }
+
+  if (!canUseOperations(user?.role)) {
+    return (
+      <div className="h-screen w-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex items-center justify-center p-6">
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-strong)] rounded-lg p-6 max-w-sm space-y-4">
+          <h1 className="text-base font-bold">Platform hesabı</h1>
+          <p className="text-sm text-[var(--text-secondary)]">Bu hesapla satış ve işletme ekranları açılamaz.</p>
+          <button type="button" onClick={logout} className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--brand)] text-white">
+            Çıkış Yap
+          </button>
+        </div>
       </div>
     );
   }
