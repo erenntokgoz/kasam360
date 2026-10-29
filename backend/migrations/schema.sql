@@ -31,6 +31,18 @@ CREATE TABLE IF NOT EXISTS outbox (
 
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox (status);
 
+CREATE TABLE IF NOT EXISTS sync_inbox (
+    operation_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    source_device_id TEXT NOT NULL,
+    payload TEXT NOT NULL CHECK (json_valid(payload)),
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPLIED')),
+    received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_inbox_tenant_status
+    ON sync_inbox (tenant_id, status);
+
 CREATE TABLE IF NOT EXISTS snapshots (
     aggregate_id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
