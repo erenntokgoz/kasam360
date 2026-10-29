@@ -30,7 +30,7 @@ Mal kabulü gerçek teslim miktarını stoğa ekler. Tedarikçi belgesi daha son
 
 ## Cihaz ve bağlantı davranışı
 
-- İnternet gerekli değildir; aynı WLAN/LAN'daki cihazlar birbirleriyle çalışır. Ana bilgisayarın kapanması kalan cihazları durdurmaz. Tek aktif cihazla satış mümkündür.
+- İnternet gerekli değildir; aynı WLAN/LAN'daki cihazlar birbirleriyle çalışır. Tek cihazlı kurulumda satış mümkündür. Çok cihazlı kurulumda ani cihaz kaybından sonraki finansal yazmalar kalıcı çoğunluk varsa sürer; iki cihazdan biri aniden kaybolduğunda çoğunluk kalmaz ve finansal yazma güvenli biçimde durur.
 - Yerel ağdan tamamen kopmuş cihaz yeni işlem açmaz. Açık ekranı ve kayıtları korur; yeniden bağlanınca eşitlenir.
 - Her işlem, ödeme, stok ve cari hareketi benzersiz kimlik ve tekrar uygulamayı engelleyen işlem anahtarı taşır. Finansal çatışmalarda son yazan kazanır kuralı kullanılmaz.
 - Cihaz aktif/pasif yapılabilir. Pasiften dönüşte veri karşılaştırması tamamlanmadan satış açılmaz.
