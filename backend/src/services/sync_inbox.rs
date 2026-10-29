@@ -20,17 +20,32 @@ pub async fn store_received(
 
     let result = sqlx::query(
         "INSERT INTO sync_inbox (operation_id, tenant_id, source_device_id, payload)
-         VALUES (?, ?, ?, ?) ON CONFLICT(operation_id) DO NOTHING",
+         SELECT ?, ?, id, ? FROM devices
+         WHERE id = ? AND tenant_id = ? AND status = 'ACTIVE'
+         ON CONFLICT(operation_id) DO NOTHING",
     )
     .bind(operation_id)
     .bind(tenant_id)
-    .bind(source_device_id)
     .bind(payload)
+    .bind(source_device_id)
+    .bind(tenant_id)
     .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
     if result.rows_affected() == 1 {
         return Ok(true);
+    }
+
+    let active: Option<i64> = sqlx::query_scalar(
+        "SELECT 1 FROM devices WHERE id = ? AND tenant_id = ? AND status = 'ACTIVE'",
+    )
+    .bind(source_device_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if active.is_none() {
+        return Err("UNAUTHORIZED: cihaz aktif değil veya kiracıya ait değil".to_string());
     }
 
     let existing = sqlx::query(
@@ -71,6 +86,10 @@ mod tests {
             .await
             .expect("sema");
         let mut conn = pool.acquire().await.expect("baglanti");
+        sqlx::query("INSERT INTO devices (id, tenant_id, name, device_type) VALUES ('dev_1', 'tnt_a', 'Kasa', 'POS')")
+            .execute(&mut *conn)
+            .await
+            .expect("cihaz");
 
         assert!(
             store_received(&mut conn, "tnt_a", "op_1", "dev_1", "{\"n\":1}")
@@ -101,5 +120,45 @@ mod tests {
         .await
         .expect("durum");
         assert_eq!(status, "PENDING");
+    }
+
+    #[tokio::test]
+    async fn yalniz_aktif_ve_ayni_kiracinin_cihazi_kabul_edilir() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(SqliteConnectOptions::new().in_memory(true))
+            .await
+            .expect("havuz");
+        sqlx::raw_sql(include_str!("../../migrations/schema.sql"))
+            .execute(&pool)
+            .await
+            .expect("sema");
+        let mut conn = pool.acquire().await.expect("baglanti");
+        sqlx::query("INSERT INTO devices (id, tenant_id, name, device_type, status) VALUES ('dev_1', 'tnt_a', 'Kasa', 'POS', 'ACTIVE'), ('dev_2', 'tnt_a', 'Depo', 'POS', 'INACTIVE')")
+            .execute(&mut *conn)
+            .await
+            .expect("cihazlar");
+
+        assert!(
+            store_received(&mut conn, "tnt_a", "op_unknown", "dev_x", "{}")
+                .await
+                .is_err()
+        );
+        assert!(
+            store_received(&mut conn, "tnt_a", "op_passive", "dev_2", "{}")
+                .await
+                .is_err()
+        );
+        assert!(
+            store_received(&mut conn, "tnt_b", "op_foreign", "dev_1", "{}")
+                .await
+                .is_err()
+        );
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sync_inbox WHERE tenant_id = ?")
+            .bind("tnt_a")
+            .fetch_one(&mut *conn)
+            .await
+            .expect("sayi");
+        assert_eq!(count, 0);
     }
 }
