@@ -13,7 +13,7 @@ Durum: Tasarım; çok cihazlı aktarım henüz uygulanmadı.
 - `devices` tablosu cihaz adı/durumu tutar; cihaz kimliği ve eşitleme konumu yerel süreçle ilişkilendirilmemiştir.
 - Masa kilidi süreç belleğindedir; diğer cihaz tarafından görülemez.
 - Önceki outbox işçisi yalnızca log yazıp olayı teslim edilmiş sayıyordu. Bu işçi kaldırıldı; gerçek teslimat kanalı kurulana kadar kayıtlar `PENDING` kalır.
-- `offline-conflict-policy.md` içindeki ödeme için “last-write-wins” kuralı kullanılmayacak. Para hareketi üstüne yazılamaz.
+- Önceki ödeme için “last-write-wins” kuralı kaldırıldı. Para hareketi üstüne yazılamaz.
 
 ## Güvenlik ve süreklilik kuralı
 
