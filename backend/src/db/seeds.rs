@@ -7,16 +7,7 @@ use sqlx::{Acquire, Row};
 /// Doğrulama Argon2 hash üzerinden yapılır; PIN'ini değiştiren kullanıcının
 /// bayrağına dokunulmaz, bayrak zaten açık olan satır yeniden doğrulanmaz.
 pub(crate) async fn flag_factory_pins(pool: &DbPool) -> Result<(), sqlx::Error> {
-    const FACTORY_PINS: [(&str, &str); 6] = [
-        ("usr_master", "1111"),
-        ("usr_owner", "2222"),
-        ("usr_manager", "3333"),
-        ("usr_cashier", "4444"),
-        ("usr_waiter", "5555"),
-        ("usr_cook", "6666"),
-    ];
-
-    for (id, pin) in FACTORY_PINS {
+    for (id, pin) in crate::services::setup::FACTORY_PINS {
         let hash: Option<Option<String>> =
             sqlx::query_scalar("SELECT pin_hash FROM users WHERE id = ? AND must_change_pin = 0")
                 .bind(id)

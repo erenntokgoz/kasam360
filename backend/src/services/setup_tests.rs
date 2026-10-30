@@ -199,6 +199,80 @@ async fn mevcut_isletme_yukseltmede_kuruluma_dusmez_ve_verisini_korur() {
     assert_eq!(session.tenant_id, "tnt_eski");
 }
 
+async fn seed_factory_users(pool: &SqlitePool) {
+    sqlx::query(
+        "INSERT OR IGNORE INTO tenants (id, name, status) VALUES ('tnt_eski', 'Kasam360 Merkez İşletme', 'ACTIVE')",
+    )
+    .execute(pool)
+    .await
+    .expect("kiracı");
+    for (id, pin) in FACTORY_PINS {
+        let hash = crate::user_credentials::hash_pin(pin).expect("hash");
+        sqlx::query(
+            "INSERT INTO users (id, tenant_id, role, name, pin_hash, must_change_pin)
+             VALUES (?, 'tnt_eski', 'OWNER', 'Fabrika', ?, 1)",
+        )
+        .bind(id)
+        .bind(hash)
+        .execute(pool)
+        .await
+        .expect("fabrika hesabı");
+    }
+}
+
+#[tokio::test]
+async fn eski_surumde_acilip_kullanilmamis_kurulum_sihirbaza_doner() {
+    for already_upgraded in [false, true] {
+        let (_path, url) = file_url("kullanilmamis");
+        let pool = init_db(&url).await.expect("veritabanı");
+        sqlx::query("DELETE FROM app_setup")
+            .execute(&pool)
+            .await
+            .expect("temizlik");
+        if already_upgraded {
+            sqlx::query(
+                "INSERT INTO app_setup (slot, status, origin, tenant_id) VALUES (1, 'COMPLETE', 'UPGRADE', 'tnt_eski')",
+            )
+            .execute(&pool)
+            .await
+            .expect("önceki karar");
+        }
+        seed_factory_users(&pool).await;
+        pool.close().await;
+
+        let reopened = init_db(&url).await.expect("yeniden açılış");
+        assert_eq!(count(&reopened, "users").await, 0, "fabrika hesabı kalmaz");
+        assert!(require_complete(&reopened).await.is_err());
+        assert!(authenticate_by_pin(&reopened, "2222", None).await.is_err());
+        let tenant = finish(&reopened, PIN).await.expect("kurulum");
+        assert_eq!(tenant, "tnt_eski", "ikinci işletme açılmaz");
+        assert_eq!(count(&reopened, "tenants").await, 1);
+    }
+}
+
+#[tokio::test]
+async fn is_kaydi_veya_degismis_pin_olan_kurulum_kuruluma_donmez() {
+    for mutation in [
+        "INSERT INTO products (id, tenant_id, category_id, name, price_cents) VALUES ('prd_1', 'tnt_eski', 'cat_1', 'Çay', 100)",
+        "UPDATE users SET pin_hash = 'degisti' WHERE id = 'usr_cook'",
+    ] {
+        let (_path, url) = file_url("korunur");
+        let pool = init_db(&url).await.expect("veritabanı");
+        sqlx::query("DELETE FROM app_setup").execute(&pool).await.expect("temizlik");
+        seed_factory_users(&pool).await;
+        sqlx::query("INSERT INTO categories (id, tenant_id, name) VALUES ('cat_1', 'tnt_eski', 'Ana')")
+            .execute(&pool)
+            .await
+            .expect("kategori");
+        sqlx::query(mutation).execute(&pool).await.expect("kayıt");
+        pool.close().await;
+
+        let reopened = init_db(&url).await.expect("yeniden açılış");
+        require_complete(&reopened).await.expect("işletme korunur");
+        assert_eq!(count(&reopened, "users").await, 6);
+    }
+}
+
 #[tokio::test]
 async fn kullanicisiz_eski_kurulum_kiraciyi_devralir_ikinci_isletme_acmaz() {
     let (_path, url) = file_url("kiraci");

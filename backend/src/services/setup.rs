@@ -102,14 +102,99 @@ pub fn validate_owner_pin(pin: &str, confirm: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Durum satırını bir kez yazar: kullanıcısı olan veritabanı mevcut işletmedir.
+/// Eski sürüm temiz veritabanına bu hesapları kendiliğinden açardı.
+pub(crate) const FACTORY_PINS: [(&str, &str); 6] = [
+    ("usr_master", "1111"),
+    ("usr_owner", "2222"),
+    ("usr_manager", "3333"),
+    ("usr_cashier", "4444"),
+    ("usr_waiter", "5555"),
+    ("usr_cook", "6666"),
+];
+
+/// Hiç kullanılmamış eski kurulum mu?
 ///
-/// Satır bir daha değerlendirilmez. Kullanıcısız eski kurulum sihirbaza gider ve
-/// tamamlanırken var olan kiracıyı devralır; ikinci işletme açılmaz.
-pub async fn classify_install(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    let known: Option<i64> = sqlx::query_scalar("SELECT 1 FROM app_setup WHERE slot = 1")
-        .fetch_optional(pool)
+/// Eski sürümü bir kez açmak fabrika hesaplarını yazardı; bu kurulum kullanıcılı
+/// görünür ama ortada işletme yoktur. PIN değiştirilmeden çalışılamadığı için
+/// bütün hesapların fabrika PIN'inde durması ve iş kaydı olmaması birlikte
+/// aranır. Tek bir değişmiş PIN veya kayıt varsa işletme korunur.
+async fn is_unused_factory_install(pool: &SqlitePool) -> Result<bool, sqlx::Error> {
+    for table in [
+        "orders",
+        "products",
+        "directories",
+        "shifts",
+        "sync_cluster",
+    ] {
+        let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+            .fetch_one(pool)
+            .await?;
+        if count > 0 {
+            return Ok(false);
+        }
+    }
+    // Çok eski şemada `pin_hash` yoktur; PIN taşınmadan karar verilmez.
+    let Ok(users) = sqlx::query_as::<_, (String, Option<String>)>("SELECT id, pin_hash FROM users")
+        .fetch_all(pool)
+        .await
+    else {
+        return Ok(false);
+    };
+    Ok(!users.is_empty()
+        && users.iter().all(|(id, hash)| {
+            let factory = FACTORY_PINS.iter().find(|(factory_id, _)| factory_id == id);
+            match (factory, hash) {
+                (Some((_, pin)), Some(hash)) => {
+                    crate::user_credentials::is_argon2_hash(hash)
+                        && crate::auth::verify_credential(pin, hash)
+                }
+                _ => false,
+            }
+        }))
+}
+
+/// Fabrika hesaplarını kaldırır ve cihazı kuruluma döndürür.
+async fn reset_unused_install(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    for (id, _) in FACTORY_PINS {
+        sqlx::query("DELETE FROM users WHERE id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    sqlx::query("DELETE FROM login_attempts")
+        .execute(&mut *tx)
         .await?;
+    sqlx::query(
+        "INSERT INTO app_setup (slot, status) VALUES (1, 'PENDING')
+         ON CONFLICT(slot) DO UPDATE SET status = 'PENDING', origin = NULL, tenant_id = NULL,
+                                         completed_at = NULL, updated_at = datetime('now')",
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await
+}
+
+/// Kurulum durumunu çözer. Kullanıcısı olan veritabanı mevcut işletmedir.
+///
+/// `UPGRADE` satırı yeniden değerlendirilir: önceki sürüm kullanılmamış kurulumu
+/// da mevcut işletme saymış olabilir. Kurulumu tamamlanmış satıra dokunulmaz.
+/// Kullanıcısız eski kurulum sihirbaza gider ve tamamlanırken var olan kiracıyı
+/// devralır; ikinci işletme açılmaz.
+pub async fn classify_install(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    let known: Option<(String, Option<String>)> =
+        sqlx::query_as("SELECT status, origin FROM app_setup WHERE slot = 1")
+            .fetch_optional(pool)
+            .await?;
+    if known
+        .as_ref()
+        .is_some_and(|(_, origin)| origin.as_deref() != Some("UPGRADE"))
+    {
+        return Ok(());
+    }
+    if is_unused_factory_install(pool).await? {
+        return reset_unused_install(pool).await;
+    }
     if known.is_some() {
         return Ok(());
     }
