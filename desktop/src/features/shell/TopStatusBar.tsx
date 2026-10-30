@@ -5,6 +5,7 @@ import { useShiftStore } from '../../stores/shiftStore';
 import { useUIStore } from '../../stores/uiStore';
 import { formatTime } from '../../lib/date';
 import { Button } from '../../ui/Button';
+import { SyncStatusChip } from './SyncStatusChip';
 
 export const TopStatusBar: React.FC = () => {
   const { user, lock } = useAuthStore();
@@ -72,6 +73,8 @@ export const TopStatusBar: React.FC = () => {
           <Clock className="w-3.5 h-3.5" />
           <span>{timeStr}</span>
         </div>
+
+        <SyncStatusChip />
       </div>
 
       {/* Sağ: Otomatik Kilit Sayacı, Tema Değiştirici, Aktif Kullanıcı ve Manuel Kilitle */}
