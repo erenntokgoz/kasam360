@@ -183,37 +183,55 @@ async fn operation_alerts(pool: &SqlitePool, tenant: &str) -> Result<Vec<Alert>,
     Ok(alerts)
 }
 
+/// Süresi geçmiş kayıt hâlâ uyarıdır: işletme ruhsatsız çalışıyor olabilir,
+/// bu yüzden geçmiş tarih yaklaşan tarihten daha sert işaretlenir.
+fn expiry_alert(subject: String, expiry_date: &str, today: &str) -> Alert {
+    if expiry_date < today {
+        return alert(
+            "CRITICAL",
+            format!("{subject} süresi doldu"),
+            format!("Son tarih {expiry_date} idi."),
+            "LEGAL",
+        );
+    }
+    alert(
+        "WARNING",
+        format!("{subject} süresi doluyor"),
+        format!("Son tarih {expiry_date}."),
+        "LEGAL",
+    )
+}
+
 async fn legal_alerts(pool: &SqlitePool, tenant: &str) -> Result<Vec<Alert>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let today = legal360::bugun();
     let mut alerts = Vec::new();
-    for document in
-        legal360::legal::list_upcoming_reminders(&mut conn, tenant, LEGAL_WINDOW_DAYS).await?
-    {
-        alerts.push(alert(
-            "WARNING",
-            format!("{} süresi doluyor", document.title),
-            format!("Son tarih {}.", document.expiry_date),
-            "",
-        ));
+    let mut documents = legal360::legal::get_expiring_documents(&mut conn, tenant).await?;
+    documents.extend(
+        legal360::legal::list_upcoming_reminders(&mut conn, tenant, LEGAL_WINDOW_DAYS)
+            .await?
+            .into_iter()
+            .filter(|document| document.expiry_date > today),
+    );
+    for document in documents {
+        alerts.push(expiry_alert(document.title, &document.expiry_date, &today));
     }
     for policy in
         legal360::insurance::get_expiring_policies(&mut conn, tenant, LEGAL_WINDOW_DAYS).await?
     {
-        alerts.push(alert(
-            "WARNING",
-            format!("{} poliçesi doluyor", policy.insurance_company),
-            format!("Son tarih {}.", policy.expiry_date),
-            "",
+        alerts.push(expiry_alert(
+            format!("{} poliçesi", policy.insurance_company),
+            &policy.expiry_date,
+            &today,
         ));
     }
     for license in
         legal360::music_license::get_expiring_licenses(&mut conn, tenant, LEGAL_WINDOW_DAYS).await?
     {
-        alerts.push(alert(
-            "WARNING",
-            format!("{} lisansı doluyor", license.license_type),
-            format!("Son tarih {}.", license.expiry_date),
-            "",
+        alerts.push(expiry_alert(
+            format!("{} lisansı", license.license_type),
+            &license.expiry_date,
+            &today,
         ));
     }
     Ok(alerts)
@@ -284,11 +302,7 @@ pub async fn collect(
         "STOCK",
     );
     add(operation_alerts(pool, tenant).await, "Operasyon", "LOG");
-    add(
-        legal_alerts(pool, tenant).await,
-        "Yasal belgeler",
-        "SETTINGS",
-    );
+    add(legal_alerts(pool, tenant).await, "Yasal belgeler", "LEGAL");
     let flags = staff360::suspicious_service::radar(pool, tenant, from, to)
         .await
         .map(|flags| {

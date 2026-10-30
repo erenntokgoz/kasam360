@@ -13,6 +13,7 @@ use super::{acquire, audit_actor, record_audit, require_tenant, KATEGORI_FINANS}
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
 use crate::services::audit_service::AuditLock;
+use crate::services::lan_sync::WritePool;
 use crate::services::legal360::insurance::{
     get_expiring_policies, list_policies, save_policy, InsurancePolicy, PolicyInput,
 };
@@ -56,51 +57,29 @@ pub async fn save_policy_command(
 ) -> Result<InsurancePolicy, String> {
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
-    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
-    let result: Result<InsurancePolicy, String> = async {
-        let polica = save_policy(&mut conn, &tenant_id, args).await?;
-
-        record_audit(
-            &mut conn,
-            &lock,
-            &tenant_id,
-            &actor_id,
-            &actor_role,
-            KATEGORI_FINANS,
-            "sigorta:polica_saved",
-            &polica.id,
-            serde_json::json!({
-                "policyType": polica.policy_type,
-                "policyNumber": polica.policy_number,
-                "premiumCents": polica.premium_cents,
-                "expiryDate": polica.expiry_date,
-            }),
-        )
-        .await?;
-
-        Ok(polica)
-    }
-    .await;
-
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    // Çoğunluk kapısından geçer: belge kaydı her cihazda aynı kalmalıdır.
+    let mut tx = pool.begin_write().await?;
+    let polica = save_policy(&mut tx, &tenant_id, args).await?;
+    record_audit(
+        &mut tx,
+        &lock,
+        &tenant_id,
+        &actor_id,
+        &actor_role,
+        KATEGORI_FINANS,
+        "sigorta:polica_saved",
+        &polica.id,
+        serde_json::json!({
+            "policyType": polica.policy_type,
+            "policyNumber": polica.policy_number,
+            "premiumCents": polica.premium_cents,
+            "expiryDate": polica.expiry_date,
+        }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(polica)
 }

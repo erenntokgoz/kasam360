@@ -13,6 +13,7 @@ use super::{acquire, audit_actor, record_audit, require_tenant, KATEGORI_FINANS}
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
 use crate::services::audit_service::AuditLock;
+use crate::services::lan_sync::WritePool;
 use crate::services::legal360::legal::{
     get_expiring_documents, list_documents, list_upcoming_reminders, save_document, LegalDocument,
     LegalDocumentInput,
@@ -79,50 +80,28 @@ pub async fn save_legal_document_command(
 ) -> Result<LegalDocument, String> {
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
-    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
-    let result: Result<LegalDocument, String> = async {
-        let belge = save_document(&mut conn, &tenant_id, &actor_id, args).await?;
-
-        record_audit(
-            &mut conn,
-            &lock,
-            &tenant_id,
-            &actor_id,
-            &actor_role,
-            KATEGORI_FINANS,
-            "yasal:belge_saved",
-            &belge.id,
-            serde_json::json!({
-                "docType": belge.doc_type,
-                "expiryDate": belge.expiry_date,
-                "isActive": belge.is_active,
-            }),
-        )
-        .await?;
-
-        Ok(belge)
-    }
-    .await;
-
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    // Çoğunluk kapısından geçer: belge kaydı her cihazda aynı kalmalıdır.
+    let mut tx = pool.begin_write().await?;
+    let belge = save_document(&mut tx, &tenant_id, &actor_id, args).await?;
+    record_audit(
+        &mut tx,
+        &lock,
+        &tenant_id,
+        &actor_id,
+        &actor_role,
+        KATEGORI_FINANS,
+        "yasal:belge_saved",
+        &belge.id,
+        serde_json::json!({
+            "docType": belge.doc_type,
+            "expiryDate": belge.expiry_date,
+            "isActive": belge.is_active,
+        }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(belge)
 }

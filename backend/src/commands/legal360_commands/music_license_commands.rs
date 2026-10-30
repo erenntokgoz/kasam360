@@ -11,6 +11,7 @@ use super::{acquire, audit_actor, record_audit, require_tenant, KATEGORI_FINANS}
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
 use crate::services::audit_service::AuditLock;
+use crate::services::lan_sync::WritePool;
 use crate::services::legal360::music_license::{
     get_expiring_licenses, list_licenses, save_license, MusicLicense, MusicLicenseInput,
 };
@@ -54,51 +55,29 @@ pub async fn save_music_license_command(
 ) -> Result<MusicLicense, String> {
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
-    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
-    let result: Result<MusicLicense, String> = async {
-        let lisans = save_license(&mut conn, &tenant_id, args).await?;
-
-        record_audit(
-            &mut conn,
-            &lock,
-            &tenant_id,
-            &actor_id,
-            &actor_role,
-            KATEGORI_FINANS,
-            "telif:lisans_saved",
-            &lisans.id,
-            serde_json::json!({
-                "licenseType": lisans.license_type,
-                "year": lisans.year,
-                "amountCents": lisans.amount_cents,
-                "expiryDate": lisans.expiry_date,
-            }),
-        )
-        .await?;
-
-        Ok(lisans)
-    }
-    .await;
-
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    // Çoğunluk kapısından geçer: belge kaydı her cihazda aynı kalmalıdır.
+    let mut tx = pool.begin_write().await?;
+    let lisans = save_license(&mut tx, &tenant_id, args).await?;
+    record_audit(
+        &mut tx,
+        &lock,
+        &tenant_id,
+        &actor_id,
+        &actor_role,
+        KATEGORI_FINANS,
+        "telif:lisans_saved",
+        &lisans.id,
+        serde_json::json!({
+            "licenseType": lisans.license_type,
+            "year": lisans.year,
+            "amountCents": lisans.amount_cents,
+            "expiryDate": lisans.expiry_date,
+        }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(lisans)
 }
