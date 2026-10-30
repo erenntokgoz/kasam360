@@ -254,7 +254,14 @@ async fn kor_sayim_kapanisi_farki_hesaplar_ve_stogu_gunceller() {
     .fetch_one(&mut conn)
     .await
     .expect("urun okunmali");
-    assert_eq!(stok, Some(17), "stok sayilan degere cekilmeli");
+    assert_eq!(stok, None, "eski stok kolonu degismemeli");
+    let parti_kalan: f64 = sqlx::query_scalar(
+        "SELECT remaining_quantity FROM inventory_batches WHERE id = 'bat_1' AND tenant_id = 'tnt_1'",
+    )
+    .fetch_one(&mut conn)
+    .await
+    .expect("parti okunmali");
+    assert_eq!(parti_kalan, 17.0, "sayim farki partiden dusmeli");
 
     let hareket = sqlx::query(
         "SELECT quantity, movement_type FROM stock_movements WHERE product_id = 'prd_1'",
@@ -288,6 +295,61 @@ async fn kor_sayim_kapanisi_farki_hesaplar_ve_stogu_gunceller() {
 }
 
 #[tokio::test]
+async fn kor_sayim_eksigi_fifo_partilerinden_gercek_maliyetle_duser() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, T, "prd_1", "Süt", 1500).await;
+    parti_ekle(&mut conn, T, "bat_1", "prd_1", 2.0, 300, None).await;
+    parti_ekle(&mut conn, T, "bat_2", "prd_1", 4.0, 500, None).await;
+    let sayim = open_stock_count(&mut conn, T, AKTOR, None, None)
+        .await
+        .unwrap();
+    record_count_line(&mut conn, T, &sayim.id, "prd_1", 2.5, AKTOR)
+        .await
+        .unwrap();
+
+    let kapali = close_stock_count(&mut conn, T, &sayim.id, AKTOR, true)
+        .await
+        .expect("fark partilerden dusmeli");
+    assert_eq!(kapali.lines[0].variance_cost_cents, Some(-1350));
+    let kalanlar: Vec<f64> = sqlx::query_scalar(
+        "SELECT remaining_quantity FROM inventory_batches WHERE tenant_id = ? AND product_id = ? ORDER BY id",
+    )
+    .bind(T)
+    .bind("prd_1")
+    .fetch_all(&mut conn)
+    .await
+    .unwrap();
+    assert_eq!(kalanlar, vec![0.0, 2.5]);
+}
+
+#[tokio::test]
+async fn kor_sayim_fazlasi_maliyetsiz_parti_uydurmaz() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, T, "prd_1", "Süt", 1500).await;
+    parti_ekle(&mut conn, T, "bat_1", "prd_1", 2.0, 300, None).await;
+    let sayim = open_stock_count(&mut conn, T, AKTOR, None, None)
+        .await
+        .unwrap();
+    record_count_line(&mut conn, T, &sayim.id, "prd_1", 3.0, AKTOR)
+        .await
+        .unwrap();
+
+    let hata = close_stock_count(&mut conn, T, &sayim.id, AKTOR, true)
+        .await
+        .expect_err("fazla stok maliyetsiz uygulanmamali");
+    assert!(hata.contains("alış girişi"), "neden belirtilmeli: {hata}");
+    let kalan: f64 = sqlx::query_scalar(
+        "SELECT remaining_quantity FROM inventory_batches WHERE id = 'bat_1' AND tenant_id = 'tnt_1'",
+    )
+    .fetch_one(&mut conn)
+    .await
+    .unwrap();
+    assert_eq!(kalan, 2.0);
+}
+
+#[tokio::test]
 async fn kor_sayim_partisiz_urunde_stok_kolonunu_beklenen_olarak_kullanir() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;
@@ -304,15 +366,19 @@ async fn kor_sayim_partisiz_urunde_stok_kolonunu_beklenen_olarak_kullanir() {
         .await
         .expect("satir yazilmali");
 
-    let kapali = close_stock_count(&mut conn, T, &sayim.id, AKTOR, true)
+    let hata = close_stock_count(&mut conn, T, &sayim.id, AKTOR, true)
         .await
-        .expect("sayim kapatilmali");
-    // Parti yok, ürün kolonu var: beklenen miktar kolondan okunur.
+        .expect_err("partisiz stok duzeltmesi reddedilmeli");
+    assert!(
+        hata.contains("partisi olmayan"),
+        "neden belirtilmeli: {hata}"
+    );
+    let kapali = close_stock_count(&mut conn, T, &sayim.id, AKTOR, false)
+        .await
+        .expect("fark raporlanabilmeli");
     assert_eq!(kapali.lines[0].expected_quantity, Some(12.0));
     assert_eq!(kapali.lines[0].variance_quantity, Some(-2.0));
-    // Parti olmadığı için birim maliyet bilinmiyor: sahte sıfır fark yazılmaz.
     assert_eq!(kapali.lines[0].variance_cost_cents, None);
-    assert_ne!(kapali.lines[0].variance_cost_cents, Some(0));
 }
 
 #[tokio::test]
@@ -329,9 +395,16 @@ async fn kor_sayim_beklenen_miktari_bilinmiyorsa_fark_uretmez() {
         .await
         .expect("satir yazilmali");
 
-    let kapali = close_stock_count(&mut conn, T, &sayim.id, AKTOR, true)
+    let hata = close_stock_count(&mut conn, T, &sayim.id, AKTOR, true)
         .await
-        .expect("sayim kapatilmali");
+        .expect_err("bilinmeyen stok duzeltilememeli");
+    assert!(
+        hata.contains("partisi olmayan"),
+        "neden belirtilmeli: {hata}"
+    );
+    let kapali = close_stock_count(&mut conn, T, &sayim.id, AKTOR, false)
+        .await
+        .expect("sayim raporlanabilmeli");
     let satir = &kapali.lines[0];
     assert_eq!(satir.counted_quantity, 6.0);
     // Beklenen miktar bilinmiyor: sıfır yazmak "stokta hiçbir şey yok" der ve

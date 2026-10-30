@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqliteConnection};
 
+use super::count_adjustment::apply_count_variance;
 use crate::id_generator::generate_id;
 use crate::management_commands::ensure_owned;
 use crate::services::inventory360::{optional_f64, optional_i64, optional_text};
@@ -133,7 +134,7 @@ pub async fn record_count_line(
 }
 
 /// Sayımı kapatır: beklenen miktar hesaplanır, fark maliyeti düşülür ve
-/// stok miktarları sayılan değere ayarlanır.
+/// eksik stok FIFO partilerinden düşülür.
 ///
 /// Kapanışta beklenen miktar `products.stock_quantity` üzerinden okunur. Bu
 /// değer partilerin toplamıyla tutarsızsa (parti hareketi `stock_quantity`'yi
@@ -144,7 +145,7 @@ pub async fn record_count_line(
 /// Ne parti ne ürün kolonu yoksa beklenen miktar `None` kalır (bilinmiyor) ve
 /// fark hesaplanmaz; sıfır kabul etmek sayımın değerini uydurur.
 ///
-/// Kapanış tek yazma değil: her satır için fark hesabı, ürün kolonu
+/// Kapanış tek yazma değil: her satır için fark hesabı, parti
 /// düzeltmesi ve `stock_movements` kaydı yazılır. Bu yüzden çağıran komut
 /// `BEGIN IMMEDIATE` ile sarar; hata olursa hiçbiri yazılmaz ve stok ile
 /// hareket defteri yarım kalmış sayımda tutmaz.
@@ -233,25 +234,15 @@ pub async fn close_stock_count(
 
         let variance = expected.map(|deger| counted - deger);
 
-        // Fark maliyeti: fark sıfır değilse ve maliyet biliniyorsa hesaplanır.
-        // Maliyet bilinmiyorsa `None` — sahte sıfır fark maliyeti yazılmaz.
-        let variance_cost = match variance {
-            None => None,
-            Some(fark) if fark.abs() <= f64::EPSILON => Some(0i64),
-            Some(fark) => {
-                let unit_cost: Option<i64> = sqlx::query_scalar(
-                    "SELECT unit_cost_cents FROM inventory_batches
-                      WHERE tenant_id = ? AND product_id = ? AND remaining_quantity > 0
-                      ORDER BY received_at DESC, id DESC LIMIT 1",
-                )
-                .bind(tenant_id)
-                .bind(&product_id)
-                .fetch_optional(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-                unit_cost.map(|cost| (cost as f64 * fark).round() as i64)
-            }
-        };
+        let variance_cost = apply_count_variance(
+            conn,
+            tenant_id,
+            &product_id,
+            parti_toplam,
+            variance,
+            apply_adjustment,
+        )
+        .await?;
 
         sqlx::query(
             "UPDATE stock_count_lines
@@ -269,25 +260,8 @@ pub async fn close_stock_count(
         .await
         .map_err(|e| e.to_string())?;
 
-        // Beklenen miktar bilinmiyorsa fark hesaplanamaz ve stok düzeltmesi
-        // yazılamaz: kolonu sayılan değere çekmek farkı bilinmeden düzeltme
-        // uydurur, hareket defteri de kaymış miktarı yazamaz.
         if apply_adjustment {
-            if let Some(fark) = variance {
-                // Stok farkı düzeltmesi: ürün kolonu sayılan değere çekilir.
-                // Pozitif fark (eşya fazlası) bir maliyet değil, envanter fazlasıdır;
-                // bu yüzden yeni parti **açılmaz**, yalnız kolon güncellenir ve fark
-                // maliyeti negatif (kar) olarak raporlanır.
-                sqlx::query(
-                    "UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?",
-                )
-                .bind(counted)
-                .bind(&product_id)
-                .bind(tenant_id)
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-
+            if let Some(fark) = variance.filter(|fark| fark.abs() > f64::EPSILON) {
                 sqlx::query(
                     "INSERT INTO stock_movements
                          (id, tenant_id, inventory_item_id, product_id, movement_type,
@@ -301,7 +275,7 @@ pub async fn close_stock_count(
                 .bind(actor_id)
                 .bind(format!(
                     "kör sayım farkı: beklenen {beklenen_kaynak} {}, sayılan {counted}",
-                    expected.unwrap_or(0.0)
+                    expected.ok_or_else(|| "STOCK: beklenen stok bilinmiyor".to_string())?
                 ))
                 .execute(&mut *conn)
                 .await
