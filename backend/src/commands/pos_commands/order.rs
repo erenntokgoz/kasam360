@@ -74,7 +74,7 @@ pub async fn submit_order(
     actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
-) -> Result<bool, String> {
+) -> Result<String, String> {
     state.lan_sync.require_local_write()?;
     crate::services::setup::require_complete(&pool).await?;
     crate::rbac::require_any_present(
@@ -92,6 +92,7 @@ pub async fn submit_order(
 
     let (order_id, total_cents) =
         execute_submit_order(&mut tx, &tenant_id, &payload, actor_id.as_deref()).await?;
+    let result_order_id = order_id.clone();
 
     let now_iso = chrono::Utc::now().to_rfc3339();
     let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
@@ -114,7 +115,7 @@ pub async fn submit_order(
     crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
-    Ok(true)
+    Ok(result_order_id)
 }
 
 pub async fn execute_submit_order(
@@ -128,6 +129,21 @@ pub async fn execute_submit_order(
         .as_deref()
         .filter(|s| !s.trim().is_empty())
         .or(actor_id);
+
+    // Tezgâh satışı masa seçmez; `orders.table_id` zorunlu olduğu için kiracıya
+    // ait görünmez bir satış noktası kullanılır, salon planında listelenmez.
+    let table_id = super::queries::resolve_table_id(tenant_id, &payload.table_id);
+    if payload.table_id == super::queries::COUNTER_TABLE {
+        sqlx::query(
+            "INSERT OR IGNORE INTO tables (id, tenant_id, name, status, current_total)
+             VALUES (?, ?, 'Tezgâh', 'AVAILABLE', 0)",
+        )
+        .bind(&table_id)
+        .bind(tenant_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
 
     // 1. Calculate authoritative totals and prepared items
     struct PreparedOrderItem {
@@ -232,7 +248,7 @@ pub async fn execute_submit_order(
     let existing_order: Option<(String, i64)> = sqlx::query_as(
         "SELECT id, total_cents FROM orders WHERE table_id=? AND tenant_id=? AND status IN ('OPEN', 'IN_PROGRESS') ORDER BY created_at DESC LIMIT 1"
     )
-    .bind(&payload.table_id)
+    .bind(&table_id)
     .bind(tenant_id)
     .fetch_optional(&mut *conn)
     .await
@@ -260,7 +276,7 @@ pub async fn execute_submit_order(
                 "INSERT INTO orders (id, table_id, status, total_cents, tenant_id, created_at, notes, cashier_id) VALUES (?, ?, 'IN_PROGRESS', ?, ?, datetime('now'), ?, ?)"
             )
             .bind(&ord_id)
-            .bind(&payload.table_id)
+            .bind(&table_id)
             .bind(total_cents)
             .bind(tenant_id)
             .bind(&payload.notes)
@@ -302,7 +318,7 @@ pub async fn execute_submit_order(
     let current_table_total: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')"
     )
-    .bind(&payload.table_id)
+    .bind(&table_id)
     .bind(tenant_id)
     .fetch_one(&mut *conn)
     .await
@@ -313,7 +329,7 @@ pub async fn execute_submit_order(
     )
     .bind(current_table_total)
     .bind(waiter_id)
-    .bind(&payload.table_id)
+    .bind(&table_id)
     .bind(tenant_id)
     .execute(&mut *conn)
     .await

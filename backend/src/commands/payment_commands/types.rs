@@ -104,6 +104,11 @@ pub struct PaymentResultDto {
     pub message: String,
     #[serde(rename = "cogsTotal")]
     pub cogs_total: Option<i64>,
+    /// Adisyonun tahsilat sonrası kalan bakiyesi. İstemci kendi hesabına güvenmez.
+    #[serde(rename = "remainingCents", skip_serializing_if = "Option::is_none")]
+    pub remaining_cents: Option<i64>,
+    #[serde(rename = "orderClosed", skip_serializing_if = "Option::is_none")]
+    pub order_closed: Option<bool>,
 }
 
 /// Compensation refund payload'ı: ters bir tahsilat kaydı oluşturur.

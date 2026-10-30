@@ -9,6 +9,20 @@ use crate::db::DbPool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
+/// Tezgâh satışının istemcideki sabit adı.
+pub const COUNTER_TABLE: &str = "COUNTER";
+/// Tezgâh satış noktasının kimlik öneki; salon planı bu satırları göstermez.
+pub const COUNTER_ID_PREFIX: &str = "tbl_counter_";
+
+/// İstemcinin masa kimliğini gerçek satış noktasına çevirir.
+pub(crate) fn resolve_table_id(tenant_id: &str, table_id: &str) -> String {
+    if table_id == COUNTER_TABLE {
+        format!("{COUNTER_ID_PREFIX}{tenant_id}")
+    } else {
+        table_id.to_string()
+    }
+}
+
 /// Masanın açık sipariş kimliği — adisyon fişi basımının kaynak kimliğidir.
 #[tauri::command]
 pub async fn get_active_order_id(
@@ -22,7 +36,7 @@ pub async fn get_active_order_id(
         "SELECT id FROM orders WHERE table_id = ? AND tenant_id = ? \
          AND status IN ('OPEN', 'IN_PROGRESS') ORDER BY created_at DESC LIMIT 1",
     )
-    .bind(&table_id)
+    .bind(resolve_table_id(&tenant, &table_id))
     .bind(&tenant)
     .fetch_optional(&mut *conn)
     .await
@@ -38,7 +52,19 @@ pub async fn get_order_items(
 ) -> Result<Vec<CartItemDto>, String> {
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    execute_get_order_items(&mut conn, &table_id, &tenant).await
+    execute_get_order_items(&mut conn, &resolve_table_id(&tenant, &table_id), &tenant).await
+}
+
+/// Adisyonun sunucu bakiyesi; tahsilat ekranı kalan tutarı buradan gösterir.
+#[tauri::command]
+pub async fn get_order_balance(
+    order_id: String,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<crate::services::order_settlement::OrderBalance, String> {
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    crate::services::order_settlement::order_balance(&mut conn, &tenant, &order_id).await
 }
 
 pub async fn execute_get_order_items(

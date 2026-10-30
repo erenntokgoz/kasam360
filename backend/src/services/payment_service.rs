@@ -171,7 +171,7 @@ impl PaymentService {
             ));
         }
 
-        let consumed_approval = crate::services::payment_approval::consume_discount_approval(
+        let consumed_approval = Self::consume_approvals(
             conn,
             audit_lock,
             tenant_id,
@@ -183,20 +183,44 @@ impl PaymentService {
         )
         .await?;
 
+        Ok((server_truth, consumed_approval))
+    }
+
+    /// İndirim ve tutar eşiği onayını tüketir; iki tahsilat yolu aynı kapıdan geçer.
+    pub async fn consume_approvals(
+        conn: &mut sqlx::SqliteConnection,
+        audit_lock: &AuditLock<'_>,
+        tenant_id: &str,
+        actor_id: &str,
+        actor_role: &str,
+        transaction_id: &str,
+        server_truth: &crate::repositories::payment_repository::ServerTruth,
+        approval_token: Option<&str>,
+    ) -> Result<Option<crate::services::payment_approval::ConsumedApproval>, String> {
+        let consumed_approval = crate::services::payment_approval::consume_discount_approval(
+            conn,
+            audit_lock,
+            tenant_id,
+            actor_id,
+            actor_role,
+            transaction_id,
+            server_truth,
+            approval_token,
+        )
+        .await?;
+
         let consumed_total_approval = crate::services::payment_approval::consume_total_approval(
             conn,
             audit_lock,
             tenant_id,
             actor_id,
             actor_role,
-            &payload.transaction_id,
-            server_total_cents,
-            payload.approval_token.as_deref(),
+            transaction_id,
+            server_truth.total_cents,
+            approval_token,
             consumed_approval.is_some(),
         )
         .await?;
-        let consumed_approval = consumed_approval.or(consumed_total_approval);
-
-        Ok((server_truth, consumed_approval))
+        Ok(consumed_approval.or(consumed_total_approval))
     }
 }

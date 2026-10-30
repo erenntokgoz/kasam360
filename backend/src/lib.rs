@@ -153,6 +153,8 @@ pub fn run() {
             // konusu olmaktan çıkıp harekete bağlı bağlantıya dönüştü.
             commands::get_financial_movements,
             commands::get_active_order_id,
+            commands::pos_commands::queries::get_order_balance,
+            commands::payment_commands::split::get_payment_status,
             // Fiş dışı basımları keyfi JSON değil, veritabanından okunur.
             print_commands::print_z_report,
             print_commands::print_day_z_report,

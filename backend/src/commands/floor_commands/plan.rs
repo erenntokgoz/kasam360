@@ -80,7 +80,7 @@ pub async fn get_floor_plan(
             WHERE tenant_id = ? AND status = 'ACTIVE'
             GROUP BY table_id
         ) res ON res.table_id = t.id
-        WHERE t.tenant_id = ?
+        WHERE t.tenant_id = ? AND substr(t.id, 1, 12) != 'tbl_counter_'
         ORDER BY t.name ASC
     "#;
 

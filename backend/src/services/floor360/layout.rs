@@ -94,7 +94,7 @@ pub async fn list_layout_tables(
     let mut sql = String::from(
         "SELECT id, name, status, x, y, rotation, seats, zone, current_total
            FROM tables
-          WHERE tenant_id = ?",
+          WHERE tenant_id = ? AND substr(id, 1, 12) != 'tbl_counter_'",
     );
     if zone_id.is_some() {
         sql.push_str(" AND zone = ?");

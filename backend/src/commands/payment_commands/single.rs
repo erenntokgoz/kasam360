@@ -15,6 +15,9 @@ pub async fn process_payment(
 ) -> Result<PaymentResultDto, String> {
     state.lan_sync.require_local_write()?;
     crate::services::setup::require_complete(&pool).await?;
+    if payload.order_id.is_some() {
+        return super::split::settle(payload, actor_role, &pool, &state).await;
+    }
     // İşletme sahibi ve kasiyer ödeme alabilir.
     crate::rbac::require_any(
         &actor_role,
@@ -152,5 +155,7 @@ pub async fn process_payment(
         timestamp: now_iso,
         message,
         cogs_total: Some(total_cogs_cents),
+        remaining_cents: None,
+        order_closed: None,
     })
 }
