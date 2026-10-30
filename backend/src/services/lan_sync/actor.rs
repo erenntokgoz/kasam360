@@ -270,7 +270,10 @@ impl Actor {
         address: String,
         now: u64,
     ) -> Result<JoinGrant, String> {
-        if self.engine.role != Role::Leader || !self.engine.has_quorum(now).await? {
+        // Yarım kalmış katılımın yeniden denenmesi çoğunluğu geri getirir; onu
+        // çoğunluk şartına bağlamak iki cihazlı kurulumu kilitli bırakırdı.
+        let rejoining = self.engine.is_known_device(&request).await?;
+        if self.engine.role != Role::Leader || (!rejoining && !self.engine.has_quorum(now).await?) {
             return Err("CONFLICT: eşleştirme otorite cihazdan yapılır".to_string());
         }
         let (grant, effects) = self.engine.admit(&request, &address, now).await?;

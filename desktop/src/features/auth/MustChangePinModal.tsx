@@ -6,7 +6,7 @@ import { Button } from '../../ui/Button';
 
 export const MustChangePinModal: React.FC = () => {
   const { mustChangePin, changeSelfPin, logout } = useAuthStore();
-  const [currentPin, setCurrentPin] = useState('1111');
+  const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -15,12 +15,12 @@ export const MustChangePinModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
-      setError('Yeni PIN tam olarak 4 haneli sayı olmalıdır.');
+    if (!/^\d{4,8}$/.test(newPin)) {
+      setError('Yeni PIN 4-8 haneli sayı olmalıdır.');
       return;
     }
-    if (newPin === '1111') {
-      setError('Yeni PIN fabrika varsayılanı (1111) ile aynı olamaz.');
+    if (/^(\d)\1+$/.test(newPin)) {
+      setError('Yeni PIN aynı rakamın tekrarı olamaz.');
       return;
     }
 
@@ -38,7 +38,7 @@ export const MustChangePinModal: React.FC = () => {
       isOpen={mustChangePin}
       onClose={logout}
       title="Yeni PIN Belirleyin"
-      subtitle="İlk girişiniz olduğu için fabrika PIN kodunuzu 4 haneli yeni şifrenizle değiştirin."
+      subtitle="İlk girişiniz olduğu için fabrika PIN kodunuzu kendi belirlediğiniz PIN ile değiştirin."
       showCloseButton={false}
       maxWidth="sm"
     >
@@ -55,7 +55,7 @@ export const MustChangePinModal: React.FC = () => {
           </label>
           <Input
             type="password"
-            maxLength={4}
+            maxLength={8}
             value={currentPin}
             onChange={(e) => setCurrentPin(e.target.value)}
             className="text-center font-mono font-bold tracking-widest text-base"
@@ -65,14 +65,13 @@ export const MustChangePinModal: React.FC = () => {
 
         <div>
           <label className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
-            Yeni 4 Haneli PIN
+            Yeni PIN (4-8 hane)
           </label>
           <Input
             type="password"
-            maxLength={4}
+            maxLength={8}
             value={newPin}
             onChange={(e) => setNewPin(e.target.value)}
-            placeholder="Örn: 7890"
             className="text-center font-mono font-bold tracking-widest text-base"
             required
             autoFocus

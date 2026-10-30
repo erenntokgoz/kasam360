@@ -19,6 +19,16 @@ use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 pub const DEFAULT_PORT: u16 = 47360;
+
+/// Dinlenecek port. Güvenlik duvarı veya aynı makinede ikinci kurulum için
+/// `KASAM360_SYNC_PORT` ile değiştirilebilir; geçersiz değer varsayılana düşer.
+pub fn sync_port() -> u16 {
+    std::env::var("KASAM360_SYNC_PORT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(DEFAULT_PORT)
+}
+
 pub enum Command {
     Submit {
         operation: Box<Operation>,
@@ -383,6 +393,7 @@ impl LanSync {
         let grant = transport::request_join(&code, &me, &request).await?;
         let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
         pairing::accept_grant(&mut tx, local_tenant, &grant, bound).await?;
+        crate::services::setup::mark_joined(&mut tx, &grant.tenant_id).await?;
         tx.commit().await.map_err(|e| e.to_string())?;
         for member in &grant.base_members {
             if !member.address.is_empty() {

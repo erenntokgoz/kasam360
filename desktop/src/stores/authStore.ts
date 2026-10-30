@@ -13,7 +13,7 @@ interface AuthStore {
   loginWithCredentials: (identifier: string, secret: string) => Promise<boolean>;
   changeSelfPin: (currentPin: string, newPin: string) => Promise<boolean>;
   lock: () => void;
-  unlock: () => void;
+  unlock: (pin: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -90,8 +90,21 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
-  lock: () => set({ isLocked: true }),
-  unlock: () => set({ isLocked: false }),
+  lock: () => set({ isLocked: true, loginError: null }),
+
+  unlock: async (pin) => {
+    const user = get().user;
+    if (!user) return false;
+    try {
+      await invokeIPC('auth_unlock', { tenantId: user.tenantId, userId: user.userId, pin });
+      set({ isLocked: false, loginError: null });
+      return true;
+    } catch (error) {
+      set({ loginError: error instanceof Error ? error.message : String(error) });
+      return false;
+    }
+  },
+
   logout: () => {
     useFeatureStore.getState().setModules([]);
     set({ user: null, isAuthenticated: false, isLocked: false,

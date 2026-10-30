@@ -9,6 +9,9 @@ import { KdsModule } from '../features/kds/KdsModule';
 import { CashierModule } from '../features/cashier/CashierModule';
 import { ErpModule } from '../features/patron/ErpModule';
 import { LoginOverlay } from '../features/auth/LoginOverlay';
+import { LockScreen } from '../features/auth/LockScreen';
+import { SetupGate } from '../features/setup/SetupGate';
+import { useSetupStore } from '../stores/setupStore';
 import { MustChangePinModal } from '../features/auth/MustChangePinModal';
 import { ShiftGateModal } from '../features/shift/ShiftGateModal';
 import { PaymentModal } from '../features/payment/PaymentModal';
@@ -24,6 +27,12 @@ export const App: React.FC = () => {
     decrementIdleTimer,
     resetIdleTimer,
   } = useUIStore();
+  const { phase: setupPhase, error: setupError, load: loadSetup } = useSetupStore();
+
+  // Kurulum durumu bilinmeden hiçbir kimlik ekranı açılmaz.
+  useEffect(() => {
+    void loadSetup();
+  }, [loadSetup]);
 
   // 120 saniye hareketsizlik sayacı ve otomatik kilit
   useEffect(() => {
@@ -85,11 +94,16 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleGlobalKeys);
   }, [setActiveModule, user?.role, isAuthenticated, isLocked, mustChangePin]);
 
-  if (!isAuthenticated || isLocked || mustChangePin) {
+  if (setupPhase !== 'COMPLETE') {
+    return <SetupGate phase={setupPhase} error={setupError} onRetry={() => void loadSetup()} />;
+  }
+
+  if (!isAuthenticated || mustChangePin) {
     return (
       <div className="h-screen w-screen bg-[var(--bg-canvas)]">
         <LoginOverlay />
         <MustChangePinModal />
+        <LockScreen />
       </div>
     );
   }
@@ -108,8 +122,13 @@ export const App: React.FC = () => {
     );
   }
 
+  // React 18 tiplerinde `inert` yok; öznitelik DOM'a olduğu gibi geçer.
+  const lockedProps = (isLocked ? { inert: '' } : {}) as React.HTMLAttributes<HTMLDivElement>;
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] select-none">
+    <div className="h-screen w-screen overflow-hidden bg-[var(--bg-canvas)]">
+    {/* Kilit oturumu kapatmaz: açık ekranlar ve sepet korunur, ama erişilemez olur. */}
+    <div {...lockedProps} className="flex flex-col h-full w-full overflow-hidden text-[var(--text-primary)] select-none">
       {/* 1. Üst Durum Çubuğu */}
       <TopStatusBar />
 
@@ -147,6 +166,8 @@ export const App: React.FC = () => {
       <ShiftGateModal />
       <PaymentModal />
       <ReceiptPreviewModal />
+    </div>
+    <LockScreen />
     </div>
   );
 };

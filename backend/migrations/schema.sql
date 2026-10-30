@@ -2060,6 +2060,18 @@ CREATE TABLE IF NOT EXISTS sync_operations (
 
 -- Kurulumun küme durumu. Dönem ve oy kaybolursa aynı dönemde iki otorite
 -- çıkabilir; bu yüzden diskte tutulur.
+-- İlk kurulum durumu. Cihaza özeldir, eşitlenmez. Taslakta PIN veya eşleştirme kodu olmaz.
+CREATE TABLE IF NOT EXISTS app_setup (
+    slot INTEGER PRIMARY KEY CHECK (slot = 1),
+    status TEXT NOT NULL CHECK (status IN ('PENDING', 'COMPLETE')),
+    origin TEXT CHECK (origin IN ('NEW', 'JOIN', 'UPGRADE')),
+    tenant_id TEXT,
+    mode TEXT CHECK (mode IN ('NEW', 'JOIN')),
+    draft TEXT CHECK (draft IS NULL OR json_valid(draft)),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS sync_cluster (
     slot INTEGER PRIMARY KEY CHECK (slot = 1),
     tenant_id TEXT NOT NULL,

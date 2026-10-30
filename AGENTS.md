@@ -108,7 +108,9 @@ KASAM360 arayüzü; restoran, kafe ve barların yoğun, tempolu ve düşük ış
 ```
 
 ### 4.4. Arayüz Düzeni ve Kabuk (App Shell)
-- **Giriş ve PIN Ekranı:** Tam ekran odaklı, 48px+ dokunmatik Numpad tuş takımlı endüstriyel terminal.
+- **İlk Kurulum:** Temiz veritabanında giriş veya kilit ekranı açılmaz; önce `Yeni işletme kur` / `Mevcut işletmeye cihaz bağla` seçimi gelir.
+- **Giriş ve PIN Ekranı:** Tam ekran odaklı, 48px+ dokunmatik Numpad tuş takımlı endüstriyel terminal. Yalnız oturum yokken görünür.
+- **Kilit Ekranı:** Hareketsizlikte açılır; mevcut oturumu korur ve yalnız oturum sahibinin PIN'iyle kapanır.
 - **Operasyon Ekranları:** Solda 72px donanım menü çubuğu (`SidebarNav`), üstte canlı durum çubuğu (`TopStatusBar`), merkezde dinamik modül alanı (`ContentArea`).
 - **Modal ve İletişim Pencereleri:** Opak, net kenarlıklı, yüksek kontrastlı yükseltilmiş paneller (`bg-[#171A20]`, `border-[#323846]`).
 
@@ -116,16 +118,16 @@ KASAM360 arayüzü; restoran, kafe ve barların yoğun, tempolu ve düşük ış
 
 ## 5. ROLLER VE YETKİ MATRİSİ (RBAC)
 
-Sistemde tanımlı 6 temel rol bulunmaktadır:
+Sistemde tanımlı 6 temel rol bulunmaktadır. Fabrika kullanıcısı veya varsayılan PIN yoktur: temiz cihazda ilk OWNER hesabı kurulum sihirbazında oluşur, PIN'i kullanıcı belirler ve Argon2id ile saklanır. Diğer personeli OWNER tanımlar. Yükseltilen eski kurulumlarda fabrika PIN'i duran hesaplar ilk girişte PIN değiştirmek zorundadır.
 
-| Rol | Varsayılan PIN | Yetki Kapsamı |
-|---|---|---|
-| **MASTER** | `1111` | Platform yönetimi, kiracı oluşturma, lisanslama, global feature flag'ler. POS/Kasa/KDS ekranlarına giremez; doğrudan platform paneline yönlendirilir. |
-| **OWNER** | `2222` | İşletme sahibi. Tüm finansal raporlar, P&L, personel maaşları, bütçe ve menü yönetimi. |
-| **MANAGER** | `3333` | Vardiya açma/kapama, iptal ve ikram PIN onayı, masa taşıma/birleştirme, operasyonel raporlar. Maaş tutarlarını göremez. |
-| **CASHIER** | `4444` | Kasa işlemleri, tahsilat, parçalı ödeme, gün sonu raporu, fiş basımı. |
-| **WAITER** | `5555` | Masa düzeni, sipariş alma, mutfağa iletme, adisyon yazdırma. Tahsilat veya iptal yapamaz. |
-| **KITCHEN** | `6666` | Mutfak Ekranı (KDS). Bekleyen siparişleri görme, hazırlama ve teslim durumuna geçirme. |
+| Rol | Yetki Kapsamı |
+|---|---|
+| **MASTER** | Platform yönetimi, kiracı oluşturma, lisanslama, global feature flag'ler. POS/Kasa/KDS ekranlarına giremez; doğrudan platform paneline yönlendirilir. |
+| **OWNER** | İşletme sahibi. Tüm finansal raporlar, P&L, personel maaşları, bütçe ve menü yönetimi. |
+| **MANAGER** | Vardiya açma/kapama, iptal ve ikram PIN onayı, masa taşıma/birleştirme, operasyonel raporlar. Maaş tutarlarını göremez. |
+| **CASHIER** | Kasa işlemleri, tahsilat, parçalı ödeme, gün sonu raporu, fiş basımı. |
+| **WAITER** | Masa düzeni, sipariş alma, mutfağa iletme, adisyon yazdırma. Tahsilat veya iptal yapamaz. |
+| **KITCHEN** | Mutfak Ekranı (KDS). Bekleyen siparişleri görme, hazırlama ve teslim durumuna geçirme. |
 
 ---
 

@@ -11,6 +11,9 @@ use crate::services::security360::login_lockout::{
     basari_sifirla, hata_kaydet, hesap_kapsami, kilit_kontrol, pin_kapsami, KilitDurumu,
 };
 
+pub mod unlock;
+pub use unlock::unlock_session;
+
 #[cfg(test)]
 #[path = "auth_commands/security_tests/mod.rs"]
 mod tests;
@@ -326,6 +329,7 @@ pub async fn auth_login_credentials(
     secret: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<UserDto, String> {
+    crate::services::setup::require_complete(&pool).await?;
     authenticate_by_identifier(&pool, &identifier, &secret).await
 }
 
@@ -336,6 +340,7 @@ pub async fn auth_login(
     #[allow(non_snake_case)] tenantId: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<UserDto, String> {
+    crate::services::setup::require_complete(&pool).await?;
     let effective_tenant = tenant_id.or(tenantId);
     authenticate_by_pin(&pool, &pin, effective_tenant.as_deref()).await
 }
@@ -469,6 +474,5 @@ pub async fn change_self_pin(
     Ok(serde_json::json!({
         "success": true,
         "user_id": user_id,
-        "new_pin": new_pin,
     }))
 }

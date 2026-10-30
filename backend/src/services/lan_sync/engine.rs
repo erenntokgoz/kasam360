@@ -305,6 +305,13 @@ impl Engine {
         Ok(effects)
     }
 
+    /// Aynı cihaz anahtarıyla üyelikte duran, katılımı yarım kalmış cihaz mı?
+    pub async fn is_known_device(&self, request: &JoinRequest) -> Result<bool, String> {
+        Ok(self.members().await?.iter().any(|member| {
+            member.device_id == request.device_id && member.public_key == request.public_key
+        }))
+    }
+
     /// Yeni cihazı kabul eder: kodu tüketir, anlık görüntüyü alır, üyeliği ekler.
     ///
     /// Anlık görüntü onay konumunu kapsar; sonrası günlükle taşındığından kayıt
@@ -320,12 +327,15 @@ impl Engine {
         if !members.iter().any(|m| m.device_id == self.me) {
             return Err("CONFLICT: bu cihaz üyelikte değil".to_string());
         }
-        if members.iter().any(|m| m.device_id == request.device_id) {
+        let rejoining = self.is_known_device(request).await?;
+        if !rejoining && members.iter().any(|m| m.device_id == request.device_id) {
             return Err("CONFLICT: cihaz zaten üye".to_string());
         }
         let grant = {
             let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
-            if store::has_pending_membership(&mut tx, &self.tenant_id).await? {
+            // Yeniden denemede bekleyen kayıt bu cihazın kendi üyeliğidir ve ancak
+            // cihaz dönünce onaylanabilir; beklemek iki cihazı kilitli bırakırdı.
+            if !rejoining && store::has_pending_membership(&mut tx, &self.tenant_id).await? {
                 return Err("CONFLICT: önceki üyelik değişikliği onay bekliyor".to_string());
             }
             pairing::consume_code(&mut tx, &self.tenant_id).await?;
@@ -345,6 +355,11 @@ impl Engine {
                 snapshot,
             }
         };
+        // Önceki deneme onayı almadan kesildi: üyelik durur, yalnız görüntü yenilenir.
+        if rejoining {
+            self.last_ack.insert(request.device_id.clone(), now);
+            return Ok((grant, Effects::default()));
+        }
         members.push(Member {
             device_id: request.device_id.clone(),
             name: request.name.clone(),

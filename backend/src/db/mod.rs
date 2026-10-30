@@ -17,7 +17,6 @@ mod migrate;
 mod seeds;
 mod stock_unit_migration;
 mod tables_migration;
-mod workspace_seed;
 
 #[cfg(test)]
 mod floor_plan_migration_tests;
@@ -36,7 +35,20 @@ pub type DbPool = Pool<Sqlite>;
 /// eski kurulumlarda bu kimlikle yazılmış satırlar yeni
 /// bir tohum değeriyle asla karışmaz ve kiracı kimliği
 /// şema ile senkron kalır.
+///
+/// Kurulum satırı önce okunur: kullanıcı işletmeye kendi adını verir. Ada göre
+/// arama yalnız `app_setup` tablosu oluşmadan önce çalışan yükseltme adımları içindir.
 pub(crate) async fn merkez_tenant_id(pool: &DbPool) -> Result<String, sqlx::Error> {
+    let kurulum =
+        sqlx::query_scalar::<_, Option<String>>("SELECT tenant_id FROM app_setup WHERE slot = 1")
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten()
+            .flatten();
+    if let Some(tenant_id) = kurulum {
+        return Ok(tenant_id);
+    }
     sqlx::query_scalar::<_, String>("SELECT id FROM tenants WHERE name = 'Kasam360 Merkez İşletme'")
         .fetch_one(pool)
         .await
@@ -51,7 +63,7 @@ const BILINMEYEN_KIRACI: &str = "tnt_unknown";
 // Alt modüllerdeki yordamlar init_db ve testler tarafından kullanılır.
 pub(crate) use campaign_seeds::seed_campaign_templates;
 pub(crate) use seeds::{
-    migrate_platform_admin_pins_to_argon2, migrate_user_pins_to_argon2, seed_default_users,
+    flag_factory_pins, migrate_platform_admin_pins_to_argon2, migrate_user_pins_to_argon2,
 };
 pub(crate) use tables_migration::migrate_tables_current_total_to_integer;
 
@@ -192,7 +204,9 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // DDL şemasını uygula (etki eşitsiz - tüm ifadeler CREATE TABLE IF NOT EXISTS kullanır)
     let schema = include_str!("../../migrations/schema.sql");
     sqlx::raw_sql(schema).execute(&pool).await?;
-    workspace_seed::seed_tenant(&pool).await?;
+    // Karar yükseltme adımlarından önce verilir: temiz kurulumda işletme ve
+    // kullanıcı açılmaz, mevcut veritabanı sihirbaza düşmez.
+    crate::services::setup::classify_install(&pool).await?;
 
     // Sürümlü migration'lar (0001_*.sql, 0002_*.sql, ...). Idempotent:
     // `_migrations` tablosunda version takibi yapar, calistirilmis
@@ -272,9 +286,8 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // kurulur; burada yalnız on sistem şablonu tohumlanır (idempotent).
     seed_campaign_templates(&pool).await?;
 
-    workspace_seed::seed_category(&pool).await?;
-    // Kullanıcı PIN'leri Argon2 ile üretilir; SQL dosyasına yazılmaz.
-    seed_default_users(&pool).await?;
+    // Eski kurulumda fabrika PIN'i duran hesaplar ilk girişte değişime zorlanır.
+    flag_factory_pins(&pool).await?;
 
     Ok(pool)
 }

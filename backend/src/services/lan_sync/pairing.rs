@@ -12,56 +12,35 @@ use sqlx::SqliteConnection;
 
 const CODE_LIFETIME_MINUTES: i64 = 10;
 
-/// Eşitlenen cari tabloları. `supplier_documents` stok tablolarına bağlı olduğu
-/// için stok eşitlenene kadar taşınmaz.
-const SNAPSHOT_TABLES: [(&str, &[&str]); 3] = [
+/// Cihaza özel tablolar: oturum, giriş sayacı, teslim kuyrukları ve eşitleme
+/// durumu. Dış teslim kuyruğu taşınırsa aynı e-posta iki cihazdan gönderilir;
+/// PIN deneme sayacı ve onay jetonları da yalnız üretildikleri cihazda anlamlıdır.
+const LOCAL_ONLY_TABLES: [&str; 12] = [
+    "app_setup",
+    "approval_attempts",
+    "approvals",
+    "conflict_log",
+    "email_queue",
+    "local_device_identity",
+    "login_attempts",
+    "outbox",
+    "sessions",
+    "snapshots",
+    "two_factor_verifications",
+    "whatsapp_queue",
+];
+
+/// Kiracı kolonu olmayan alt tablolar üst tablodan süzülür. Yeni tablolar kiracı
+/// kolonu taşıdığı sürece kendiliğinden taşınır.
+const CHILD_FILTERS: [(&str, &str); 3] = [
+    ("tenants", "id = ?"),
     (
-        "directories",
-        &[
-            "id",
-            "tenant_id",
-            "name",
-            "type",
-            "phone",
-            "email",
-            "tax_no",
-            "tax_office",
-            "address",
-            "credit_limit_cents",
-            "notes",
-            "created_at",
-        ],
+        "modifier_options",
+        "group_id IN (SELECT id FROM modifier_groups WHERE tenant_id = ?)",
     ),
     (
-        "debts",
-        &[
-            "id",
-            "tenant_id",
-            "directory_id",
-            "type",
-            "total_amount_cents",
-            "remaining_amount_cents",
-            "due_date",
-            "status",
-            "is_cash",
-            "order_id",
-            "description",
-            "created_at",
-        ],
-    ),
-    (
-        "debt_payments",
-        &[
-            "id",
-            "tenant_id",
-            "debt_id",
-            "amount_cents",
-            "payment_method",
-            "shift_id",
-            "actor_id",
-            "notes",
-            "created_at",
-        ],
+        "product_modifier_groups",
+        "group_id IN (SELECT id FROM modifier_groups WHERE tenant_id = ?)",
     ),
 ];
 
@@ -226,38 +205,87 @@ pub async fn init_cluster(
     Ok(row)
 }
 
-fn columns_sql(columns: &[&str]) -> String {
-    columns.join(", ")
+fn is_local_only(table: &str) -> bool {
+    table.starts_with("sync_") || LOCAL_ONLY_TABLES.contains(&table)
 }
 
-/// Cari tablolarının kiracı kapsamlı kopyası.
+async fn table_columns(conn: &mut SqliteConnection, table: &str) -> Result<Vec<String>, String> {
+    sqlx::query_scalar("SELECT name FROM pragma_table_info(?)")
+        .bind(table)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Taşınan tablolar ve satır süzgeçleri; eşleşmeyen tablo cihaz seviyesindedir.
+async fn snapshot_sources(
+    conn: &mut SqliteConnection,
+) -> Result<Vec<(String, Vec<String>, String)>, String> {
+    let names: Vec<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_%' ESCAPE '\\'
+         ORDER BY name",
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    let mut sources = Vec::with_capacity(names.len());
+    for table in names {
+        if is_local_only(&table) {
+            continue;
+        }
+        let columns = table_columns(conn, &table).await?;
+        let filter = CHILD_FILTERS
+            .iter()
+            .find(|(name, _)| *name == table)
+            .map(|(_, filter)| (*filter).to_string())
+            .or_else(|| {
+                columns
+                    .iter()
+                    .any(|column| column == "tenant_id")
+                    .then(|| "tenant_id = ?".to_string())
+            });
+        if let Some(filter) = filter {
+            sources.push((table, columns, filter));
+        }
+    }
+    Ok(sources)
+}
+
+/// İşletmenin kiracı kapsamlı tam kopyası.
+///
+/// Yeni cihaz giriş, menü, stok ve cari ekranlarını bu kopyayla açar. Denetim
+/// zinciri bozulmasın diye satırlar yazılma sırasıyla ve olduğu gibi taşınır.
 pub async fn export_snapshot(
     conn: &mut SqliteConnection,
     tenant_id: &str,
 ) -> Result<Vec<(String, String)>, String> {
-    let mut tables = Vec::with_capacity(SNAPSHOT_TABLES.len());
-    for (table, columns) in SNAPSHOT_TABLES {
+    let sources = snapshot_sources(conn).await?;
+    let mut tables = Vec::with_capacity(sources.len());
+    for (table, columns, filter) in sources {
         let pairs = columns
             .iter()
-            .map(|column| format!("'{column}', {column}"))
+            .map(|column| format!("'{column}', \"{column}\""))
             .collect::<Vec<_>>()
             .join(", ");
         let rows: String = sqlx::query_scalar(&format!(
             "SELECT COALESCE(json_group_array(json_object({pairs})), '[]')
-             FROM (SELECT * FROM {table} WHERE tenant_id = ? ORDER BY created_at, id)"
+             FROM (SELECT * FROM \"{table}\" WHERE {filter} ORDER BY rowid)"
         ))
         .bind(tenant_id)
         .fetch_one(&mut *conn)
         .await
-        .map_err(|e| format!("Anlık görüntü alınamadı: {e}"))?;
-        tables.push((table.to_string(), rows));
+        .map_err(|e| format!("Anlık görüntü alınamadı ({table}): {e}"))?;
+        if rows != "[]" {
+            tables.push((table, rows));
+        }
     }
     Ok(tables)
 }
 
-/// Kurulumda iş kaydı varsa katılım reddedilir.
+/// Kurulumda iş kaydı veya kullanıcı varsa katılım reddedilir.
 async fn require_empty(conn: &mut SqliteConnection) -> Result<(), String> {
-    for table in ["directories", "debts", "orders", "cash_movements"] {
+    for table in ["users", "directories", "debts", "orders", "cash_movements"] {
         let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
             .fetch_one(&mut *conn)
             .await
@@ -283,10 +311,6 @@ async fn adopt_tenant(
     if local_tenant == cluster_tenant {
         return Ok(());
     }
-    sqlx::query("PRAGMA defer_foreign_keys = ON")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
     let tables: Vec<String> = sqlx::query_scalar(
         "SELECT m.name FROM sqlite_master m, pragma_table_info(m.name) p
          WHERE m.type = 'table' AND p.name = 'tenant_id' AND m.name != 'audit_ledger'",
@@ -313,6 +337,53 @@ async fn adopt_tenant(
     Ok(())
 }
 
+/// Görüntü satırlarını yerel şemaya yazar.
+///
+/// Sütun adları eşten geldiği için SQL'e yalnız yerel şemada bulunanlar girer;
+/// bilinmeyen sütun sürüm farkıdır ve sessizce atılırsa veri kaybolurdu.
+async fn insert_snapshot_rows(
+    conn: &mut SqliteConnection,
+    table: &str,
+    columns: &[String],
+    rows: &str,
+) -> Result<(), String> {
+    let keys: Vec<String> = sqlx::query_scalar("SELECT key FROM json_each(?, '$[0]')")
+        .bind(rows)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| format!("Anlık görüntü okunamadı: {e}"))?;
+    if let Some(unknown) = keys.iter().find(|key| !columns.contains(key)) {
+        return Err(format!(
+            "CONFLICT: sürüm uyuşmuyor; {table}.{unknown} bu cihazda yok, iki cihazı aynı sürüme yükseltin"
+        ));
+    }
+    let names = keys
+        .iter()
+        .map(|key| format!("\"{key}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let extract = keys
+        .iter()
+        .map(|key| format!("json_extract(value, '$.\"{key}\"')"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    // Yarım kalan katılımın yeniden denenmesinde bu cihazın kendi satırı görüntüde gelir.
+    let on_conflict = if table == "devices" {
+        " ON CONFLICT(id) DO NOTHING"
+    } else {
+        ""
+    };
+    sqlx::query(&format!(
+        "INSERT INTO \"{table}\" ({names})
+         SELECT {extract} FROM json_each(?) WHERE true ORDER BY key{on_conflict}"
+    ))
+    .bind(rows)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| format!("Anlık görüntü yüklenemedi ({table}): {e}"))?;
+    Ok(())
+}
+
 /// Katılımı tek transaction'da uygular; yarım kalan katılım kurulumu bozmaz.
 pub async fn accept_grant(
     conn: &mut SqliteConnection,
@@ -324,30 +395,35 @@ pub async fn accept_grant(
         return Err("CONFLICT: bu cihaz zaten bir kümeye bağlı".to_string());
     }
     require_empty(conn).await?;
-    adopt_tenant(conn, local_tenant, &grant.tenant_id).await?;
-    for (table, rows) in &grant.snapshot {
-        let (name, columns) = SNAPSHOT_TABLES
-            .iter()
-            .find(|(name, _)| name == table)
-            .ok_or_else(|| format!("UNAUTHORIZED: beklenmeyen tablo: {table}"))?;
-        let extract = columns
-            .iter()
-            .map(|column| format!("json_extract(value, '$.{column}')"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        sqlx::query(&format!(
-            "INSERT INTO {name} ({}) SELECT {extract} FROM json_each(?)",
-            columns_sql(columns)
-        ))
-        .bind(rows)
+    sqlx::query("PRAGMA defer_foreign_keys = ON")
         .execute(&mut *conn)
         .await
-        .map_err(|e| format!("Anlık görüntü yüklenemedi: {e}"))?;
+        .map_err(|e| e.to_string())?;
+    adopt_tenant(conn, local_tenant, &grant.tenant_id).await?;
+    // Geçici kiracı küme kimliğine taşındı; asıl satır görüntüden gelir. Silme
+    // yazımdan önce olmalı: sonra yapılırsa alt kayıtlar cascade ile giderdi.
+    if grant.snapshot.iter().any(|(table, _)| table == "tenants") {
+        sqlx::query("DELETE FROM tenants WHERE id = ?")
+            .bind(&grant.tenant_id)
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    let sources = snapshot_sources(conn).await?;
+    for (table, rows) in &grant.snapshot {
+        let (name, columns, _) = sources
+            .iter()
+            .find(|(name, _, _)| name == table)
+            .ok_or_else(|| format!("UNAUTHORIZED: beklenmeyen tablo: {table}"))?;
+        insert_snapshot_rows(conn, name, columns, rows).await?;
     }
     // Anlık görüntü başkasının defteridir; yalnız kümenin kiracısıyla kabul edilir.
-    for (table, _) in SNAPSHOT_TABLES {
+    for (table, columns, _) in &sources {
+        if !columns.iter().any(|column| column == "tenant_id") {
+            continue;
+        }
         let foreign: i64 = sqlx::query_scalar(&format!(
-            "SELECT COUNT(*) FROM {table} WHERE tenant_id != ?"
+            "SELECT COUNT(*) FROM \"{table}\" WHERE tenant_id != ?"
         ))
         .bind(&grant.tenant_id)
         .fetch_one(&mut *conn)

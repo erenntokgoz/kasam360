@@ -1,81 +1,38 @@
 use super::{tracing_fallback_log, DbPool};
 use sqlx::{Acquire, Row};
 
-/// Altı sabit rolü Argon2id hash'li PIN'lerle tohumlar.
+/// Eski sürümün fabrika hesaplarında PIN değişmemişse değişimi zorunlu kılar.
 ///
-/// Etkileşimli: önce `SELECT` ile varlık denetir, yalnızca eksik olan hash'lenir.
-/// Böylece her açılışta altı Argon2 işlemi harcanmaz.
-/// `ON CONFLICT DO NOTHING` tek başına yeterli değildir: hash parametre olarak
-/// önceden hesaplanmak zorunda kalırdı.
-pub(crate) async fn seed_default_users(pool: &DbPool) -> Result<(), sqlx::Error> {
-    const DEFAULT_USERS: [(&str, &str, &str, &str); 6] = [
-        ("usr_master", "1111", "MASTER", "Master Admin"),
-        ("usr_owner", "2222", "OWNER", "Owner (Patron)"),
-        ("usr_manager", "3333", "MANAGER", "Manager (Müdür)"),
-        ("usr_cashier", "4444", "CASHIER", "Cashier (Kasiyer)"),
-        ("usr_waiter", "5555", "WAITER", "Waiter (Garson)"),
-        ("usr_cook", "6666", "KITCHEN", "Kitchen (Aşçı)"),
+/// Hesap açmaz: temiz kurulumda bu kimlikler yoktur ve OWNER kurulumda oluşur.
+/// Doğrulama Argon2 hash üzerinden yapılır; PIN'ini değiştiren kullanıcının
+/// bayrağına dokunulmaz, bayrak zaten açık olan satır yeniden doğrulanmaz.
+pub(crate) async fn flag_factory_pins(pool: &DbPool) -> Result<(), sqlx::Error> {
+    const FACTORY_PINS: [(&str, &str); 6] = [
+        ("usr_master", "1111"),
+        ("usr_owner", "2222"),
+        ("usr_manager", "3333"),
+        ("usr_cashier", "4444"),
+        ("usr_waiter", "5555"),
+        ("usr_cook", "6666"),
     ];
 
-    // Kiracı kimliği merkez işletmeden okunur (tek kaynak):
-    // tohum kullanıcıları, kurulumda açılan merkez işletme
-    // satırıyla aynı kiracıya yazılır. Kimlik kaynak kodta
-    // sözlü olarak yaşamaz; kiracı çözülemezse tohumlanmaz
-    // (fail-closed, AGENTS.md §3.3).
-    let merkez = super::merkez_tenant_id(pool).await?;
-
-    let mut inserted = 0usize;
-    for (id, pin, role, name) in DEFAULT_USERS {
-        let existing: Option<i64> = sqlx::query_scalar("SELECT 1 FROM users WHERE id = ?")
-            .bind(id)
-            .fetch_optional(pool)
-            .await?;
-        if existing.is_some() {
-            // Mevcut hesap: PIN'i hâlâ fabrika öntanımlısıysa ilk
-            // giriş değişimi zorunludur. Doğrulama Argon2 hash
-            // üzerinden yapılır; kullanıcı PIN'ini değiştirdiyse
-            // bayrak dokunulmaz (idempotent, sessiz sıfırlama yok).
-            let hash: Option<String> =
-                sqlx::query_scalar("SELECT pin_hash FROM users WHERE id = ?")
-                    .bind(id)
-                    .fetch_optional(pool)
-                    .await?
-                    .flatten();
-            if let Some(hash) = hash {
-                if crate::user_credentials::is_argon2_hash(&hash)
-                    && crate::auth::verify_credential(pin, &hash)
-                {
-                    sqlx::query("UPDATE users SET must_change_pin = 1 WHERE id = ?")
-                        .bind(id)
-                        .execute(pool)
-                        .await?;
-                }
-            }
+    for (id, pin) in FACTORY_PINS {
+        let hash: Option<Option<String>> =
+            sqlx::query_scalar("SELECT pin_hash FROM users WHERE id = ? AND must_change_pin = 0")
+                .bind(id)
+                .fetch_optional(pool)
+                .await?;
+        let Some(hash) = hash.flatten() else {
             continue;
+        };
+        if crate::user_credentials::is_argon2_hash(&hash)
+            && crate::auth::verify_credential(pin, &hash)
+        {
+            sqlx::query("UPDATE users SET must_change_pin = 1 WHERE id = ?")
+                .bind(id)
+                .execute(pool)
+                .await?;
         }
-
-        let hash = crate::user_credentials::hash_pin(pin).map_err(sqlx::Error::Protocol)?;
-        // `must_change_pin = 1`: fabrika PIN'leriyle kurulan hesaplar
-        // ilk girişte PIN değiştirmek zorundadır (ilk giriş güvenlik kuralı).
-        sqlx::query(
-            "INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active, must_change_pin)
-             VALUES (?, ?, ?, ?, ?, 1, 1)",
-        )
-        .bind(id)
-        .bind(&merkez)
-        .bind(role)
-        .bind(name)
-        .bind(&hash)
-        .execute(pool)
-        .await?;
-        inserted += 1;
-    }
-
-    if inserted > 0 {
-        tracing_fallback_log(
-            "db::seed",
-            &format!("Kullanıcılar Argon2 ile tohumlandı: {} kayıt", inserted),
-        );
     }
     Ok(())
 }

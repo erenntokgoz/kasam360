@@ -15,6 +15,7 @@ pub async fn process_split_payment(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<PaymentResultDto, String> {
     state.lan_sync.require_local_write()?;
+    crate::services::setup::require_complete(&pool).await?;
     // Parçalı ödeme de tahsilattır: process_payment ile aynı yetki kuralı.
     crate::rbac::require_any(
         &actor_role,

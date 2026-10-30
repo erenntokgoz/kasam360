@@ -31,6 +31,7 @@ pub mod print_commands;
 pub mod receipt_commands;
 pub mod report_commands;
 pub mod reservation_commands;
+pub mod setup_commands;
 pub mod shift_commands;
 pub mod staff_commands;
 pub mod sync_commands;

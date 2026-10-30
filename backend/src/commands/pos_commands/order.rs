@@ -76,6 +76,7 @@ pub async fn submit_order(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
     state.lan_sync.require_local_write()?;
+    crate::services::setup::require_complete(&pool).await?;
     crate::rbac::require_any_present(
         actor_role.as_deref(),
         &[

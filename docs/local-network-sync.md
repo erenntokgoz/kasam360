@@ -13,6 +13,8 @@ Durum: Cari işlemler için aktarım uygulandı; gerçek cihaz testi yapılmadı
 - Kod `backend/src/services/lan_sync` altındadır: işlem günlüğü (`op_log`), otorite ve çoğunluk (`engine`), şifreli kanal (`secure_channel`), eşleştirme (`pairing`), TCP çalışma döngüsü (`runtime`, `transport`).
 - Sipariş, ödeme, kasa, vardiya, gün sonu, personel bordrosu ve stok henüz günlüğe taşınmadı. Bu yüzden iki veya daha fazla cihaz eşleştirildiğinde bu yazmalar `SYNC_UNSUPPORTED` ile durur; nakit cari hareketi ve tedarikçi belgesi de vardiya ve stok eşitlenene kadar kapalıdır.
 - `outbox` harici sistem teslimatı içindir; cihazlar arası eşitlemede kullanılmaz.
+- Yeni cihaz, ilk kurulumda tek kullanımlık kodla katılır ve işletmenin kiracı kapsamlı tam görüntüsünü (kullanıcılar, menü, stok, cari, denetim zinciri) alır. Oturum, giriş sayacı, teslim kuyrukları ve eşitleme durumu cihaza özeldir, taşınmaz. Görüntü tek şifreli çerçevede 32 MB ile sınırlıdır.
+- Onay yanıtı cihaza ulaşmadan kesilen katılım, aynı cihaz anahtarı ve yeni kodla tekrarlanır; cihaz çift eklenmez. Kurulumdan vazgeçilirse otorite o cihazı Cihazlar ekranından pasife alır.
 
 ## Güvenlik ve süreklilik kuralı
 

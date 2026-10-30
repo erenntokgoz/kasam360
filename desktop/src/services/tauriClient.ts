@@ -76,6 +76,15 @@ async function handleMockIPC<T>(command: string, args: Record<string, unknown>):
       } as T;
     }
 
+    case 'get_setup_status':
+      return { status: 'COMPLETE', mode: null, draft: {} } as unknown as T;
+
+    case 'auth_unlock': {
+      const { pin } = args as { pin: string };
+      if (!import.meta.env.DEV || !/^([1-6])\1{3}$/.test(pin)) throw new Error('Geçersiz PIN');
+      return null as unknown as T;
+    }
+
     case 'auth_login_credentials':
       throw new Error('Hesap girişi için masaüstü uygulaması gerekli.');
 

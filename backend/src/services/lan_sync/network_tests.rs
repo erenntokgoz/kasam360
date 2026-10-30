@@ -323,3 +323,55 @@ async fn yeniden_baslayan_uye_otoriteye_baglanip_eksigini_alir() {
     restarted.shutdown().await;
     sync_b.shutdown().await;
 }
+
+/// Onay yanıtı cihaza ulaşmadan kesilen katılım, yeni kodla aynı cihazdan sürer.
+#[tokio::test]
+async fn yarim_kalan_katilim_yeni_kodla_tamamlanir() {
+    use crate::services::device_identity::ensure_local_device;
+    use crate::services::lan_sync::pairing::{JoinRequest, PairingCode};
+    use crate::services::lan_sync::secure_channel::DeviceKey;
+
+    let (_pool_a, sync_a) = device("kasa").await;
+    let (pool_b, sync_b) = device("yeni").await;
+    let (code, _) = sync_a
+        .create_pairing_code(TENANT, "Kasa", "127.0.0.1", 0)
+        .await
+        .expect("kod");
+    wait_until!("tek üyede otorite", sync_a.status().state == "READY");
+
+    // Kesintiyi yalnız ilk yarıyla kurar: üyelik yazılır, cihaz onayı işlemez.
+    let (me, public_key) = {
+        let mut conn = pool_b.acquire().await.expect("bağlantı");
+        let key = DeviceKey::load_or_create(&mut conn).await.expect("anahtar");
+        let me = ensure_local_device(&mut conn, TENANT).await.expect("cihaz");
+        (me, key.public_key)
+    };
+    let request = JoinRequest {
+        device_id: me.clone(),
+        name: "Garson".to_string(),
+        public_key,
+        listen_port: 1,
+    };
+    let parsed = PairingCode::parse(&code).expect("kod");
+    super::transport::request_join(&parsed, &me, &request)
+        .await
+        .expect("ilk katılım");
+    wait_until!(
+        "üyelik işlendi",
+        sync_a.status().members.iter().any(|m| m.device_id == me)
+    );
+
+    let (retry, _) = sync_a
+        .create_pairing_code(TENANT, "Kasa", "127.0.0.1", 0)
+        .await
+        .expect("yeni kod");
+    sync_b
+        .join(&retry, TENANT, "Garson", 0)
+        .await
+        .expect("yeniden deneme");
+    wait_until!(
+        "iki cihaz hazır",
+        sync_a.status().state == "READY" && sync_b.status().state == "READY"
+    );
+    assert_eq!(sync_a.status().members.len(), 2, "cihaz çift eklenmez");
+}

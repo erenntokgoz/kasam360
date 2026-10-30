@@ -5,7 +5,7 @@
 
 use crate::ledger_commands::guard::require_ledger_tenant;
 use crate::rbac::{self, Role};
-use crate::services::lan_sync::runtime::DEFAULT_PORT;
+use crate::services::lan_sync::runtime::sync_port;
 use crate::services::lan_sync::{OperationOutcome, SyncStatus};
 use serde::Serialize;
 
@@ -60,26 +60,9 @@ pub async fn create_pairing_code(
     let tid = require_ledger_tenant(tenant_id.as_deref())?;
     let (code, expires_at) = state
         .lan_sync
-        .create_pairing_code(&tid, device_name.trim(), &local_ip()?, DEFAULT_PORT)
+        .create_pairing_code(&tid, device_name.trim(), &local_ip()?, sync_port())
         .await?;
     Ok(PairingCodeDto { code, expires_at })
-}
-
-/// Boş kurulumu kodla kümeye katar.
-#[tauri::command]
-pub async fn join_cluster(
-    actor_role: Option<String>,
-    tenant_id: Option<String>,
-    code: String,
-    device_name: String,
-    state: tauri::State<'_, crate::AppState>,
-) -> Result<(), String> {
-    rbac::require_any_present(actor_role.as_deref(), &[Role::Owner])?;
-    let tid = require_ledger_tenant(tenant_id.as_deref())?;
-    state
-        .lan_sync
-        .join(&code, &tid, device_name.trim(), DEFAULT_PORT)
-        .await
 }
 
 /// Cihazı planlı olarak üyelikten çıkarır.

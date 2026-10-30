@@ -29,7 +29,6 @@ interface SyncStore {
   statusError: string | null;
   refresh: () => Promise<void>;
   createPairingCode: (deviceName: string) => Promise<{ code: string; expiresAt: string }>;
-  joinCluster: (code: string, deviceName: string) => Promise<void>;
   setDevicePassive: (deviceId: string) => Promise<void>;
 }
 
@@ -66,12 +65,6 @@ export const useSyncStore = create<SyncStore>((set, get) => ({
     });
     await get().refresh();
     return result;
-  },
-
-  joinCluster: async (code, deviceName) => {
-    const { actorRole, tenantId } = sessionArgs();
-    await invokeIPC('join_cluster', { actorRole, tenantId, code, deviceName });
-    await get().refresh();
   },
 
   setDevicePassive: async (deviceId) => {

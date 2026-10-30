@@ -8,7 +8,7 @@ import { Input } from '../../ui/Input';
 import { formatDateTime } from '../../lib/date';
 
 export const LoginOverlay: React.FC = () => {
-  const { isAuthenticated, isLocked, loginWithPin, loginWithCredentials, loginError } = useAuthStore();
+  const { isAuthenticated, loginWithPin, loginWithCredentials, loginError } = useAuthStore();
   const { theme, toggleTheme, resetIdleTimer } = useUIStore();
 
   const [authMethod, setAuthMethod] = useState<'PIN' | 'CRED'>('PIN');
@@ -24,8 +24,7 @@ export const LoginOverlay: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const shouldShow = !isAuthenticated || isLocked;
-  if (!shouldShow) return null;
+  if (isAuthenticated) return null;
 
   const handleDigit = (d: string) => {
     if (pinDigits.length < 8) setPinDigits((current) => current + d);
@@ -99,9 +98,7 @@ export const LoginOverlay: React.FC = () => {
           }`}
         >
           <div className="text-center">
-            <h1 className="text-base font-bold text-[var(--text-primary)]">
-              {isLocked ? 'Terminal Kilitli' : 'Personel Girişi'}
-            </h1>
+            <h1 className="text-base font-bold text-[var(--text-primary)]">Personel Girişi</h1>
             <p className="text-xs mt-1 text-[var(--text-secondary)]">
               Devam etmek için 4-8 haneli PIN kodunuzu girin
             </p>

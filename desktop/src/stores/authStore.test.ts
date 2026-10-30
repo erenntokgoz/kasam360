@@ -45,6 +45,26 @@ describe('oturum sınırı', () => {
     expect(useAuthStore.getState().user).toMatchObject({ role: 'MANAGER', tenantId: 'ten_3' });
   });
 
+  it('kilidi yalnız oturum sahibinin kimliğiyle ister, hatada kilitli kalır', async () => {
+    invokeMock.mockResolvedValueOnce({
+      id: 'usr_1', name: 'Ayşe', role: 'CASHIER', tenant_id: 'ten_2',
+      activeModules: [], mustChangePin: false,
+    });
+    await useAuthStore.getState().loginWithPin('4827');
+    useAuthStore.getState().lock();
+
+    invokeMock.mockRejectedValueOnce(new Error('Geçersiz PIN'));
+    expect(await useAuthStore.getState().unlock('0000')).toBe(false);
+    expect(useAuthStore.getState().isLocked).toBe(true);
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    expect(await useAuthStore.getState().unlock('4827')).toBe(true);
+    expect(invokeMock).toHaveBeenLastCalledWith('auth_unlock', {
+      tenantId: 'ten_2', userId: 'usr_1', pin: '4827',
+    });
+    expect(useAuthStore.getState()).toMatchObject({ isLocked: false, isAuthenticated: true });
+  });
+
   it('özellik bayraklarını yalnız oturum yanıtından açar ve çıkışta kapatır', async () => {
     invokeMock.mockResolvedValueOnce({
       id: 'usr_1', name: 'Ayşe', role: 'WAITER', tenant_id: 'ten_2',

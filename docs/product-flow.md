@@ -6,7 +6,7 @@ Restoranın masaya servis öncelikli günlük işini, internet olmasa da aynı y
 
 ## Günlük akış
 
-1. İşletme sahibi cihazları, kullanıcıları, menüyü, reçeteleri, hammaddeleri ve tedarikçileri tanımlar.
+1. İlk açılışta `Yeni işletme kur` işletme bilgilerini ve OWNER hesabını oluşturur, `Mevcut işletmeye cihaz bağla` tek kullanımlık kodla mevcut kiracıya katılır. Fabrika kullanıcısı yoktur. İşletme sahibi cihazları, kullanıcıları, menüyü, reçeteleri, hammaddeleri ve tedarikçileri tanımlar.
 2. Yönetici vardiyayı açar; cihazlar menü, fiyat, stok ve açık işlemleri eşitler.
 3. Garson masayı açar, ürün ve seçenekleri ekler, mutfağa gönderir. Tezgâh satışı masa seçmeden aynı akışı kullanır.
 4. Mutfağa gönderilen kalemler reçetelerinden gerçek parti sırasıyla bir kez stok düşer. Hazırlık öncesi iptal stoğu geri bırakır; hazırlık sonrası kayıp gerekçeli fire olur.
@@ -27,6 +27,14 @@ Restoranın masaya servis öncelikli günlük işini, internet olmasa da aynı y
 ## Tedarik ve cari bağlantısı
 
 Mal kabulü gerçek teslim miktarını stoğa ekler. Tedarikçi belgesi daha sonra gelebilir; bu durumda giriş "Belge bekleniyor" görünür. Belge tutarı kontrol edilip onaylanınca tedarikçi borcu doğar. Farklar sessizce düzeltilmez. Ödemeler ayrı hareketlerle bakiyeyi azaltır.
+
+## İlk kurulum, giriş ve kilit
+
+- Kurulum durumu `app_setup` satırındadır ve cihaza özeldir. Kullanıcısı olan mevcut veritabanı ilk yükseltmede tamamlanmış sayılır; sihirbaza düşmez.
+- Yeni işletme tek transaction'da açılır. Yarıda kesilirse kayıt kalmaz; seçim ve işletme bilgileri taslakta durur, PIN ve eşleştirme kodu diske yazılmaz.
+- Kurulum tamamlanmadan giriş, kilit açma, sipariş ve tahsilat komutları `SETUP_REQUIRED` ile reddedilir. Durum okunamazsa kurulum tamamlanmış sayılmaz.
+- Giriş oturum yokken, kilit ekranı mevcut oturum hareketsizlikten kilitlendiğinde kullanılır. Başka personelin PIN'i kilitli oturumu açmaz; `Kullanıcı Değiştir` oturumu kapatıp girişe döner.
+- Cihaz bağlama yalnız kurulum sihirbazından yapılır: kayıtlı işletmesi olan cihaz başka işletmeye katılmaz.
 
 ## Cihaz ve bağlantı davranışı
 

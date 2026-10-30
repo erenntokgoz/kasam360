@@ -14,10 +14,9 @@ interface SyncDevicesModalProps {
 }
 
 export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({ isOpen, onClose }) => {
-  const { status, createPairingCode, joinCluster, setDevicePassive } = useSyncStore();
+  const { status, createPairingCode, setDevicePassive } = useSyncStore();
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const [deviceName, setDeviceName] = useState('');
-  const [joinCode, setJoinCode] = useState('');
   const [pairing, setPairing] = useState<{ code: string; expiresAt: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -129,25 +128,6 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({ isOpen, onCl
                   Tek kullanımlık. Geçerlilik: {formatDateTime(`${pairing.expiresAt}Z`)}
                 </span>
               </p>
-            ) : null}
-            {status?.mode === 'SINGLE' ? (
-              <div className="flex gap-2">
-                <Input
-                  aria-label="Eşleştirme kodu"
-                  placeholder="Eşleştirme kodu"
-                  value={joinCode}
-                  onChange={(event) => setJoinCode(event.target.value)}
-                  className="min-h-12"
-                />
-                <Button
-                  variant="secondary"
-                  disabled={isBusy || !nameReady || !joinCode.trim()}
-                  onClick={() => void run(() => joinCluster(joinCode.trim(), deviceName.trim()))}
-                  className="min-h-12 shrink-0"
-                >
-                  Kümeye Katıl
-                </Button>
-              </div>
             ) : null}
           </section>
         ) : null}
