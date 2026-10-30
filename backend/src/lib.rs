@@ -229,6 +229,7 @@ pub fn run() {
             ledger_commands::get_directories,
             ledger_commands::create_directory,
             ledger_commands::update_directory,
+            ledger_commands::find_similar_directories,
             ledger_commands::get_debts,
             ledger_commands::create_debt,
             ledger_commands::pay_debt,
@@ -242,6 +243,9 @@ pub fn run() {
             ledger_commands::get_recurring_expenses,
             ledger_commands::get_directory_statement,
             ledger_commands::print_payment_receipt,
+            ledger_commands::operations::get_operation_result,
+            ledger_commands::supplier_documents::get_awaiting_supplier_documents,
+            ledger_commands::supplier_documents::approve_supplier_document,
             // Personel 360°. Maaş tutarı görmek yalnız OWNER'a açıktır;
             // kapılar `commands::staff_commands` içinde `rbac` ile uygulanır.
             commands::staff_commands::list_staff_profiles,
