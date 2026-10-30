@@ -37,8 +37,14 @@ pub(crate) async fn submit(
         actor_role,
         intent_sha256: intent_hash(op.kind(), &intent),
         created_at: chrono::Utc::now().to_rfc3339(),
-        op: LogOp::Cari(op),
+        op: LogOp::Cari(Box::new(op)),
     };
+    if state.lan_sync.status().mode == "CLUSTER" {
+        if let LogOp::Cari(op) = &operation.op {
+            state.lan_sync.require_replicable(op)?;
+        }
+        return state.lan_sync.submit(operation).await?.into_result();
+    }
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     execute_local(pool, &audit_lock, &operation)
         .await?

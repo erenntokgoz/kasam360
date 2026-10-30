@@ -42,8 +42,10 @@ pub use db::{init_db, DbPool};
 /// yönetim komutlarının kasayı kilitlenmesini engeller.
 pub struct AppState {
     pub payment_mutex: tokio::sync::Mutex<()>,
-    pub audit_mutex: tokio::sync::Mutex<()>,
+    pub audit_mutex: std::sync::Arc<tokio::sync::Mutex<()>>,
     pub table_locks: tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>,
+    /// Yerel ağ eşitlemesi; finansal yazma kapısı buradan geçer.
+    pub lan_sync: services::lan_sync::LanSync,
 }
 
 pub fn run() {
@@ -60,11 +62,18 @@ pub fn run() {
                     .await
                     .map_err(|e| Box::new(std::io::Error::other(e.to_string())))?;
 
+                // Eşitleme de aynı denetim kilidini kullanır: iki yol aynı zinciri yazar.
+                let audit_mutex = std::sync::Arc::new(tokio::sync::Mutex::new(()));
+                let lan_sync =
+                    services::lan_sync::LanSync::new(pool.clone(), audit_mutex.clone(), "0.0.0.0");
+                lan_sync.resume().await;
+
                 app.manage(pool);
                 app.manage(AppState {
                     payment_mutex: tokio::sync::Mutex::new(()),
-                    audit_mutex: tokio::sync::Mutex::new(()),
+                    audit_mutex,
                     table_locks: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+                    lan_sync,
                 });
 
                 Ok::<(), Box<dyn std::error::Error>>(())
@@ -244,6 +253,10 @@ pub fn run() {
             ledger_commands::get_directory_statement,
             ledger_commands::print_payment_receipt,
             ledger_commands::operations::get_operation_result,
+            commands::sync_commands::get_sync_status,
+            commands::sync_commands::create_pairing_code,
+            commands::sync_commands::join_cluster,
+            commands::sync_commands::set_device_passive,
             ledger_commands::supplier_documents::get_awaiting_supplier_documents,
             ledger_commands::supplier_documents::approve_supplier_document,
             // Personel 360°. Maaş tutarı görmek yalnız OWNER'a açıktır;

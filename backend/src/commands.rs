@@ -33,6 +33,7 @@ pub mod report_commands;
 pub mod reservation_commands;
 pub mod shift_commands;
 pub mod staff_commands;
+pub mod sync_commands;
 pub mod threshold_commands;
 pub mod void_commands;
 pub mod waiter_commands;
