@@ -13,6 +13,7 @@ mod price_lists_windows;
 mod pricing;
 mod recipes;
 mod shelf_life;
+mod stock;
 mod suppliers;
 mod support;
 mod units;

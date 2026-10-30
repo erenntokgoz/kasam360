@@ -50,13 +50,22 @@ async fn siparisi_teslim_almak_fifo_partisi_acar_ve_stogu_gunceller() {
     assert_eq!(miktar, 10.0);
     assert_eq!(birim, 3800);
 
-    let stok = sqlx::query_scalar::<_, Option<i64>>(
+    let legacy_stok = sqlx::query_scalar::<_, Option<i64>>(
         "SELECT stock_quantity FROM products WHERE id = 'prd_1' AND tenant_id = 'tnt_1'",
     )
     .fetch_one(&mut conn)
     .await
     .expect("urun okunmali");
-    assert_eq!(stok, Some(10), "stok teslim miktari kadar artmali");
+    assert_eq!(legacy_stok, None, "tek stok kaynağı FIFO partileri olmalı");
+
+    let alinan: f64 = sqlx::query_scalar(
+        "SELECT received_quantity FROM purchase_order_items WHERE tenant_id = 'tnt_1' AND purchase_order_id = ?",
+    )
+    .bind(&siparis.id)
+    .fetch_one(&mut conn)
+    .await
+    .expect("teslim miktarı okunmalı");
+    assert_eq!(alinan, 10.0);
 
     let durum: String = sqlx::query_scalar("SELECT status FROM purchase_orders WHERE id = ?")
         .bind(&siparis.id)
@@ -77,6 +86,31 @@ async fn siparisi_teslim_almak_fifo_partisi_acar_ve_stogu_gunceller() {
             .await
             .expect("sorgu calismali");
     assert_eq!(parti_sayisi, 1, "ikinci teslimde yeni parti acilmamali");
+}
+
+#[tokio::test]
+async fn kesirli_alim_tutari_tamsayi_kurusla_hesaplanir() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, T, "prd_kilo", "Un", 0).await;
+    let supplier = upsert_supplier(&mut conn, T, AKTOR, tedarikci_girdisi("Uncu"))
+        .await
+        .expect("tedarikçi");
+    let order = create_purchase_order(
+        &mut conn,
+        T,
+        AKTOR,
+        siparis_girdisi(&supplier.id, "prd_kilo", 1.5, Some(333)),
+    )
+    .await
+    .expect("sipariş");
+    assert_eq!(order.total_cents, 500);
+    assert_eq!(
+        receive_purchase_order(&mut conn, T, &order.id)
+            .await
+            .unwrap(),
+        500
+    );
 }
 
 #[tokio::test]

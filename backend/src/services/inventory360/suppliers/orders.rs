@@ -3,6 +3,25 @@ use crate::management_commands::ensure_owned;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqliteConnection};
 
+fn line_cost_cents(unit_cost_cents: i64, quantity: f64) -> Result<i64, String> {
+    if unit_cost_cents < 0
+        || !quantity.is_finite()
+        || quantity <= 0.0
+        || quantity > (i64::MAX as f64) / 1_000_000.0
+    {
+        return Err("VALIDATION: geçersiz alış miktarı veya fiyatı".into());
+    }
+    let micros = (quantity * 1_000_000.0).round() as i128;
+    if micros == 0 {
+        return Err("VALIDATION: alış miktarı ölçülemeyecek kadar küçük".into());
+    }
+    let cost_micros = i128::from(unit_cost_cents)
+        .checked_mul(micros)
+        .ok_or_else(|| "OVERFLOW: alış maliyeti taştı".to_string())?;
+    i64::try_from((cost_micros + 500_000) / 1_000_000)
+        .map_err(|_| "OVERFLOW: alış maliyeti taştı".to_string())
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PurchaseOrder {
     pub id: String,
@@ -94,7 +113,9 @@ pub async fn create_purchase_order(
             })?,
         };
 
-        toplam += (unit_cost as f64 * item.quantity).round() as i64;
+        toplam = toplam
+            .checked_add(line_cost_cents(unit_cost, item.quantity)?)
+            .ok_or_else(|| "OVERFLOW: sipariş toplamı taştı".to_string())?;
         kalemler.push((item.product_id.clone(), item.quantity, unit_cost));
     }
 
@@ -235,25 +256,16 @@ pub async fn receive_purchase_order(
         sqlx::query(
             "UPDATE purchase_order_items SET received_quantity = ? WHERE id = ? AND tenant_id = ?",
         )
-        .bind(kalan)
+        .bind(quantity)
         .bind(&kalem_id)
         .bind(tenant_id)
         .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
 
-        sqlx::query(
-            "UPDATE products SET stock_quantity = COALESCE(stock_quantity, 0) + ?
-              WHERE id = ? AND tenant_id = ?",
-        )
-        .bind(kalan)
-        .bind(&product_id)
-        .bind(tenant_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-
-        toplam_maliyet += (unit_cost as f64 * kalan).round() as i64;
+        toplam_maliyet = toplam_maliyet
+            .checked_add(line_cost_cents(unit_cost, kalan)?)
+            .ok_or_else(|| "OVERFLOW: teslim toplamı taştı".to_string())?;
     }
 
     sqlx::query(

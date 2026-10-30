@@ -29,7 +29,7 @@ pub struct PosProductDto {
     #[serde(rename = "inStock", alias = "in_stock")]
     pub in_stock: bool,
     #[serde(rename = "stockQuantity", alias = "stock_quantity")]
-    pub stock_quantity: Option<i64>,
+    pub stock_quantity: Option<f64>,
     pub color: Option<String>,
     #[serde(rename = "imageUrl", alias = "image_url")]
     pub image_url: Option<String>,
@@ -70,32 +70,44 @@ pub async fn pos_get_products(
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<PosProductDto>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    list_pos_products(&mut conn, &tenant_id).await
+}
+
+pub(crate) async fn list_pos_products(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+) -> Result<Vec<PosProductDto>, String> {
+    if tenant_id.trim().is_empty() {
+        return Err("UNAUTHORIZED: işletme kimliği gerekli".into());
+    }
     let rows = sqlx::query(
         "SELECT p.id, p.sku, p.barcode, p.name, p.price_cents, p.tax_rate_bp, \
-                c.name as category_name, p.description, p.track_stock, p.stock_quantity, \
+                c.name as category_name, p.description, \
                 p.color, p.image_url, p.is_active, p.is_86, p.stockout_reason, \
-                COALESCE(SUM(oi.quantity), 0) AS sold_quantity \
+                CAST(COALESCE(b.current_stock, 0) AS REAL) AS current_stock, \
+                COALESCE(b.batch_count, 0) AS batch_count \
          FROM products p \
-         JOIN categories c ON p.category_id = c.id \
-         LEFT JOIN order_items oi ON oi.product_id = p.id AND oi.tenant_id = p.tenant_id \
+         JOIN categories c ON p.category_id = c.id AND c.tenant_id = p.tenant_id \
+         LEFT JOIN (SELECT tenant_id, product_id, SUM(remaining_quantity) AS current_stock, \
+                           COUNT(*) AS batch_count FROM inventory_batches \
+                    WHERE product_id IS NOT NULL GROUP BY tenant_id, product_id) b \
+           ON b.product_id = p.id AND b.tenant_id = p.tenant_id \
          WHERE p.tenant_id = ? \
-         GROUP BY p.id \
          ORDER BY p.name ASC",
     )
-    .bind(&tenant_id)
+    .bind(tenant_id)
     .fetch_all(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
 
     let mut res = Vec::new();
     for row in rows {
-        let is_active: bool = row.try_get("is_active").unwrap_or(true);
-        let is_86: bool = row.try_get("is_86").unwrap_or(false);
-        let stockout_reason: Option<String> = row.try_get("stockout_reason").ok();
-        let track_stock: bool = row.try_get("track_stock").unwrap_or(false);
-        let stock_quantity: i64 = row.try_get("stock_quantity").unwrap_or(0);
-        let sold: i64 = row.try_get("sold_quantity").unwrap_or(0);
-        let current_stock = stock_quantity - sold;
+        let is_active: bool = row.try_get("is_active").map_err(|e| e.to_string())?;
+        let is_86: bool = row.try_get("is_86").map_err(|e| e.to_string())?;
+        let stockout_reason: Option<String> =
+            row.try_get("stockout_reason").map_err(|e| e.to_string())?;
+        let tracked: i64 = row.try_get("batch_count").map_err(|e| e.to_string())?;
+        let current_stock: f64 = row.try_get("current_stock").map_err(|e| e.to_string())?;
 
         res.push(PosProductDto {
             id: row.try_get("id").map_err(|e| e.to_string())?,
@@ -106,8 +118,8 @@ pub async fn pos_get_products(
             tax_rate_bp: row.try_get("tax_rate_bp").unwrap_or(1000),
             category: row.try_get("category_name").map_err(|e| e.to_string())?,
             description: row.try_get("description").ok(),
-            in_stock: is_active && !is_86 && (!track_stock || current_stock > 0),
-            stock_quantity: if track_stock {
+            in_stock: is_active && !is_86 && (tracked == 0 || current_stock > 0.0),
+            stock_quantity: if tracked > 0 {
                 Some(current_stock)
             } else {
                 None
@@ -119,4 +131,56 @@ pub async fn pos_get_products(
         });
     }
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::list_pos_products;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    #[tokio::test]
+    async fn pos_stogu_partilerden_okur_ve_tukenince_urunu_kapatir() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::raw_sql(include_str!("../../../migrations/schema.sql"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        let mut conn = pool.acquire().await.unwrap();
+        sqlx::query("INSERT INTO categories (id, tenant_id, name) VALUES ('cat_a', 'ten_a', 'A'), ('cat_b', 'ten_b', 'B')")
+            .execute(&mut *conn).await.unwrap();
+        sqlx::query("INSERT INTO products (id, tenant_id, category_id, name) VALUES ('prd_a', 'ten_a', 'cat_a', 'Un'), ('prd_b', 'ten_b', 'cat_b', 'Yağ'), ('prd_c', 'ten_a', 'cat_a', 'Servis')")
+            .execute(&mut *conn).await.unwrap();
+        sqlx::query("INSERT INTO inventory_batches (id, tenant_id, product_id, initial_quantity, remaining_quantity, unit_cost_cents) VALUES ('bat_a', 'ten_a', 'prd_a', 2.0, 1.5, 300), ('bat_b', 'ten_b', 'prd_b', 5.0, 5.0, 1)")
+            .execute(&mut *conn).await.unwrap();
+
+        let products = list_pos_products(&mut conn, "ten_a").await.unwrap();
+        assert_eq!(products.len(), 2);
+        let flour = products
+            .iter()
+            .find(|product| product.id == "prd_a")
+            .unwrap();
+        assert_eq!(flour.stock_quantity, Some(1.5));
+        assert!(flour.in_stock);
+        let service = products
+            .iter()
+            .find(|product| product.id == "prd_c")
+            .unwrap();
+        assert_eq!(service.stock_quantity, None);
+        assert!(service.in_stock);
+
+        sqlx::query("UPDATE inventory_batches SET remaining_quantity = 0 WHERE id = 'bat_a' AND tenant_id = 'ten_a'")
+            .execute(&mut *conn).await.unwrap();
+        let products = list_pos_products(&mut conn, "ten_a").await.unwrap();
+        let flour = products
+            .iter()
+            .find(|product| product.id == "prd_a")
+            .unwrap();
+        assert_eq!(flour.stock_quantity, Some(0.0));
+        assert!(!flour.in_stock);
+        assert!(list_pos_products(&mut conn, "").await.is_err());
+    }
 }

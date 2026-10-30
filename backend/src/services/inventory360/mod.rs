@@ -10,6 +10,7 @@
 pub mod pricing;
 pub mod recipes;
 pub mod shelf_life;
+pub mod stock;
 pub mod suppliers;
 pub mod units;
 pub mod waste;

@@ -285,6 +285,7 @@ pub fn run() {
             inventory360_commands::recipe_commands::create_recipe_command,
             inventory360_commands::recipe_commands::deactivate_recipe_command,
             inventory360_commands::recipe_commands::get_recipe_cost,
+            inventory360_commands::stock_commands::list_stock_batches_command,
             inventory360_commands::supplier_commands::get_inventory_suppliers,
             inventory360_commands::supplier_commands::upsert_supplier_command,
             inventory360_commands::supplier_commands::set_supplier_product_command,

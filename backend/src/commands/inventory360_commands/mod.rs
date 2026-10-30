@@ -14,6 +14,7 @@ pub mod menu_availability_commands;
 pub mod pricing_commands;
 pub mod recipe_commands;
 pub mod shelf_life_commands;
+pub mod stock_commands;
 pub mod supplier_commands;
 pub mod waste_commands;
 
@@ -35,6 +36,7 @@ pub use shelf_life_commands::{
     get_expiry_report, list_shelf_life_policies_command, set_batch_expiry_date,
     upsert_shelf_life_policy_command,
 };
+pub use stock_commands::list_stock_batches_command;
 pub use supplier_commands::{
     compare_supplier_prices_command, create_purchase_order_command, get_inventory_suppliers,
     receive_purchase_order_command, set_supplier_product_command, upsert_supplier_command,
