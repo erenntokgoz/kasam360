@@ -5,12 +5,40 @@
 //! göndermek yerine kimlikle sonucu sorar. Sonuç ve iş kayıtları aynı SQLite
 //! transaction'ında yazıldığından "uygulandı ama sonucu kayboldu" durumu olmaz.
 
+use super::store::Member;
 use crate::services::audit_service::AuditLock;
 use crate::services::cari::{self, ApplyError, CariOp};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::{Acquire, Row, SqliteConnection, SqlitePool};
+
+/// Günlüğe girebilen işlem türleri. Yalnız burada adı geçen tür eşitlenir;
+/// bilinmeyen kayıt çözülemez ve işlem durur.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "domain", content = "body", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LogOp {
+    Cari(CariOp),
+    SetMembers(Vec<Member>),
+    Noop,
+}
+
+impl LogOp {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Cari(op) => op.kind(),
+            Self::SetMembers(_) => "SET_MEMBERS",
+            Self::Noop => "NOOP",
+        }
+    }
+
+    pub fn target_id(&self) -> &str {
+        match self {
+            Self::Cari(op) => op.target_id(),
+            Self::SetMembers(_) | Self::Noop => "cluster",
+        }
+    }
+}
 
 /// Kaynak cihazın bir kez ürettiği, her cihazda aynı uygulanan işlem.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,7 +52,7 @@ pub struct Operation {
     /// İstemcinin niyetinin özeti. Sunucunun ürettiği kimlik ve zaman dahil
     /// değildir; yoksa aynı isteğin yeniden denenmesi "farklı içerik" sayılırdı.
     pub intent_sha256: String,
-    pub op: CariOp,
+    pub op: LogOp,
     pub created_at: String,
 }
 
@@ -169,6 +197,47 @@ pub async fn append(
     Ok(())
 }
 
+/// Günlükteki kaydı `Operation` değerine geri çevirir.
+pub(super) fn operation_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Operation, String> {
+    let payload: String = row.try_get("payload").map_err(|e| e.to_string())?;
+    Ok(Operation {
+        operation_id: row.try_get("operation_id").map_err(|e| e.to_string())?,
+        tenant_id: row.try_get("tenant_id").map_err(|e| e.to_string())?,
+        device_id: row.try_get("device_id").map_err(|e| e.to_string())?,
+        actor_id: row.try_get("actor_id").map_err(|e| e.to_string())?,
+        actor_role: row.try_get("actor_role").map_err(|e| e.to_string())?,
+        intent_sha256: row.try_get("intent_sha256").map_err(|e| e.to_string())?,
+        op: serde_json::from_str(&payload).map_err(|e| format!("Bozuk işlem kaydı: {e}"))?,
+        created_at: row.try_get("created_at").map_err(|e| e.to_string())?,
+    })
+}
+
+async fn apply_members(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    members: &[Member],
+) -> Result<(), ApplyError> {
+    // Cihaz ekranı üyeliği gösterir; üyelikten çıkan cihaz silinmez, pasif olur.
+    sqlx::query("UPDATE devices SET status = 'INACTIVE' WHERE tenant_id = ?")
+        .bind(tenant_id)
+        .execute(&mut *conn)
+        .await?;
+    for member in members {
+        sqlx::query(
+            "INSERT INTO devices (id, tenant_id, name, device_type, status)
+             VALUES (?, ?, ?, 'POS', 'ACTIVE')
+             ON CONFLICT(id) DO UPDATE SET status = 'ACTIVE', name = excluded.name
+             WHERE devices.tenant_id = excluded.tenant_id",
+        )
+        .bind(&member.device_id)
+        .bind(tenant_id)
+        .bind(&member.name)
+        .execute(&mut *conn)
+        .await?;
+    }
+    Ok(())
+}
+
 /// `PROPOSED` kaydı uygular; red ve başarı aynı transaction'da mühürlenir.
 ///
 /// Altyapı hatasında tamamı geri alınır ve kayıt `PROPOSED` kalır; sahte
@@ -179,16 +248,24 @@ pub(super) async fn apply_proposed(
     operation: &Operation,
 ) -> Result<OperationOutcome, String> {
     let mut savepoint = conn.begin().await.map_err(|e| e.to_string())?;
-    let applied = cari::apply(
-        &mut savepoint,
-        audit_lock,
-        &operation.tenant_id,
-        &operation.actor_id,
-        &operation.actor_role,
-        &operation.created_at,
-        &operation.op,
-    )
-    .await;
+    let applied = match &operation.op {
+        LogOp::Cari(op) => {
+            cari::apply(
+                &mut savepoint,
+                audit_lock,
+                &operation.tenant_id,
+                &operation.actor_id,
+                &operation.actor_role,
+                &operation.created_at,
+                op,
+            )
+            .await
+        }
+        LogOp::SetMembers(members) => apply_members(&mut savepoint, &operation.tenant_id, members)
+            .await
+            .map(|()| Value::Null),
+        LogOp::Noop => Ok(Value::Null),
+    };
     let (status, result, error) = match applied {
         Ok(value) => {
             savepoint.commit().await.map_err(|e| e.to_string())?;

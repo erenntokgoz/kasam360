@@ -9,7 +9,7 @@ use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant};
 use crate::services::audit_service::AuditLock;
 use crate::services::cari::CariOp;
 use crate::services::device_identity::ensure_local_device;
-use crate::services::lan_sync::op_log::{execute_local, intent_hash, lookup};
+use crate::services::lan_sync::op_log::{execute_local, intent_hash, lookup, LogOp};
 use crate::services::lan_sync::{Operation, OperationOutcome};
 use serde_json::Value;
 
@@ -37,7 +37,7 @@ pub(crate) async fn submit(
         actor_role,
         intent_sha256: intent_hash(op.kind(), &intent),
         created_at: chrono::Utc::now().to_rfc3339(),
-        op,
+        op: LogOp::Cari(op),
     };
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     execute_local(pool, &audit_lock, &operation)
