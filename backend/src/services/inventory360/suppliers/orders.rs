@@ -1,26 +1,8 @@
 use crate::id_generator::generate_id;
 use crate::management_commands::ensure_owned;
+use crate::services::inventory360::quantity_cost::line_cost_cents;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqliteConnection};
-
-fn line_cost_cents(unit_cost_cents: i64, quantity: f64) -> Result<i64, String> {
-    if unit_cost_cents < 0
-        || !quantity.is_finite()
-        || quantity <= 0.0
-        || quantity > (i64::MAX as f64) / 1_000_000.0
-    {
-        return Err("VALIDATION: geçersiz alış miktarı veya fiyatı".into());
-    }
-    let micros = (quantity * 1_000_000.0).round() as i128;
-    if micros == 0 {
-        return Err("VALIDATION: alış miktarı ölçülemeyecek kadar küçük".into());
-    }
-    let cost_micros = i128::from(unit_cost_cents)
-        .checked_mul(micros)
-        .ok_or_else(|| "OVERFLOW: alış maliyeti taştı".to_string())?;
-    i64::try_from((cost_micros + 500_000) / 1_000_000)
-        .map_err(|_| "OVERFLOW: alış maliyeti taştı".to_string())
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PurchaseOrder {

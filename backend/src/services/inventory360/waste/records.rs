@@ -14,6 +14,9 @@ use sqlx::{Row, SqliteConnection};
 
 use crate::id_generator::generate_id;
 use crate::management_commands::ensure_owned;
+use crate::services::inventory360::quantity_cost::{
+    line_cost_cents, unit_cost_cents as calculate_unit_cost_cents,
+};
 use crate::services::inventory360::{optional_i64, optional_text};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -86,7 +89,7 @@ pub async fn record_waste(
     // FIFO'dan düş: en eski partiden başlayarak miktarı karşıla. Gerçek
     // maliyet partilerden gelir; parti yoksa maliyet bilinmiyor olarak kalır.
     let mut kalan = input.quantity;
-    let mut maliyet: Option<i64> = Some(0.0_f64).map(|v| v as i64);
+    let mut maliyet: i64 = 0;
     let mut maliyet_bilinmiyor = false;
 
     let partiler = sqlx::query(
@@ -116,6 +119,11 @@ pub async fn record_waste(
         let dusulen = kalan.min(parti_kalan);
         let yeni_kalan = parti_kalan - dusulen;
 
+        let satir_maliyet = line_cost_cents(parti_maliyet, dusulen)?;
+        maliyet = maliyet
+            .checked_add(satir_maliyet)
+            .ok_or_else(|| "OVERFLOW: fire maliyeti taştı".to_string())?;
+
         sqlx::query(
             "UPDATE inventory_batches SET remaining_quantity = ?
               WHERE id = ? AND tenant_id = ?",
@@ -127,8 +135,6 @@ pub async fn record_waste(
         .await
         .map_err(|e| e.to_string())?;
 
-        let satir_maliyet = (parti_maliyet as f64 * dusulen).round() as i64;
-        maliyet = maliyet.map(|mevcut| mevcut + satir_maliyet);
         kalan -= dusulen;
     }
 
@@ -144,15 +150,13 @@ pub async fn record_waste(
     let unit_cost_cents = if maliyet_bilinmiyor {
         None
     } else {
-        maliyet.map(|toplam| {
-            if input.quantity > 0.0 {
-                (toplam as f64 / input.quantity).round() as i64
-            } else {
-                0
-            }
-        })
+        Some(calculate_unit_cost_cents(maliyet, input.quantity)?)
     };
-    let total_cost_cents = if maliyet_bilinmiyor { None } else { maliyet };
+    let total_cost_cents = if maliyet_bilinmiyor {
+        None
+    } else {
+        Some(maliyet)
+    };
 
     let id = generate_id("wst");
     sqlx::query(
@@ -171,17 +175,6 @@ pub async fn record_waste(
     .bind(&occurred_at)
     .bind(actor_id)
     .bind(&input.notes)
-    .execute(&mut *conn)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    sqlx::query(
-        "UPDATE products SET stock_quantity = COALESCE(stock_quantity, 0) - ?
-          WHERE id = ? AND tenant_id = ?",
-    )
-    .bind(input.quantity)
-    .bind(&input.product_id)
-    .bind(tenant_id)
     .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;

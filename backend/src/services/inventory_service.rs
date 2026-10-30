@@ -4,6 +4,7 @@
 //! `inventory_batches` üzerinden en eski partiden başlanarak düşülür.
 
 use crate::commands::CartItemDto;
+use crate::services::inventory360::quantity_cost::line_cost_cents;
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -72,17 +73,18 @@ impl InventoryService {
                     .try_get("yield_percent")
                     .map_err(|e| e.to_string())?;
 
-                let yield_factor = if yield_percent <= 0.0 {
-                    1.0
-                } else {
-                    yield_percent / 100.0
-                };
-                let out_qty = if output_quantity <= 0.0 {
-                    1.0
-                } else {
-                    output_quantity
-                };
-                let recipe_scale = (sold_quantity / out_qty) / yield_factor;
+                if !yield_percent.is_finite()
+                    || yield_percent <= 0.0
+                    || yield_percent > 100.0
+                    || !output_quantity.is_finite()
+                    || output_quantity <= 0.0
+                {
+                    return Err("STOCK: reçete randımanı veya üretim miktarı geçersiz".into());
+                }
+                let recipe_scale = (sold_quantity / output_quantity) / (yield_percent / 100.0);
+                if !recipe_scale.is_finite() || recipe_scale <= 0.0 {
+                    return Err("STOCK: reçete ölçeği geçersiz".into());
+                }
 
                 let recipe_items = sqlx::query(
                     "SELECT component_product_id, quantity, waste_percent \
@@ -103,11 +105,14 @@ impl InventoryService {
                     let comp_qty: f64 = ri.try_get("quantity").map_err(|e| e.to_string())?;
                     let waste_pct: f64 = ri.try_get("waste_percent").map_err(|e| e.to_string())?;
 
-                    let waste_factor = if waste_pct >= 100.0 {
-                        0.01
-                    } else {
-                        1.0 - (waste_pct / 100.0)
-                    };
+                    if !comp_qty.is_finite()
+                        || comp_qty <= 0.0
+                        || !waste_pct.is_finite()
+                        || !(0.0..100.0).contains(&waste_pct)
+                    {
+                        return Err("STOCK: reçete malzeme miktarı veya fire oranı geçersiz".into());
+                    }
+                    let waste_factor = 1.0 - (waste_pct / 100.0);
                     let mut comp_remaining_demand = (comp_qty / waste_factor) * recipe_scale;
 
                     let batch_rows = sqlx::query(
@@ -133,8 +138,10 @@ impl InventoryService {
                             b.try_get("unit_cost_cents").map_err(|e| e.to_string())?;
 
                         let take = comp_remaining_demand.min(b_rem);
-                        let cost = (take * b_cost as f64).round() as i64;
-                        item_cogs_cents += cost;
+                        let cost = line_cost_cents(b_cost, take)?;
+                        item_cogs_cents = item_cogs_cents
+                            .checked_add(cost)
+                            .ok_or_else(|| "OVERFLOW: satış maliyeti taştı".to_string())?;
                         comp_remaining_demand -= take;
 
                         sqlx::query(
@@ -168,18 +175,6 @@ impl InventoryService {
                             "reason": "Reçete bileşeni için parti girişi yok; gerçek maliyet bilinmiyor."
                         }));
                     }
-
-                    // Bileşenin stok miktarını düş
-                    sqlx::query(
-                        "UPDATE products SET stock_quantity = COALESCE(stock_quantity, 0) - ? \
-                         WHERE id = ? AND tenant_id = ? AND is_active = 1",
-                    )
-                    .bind(comp_qty * recipe_scale)
-                    .bind(&comp_product_id)
-                    .bind(tenant_id)
-                    .execute(&mut *conn)
-                    .await
-                    .map_err(|e| e.to_string())?;
                 }
             } else {
                 rule_name = "FIFO_DETERMINISTIC_BATCH";
@@ -207,8 +202,10 @@ impl InventoryService {
                     let b_cost: i64 = b.try_get("unit_cost_cents").map_err(|e| e.to_string())?;
 
                     let take = remaining_demand.min(b_rem);
-                    let cost = (take * b_cost as f64).round() as i64;
-                    item_cogs_cents += cost;
+                    let cost = line_cost_cents(b_cost, take)?;
+                    item_cogs_cents = item_cogs_cents
+                        .checked_add(cost)
+                        .ok_or_else(|| "OVERFLOW: satış maliyeti taştı".to_string())?;
                     remaining_demand -= take;
 
                     sqlx::query(
@@ -240,21 +237,11 @@ impl InventoryService {
                         "reason": "Bu ürün için parti girişi yok; gerçek maliyet bilinmiyor."
                     }));
                 }
-
-                // Ürünlerden stok miktarını düş (kiracı filtresi zorunlu)
-                sqlx::query(
-                    "UPDATE products SET stock_quantity = COALESCE(stock_quantity, 0) - ? \
-                     WHERE id = ? AND tenant_id = ? AND is_active = 1",
-                )
-                .bind(item.quantity)
-                .bind(product_id)
-                .bind(tenant_id)
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
             }
 
-            total_cogs_cents += item_cogs_cents;
+            total_cogs_cents = total_cogs_cents
+                .checked_add(item_cogs_cents)
+                .ok_or_else(|| "OVERFLOW: toplam satış maliyeti taştı".to_string())?;
             allocations.push(serde_json::json!({
                 "itemId": item.id,
                 "productId": product_id,

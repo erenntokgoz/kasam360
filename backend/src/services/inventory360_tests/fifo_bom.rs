@@ -106,6 +106,18 @@ async fn bom_receteli_urun_fifo_bilesenlerden_duser_ve_maliyeti_hesaplar() {
         "bat_milk_1'den 200ml düşülüp 300ml kalmalı"
     );
 
+    let legacy_stock: Option<i64> = sqlx::query_scalar(
+        "SELECT stock_quantity FROM products WHERE id = 'prd_beans' AND tenant_id = ?",
+    )
+    .bind(KIRACI)
+    .fetch_one(&mut conn)
+    .await
+    .expect("eski kolon okunmalı");
+    assert_eq!(
+        legacy_stock, None,
+        "satış eski stok kolonunu değiştirmemeli"
+    );
+
     // prd_latte'nin kendisi için doğrudan parti aranmadığını doğrula
     let latte_batches: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM inventory_batches WHERE product_id = 'prd_latte'")

@@ -67,7 +67,7 @@ async fn fire_fifo_dusur_ve_gercek_maliyeti_yazar() {
     .fetch_one(&mut conn)
     .await
     .expect("urun okunmali");
-    assert_eq!(stok, Some(-8), "urun kolonu fire kadar dusmeli");
+    assert_eq!(stok, None, "fire yalnız FIFO partilerini değiştirmeli");
 }
 
 #[tokio::test]

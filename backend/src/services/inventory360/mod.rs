@@ -8,6 +8,7 @@
 //! Böylece iş mantığı testlerde komut altyapısı olmadan doğrulanabilir.
 
 pub mod pricing;
+pub(crate) mod quantity_cost;
 pub mod recipes;
 pub mod shelf_life;
 pub mod stock;
