@@ -10,6 +10,7 @@ import {
   Users,
   TrendingUp,
   ArrowLeft,
+  CalendarCheck,
   Receipt,
   FileBarChart,
   Gauge,
@@ -31,6 +32,8 @@ import { CriticalLogTab } from './CriticalLogTab';
 import { PanoramaTab } from './panorama/PanoramaTab';
 import { ReportsTab } from './reports/ReportsTab';
 import { ExpensesTab } from './expenses/ExpensesTab';
+import { LeavePanel } from './payroll/LeavePanel';
+import { PayrollPanel } from './payroll/PayrollPanel';
 
 export const ErpModule: React.FC = () => {
   const { activeErpTab, setActiveErpTab, loadLedgerData } = useLedgerStore();
@@ -51,14 +54,15 @@ export const ErpModule: React.FC = () => {
   }> = [
     { id: 'PANORAMA', label: 'Panorama', icon: Gauge },
     { id: 'REPORTS', label: 'Raporlar', icon: FileBarChart },
-    { id: 'EXPENSES', label: 'Gider ve Bütçe', icon: Receipt },
-    { id: 'WIZARD', label: 'Hızlı Kasa İşlemi', icon: Zap },
-    { id: 'DEBTS', label: 'Borç & Alacak Defteri', icon: BookOpen },
+    { id: 'EXPENSES', label: 'Gider', icon: Receipt },
+    { id: 'PAYROLL', label: 'Bordro', icon: CalendarCheck },
+    { id: 'WIZARD', label: 'Hızlı İşlem', icon: Zap },
+    { id: 'DEBTS', label: 'Cari', icon: BookOpen },
     { id: 'STAFF', label: 'Personel', icon: Users },
     { id: 'PROFIT', label: 'Net Kâr', icon: TrendingUp },
     { id: 'MENU', label: 'Menü', icon: UtensilsCrossed },
     ...(isOwner ? [{ id: 'STOCK' as const, label: 'Stok', icon: Package }] : []),
-    { id: 'LOG', label: 'Kritik İşlemler', icon: ShieldAlert },
+    { id: 'LOG', label: 'Kritik', icon: ShieldAlert },
     { id: 'SETTINGS', label: 'Ayarlar', icon: Settings },
   ];
 
@@ -75,7 +79,7 @@ export const ErpModule: React.FC = () => {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveErpTab(tab.id)}
-                className={`tactile-btn min-h-12 px-4 rounded-lg flex items-center gap-2 text-xs font-bold cursor-pointer transition-colors ${
+                className={`tactile-btn min-h-12 px-3 rounded-lg flex items-center gap-2 text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
                   isSelected
                     ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border-[var(--accent-blue)] shadow-[inset_0_0_0_1px_var(--accent-blue)]'
                     : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
@@ -110,6 +114,12 @@ export const ErpModule: React.FC = () => {
             {activeErpTab === 'PANORAMA' && <PanoramaTab />}
             {activeErpTab === 'REPORTS' && <ReportsTab />}
             {activeErpTab === 'EXPENSES' && <ExpensesTab />}
+            {activeErpTab === 'PAYROLL' && (
+              <div className="space-y-4 max-w-[1500px] mx-auto">
+                <PayrollPanel />
+                <LeavePanel />
+              </div>
+            )}
             {activeErpTab === 'WIZARD' && <PatronWizardTab />}
             {activeErpTab === 'DEBTS' && <DebtsTab />}
             {activeErpTab === 'STAFF' && <StaffTab />}

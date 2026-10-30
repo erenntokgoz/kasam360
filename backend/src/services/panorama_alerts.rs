@@ -165,6 +165,21 @@ async fn operation_alerts(pool: &SqlitePool, tenant: &str) -> Result<Vec<Alert>,
             "LOG",
         ));
     }
+    let waiting: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM leave_requests WHERE tenant_id = ?1 AND status = 'Bekliyor'",
+    )
+    .bind(tenant)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    if waiting > 0 {
+        alerts.push(alert(
+            "INFO",
+            format!("{waiting} izin talebi onay bekliyor"),
+            "Karar verilene kadar vardiya planı belirsiz kalır.".to_string(),
+            "PAYROLL",
+        ));
+    }
     Ok(alerts)
 }
 

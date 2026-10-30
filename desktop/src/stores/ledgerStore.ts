@@ -11,11 +11,11 @@ import { errorText, localDate, newOperationId } from '../lib/cariInput';
 interface LedgerStore {
   directories: DirectoryContact[];
   summary: FinancialProfitSummary | null;
-  activeErpTab: 'PANORAMA' | 'REPORTS' | 'EXPENSES' | 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'LOG' | 'SETTINGS';
+  activeErpTab: 'PANORAMA' | 'REPORTS' | 'EXPENSES' | 'PAYROLL' | 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'LOG' | 'SETTINGS';
   isLoading: boolean;
   ledgerError: string | null;
   loadLedgerData: () => Promise<void>;
-  setActiveErpTab: (tab: 'PANORAMA' | 'REPORTS' | 'EXPENSES' | 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'LOG' | 'SETTINGS') => void;
+  setActiveErpTab: (tab: 'PANORAMA' | 'REPORTS' | 'EXPENSES' | 'PAYROLL' | 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'LOG' | 'SETTINGS') => void;
   executePatronAction: (
     actionType: PatronActionType,
     amountCents: number,
