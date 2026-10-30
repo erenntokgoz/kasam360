@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, DollarSign, TrendingDown, Check } from 'lucide-react';
 import { useLedgerStore } from '../../stores/ledgerStore';
 import { formatMoney } from '../../lib/formatMoney';
+import { errorText, parseCents } from '../../lib/cariInput';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import type { PatronActionType } from '../../types/ledger';
@@ -16,6 +17,7 @@ export const PatronWizardTab: React.FC = () => {
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const wizardActions: Array<{
     type: PatronActionType;
@@ -62,11 +64,14 @@ export const PatronWizardTab: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAction) return;
-    const liras = parseFloat(amountLiras) || 0;
-    const cents = Math.round(liras * 100);
-    if (cents <= 0) return;
+    const cents = parseCents(amountLiras);
+    if (!cents) {
+      setErrorMsg('Geçerli bir tutar girin.');
+      return;
+    }
 
     setIsSubmitting(true);
+    setErrorMsg(null);
     try {
       await executePatronAction(selectedAction, cents, selectedDirectoryId, category, description);
       setSuccessMsg(`İşlem başarıyla kaydedildi (${formatMoney(cents)}).`);
@@ -74,6 +79,8 @@ export const PatronWizardTab: React.FC = () => {
       setAmountLiras('');
       setDescription('');
       setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (error) {
+      setErrorMsg(errorText(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -94,6 +101,15 @@ export const PatronWizardTab: React.FC = () => {
         <div className="p-3 rounded-xl bg-[var(--accent-emerald-soft)] text-[var(--accent-emerald)] border border-[var(--accent-emerald-border)] text-xs font-bold flex items-center gap-2">
           <Check className="w-4 h-4" />
           <span>{successMsg}</span>
+        </div>
+      ) : null}
+
+      {errorMsg ? (
+        <div
+          role="alert"
+          className="p-3 rounded-xl bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red)] text-xs font-bold"
+        >
+          {errorMsg}
         </div>
       ) : null}
 
