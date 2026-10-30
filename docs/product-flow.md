@@ -28,6 +28,14 @@ Restoranın masaya servis öncelikli günlük işini, internet olmasa da aynı y
 
 Mal kabulü gerçek teslim miktarını stoğa ekler. Tedarikçi belgesi daha sonra gelebilir; bu durumda giriş "Belge bekleniyor" görünür. Belge tutarı kontrol edilip onaylanınca tedarikçi borcu doğar. Farklar sessizce düzeltilmez. Ödemeler ayrı hareketlerle bakiyeyi azaltır.
 
+## Yedek ve geri dönüş
+
+- Değişiklik varsa saatte bir, her gün sonunda ve elle yedek alınır. Yedek önce geçici dosyaya yazılır, `integrity_check` ve SHA-256 ile doğrulanır, sonra yayınlanır; yarım yedek listelenmez. Tür başına son 30 kopya kalır.
+- Varsayılan klasör veritabanının yanındadır ve disk arızasına karşı korumaz. Ayarlar'dan ikinci klasör (harici disk, ağ paylaşımı) tanımlanır; kopyalanamazsa hata ekranda görünür.
+- Geri dönüşü yalnız patron, hesap şifresiyle yapar. Mevcut veri önce yedeklenir, uygulama yeniden açılır ve dönüş açılışta uygulanır. Eski dosyalar `<veritabanı>.before-restore-<zaman>` klasöründe kalır.
+- Geri dönen cihazda hesap oturumu kapanır, küme kayıtları silinir ve dönüş kritik işlem listesine yazılır. Çok cihazlı modda geri dönüş kapalıdır: geride kalan üye diğer cihazların günlüğünü geri saramaz.
+- Yeni cihaz kurulum ekranındaki `Yedekten Geri Dön` ile harici diskteki `.db` dosyasından (yanında `.sha256` ile) açılır. İşaretli yedek açılışta doğrulanamazsa uygulama mevcut veriyle açılır ve hatayı gösterir.
+
 ## İlk kurulum, giriş ve kilit
 
 - Kurulum durumu `app_setup` satırındadır ve cihaza özeldir. Kullanıcısı olan mevcut veritabanı ilk yükseltmede tamamlanmış sayılır; sihirbaza düşmez.

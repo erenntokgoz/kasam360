@@ -2073,6 +2073,18 @@ CREATE TABLE IF NOT EXISTS app_setup (
     completed_at TEXT
 );
 
+-- Yedek durumu cihaza özeldir; dosya yolları diğer cihazda anlamsızdır.
+CREATE TABLE IF NOT EXISTS device_backup (
+    slot INTEGER PRIMARY KEY CHECK (slot = 1),
+    mirror_dir TEXT,
+    last_backup_at TEXT,
+    last_error TEXT,
+    last_sequence INTEGER,
+    last_restored_at TEXT,
+    restored_from TEXT,
+    restore_audit_pending INTEGER NOT NULL DEFAULT 0
+);
+
 -- Cihaza özel işletme hesabı oturumu ve personel kilit ayarı.
 CREATE TABLE IF NOT EXISTS device_session (
     slot INTEGER PRIMARY KEY CHECK (slot = 1),

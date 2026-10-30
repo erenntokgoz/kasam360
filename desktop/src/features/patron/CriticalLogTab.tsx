@@ -26,6 +26,7 @@ const CRITICAL: Record<string, string> = {
   'shift:closed': 'Vardiya kapanışı',
   'shift:difference_explained': 'Kasa farkı açıklaması',
   'day:closed': 'Gün sonu',
+  'backup:restored': 'Yedeğe geri dönüş',
   'approval:lockout': 'Onay PIN kilidi',
   'staff:approval_changed': 'Onay yetkisi değişikliği',
   'account:created': 'Hesap oluşturma',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSetupStore, type SetupMode } from '../../stores/setupStore';
 import { AccountLogin } from '../auth/AccountLogin';
+import { RestoreFromFile } from './RestoreFromFile';
 import { NewBusinessForm } from './NewBusinessForm';
 import { JoinBusinessForm } from './JoinBusinessForm';
 
@@ -24,7 +25,10 @@ export const SetupWizard: React.FC = () => {
           {mode === null ? (
             // Web kaydı gelince `onRegister` web adresini açacak; o zamana kadar
             // işletme bu cihazda kurulur, internet zorunlu olmaz.
-            <AccountLogin onRegister={() => choose('NEW')} onJoinDevice={() => choose('JOIN')} />
+            <>
+              <AccountLogin onRegister={() => choose('NEW')} onJoinDevice={() => choose('JOIN')} />
+              <RestoreFromFile />
+            </>
           ) : null}
 
           {mode === 'NEW' ? <NewBusinessForm onBack={() => choose(null)} /> : null}

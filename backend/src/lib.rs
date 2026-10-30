@@ -46,6 +46,8 @@ pub struct AppState {
     pub table_locks: tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>,
     /// Yerel ağ eşitlemesi; finansal yazma kapısı buradan geçer.
     pub lan_sync: services::lan_sync::LanSync,
+    /// Dosya tabanlı veritabanının yolu; yedek klasörü buradan türer.
+    pub db_path: Option<std::path::PathBuf>,
 }
 
 /// Komut gövdesine girmeden önce çalışır: eşitlenmeyen yazma cihazları ayrıştırır.
@@ -66,6 +68,26 @@ fn gated(
     }
 }
 
+/// Veritabanı yeri. Çalışma klasörüne bağlı kalırsa kısayoldan açılan uygulama başka
+/// bir boş veritabanı açar ve işletme kurulmamış görünürdü; var olan dosya korunur,
+/// yeni kurulum kullanıcı veri klasörüne yazılır.
+fn resolve_database_url(app: &tauri::App) -> Result<String, Box<dyn std::error::Error>> {
+    if let Ok(url) = std::env::var("DATABASE_URL") {
+        return Ok(url);
+    }
+    if std::path::Path::new("kasam360.db").exists() {
+        return Ok("sqlite://kasam360.db".to_string());
+    }
+    let dir = app.path().app_data_dir()?;
+    std::fs::create_dir_all(&dir)?;
+    let path = dir
+        .join("kasam360.db")
+        .display()
+        .to_string()
+        .replace('\\', "/");
+    Ok(format!("sqlite:///{}", path.trim_start_matches('/')))
+}
+
 pub fn run() {
     // Yapılandırılmış günlükleme (tracing + rolling file).
     // Loglama asla uygulamayı durdurmaz; hata olursa konsola fallback.
@@ -74,11 +96,32 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .setup(|app| {
             tauri::async_runtime::block_on(async {
-                let database_url = std::env::var("DATABASE_URL")
-                    .unwrap_or_else(|_| "sqlite://kasam360.db".to_string());
+                let database_url = resolve_database_url(app)?;
+                let db_path = services::backup::db_path_from_url(&database_url);
+                // Veritabanı açılmadan önce: çalışan havuzun altındaki dosya değiştirilemez.
+                let mut restore_error = None;
+                if let Some(path) = &db_path {
+                    if let Err(error) = services::backup::restore::apply_pending_restore(path).await
+                    {
+                        tracing::error!("geri dönüş uygulanamadı: {error}");
+                        services::backup::restore::abandon_pending_restore(path);
+                        restore_error = Some(format!("Geri dönüş uygulanamadı: {error}"));
+                    }
+                }
                 let pool = init_db(&database_url)
                     .await
                     .map_err(|e| Box::new(std::io::Error::other(e.to_string())))?;
+                if let Some(error) = &restore_error {
+                    services::backup::schedule::write_result(&pool, Some(error), None)
+                        .await
+                        .map_err(std::io::Error::other)?;
+                }
+                if let Err(error) = services::backup::schedule::record_restore_audit(&pool).await {
+                    tracing::warn!("geri dönüş kaydı yazılamadı: {error}");
+                }
+                if let Some(path) = &db_path {
+                    services::backup::schedule::spawn_periodic(pool.clone(), path.clone());
+                }
 
                 // Eşitleme de aynı denetim kilidini kullanır: iki yol aynı zinciri yazar.
                 let audit_mutex = std::sync::Arc::new(tokio::sync::Mutex::new(()));
@@ -92,6 +135,7 @@ pub fn run() {
                     audit_mutex,
                     table_locks: tokio::sync::Mutex::new(std::collections::HashMap::new()),
                     lan_sync,
+                    db_path,
                 });
 
                 Ok::<(), Box<dyn std::error::Error>>(())
@@ -143,6 +187,12 @@ pub fn run() {
             analytics_commands::metrics::set_competitor_price,
             commands::auth_login,
             commands::auth_commands::unlock::auth_unlock,
+            commands::backup_commands::get_backup_status,
+            commands::backup_commands::list_backups,
+            commands::backup_commands::create_backup_now,
+            commands::backup_commands::set_backup_mirror,
+            commands::backup_commands::restore_backup,
+            commands::backup_commands::restore_backup_on_setup,
             commands::account_commands::get_device_session,
             commands::account_commands::account_sign_in,
             commands::account_commands::account_create,

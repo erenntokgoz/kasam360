@@ -15,11 +15,12 @@ const CODE_LIFETIME_MINUTES: i64 = 10;
 /// Cihaza özel tablolar: oturum, giriş sayacı, teslim kuyrukları ve eşitleme
 /// durumu. Dış teslim kuyruğu taşınırsa aynı e-posta iki cihazdan gönderilir;
 /// PIN deneme sayacı ve onay jetonları da yalnız üretildikleri cihazda anlamlıdır.
-const LOCAL_ONLY_TABLES: [&str; 13] = [
+const LOCAL_ONLY_TABLES: [&str; 14] = [
     "app_setup",
     "approval_attempts",
     "approvals",
     "conflict_log",
+    "device_backup",
     "device_session",
     "email_queue",
     "local_device_identity",

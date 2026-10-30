@@ -8,7 +8,9 @@
 //! yazan komut açılmamalıdır. Tek cihazda kapı devre dışıdır.
 
 /// Yerel tablolara yazar veya oturumla ilgilidir; işletme verisini değiştirmez.
-const DEVICE_LOCAL: [&str; 14] = [
+const DEVICE_LOCAL: [&str; 16] = [
+    "create_backup_now",
+    "set_backup_mirror",
     "auth_login",
     "auth_unlock",
     "account_sign_in",

@@ -339,6 +339,15 @@ pub async fn close_day(
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
+    // Yedek hatası kapanışı geri almaz; Ayarlar'da görünür kalır.
+    if let Some(path) = state.db_path.clone() {
+        let backup_pool = pool.inner().clone();
+        tauri::async_runtime::spawn(async move {
+            let _ =
+                crate::services::backup::schedule::run_backup(&backup_pool, &path, "gunsonu").await;
+        });
+    }
+
     Ok(CloseDayResultDto {
         success: true,
         message: format!(
