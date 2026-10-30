@@ -3,6 +3,65 @@
 use super::*;
 
 #[tokio::test]
+async fn recete_maliyeti_kalan_partileri_fifo_sirasiyla_kullanir() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, KIRACI_A, "prd_yemek", "Yemek", 5000).await;
+    urun_ekle(&mut conn, KIRACI_A, "prd_un", "Un", 0).await;
+    parti_ekle(&mut conn, KIRACI_A, "bat_01", "prd_un", 1.0, 100, None).await;
+    parti_ekle(&mut conn, KIRACI_A, "bat_02", "prd_un", 1.0, 300, None).await;
+    let recete = recete_olustur(
+        &mut conn,
+        KIRACI_A,
+        recete_girdisi(
+            "prd_yemek",
+            "Yemek",
+            100.0,
+            1.0,
+            vec![malzeme("prd_un", 1.5, "kg", None)],
+        ),
+    )
+    .await;
+    let maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &recete.id)
+        .await
+        .unwrap();
+    assert_eq!(bilesen(&maliyet, "prd_un").line_cost_cents, Some(250));
+    assert_eq!(maliyet.unit_cost_cents, Some(250));
+    assert_eq!(maliyet.unresolved.len(), 0);
+}
+
+#[tokio::test]
+async fn recete_stok_yetmezse_tedarikci_teklifinden_maliyet_uydurmaz() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, KIRACI_A, "prd_yemek", "Yemek", 5000).await;
+    urun_ekle(&mut conn, KIRACI_A, "prd_un", "Un", 0).await;
+    parti_ekle(&mut conn, KIRACI_A, "bat_01", "prd_un", 1.0, 100, None).await;
+    sqlx::query("INSERT INTO suppliers (id, tenant_id, name, created_by) VALUES ('sup_1', ?, 'Tedarikçi', 'usr_1')")
+        .bind(KIRACI_A).execute(&mut conn).await.unwrap();
+    sqlx::query("INSERT INTO supplier_products (id, tenant_id, supplier_id, product_id, unit_cost_cents) VALUES ('spr_1', ?, 'sup_1', 'prd_un', 50)")
+        .bind(KIRACI_A).execute(&mut conn).await.unwrap();
+    let recete = recete_olustur(
+        &mut conn,
+        KIRACI_A,
+        recete_girdisi(
+            "prd_yemek",
+            "Yemek",
+            100.0,
+            1.0,
+            vec![malzeme("prd_un", 1.5, "kg", None)],
+        ),
+    )
+    .await;
+    let maliyet = calculate_recipe_cost(&mut conn, KIRACI_A, &recete.id)
+        .await
+        .unwrap();
+    assert_eq!(bilesen(&maliyet, "prd_un").line_cost_cents, None);
+    assert_eq!(maliyet.unit_cost_cents, None);
+    assert_eq!(maliyet.unresolved, vec!["Un"]);
+}
+
+#[tokio::test]
 async fn recete_maliyeti_randiman_ve_fireyi_hesaplar() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;

@@ -115,13 +115,6 @@ pub struct RecipeInput {
 /// engeller ve hatayı yukarı taşır.
 pub(super) const MAX_RECIPE_DEPTH: usize = 8;
 
-pub(super) fn round_cents(value: f64) -> Option<i64> {
-    if !value.is_finite() {
-        return None;
-    }
-    Some(value.round() as i64)
-}
-
 pub async fn list_recipes(
     conn: &mut SqliteConnection,
     tenant_id: &str,
