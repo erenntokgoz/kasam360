@@ -8,13 +8,10 @@
 //! görülmeden önlem alınamaz. Kör sayımın varlık sebebi ise beklenen miktarın
 //! sayım sırasında **görünmemesidir**.
 
-use sqlx::Row;
-
 use super::support::*;
 use crate::services::inventory360::waste::*;
 
 const T: &str = "tnt_1";
-const T2: &str = "tnt_2";
 const AKTOR: &str = "usr_1";
 
 fn fire_girdisi(urun_id: &str, gerekce: &str, miktar: f64) -> WasteInput {

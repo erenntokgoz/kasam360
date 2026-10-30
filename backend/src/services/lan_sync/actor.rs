@@ -444,7 +444,8 @@ impl Actor {
         };
         let behind = is_leader
             && members.iter().any(|member| {
-                member.device_id != self.me
+                // Kapalı cihaz beklenmez: çoğunluk varken ekran "Eşitleniyor"da takılmamalı.
+                self.peers.contains_key(&member.device_id)
                     && self.engine.match_index.get(&member.device_id).copied() != Some(last_index)
             });
         let state = if self.engine.halted.is_some() {
