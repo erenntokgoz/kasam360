@@ -24,8 +24,11 @@ impl PaymentRepository {
         transaction_id: &str,
         tenant_id: &str,
     ) -> Result<bool, String> {
+        // Yalnız tahsilat kaydı sayılır: indirim onayı da aynı kimlikle deftere yazılır,
+        // onu "işlendi" saymak onaylı indirimi her zaman reddederdi.
         let existing: Option<sqlx::sqlite::SqliteRow> = sqlx::query(
-            "SELECT id FROM audit_ledger WHERE resource_id = ? AND tenant_id = ? LIMIT 1",
+            "SELECT id FROM audit_ledger
+             WHERE resource_id = ? AND tenant_id = ? AND action LIKE 'payment:%' LIMIT 1",
         )
         .bind(transaction_id)
         .bind(tenant_id)

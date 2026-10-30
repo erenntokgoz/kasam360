@@ -26,7 +26,9 @@ const SPLIT_TABS: { mode: PaymentSplitMode; label: string }[] = [
 ];
 
 /** İş kuralı reddi kesindir: para alınmamıştır. Diğer hatalarda sonuç bilinmez. */
-const DEFINITE_REJECTION = /^(OVERPAYMENT|ITEM_ALREADY_PAID|TOTAL_MISMATCH|ORDER_CLOSED|VALIDATION|INVALID_|NOT_FOUND|UNAUTHORIZED|SETUP_REQUIRED)/;
+// Kodlu her hata işlem geri alındıktan sonra döner: para alınmamıştır. Kodsuz hata
+// (bağlantı, disk) sonucu bilinmez sayılır ve sunucuya sorulur.
+const DEFINITE_REJECTION = /^[A-Z][A-Z_]+:/;
 
 function newTransactionId(): string {
   return `txn_${crypto.randomUUID()}`;

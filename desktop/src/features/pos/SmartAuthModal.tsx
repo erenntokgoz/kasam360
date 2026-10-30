@@ -49,7 +49,8 @@ export const SmartAuthModal: React.FC<SmartAuthModalProps> = ({
         const { actorId, actorRole, tenantId } = sessionArgs();
         const approval = await invokeIPC<{ approvalToken: string }>('verify_manager_pin', {
           payload: {
-            operation: mode === 'VOID' ? 'VOID_ORDER' : 'COMPLIMENTARY',
+            // Kalem ikramı sunucuda %100 indirim yüzeyidir.
+            operation: mode === 'VOID' ? 'VOID_ORDER' : 'DISCOUNT',
             resourceId: item.id,
             actorId,
             actorRole,

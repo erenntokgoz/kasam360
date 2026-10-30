@@ -113,6 +113,46 @@ async fn vardiya_kasasi_acilistan_onceki_satisi_saymaz() {
     assert_eq!(before.cash_sales, 300);
 }
 
+/// Onay kaydı tahsilat kimliğini taşır; tahsilat sayılırsa onaylı indirim hiç geçemez.
+#[tokio::test]
+async fn onay_kaydi_tahsilat_tekrari_sayilmaz() {
+    let pool = pool().await;
+    let mutex = Mutex::new(());
+    let lock = AuditLock::new(mutex.lock().await);
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let ctx = AuditContext::new(
+        TENANT.to_string(),
+        "usr_2".to_string(),
+        "MANAGER".to_string(),
+        category::GUVENLIK,
+        "approval:verified",
+        "txn_1".to_string(),
+        serde_json::json!({ "operation": "DISCOUNT" }),
+        chrono::Utc::now().to_rfc3339(),
+    )
+    .expect("kayıt");
+    AuditService::append(&mut conn, &lock, &ctx)
+        .await
+        .expect("onay");
+    assert!(
+        !PaymentRepository::check_idempotency(&mut conn, "txn_1", TENANT)
+            .await
+            .expect("sorgu")
+    );
+    drop(conn);
+    drop(lock);
+
+    pay(&pool, &payment("txn_1", "CASH", 300, &[("itm_1", 3)]))
+        .await
+        .expect("tahsilat");
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    assert!(
+        PaymentRepository::check_idempotency(&mut conn, "txn_1", TENANT)
+            .await
+            .expect("sorgu")
+    );
+}
+
 async fn scalar(pool: &SqlitePool, query: &str) -> i64 {
     sqlx::query_scalar(query)
         .fetch_one(pool)
