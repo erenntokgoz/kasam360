@@ -1,6 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { handleManagementMockIPC } from '../test/managementIpcFixture';
 import { parseMoneyToCents, useMenu360Store } from './menu360Store';
 import { useAuthStore } from './authStore';
+
+vi.mock('../services/tauriClient', () => ({
+  invokeIPC: async (command: string, args: Record<string, unknown> = {}) =>
+    handleManagementMockIPC(command, args),
+  isTauri: () => false,
+}));
 
 describe('Menu Money Parser & Calculations', () => {
   it('parses Turkish formatted currency string to integer cents', () => {

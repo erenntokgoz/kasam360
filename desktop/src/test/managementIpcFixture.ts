@@ -2,7 +2,7 @@
 // Gerçek Tauri IPC yokken (tarayıcı test/geliştirme) bellek tabanlı deterministik veri sağlar.
 // Tüm finansal alanlar INTEGER kuruş (cents) cinsindendir. Backend kontratlarıyla %100 uyumludur.
 
-import { SEED_CATEGORIES, SEED_PRODUCTS } from './mockProducts';
+import { SEED_CATEGORIES, SEED_PRODUCTS } from './productFixture';
 import type {
   ProductDto,
   CategoryDto,

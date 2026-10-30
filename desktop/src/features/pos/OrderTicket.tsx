@@ -3,7 +3,6 @@ import { Send, CreditCard, Trash2, FileText } from 'lucide-react';
 import { usePosStore } from '../../stores/posStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useKdsStore } from '../../stores/kdsStore';
-import { useAuthStore } from '../../stores/authStore';
 import { formatMoney } from '../../lib/formatMoney';
 import { Button } from '../../ui/Button';
 import { SmartAuthModal } from './SmartAuthModal';
@@ -24,15 +23,17 @@ export const OrderTicket: React.FC = () => {
     setItemCourse,
     setItemNote,
     clearTicket,
-    markItemsSentToKitchen,
+    loadActiveOrder,
+    sendToKitchen,
+    orderError,
+    isSending,
     calculateTaxCents,
     calculateTotalCents,
   } = usePosStore();
 
   const { openModal } = useUIStore();
-  const { playOrderBell, addTicketsFromOrder } = useKdsStore();
-  const { user } = useAuthStore();
-  const { tables } = useFloorStore();
+  const { playOrderBell } = useKdsStore();
+  const { tables, loadFloorPlan } = useFloorStore();
 
   const [authModalItem, setAuthModalItem] = useState<OrderItem | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'VOID' | 'COMP'>('VOID');
@@ -43,26 +44,26 @@ export const OrderTicket: React.FC = () => {
   const unsentCount = ticketItems.filter((i) => !i.isSentToKitchen).length;
 
   const handleSendToKitchen = async () => {
-    const unsentItems = ticketItems.filter((i) => !i.isSentToKitchen);
-    if (unsentItems.length > 0) {
-      await addTicketsFromOrder(
-        activeTableId || 'walkin',
-        activeTableName,
-        user?.name || 'Garson',
-        unsentItems
-      );
+    if (await sendToKitchen()) {
+      playOrderBell();
+      await loadFloorPlan();
     }
-    markItemsSentToKitchen();
-    playOrderBell();
   };
 
-  const handleOpenPayment = () => {
+  // Tahsilat sunucudaki adisyona yapılır: taslak önce adisyona yazılır.
+  const handleOpenPayment = async () => {
+    if (unsentCount > 0) {
+      if (!(await sendToKitchen())) return;
+      await loadFloorPlan();
+    }
     openModal('payment');
   };
 
   const handleAuthSuccess = () => {
     if (!authModalItem) return;
     removeItem(authModalItem.id);
+    void loadActiveOrder();
+    void loadFloorPlan();
   };
 
   const handleConfirmTransfer = () => {
@@ -76,7 +77,7 @@ export const OrderTicket: React.FC = () => {
       <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between shrink-0">
         <div>
           <div className="text-sm font-bold text-[var(--text-primary)]">{activeTableName}</div>
-          <div className="text-xs text-[var(--text-secondary)]">KDV dahil adisyon</div>
+          <div className="text-xs text-[var(--text-secondary)]">Adisyon</div>
         </div>
         <div className="flex items-center gap-1.5">
           <Button
@@ -134,11 +135,17 @@ export const OrderTicket: React.FC = () => {
         )}
       </div>
 
+      {orderError ? (
+        <p role="alert" className="mx-4 mb-2 p-2 rounded-lg text-xs font-medium break-words bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
+          {orderError}
+        </p>
+      ) : null}
+
       {/* Alt Toplam ve Ödeme Alanı */}
       <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-subtle)] space-y-3 shrink-0">
         <div className="space-y-1 text-xs">
           <div className="flex justify-between text-[var(--text-secondary)]">
-            <span>Dahili KDV (%10)</span>
+            <span>KDV</span>
             <span className="tabular-nums font-semibold">{formatMoney(tax)}</span>
           </div>
           <div className="flex justify-between items-baseline pt-1">
@@ -154,7 +161,8 @@ export const OrderTicket: React.FC = () => {
           variant="primary"
           size="lg"
           onClick={handleSendToKitchen}
-          disabled={ticketItems.length === 0}
+          disabled={unsentCount === 0 || isSending}
+          isLoading={isSending}
           className="w-full justify-between"
         >
           <span className="flex items-center gap-2">

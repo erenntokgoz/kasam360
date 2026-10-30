@@ -1,6 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { handleManagementMockIPC } from '../test/managementIpcFixture';
 import { useAuthStore } from './authStore';
 import { useStockStore } from './stockStore';
+
+vi.mock('../services/tauriClient', () => ({
+  invokeIPC: async (command: string, args: Record<string, unknown> = {}) =>
+    handleManagementMockIPC(command, args),
+  isTauri: () => false,
+}));
 
 describe('stok satın alma akışı', () => {
   beforeEach(() => {

@@ -39,8 +39,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
   }, [products, selectedCategoryId, searchQuery]);
 
   const handleProductClick = (product: Product) => {
-    // Seçenekli veya pişirme derecesi gerektiren ürünler (Izgaralar/Burgerler) modal açar
-    if (product.categoryId === 'cat_grill' || product.categoryId === 'cat_fast') {
+    if (product.modifierGroups?.length) {
       openModifierModal(product);
     } else {
       addItemToTicket(product);

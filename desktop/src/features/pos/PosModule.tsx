@@ -27,7 +27,7 @@ export const PosModule: React.FC = () => {
   const handleBindConfirm = () => {
     const table = tables.find((t) => t.id === targetTableId);
     if (!table) return;
-    bindWalkinToTable(table.id, table.tableNumber);
+    void bindWalkinToTable(table.id, table.tableNumber);
     setShowBindModal(false);
   };
 

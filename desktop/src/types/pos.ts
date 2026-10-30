@@ -25,6 +25,7 @@ export interface Product {
   name: string;
   unitPriceCents: number;
   vatRate: number; // örn: 10 (%10)
+  taxRateBp?: number;
   station: 'MUTFAK' | 'BAR' | 'TATLI' | 'KASA';
   isAvailable: boolean;
   is86d?: boolean;
@@ -54,6 +55,11 @@ export interface OrderItem {
   isSentToKitchen: boolean;
   isComp?: boolean;
   isVoid?: boolean;
+  taxRateBp?: number;
+  // Sunucu satırının bütünü: adet payı bunlardan kuruş kaybetmeden türetilir.
+  lineQuantity?: number;
+  paidQuantity?: number;
+  lineTotalCents?: number;
 }
 
 export interface Order {

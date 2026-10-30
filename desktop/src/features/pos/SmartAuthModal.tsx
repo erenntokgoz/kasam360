@@ -5,6 +5,8 @@ import { Modal } from '../../ui/Modal';
 import { Button } from '../../ui/Button';
 import { Numpad } from '../../ui/Numpad';
 import { invokeIPC } from '../../services/tauriClient';
+import { sessionArgs } from '../../stores/cariStore';
+import { errorText } from '../../lib/cariInput';
 
 export interface SmartAuthModalProps {
   isOpen: boolean;
@@ -33,33 +35,44 @@ export const SmartAuthModal: React.FC<SmartAuthModalProps> = ({
       ? ['Müşteri Vazgeçti', 'Hatalı Giriş', 'Mutfak Zayi', 'Geç Servis']
       : ['Müdür İkramı', 'Müşteri Memnuniyeti', 'Hediye / Tadım', 'Personel İkramı'];
 
-  const handleDigit = async (d: string) => {
-    if (pinDigits.length >= 4) return;
-    const next = pinDigits + d;
-    setPinDigits(next);
+  const handleDigit = (d: string) => {
+    if (pinDigits.length < 8) setPinDigits((current) => current + d);
+  };
 
-    if (next.length === 4) {
-      setIsVerifying(true);
-      setError(null);
-      try {
-        const res = await invokeIPC<{ success: boolean; approverRole?: string }>('verify_manager_pin', {
-          pin: next,
+  // Sunucuya gitmiş kalemde iptal jetonla ve gerekçeyle yazılır; PIN doğrulanmadan
+  // kalem ekrandan kalkmaz.
+  const handleConfirm = async () => {
+    setIsVerifying(true);
+    setError(null);
+    try {
+      if (item.isSentToKitchen) {
+        const { actorId, actorRole, tenantId } = sessionArgs();
+        const approval = await invokeIPC<{ approvalToken: string }>('verify_manager_pin', {
+          payload: {
+            operation: mode === 'VOID' ? 'VOID_ORDER' : 'COMPLIMENTARY',
+            resourceId: item.id,
+            actorId,
+            actorRole,
+            amountCents: item.lineTotalCents ?? item.totalCents,
+            discountPercent: mode === 'COMP' ? 100 : 0,
+            terminalId: 'terminal_pos',
+            pin: pinDigits,
+            tenantId,
+          },
         });
-
-        if (res.success) {
-          setPinDigits('');
-          onSuccess(reason);
-          onClose();
-        } else {
-          setError('Geçersiz yönetici PIN kodu.');
-          setTimeout(() => setPinDigits(''), 500);
-        }
-      } catch {
-        setError('PIN doğrulanamadı.');
-        setTimeout(() => setPinDigits(''), 500);
-      } finally {
-        setIsVerifying(false);
+        await invokeIPC(mode === 'VOID' ? 'void_order_item' : 'comp_order_item', {
+          payload: { itemId: item.id, reason, actorId, actorRole, approvalToken: approval.approvalToken },
+          tenantId,
+        });
       }
+      setPinDigits('');
+      onSuccess(reason);
+      onClose();
+    } catch (caught) {
+      setError(errorText(caught));
+      setPinDigits('');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -101,7 +114,7 @@ export const SmartAuthModal: React.FC<SmartAuthModalProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-[var(--text-secondary)] flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-[var(--accent-amber)]" />
-              <span>Müdür (3333) veya Patron (2222) PIN Kodu</span>
+              <span>Yönetici veya işletme sahibi PIN kodu</span>
             </span>
             <span className="text-sm font-mono font-bold tracking-widest text-[var(--text-primary)]">
               {pinDigits ? pinDigits.replace(/./g, '•') : '----'}
@@ -119,15 +132,13 @@ export const SmartAuthModal: React.FC<SmartAuthModalProps> = ({
             onDigit={handleDigit}
             onClear={handleClear}
             onBackspace={handleBackspace}
-            buttonHeightClass="!min-h-[46px]"
+            buttonHeightClass="!min-h-12"
           />
+          <Button type="button" variant="primary" className="w-full min-h-12" disabled={pinDigits.length < 4} isLoading={isVerifying} onClick={() => void handleConfirm()}>
+            Onayla
+          </Button>
         </div>
 
-        {isVerifying ? (
-          <div className="text-center text-xs text-[var(--accent-amber)] font-semibold">
-            Yetki doğrulanıyor...
-          </div>
-        ) : null}
       </div>
     </Modal>
   );

@@ -1,90 +1,103 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
 import { usePosStore } from '../../stores/posStore';
 import { useUIStore } from '../../stores/uiStore';
-import { useAuthStore } from '../../stores/authStore';
 import { useLedgerStore } from '../../stores/ledgerStore';
 import { useFloorStore } from '../../stores/floorStore';
+import { useShiftStore } from '../../stores/shiftStore';
+import { sessionArgs } from '../../stores/cariStore';
 import { formatMoney } from '../../lib/formatMoney';
+import { parseMoneyToCents } from '../../lib/moneyParser';
+import { unitShareCents } from '../../lib/orderMath';
+import { errorText } from '../../lib/cariInput';
 import { invokeIPC } from '../../services/tauriClient';
 import { Modal } from '../../ui/Modal';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { PaymentItemSplitTab } from './PaymentItemSplitTab';
 import { PaymentChannelSection } from './PaymentChannelSection';
-import type { PaymentMethod, PaymentSplitMode } from '../../types/payment';
+import { ManagerPinPrompt } from './ManagerPinPrompt';
+import type { PaymentMethod, PaymentResultWire, PaymentSplitMode, PaymentStatusWire } from '../../types/payment';
+
+const SPLIT_TABS: { mode: PaymentSplitMode; label: string }[] = [
+  { mode: 'FULL', label: 'Tam Hesap' },
+  { mode: 'ITEMS', label: 'Kalem Bazlı Böl' },
+  { mode: 'PARTIAL', label: 'Tutar Bazlı Böl' },
+];
+
+/** İş kuralı reddi kesindir: para alınmamıştır. Diğer hatalarda sonuç bilinmez. */
+const DEFINITE_REJECTION = /^(OVERPAYMENT|ITEM_ALREADY_PAID|TOTAL_MISMATCH|ORDER_CLOSED|VALIDATION|INVALID_|NOT_FOUND|UNAUTHORIZED|SETUP_REQUIRED)/;
+
+function newTransactionId(): string {
+  return `txn_${crypto.randomUUID()}`;
+}
+
+function parseCents(text: string): number | null {
+  try {
+    return parseMoneyToCents(text);
+  } catch {
+    return null;
+  }
+}
 
 export const PaymentModal: React.FC = () => {
   const { modals, closeModal, openModal } = useUIStore();
-  const {
-    activeTableName,
-    activeTableId,
-    ticketItems,
-    calculateTotalCents,
-    clearTicket,
-    deductPaidItems,
-    deductPaidAmount,
-  } = usePosStore();
-  const { user } = useAuthStore();
-  const { directories, createContact } = useLedgerStore();
-  const { loadFloorPlan, updateTablePayment } = useFloorStore();
+  const { activeTableName, activeTableId, activeOrderId, balance, ticketItems, loadActiveOrder, setLastSale } = usePosStore();
+  const { directories, createContact, loadLedgerData } = useLedgerStore();
+  const { loadFloorPlan } = useFloorStore();
+  const { loadShiftData } = useShiftStore();
 
-  const totalOrderCents = calculateTotalCents();
+  const remainingCents = balance?.remainingCents ?? 0;
+  const payableItems = useMemo(() => ticketItems.filter((item) => item.isSentToKitchen), [ticketItems]);
 
   const [splitMode, setSplitMode] = useState<PaymentSplitMode>('FULL');
   const [selectedItemQuantities, setSelectedItemQuantities] = useState<Record<string, number>>({});
-  const [customPartialLiras, setCustomPartialLiras] = useState<string>('');
-  const [discountCents, setDiscountCents] = useState<number>(0);
-
+  const [customPartial, setCustomPartial] = useState('');
+  const [discountCents, setDiscountCents] = useState(0);
   const [channel, setChannel] = useState<PaymentMethod>('CASH');
-  const [tenderedLiras, setTenderedLiras] = useState<string>('');
-  const [selectedDirectoryId, setSelectedDirectoryId] = useState<string>('');
-
+  const [tendered, setTendered] = useState('');
+  const [selectedDirectoryId, setSelectedDirectoryId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isUnresolved, setIsUnresolved] = useState(false);
+  const [needsApproval, setNeedsApproval] = useState(false);
+
+  // Aynı niyet aynı kimlikle gider: yeniden deneme ikinci tahsilat olamaz.
+  const transactionId = useRef(newTransactionId());
+
+  useEffect(() => {
+    if (modals.payment) void loadLedgerData();
+  }, [modals.payment, loadLedgerData]);
 
   if (!modals.payment) return null;
 
-  // Hesaplama: Şu an tahsil edilecek tutar
   let payNowCents = 0;
   if (splitMode === 'FULL') {
-    payNowCents = Math.max(0, totalOrderCents - discountCents);
+    payNowCents = Math.max(0, remainingCents - discountCents);
   } else if (splitMode === 'ITEMS') {
-    payNowCents = ticketItems.reduce((acc, item) => {
-      const qty = selectedItemQuantities[item.id] || 0;
-      return acc + qty * item.unitPriceCents;
-    }, 0);
-  } else if (splitMode === 'PARTIAL') {
-    const entered = parseFloat(customPartialLiras) || 0;
-    payNowCents = Math.min(totalOrderCents, Math.round(entered * 100));
+    payNowCents = payableItems.reduce(
+      (sum, item) => sum + unitShareCents(item, selectedItemQuantities[item.id] || 0),
+      0,
+    );
+  } else {
+    payNowCents = Math.min(remainingCents, parseCents(customPartial) ?? 0);
   }
 
-  // Düz Hesap Yuvarlama
   const handleQuickFlatRounding = () => {
-    const liras = Math.floor(totalOrderCents / 100);
-    const remainder = liras % 50;
-    let targetLira = liras - remainder;
-    if (targetLira <= 0) targetLira = Math.floor(liras / 10) * 10;
-    const targetCents = targetLira * 100;
-    const discount = Math.max(0, totalOrderCents - targetCents);
-    setDiscountCents(discount);
+    const liras = Math.floor(remainingCents / 100);
+    const target = liras - (liras % 50) || Math.floor(liras / 10) * 10;
+    setDiscountCents(Math.max(0, remainingCents - target * 100));
   };
 
-  // Kalem Seçimi (Alman Usulü)
   const toggleItemSelect = (itemId: string, maxQty: number) => {
     setSelectedItemQuantities((prev) => {
       const current = prev[itemId] || 0;
-      const next = current >= maxQty ? 0 : current + 1;
-      return { ...prev, [itemId]: next };
+      return { ...prev, [itemId]: current >= maxQty ? 0 : current + 1 };
     });
   };
 
   const selectAllItems = () => {
-    const all: Record<string, number> = {};
-    ticketItems.forEach((i) => {
-      all[i.id] = i.quantity;
-    });
-    setSelectedItemQuantities(all);
+    setSelectedItemQuantities(Object.fromEntries(payableItems.map((item) => [item.id, item.quantity])));
   };
 
   const handleCreateCari = async (name: string, phone: string) => {
@@ -92,80 +105,145 @@ export const PaymentModal: React.FC = () => {
     setSelectedDirectoryId(created.id);
   };
 
-  // Tahsilatı Tamamla
-  const handleExecutePayment = async () => {
-    if (payNowCents <= 0) {
-      setErrorMsg('Tahsil edilecek tutar sıfırdan büyük olmalıdır.');
-      return;
-    }
-    if (channel === 'VERESIYE' && !selectedDirectoryId) {
-      setErrorMsg('Veresiye işlemi için lütfen bir cari müşteri seçin.');
-      return;
-    }
+  const tenderedCents = channel === 'CASH' && tendered ? parseCents(tendered) : payNowCents;
 
+  const finishSale = async (changeCents: number, remaining: number) => {
+    setLastSale({
+      transactionId: transactionId.current,
+      tableName: activeTableName,
+      items: splitMode === 'ITEMS'
+        ? payableItems
+            .filter((item) => selectedItemQuantities[item.id])
+            .map((item) => ({
+              ...item,
+              quantity: selectedItemQuantities[item.id],
+              totalCents: unitShareCents(item, selectedItemQuantities[item.id]),
+            }))
+        : payableItems,
+      amountCents: payNowCents,
+      method: channel,
+      changeCents,
+      remainingCents: remaining,
+    });
+    transactionId.current = newTransactionId();
+    setSelectedItemQuantities({});
+    setCustomPartial('');
+    setDiscountCents(0);
+    setTendered('');
+    setSplitMode('FULL');
+    setIsUnresolved(false);
+    setErrorMsg(null);
+    await Promise.all([loadActiveOrder(), loadFloorPlan(), loadShiftData()]);
+    closeModal('payment');
+    openModal('receiptPreview');
+  };
+
+  const execute = async (approvalToken?: string) => {
+    const { actorId, actorRole } = sessionArgs();
     setIsProcessing(true);
     setErrorMsg(null);
-
     try {
-      await invokeIPC('process_payment', {
-        orderId: `ord_${activeTableId || 'walkin'}`,
-        amountCents: payNowCents,
-        paymentMethod: channel,
-        splitMode,
-        discountCents,
-        directoryId: channel === 'VERESIYE' ? selectedDirectoryId : undefined,
-        cashierId: user?.userId || 'usr_cashier',
+      const reply = await invokeIPC<PaymentResultWire>('process_payment', {
+        actorRole,
+        payload: {
+          transactionId: transactionId.current,
+          orderId: activeOrderId,
+          timestamp: new Date().toISOString(),
+          method: channel,
+          amountTendered: tenderedCents,
+          totalAmount: payNowCents,
+          changeAmount: (tenderedCents ?? payNowCents) - payNowCents,
+          items: splitMode === 'ITEMS'
+            ? payableItems
+                .filter((item) => selectedItemQuantities[item.id])
+                .map((item) => ({
+                  id: item.id,
+                  product: { id: item.productId },
+                  quantity: selectedItemQuantities[item.id],
+                }))
+            : [],
+          customerRef: activeTableId,
+          cashierId: actorId,
+          actorId,
+          debtDirectoryId: channel === 'VERESIYE' ? selectedDirectoryId : undefined,
+          globalDiscount: discountCents > 0 ? { type: 'FIXED_AMOUNT', value: discountCents } : undefined,
+          approvalToken,
+        },
       });
-
-      const isFullOrCovered = splitMode === 'FULL' || payNowCents >= totalOrderCents;
-
-      if (isFullOrCovered) {
-        clearTicket();
-        if (activeTableId) {
-          updateTablePayment(activeTableId, payNowCents, true);
-        }
-      } else if (splitMode === 'ITEMS') {
-        deductPaidItems(selectedItemQuantities);
-        if (activeTableId) {
-          updateTablePayment(activeTableId, payNowCents, false);
-        }
-        setSelectedItemQuantities({});
-      } else if (splitMode === 'PARTIAL') {
-        deductPaidAmount(payNowCents);
-        if (activeTableId) {
-          updateTablePayment(activeTableId, payNowCents, false);
-        }
-        setCustomPartialLiras('');
+      await finishSale((tenderedCents ?? payNowCents) - payNowCents, reply.remainingCents ?? 0);
+    } catch (caught) {
+      const message = errorText(caught);
+      if (message.startsWith('IDEMPOTENCY_CONFLICT')) {
+        await checkOutcome();
+      } else if (DEFINITE_REJECTION.test(message)) {
+        setErrorMsg(message);
+        await loadActiveOrder();
+      } else {
+        setIsUnresolved(true);
+        setErrorMsg(`Tahsilat sonucu doğrulanamadı. İşlem kimliği: ${transactionId.current}`);
       }
-
-      await loadFloorPlan();
-      closeModal('payment');
-      openModal('receiptPreview');
-    } catch {
-      setErrorMsg('Tahsilat işlemi tamamlanamadı. Lütfen tekrar deneyin.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // İkinci gönderimden önce sunucuya sorulur: para alınmışsa tekrar alınmaz.
+  const checkOutcome = async () => {
+    const { tenantId } = sessionArgs();
+    setIsProcessing(true);
+    try {
+      const status = await invokeIPC<PaymentStatusWire>('get_payment_status', {
+        transactionId: transactionId.current,
+        orderId: activeOrderId,
+        tenantId,
+      });
+      if (status.processed) {
+        await finishSale((tenderedCents ?? payNowCents) - payNowCents, status.balance.remainingCents);
+      } else {
+        setIsUnresolved(false);
+        setErrorMsg('Tahsilat kaydedilmemiş. Aynı işlem kimliğiyle güvenle yeniden deneyebilirsiniz.');
+      }
+    } catch (caught) {
+      setErrorMsg(`Sonuç sorgulanamadı: ${errorText(caught)}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleExecutePayment = () => {
+    if (!activeOrderId) {
+      setErrorMsg('Açık adisyon bulunamadı.');
+    } else if (payNowCents <= 0) {
+      setErrorMsg('Tahsil edilecek tutar sıfırdan büyük olmalıdır.');
+    } else if (channel === 'VERESIYE' && !selectedDirectoryId) {
+      setErrorMsg('Veresiye işlemi için lütfen bir cari müşteri seçin.');
+    } else if (tenderedCents === null || tenderedCents < payNowCents) {
+      setErrorMsg('Verilen nakit tahsilat tutarından az olamaz.');
+    } else if (discountCents > 0) {
+      setNeedsApproval(true);
+    } else {
+      void execute();
     }
   };
 
   return (
     <Modal
       isOpen={modals.payment}
-      onClose={() => closeModal('payment')}
+      onClose={() => {
+        if (!isUnresolved && !isProcessing) closeModal('payment');
+      }}
       title={`${activeTableName} Tahsilatı`}
       subtitle="Ödeme yöntemini ve tahsilat tipini seçin"
       maxWidth="2xl"
     >
       <div className="space-y-4">
-        {/* Üst Bakiye Kartları */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3.5">
-            <span className="text-xs text-[var(--text-secondary)] block">Masanın Kalan Bakiyesi</span>
+            <span className="text-xs text-[var(--text-secondary)] block">Adisyonun Kalan Bakiyesi</span>
             <span className="text-lg font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-              {formatMoney(totalOrderCents)}
+              {balance ? formatMoney(remainingCents) : 'Okunamadı'}
             </span>
           </div>
-
           <div className="bg-[var(--bg-subtle)] border border-[var(--accent-emerald-border)] rounded-xl p-3.5">
             <span className="text-xs text-[var(--text-secondary)] block">Şu An Tahsil Edilecek</span>
             <span className="text-xl font-bold text-[var(--accent-emerald)] tabular-nums mt-0.5 block">
@@ -175,103 +253,77 @@ export const PaymentModal: React.FC = () => {
         </div>
 
         {errorMsg ? (
-          <div className="p-3 rounded-lg text-xs font-medium text-center bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)] flex items-center justify-center gap-1.5">
+          <div role="alert" className="p-3 rounded-lg text-xs font-medium text-center break-all bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)] flex items-center justify-center gap-1.5">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         ) : null}
 
-        {/* 3 Sekmeli Tahsilat Modu */}
         <div className="grid grid-cols-3 p-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
-          <button
-            type="button"
-            onClick={() => setSplitMode('FULL')}
-            className={`py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-              splitMode === 'FULL'
-                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            Tam Hesap
-          </button>
-          <button
-            type="button"
-            onClick={() => setSplitMode('ITEMS')}
-            className={`py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-              splitMode === 'ITEMS'
-                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            Kalem Bazlı Böl
-          </button>
-          <button
-            type="button"
-            onClick={() => setSplitMode('PARTIAL')}
-            className={`py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-              splitMode === 'PARTIAL'
-                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            Tutar Bazlı Böl
-          </button>
+          {SPLIT_TABS.map(({ mode, label }) => (
+            <button
+              key={mode}
+              type="button"
+              disabled={isUnresolved}
+              onClick={() => {
+                setSplitMode(mode);
+                setDiscountCents(0);
+              }}
+              className={`min-h-12 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
+                splitMode === mode
+                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Sekme 1: Tam Hesap */}
         {splitMode === 'FULL' ? (
           <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3 flex items-center justify-between">
             <div>
-              <span className="text-xs font-semibold text-[var(--text-primary)] block">
-                Düz Hesap Yuvarlama
-              </span>
+              <span className="text-xs font-semibold text-[var(--text-primary)] block">Düz Hesap Yuvarlama</span>
               <span className="text-xs text-[var(--text-secondary)] block mt-0.5">
-                Küsüratı otomatik indirim olarak düşer
+                Küsürat yönetici onayıyla indirim olarak düşer
                 {discountCents > 0 ? ` (Uygulanan İndirim: ${formatMoney(discountCents)})` : ''}
               </span>
             </div>
-            <Button
-              variant="outline-amber"
-              size="sm"
-              onClick={handleQuickFlatRounding}
-              className="text-xs"
-            >
+            <Button variant="outline-amber" size="sm" onClick={handleQuickFlatRounding} className="min-h-12 text-xs">
               Düz Hesap Yap
             </Button>
           </div>
         ) : null}
 
-        {/* Sekme 2: Alman Usulü Kalem Seçimi */}
         {splitMode === 'ITEMS' ? (
           <PaymentItemSplitTab
-            items={ticketItems}
+            items={payableItems}
             selectedQuantities={selectedItemQuantities}
             onToggleItem={toggleItemSelect}
             onSelectAll={selectAllItems}
           />
         ) : null}
 
-        {/* Sekme 3: Kısmi / Düz Hesap */}
         {splitMode === 'PARTIAL' ? (
           <div className="space-y-2">
-            <label className="block text-xs font-medium text-[var(--text-secondary)]">
+            <label htmlFor="payment-partial" className="block text-xs font-medium text-[var(--text-secondary)]">
               Tahsil Edilecek Tutar (₺)
             </label>
             <div className="flex gap-2">
               <Input
-                type="number"
-                step="1"
-                min="1"
-                value={customPartialLiras}
-                onChange={(e) => setCustomPartialLiras(e.target.value)}
+                id="payment-partial"
+                inputMode="decimal"
+                value={customPartial}
+                onChange={(e) => setCustomPartial(e.target.value)}
                 placeholder="Örn: 500"
-                className="text-base font-bold tabular-nums flex-1"
+                className="min-h-12 text-base font-bold tabular-nums flex-1"
                 autoFocus
               />
               <Button
                 variant="secondary"
                 size="md"
-                onClick={() => setCustomPartialLiras((totalOrderCents / 200).toString())}
+                className="min-h-12"
+                onClick={() => setCustomPartial((Math.ceil(remainingCents / 2) / 100).toFixed(2).replace('.', ','))}
               >
                 1/2 Hesap
               </Button>
@@ -279,31 +331,46 @@ export const PaymentModal: React.FC = () => {
           </div>
         ) : null}
 
-        {/* Ödeme Kanalı Bölümü */}
         <PaymentChannelSection
           channel={channel}
           onSelectChannel={setChannel}
           payNowCents={payNowCents}
-          tenderedLiras={tenderedLiras}
-          onChangeTendered={setTenderedLiras}
+          tenderedLiras={tendered}
+          onChangeTendered={setTendered}
           directories={directories}
           selectedDirectoryId={selectedDirectoryId}
           onSelectDirectory={setSelectedDirectoryId}
           onCreateContact={handleCreateCari}
         />
 
-        {/* Tahsilatı Onayla Butonu */}
-        <Button
-          variant="success"
-          size="xl"
-          onClick={handleExecutePayment}
-          isLoading={isProcessing}
-          className="w-full mt-2 text-base font-bold"
-        >
-          <Check className="w-5 h-5 mr-1.5" />
-          <span>{formatMoney(payNowCents)} Tahsilatı Tamamla</span>
-        </Button>
+        {isUnresolved ? (
+          <Button variant="primary" size="xl" onClick={() => void checkOutcome()} isLoading={isProcessing} className="w-full mt-2 text-base font-bold">
+            Tahsilat Sonucunu Sorgula
+          </Button>
+        ) : (
+          <Button variant="success" size="xl" onClick={handleExecutePayment} isLoading={isProcessing} className="w-full mt-2 text-base font-bold">
+            <Check className="w-5 h-5 mr-1.5" />
+            <span>{formatMoney(payNowCents)} Tahsilatı Tamamla</span>
+          </Button>
+        )}
       </div>
+
+      {needsApproval ? (
+        <ManagerPinPrompt
+          title="İndirim Onayı"
+          scope={{
+            operation: 'DISCOUNT',
+            resourceId: transactionId.current,
+            amountCents: discountCents,
+            discountPercent: Math.round((discountCents * 100) / remainingCents),
+          }}
+          onClose={() => setNeedsApproval(false)}
+          onApproved={(token) => {
+            setNeedsApproval(false);
+            void execute(token);
+          }}
+        />
+      ) : null}
     </Modal>
   );
 };

@@ -1,7 +1,75 @@
 import { create } from 'zustand';
 import type { KdsTicket, KdsItemStatus } from '../types/kds';
-import type { OrderItem } from '../types/pos';
 import { invokeIPC } from '../services/tauriClient';
+import { sessionArgs } from './cariStore';
+
+interface KdsItemWire {
+  id: string;
+  name: string;
+  quantity: number;
+  status?: string | null;
+  station?: string | null;
+  notes?: string | null;
+}
+
+interface KdsOrderWire {
+  id: string;
+  orderNumber: string;
+  tableNumber?: string | null;
+  waiterName?: string | null;
+  items: KdsItemWire[];
+  createdAt: string;
+  elapsedSeconds: number;
+}
+
+const ITEM_STATUS: Record<string, KdsItemStatus> = {
+  PENDING: 'PENDING',
+  PREPARING: 'PREPARING',
+  READY: 'READY',
+  SERVED: 'SERVED',
+  COMPLETED: 'SERVED',
+};
+
+const WIRE_STATUS: Record<KdsItemStatus, string> = {
+  PENDING: 'Pending',
+  PREPARING: 'Preparing',
+  READY: 'Ready',
+  SERVED: 'Served',
+};
+
+function stationOf(value?: string | null): 'MUTFAK' | 'BAR' | 'TATLI' {
+  return value === 'BAR' || value === 'TATLI' ? value : 'MUTFAK';
+}
+
+/** Her istasyon kendi biletini görür; adisyon istasyonlara bölünür. */
+export function mapKdsOrders(orders: KdsOrderWire[]): KdsTicket[] {
+  return orders.flatMap((order, index) => {
+    const stations = [...new Set(order.items.map((item) => stationOf(item.station)))];
+    return stations.map((station) => ({
+      id: `${order.id}:${station}`,
+      orderId: order.id,
+      ticketNumber: index + 1,
+      tableName: order.tableNumber ?? 'Tezgâh',
+      waiterName: order.waiterName ?? undefined,
+      station,
+      createdAt: order.createdAt,
+      elapsedMinutes: Math.floor(order.elapsedSeconds / 60),
+      isCompleted: false,
+      items: order.items
+        .filter((item) => stationOf(item.station) === station)
+        .map((item) => ({
+          id: item.id,
+          orderItemId: item.id,
+          productName: item.name,
+          quantity: item.quantity,
+          course: 1 as const,
+          station,
+          notes: item.notes ?? undefined,
+          status: ITEM_STATUS[(item.status ?? 'PENDING').toUpperCase()] ?? 'PENDING',
+        })),
+    }));
+  });
+}
 
 interface KdsStore {
   tickets: KdsTicket[];
@@ -11,17 +79,11 @@ interface KdsStore {
   loadTickets: () => Promise<void>;
   setSelectedStation: (station: 'TUMU' | 'MUTFAK' | 'BAR' | 'TATLI') => void;
   setStationActive: (station: 'MUTFAK' | 'BAR' | 'TATLI', active: boolean) => void;
-  toggleItemStatus: (ticketId: string, itemId: string) => void;
+  toggleItemStatus: (ticketId: string, itemId: string) => Promise<void>;
   completeTicket: (ticketId: string) => Promise<void>;
   recallLastTicket: () => Promise<void>;
   toggleSound: () => void;
   playOrderBell: () => void;
-  addTicketsFromOrder: (
-    orderId: string,
-    tableName: string,
-    waiterName: string,
-    items: OrderItem[]
-  ) => Promise<{ addedCount: number; autoPrintedStations: string[] }>;
 }
 
 export const useKdsStore = create<KdsStore>((set, get) => ({
@@ -35,8 +97,9 @@ export const useKdsStore = create<KdsStore>((set, get) => ({
   soundEnabled: true,
 
   loadTickets: async () => {
-    const data = await invokeIPC<KdsTicket[]>('get_active_tickets');
-    set({ tickets: data || [] });
+    const { actorRole, tenantId } = sessionArgs();
+    const orders = await invokeIPC<KdsOrderWire[]>('get_active_tickets', { tenantId, actorRole });
+    set({ tickets: mapKdsOrders(orders) });
   },
 
   setSelectedStation: (selectedStation) => set({ selectedStation }),
@@ -46,41 +109,44 @@ export const useKdsStore = create<KdsStore>((set, get) => ({
       activeStations: { ...state.activeStations, [station]: active },
     })),
 
-  toggleItemStatus: (ticketId, itemId) => {
+  // Durum sunucuya yazılmadan ekranda ilerlemez; yoksa diğer ekranlar ayrışır.
+  toggleItemStatus: async (ticketId, itemId) => {
     const nextStatus: Record<KdsItemStatus, KdsItemStatus> = {
       PENDING: 'PREPARING',
       PREPARING: 'READY',
       READY: 'SERVED',
       SERVED: 'READY',
     };
-
-    set((state) => ({
-      tickets: state.tickets.map((t) => {
-        if (t.id === ticketId) {
-          const updatedItems = t.items.map((i) =>
-            i.id === itemId ? { ...i, status: nextStatus[i.status] } : i
-          );
-          const allReady = updatedItems.every((i) => i.status === 'READY' || i.status === 'SERVED');
-          return {
-            ...t,
-            items: updatedItems,
-            isCompleted: allReady,
-          };
-        }
-        return t;
-      }),
-    }));
+    const item = get().tickets.find((t) => t.id === ticketId)?.items.find((i) => i.id === itemId);
+    if (!item) return;
+    const { actorRole, tenantId } = sessionArgs();
+    await invokeIPC('update_kds_item_status', {
+      payload: { itemId, status: WIRE_STATUS[nextStatus[item.status]] },
+      tenantId,
+      actorRole,
+    });
+    await get().loadTickets();
   },
 
   completeTicket: async (ticketId) => {
-    await invokeIPC('kds_update_ticket_status', { ticketId, isCompleted: true });
-    set((state) => ({
-      tickets: state.tickets.filter((t) => t.id !== ticketId),
-    }));
+    const ticket = get().tickets.find((t) => t.id === ticketId);
+    if (!ticket) return;
+    const { actorRole, tenantId } = sessionArgs();
+    for (const item of ticket.items) {
+      await invokeIPC('update_kds_item_status', {
+        payload: { itemId: item.id, status: WIRE_STATUS.SERVED },
+        tenantId,
+        actorRole,
+      });
+    }
+    await get().loadTickets();
   },
 
   recallLastTicket: async () => {
-    await invokeIPC('recall_kds_ticket');
+    const orderId = get().tickets[0]?.orderId;
+    if (!orderId) return;
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('recall_kds_ticket', { orderId, actorId, actorRole, tenantId });
     await get().loadTickets();
   },
 
@@ -108,77 +174,5 @@ export const useKdsStore = create<KdsStore>((set, get) => ({
     } catch {
       // Audio context policy fallback
     }
-  },
-
-  addTicketsFromOrder: async (orderId, tableName, waiterName, items) => {
-    if (!items || items.length === 0) {
-      return { addedCount: 0, autoPrintedStations: [] };
-    }
-
-    const { activeStations, tickets } = get();
-    const newTickets: KdsTicket[] = [];
-    const autoPrintedStations: string[] = [];
-
-    // İstasyonlara göre kalemleri grupla
-    const byStation: Record<string, OrderItem[]> = {};
-    for (const item of items) {
-      const st = item.station || 'MUTFAK';
-      if (!byStation[st]) byStation[st] = [];
-      byStation[st].push(item);
-    }
-
-    let ticketSeq = tickets.length + 101;
-
-    for (const [st, stationItems] of Object.entries(byStation)) {
-      const stationKey = (st as 'MUTFAK' | 'BAR' | 'TATLI');
-      const hasActiveScreen = activeStations[stationKey] ?? true;
-
-      if (hasActiveScreen) {
-        // Canlı KDS biletine ekle
-        newTickets.push({
-          id: `kds_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          orderId,
-          ticketNumber: ticketSeq++,
-          tableName,
-          waiterName: waiterName || 'Garson',
-          station: stationKey,
-          createdAt: new Date().toISOString(),
-          elapsedMinutes: 0,
-          isCompleted: false,
-          items: stationItems.map((si) => ({
-            id: `ki_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            orderItemId: si.id,
-            productName: si.name,
-            quantity: si.quantity,
-            course: si.course,
-            station: stationKey,
-            cookingDegree: si.cookingDegree,
-            notes: si.notes,
-            status: 'PENDING',
-          })),
-        });
-      } else {
-        // İlgili kısımda aktif ekran yok -> Otomatik termal yazıcı çıktısı
-        autoPrintedStations.push(stationKey);
-        try {
-          await invokeIPC('print_order_slip', {
-            orderId,
-            station: stationKey,
-            tableName,
-            items: stationItems,
-          });
-        } catch {
-          // print slip fallback
-        }
-      }
-    }
-
-    if (newTickets.length > 0) {
-      set((state) => ({
-        tickets: [...newTickets, ...state.tickets],
-      }));
-    }
-
-    return { addedCount: newTickets.length, autoPrintedStations };
   },
 }));

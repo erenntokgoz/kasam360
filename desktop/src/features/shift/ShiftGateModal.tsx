@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { parseMoneyToCents } from '../../lib/moneyParser';
 import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
 
 export const ShiftGateModal: React.FC = () => {
   const { user } = useAuthStore();
-  const { openShift, activeShift } = useShiftStore();
+  const { openShift, activeShift, shiftError } = useShiftStore();
   const { modals, closeModal } = useUIStore();
 
-  const [openingLira, setOpeningLira] = useState('1500');
+  const [openingLira, setOpeningLira] = useState('0');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isOpen = modals.shiftGate || (!activeShift?.isOpen && modals.payment);
@@ -22,8 +23,7 @@ export const ShiftGateModal: React.FC = () => {
 
   const handleStartShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    const liras = parseFloat(openingLira) || 0;
-    const cents = Math.round(liras * 100);
+    const cents = parseMoneyToCents(openingLira);
 
     setIsSubmitting(true);
     const success = await openShift(cents, user?.userId || 'usr_cashier', user?.name || 'Kasiyer');
@@ -73,6 +73,10 @@ export const ShiftGateModal: React.FC = () => {
             ))}
           </div>
         </div>
+
+        {shiftError ? (
+          <p role="alert" className="text-xs font-semibold text-[var(--accent-red)] break-words">{shiftError}</p>
+        ) : null}
 
         <Button
           type="submit"

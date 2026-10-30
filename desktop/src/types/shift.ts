@@ -36,8 +36,6 @@ export interface ShiftSummary {
   totalCashOutCents: number;
   expectedCashInDrawerCents: number;
   totalSalesCents: number;
-  totalTaxCents: number;
-  orderCount: number;
 }
 
 export interface ZReportData {

@@ -1,81 +1,34 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useKdsStore } from './kdsStore';
-import type { OrderItem } from '../types/pos';
+import { describe, expect, it } from 'vitest';
+import { mapKdsOrders } from './kdsStore';
 
-describe('kdsStore - İstasyon Bazlı Otomatik Fişleme ve Bilet Oluşturma', () => {
-  beforeEach(() => {
-    useKdsStore.setState({
-      tickets: [],
-      activeStations: {
-        MUTFAK: true,
-        BAR: true,
-        TATLI: false, // Ekransız istasyon: fiş basılır
+describe('mutfak biletleri', () => {
+  it('sunucu adisyonunu istasyonlara böler ve durumları korur', () => {
+    const tickets = mapKdsOrders([
+      {
+        id: 'ord_1',
+        orderNumber: '1',
+        tableNumber: 'Masa 4',
+        waiterName: 'Ayşe',
+        createdAt: '2026-10-30T10:00:00Z',
+        elapsedSeconds: 125,
+        items: [
+          { id: 'itm_1', name: 'Tost', quantity: 2, status: 'Pending', station: 'MUTFAK' },
+          { id: 'itm_2', name: 'Kola', quantity: 1, status: 'Ready', station: 'BAR' },
+        ],
       },
-      soundEnabled: false,
-    });
+    ]);
+    expect(tickets.map((t) => t.station)).toEqual(['MUTFAK', 'BAR']);
+    expect(tickets[0]).toMatchObject({ orderId: 'ord_1', tableName: 'Masa 4', elapsedMinutes: 2 });
+    expect(tickets[1].items[0]).toMatchObject({ orderItemId: 'itm_2', status: 'READY' });
   });
 
-  it('aktif ekranı olan mutfak ve bar ürünleri canlı KDS biletine eklenir', async () => {
-    const items: OrderItem[] = [
+  it('masasız adisyonu tezgâh olarak gösterir', () => {
+    const [ticket] = mapKdsOrders([
       {
-        id: 'oi_1',
-        productId: 'prod_antrikot',
-        name: 'Antrikot',
-        quantity: 1,
-        unitPriceCents: 48000,
-        vatRate: 10,
-        station: 'MUTFAK',
-        course: 2,
-        selectedModifiers: [],
-        totalCents: 48000,
-        isSentToKitchen: false,
+        id: 'ord_2', orderNumber: '2', tableNumber: null, createdAt: '2026-10-30T10:00:00Z', elapsedSeconds: 0,
+        items: [{ id: 'itm_1', name: 'Çay', quantity: 1 }],
       },
-      {
-        id: 'oi_2',
-        productId: 'prod_cola',
-        name: 'Kola',
-        quantity: 2,
-        unitPriceCents: 5500,
-        vatRate: 10,
-        station: 'BAR',
-        course: 1,
-        selectedModifiers: [],
-        totalCents: 11000,
-        isSentToKitchen: false,
-      },
-    ];
-
-    const res = await useKdsStore.getState().addTicketsFromOrder('ord_1', 'Masa 04', 'Ahmet G.', items);
-    expect(res.addedCount).toBe(2);
-    expect(res.autoPrintedStations.length).toBe(0);
-
-    const tickets = useKdsStore.getState().tickets;
-    expect(tickets.length).toBe(2);
-    expect(tickets.some((t) => t.station === 'MUTFAK')).toBe(true);
-    expect(tickets.some((t) => t.station === 'BAR')).toBe(true);
-  });
-
-  it('aktif ekranı olmayan tatlı istasyonu siparişi otomatik termal fiş kuyruğuna iletir', async () => {
-    const items: OrderItem[] = [
-      {
-        id: 'oi_3',
-        productId: 'prod_sufle',
-        name: 'Çikolatalı Sufle',
-        quantity: 1,
-        unitPriceCents: 17000,
-        vatRate: 10,
-        station: 'TATLI',
-        course: 3,
-        selectedModifiers: [],
-        totalCents: 17000,
-        isSentToKitchen: false,
-      },
-    ];
-
-    const res = await useKdsStore.getState().addTicketsFromOrder('ord_2', 'Masa 02', 'Ahmet G.', items);
-    expect(res.addedCount).toBe(0);
-    expect(res.autoPrintedStations).toContain('TATLI');
-    // Ekrana düşmez, otomatik yazıcıya uçar
-    expect(useKdsStore.getState().tickets.length).toBe(0);
+    ]);
+    expect(ticket).toMatchObject({ tableName: 'Tezgâh', station: 'MUTFAK' });
   });
 });

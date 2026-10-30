@@ -247,3 +247,16 @@ fn aciklamadaki_tckn_bicimi_telefon_kaniti_olmaz() {
     maskele(&mut veri);
     assert_eq!(veri["aciklama"], json!("Fatura 11111111111"));
 }
+
+#[test]
+fn kurus_alanlari_para_kanitidir_maskelenmez() {
+    let mut veri = json!({
+        "cardAmountCents": 13100,
+        "mealCardAmountCents": 500,
+        "cardNumber": "4111111111111111",
+    });
+    maskele(&mut veri);
+    assert_eq!(veri["cardAmountCents"], json!(13100));
+    assert_eq!(veri["mealCardAmountCents"], json!(500));
+    assert_eq!(veri["cardNumber"], json!("***"));
+}

@@ -1,6 +1,7 @@
 import React from 'react';
 import type { OrderItem } from '../../types/pos';
 import { formatMoney } from '../../lib/formatMoney';
+import { unitShareCents } from '../../lib/orderMath';
 
 export interface PaymentItemSplitTabProps {
   items: OrderItem[];
@@ -24,7 +25,7 @@ export const PaymentItemSplitTab: React.FC<PaymentItemSplitTabProps> = ({
         <button
           type="button"
           onClick={onSelectAll}
-          className="font-semibold text-[var(--accent-amber)] hover:underline cursor-pointer"
+          className="min-h-12 px-2 font-semibold text-[var(--accent-amber)] hover:underline cursor-pointer"
         >
           Tümünü Seç
         </button>
@@ -37,7 +38,7 @@ export const PaymentItemSplitTab: React.FC<PaymentItemSplitTabProps> = ({
             <div
               key={item.id}
               onClick={() => onToggleItem(item.id, item.quantity)}
-              className={`p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-colors ${
+              className={`min-h-12 p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-colors ${
                 selected > 0
                   ? 'bg-[var(--accent-amber-soft)] border-[var(--accent-amber-border)] text-[var(--text-primary)]'
                   : 'bg-[var(--bg-subtle)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
@@ -59,7 +60,7 @@ export const PaymentItemSplitTab: React.FC<PaymentItemSplitTabProps> = ({
                 </span>
               </div>
               <span className="text-xs font-bold tabular-nums">
-                {formatMoney(item.unitPriceCents * (selected || item.quantity))}
+                {formatMoney(unitShareCents(item, selected || item.quantity))}
               </span>
             </div>
           );

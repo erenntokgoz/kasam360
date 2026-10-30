@@ -25,6 +25,9 @@ pub struct PosProductDto {
     #[serde(rename = "taxRateBp", alias = "tax_rate_bp")]
     pub tax_rate_bp: i64,
     pub category: String,
+    #[serde(rename = "categoryId", alias = "category_id")]
+    pub category_id: String,
+    pub station: Option<String>,
     pub description: Option<String>,
     #[serde(rename = "inStock", alias = "in_stock")]
     pub in_stock: bool,
@@ -82,7 +85,7 @@ pub(crate) async fn list_pos_products(
     }
     let rows = sqlx::query(
         "SELECT p.id, p.sku, p.barcode, p.name, p.price_cents, p.tax_rate_bp, \
-                c.name as category_name, p.description, \
+                c.name as category_name, p.category_id, c.default_station, p.description, \
                 p.color, p.image_url, p.is_active, p.is_86, p.stockout_reason, \
                 CAST(COALESCE(b.current_stock, 0) AS REAL) AS current_stock, \
                 COALESCE(b.batch_count, 0) AS batch_count \
@@ -117,6 +120,8 @@ pub(crate) async fn list_pos_products(
             price_cents: row.try_get("price_cents").map_err(|e| e.to_string())?,
             tax_rate_bp: row.try_get("tax_rate_bp").unwrap_or(1000),
             category: row.try_get("category_name").map_err(|e| e.to_string())?,
+            category_id: row.try_get("category_id").map_err(|e| e.to_string())?,
+            station: row.try_get("default_station").map_err(|e| e.to_string())?,
             description: row.try_get("description").ok(),
             in_stock: is_active && !is_86 && (tracked == 0 || current_stock > 0.0),
             stock_quantity: if tracked > 0 {

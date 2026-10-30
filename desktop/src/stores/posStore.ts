@@ -1,28 +1,64 @@
 import { create } from 'zustand';
 import type { ProductCategory, Product, OrderItem, OrderItemModifier } from '../types/pos';
+import type { LastSale } from '../types/payment';
 import { invokeIPC } from '../services/tauriClient';
-import { INITIAL_DEMO_TICKETS } from '../services/mockOrders';
+import { sessionArgs } from './cariStore';
+import {
+  itemTaxCents,
+  lineTotalCents,
+  mapServerItem,
+  toSubmitItem,
+  type CartItemWire,
+} from '../lib/orderMath';
+
+// Sepetin iki parçası vardır: sunucudaki adisyon (tek doğruluk kaynağı) ve bu
+// cihazda henüz mutfağa gönderilmemiş taslak. Tutar taslak dışında istemcide
+// hesaplanmaz.
+
+export const COUNTER_TABLE = 'COUNTER';
+
+export interface OrderBalance {
+  totalCents: number;
+  paidCents: number;
+  remainingCents: number;
+}
+
+interface ProductWire {
+  id: string;
+  name: string;
+  priceCents: number;
+  taxRateBp: number;
+  categoryId: string;
+  station?: string | null;
+  inStock: boolean;
+  is86?: boolean;
+  barcode?: string | null;
+}
 
 interface PosStore {
   activeTableId: string | null;
   activeTableName: string;
   isWalkin: boolean;
   guestCount: number;
+  activeOrderId: string | null;
+  balance: OrderBalance | null;
   categories: ProductCategory[];
   products: Product[];
   selectedCategoryId: string;
   searchQuery: string;
   ticketItems: OrderItem[];
-  tableTickets: Record<string, OrderItem[]>;
-  tablePaidCents: Record<string, number>;
+  drafts: Record<string, OrderItem[]>;
+  orderError: string | null;
+  isSending: boolean;
+  lastSale: LastSale | null;
   activeModifierProduct: Product | null;
   selectedTicketItemId: string | null;
 
   loadCatalog: () => Promise<void>;
-  openOrderForTable: (tableId: string, tableName: string, guests?: number) => void;
-  openWalkinOrder: () => void;
-  bindWalkinToTable: (tableId: string, tableName: string) => void;
-  getTableTicketItems: (tableId: string) => OrderItem[];
+  loadActiveOrder: () => Promise<void>;
+  openOrderForTable: (tableId: string, tableName: string, guests?: number) => Promise<void>;
+  openWalkinOrder: () => Promise<void>;
+  bindWalkinToTable: (tableId: string, tableName: string) => Promise<void>;
   setSelectedCategoryId: (catId: string) => void;
   setSearchQuery: (query: string) => void;
   openModifierModal: (product: Product) => void;
@@ -39,98 +75,145 @@ interface PosStore {
   removeItem: (itemId: string) => void;
   setItemCourse: (itemId: string, course: 1 | 2 | 3) => void;
   setItemNote: (itemId: string, notes: string) => void;
-  deductPaidItems: (selectedQuantities: Record<string, number>) => void;
-  deductPaidAmount: (amountCents: number) => void;
   clearTicket: () => void;
-  markItemsSentToKitchen: () => void;
+  setLastSale: (sale: LastSale) => void;
+  sendToKitchen: () => Promise<boolean>;
   calculateSubtotalCents: () => number;
   calculateTaxCents: () => number;
   calculateTotalCents: () => number;
 }
 
+function orderKey(state: Pick<PosStore, 'isWalkin' | 'activeTableId'>): string | null {
+  return state.isWalkin ? COUNTER_TABLE : state.activeTableId;
+}
+
+function withDraft(state: PosStore, draft: OrderItem[]): Partial<PosStore> {
+  const key = orderKey(state);
+  const sent = state.ticketItems.filter((item) => item.isSentToKitchen);
+  return {
+    ticketItems: [...sent, ...draft],
+    drafts: key ? { ...state.drafts, [key]: draft } : state.drafts,
+  };
+}
+
+function draftOf(state: PosStore): OrderItem[] {
+  return state.ticketItems.filter((item) => !item.isSentToKitchen);
+}
+
+function mapProduct(wire: ProductWire): Product {
+  const station = wire.station === 'BAR' || wire.station === 'TATLI' ? wire.station : 'MUTFAK';
+  return {
+    id: wire.id,
+    categoryId: wire.categoryId,
+    name: wire.name,
+    unitPriceCents: wire.priceCents,
+    vatRate: wire.taxRateBp / 100,
+    taxRateBp: wire.taxRateBp,
+    station,
+    isAvailable: wire.inStock,
+    is86d: wire.is86,
+    barcode: wire.barcode ?? undefined,
+  };
+}
+
 export const usePosStore = create<PosStore>((set, get) => ({
-  activeTableId: 'tbl_01',
-  activeTableName: 'Masa 01',
+  activeTableId: null,
+  activeTableName: 'Masa seçilmedi',
   isWalkin: false,
   guestCount: 2,
+  activeOrderId: null,
+  balance: null,
   categories: [],
   products: [],
   selectedCategoryId: 'cat_all',
   searchQuery: '',
   ticketItems: [],
-  tableTickets: { ...INITIAL_DEMO_TICKETS },
-  tablePaidCents: {},
+  drafts: {},
+  orderError: null,
+  isSending: false,
+  lastSale: null,
   activeModifierProduct: null,
   selectedTicketItemId: null,
 
   loadCatalog: async () => {
+    const { tenantId } = sessionArgs();
     const [cats, prods] = await Promise.all([
-      invokeIPC<ProductCategory[]>('pos_get_categories'),
-      invokeIPC<Product[]>('pos_get_products'),
+      invokeIPC<{ id: string; name: string; icon?: string }[]>('pos_get_categories', { tenantId }),
+      invokeIPC<ProductWire[]>('pos_get_products', { tenantId }),
     ]);
-    set({ categories: cats || [], products: prods || [] });
+    set({
+      categories: cats.map((cat, orderIndex) => ({ ...cat, orderIndex })),
+      products: prods.map(mapProduct),
+    });
   },
 
-  openOrderForTable: (tableId, tableName, guests = 2) => {
-    const currentKey = get().isWalkin ? 'walkin' : (get().activeTableId || 'tbl_01');
-    const updatedMap = {
-      ...get().tableTickets,
-      [currentKey]: get().ticketItems,
-    };
+  loadActiveOrder: async () => {
+    const key = orderKey(get());
+    if (!key) {
+      set({ ticketItems: [], activeOrderId: null, balance: null });
+      return;
+    }
+    const { tenantId } = sessionArgs();
+    try {
+      const orderId = await invokeIPC<string | null>('get_active_order_id', { tableId: key, tenantId });
+      const wire = await invokeIPC<CartItemWire[]>('get_order_items', { tableId: key, tenantId });
+      const balance = orderId
+        ? await invokeIPC<OrderBalance>('get_order_balance', { orderId, tenantId })
+        : null;
+      const sent = wire.map(mapServerItem).filter((item): item is OrderItem => item !== null);
+      set((state) => ({
+        activeOrderId: orderId,
+        balance,
+        ticketItems: [...sent, ...(state.drafts[key] ?? [])],
+        orderError: null,
+      }));
+    } catch (error) {
+      // Okunamayan adisyon boş gösterilmez: boş masa sanılıp ikinci adisyon açılır.
+      set({ ticketItems: [], activeOrderId: null, balance: null, orderError: String(error) });
+    }
+  },
 
-    const targetItems = updatedMap[tableId] || [];
-
+  openOrderForTable: async (tableId, tableName, guests = 2) => {
     set({
       activeTableId: tableId,
       activeTableName: tableName,
       isWalkin: false,
       guestCount: guests,
       selectedTicketItemId: null,
-      tableTickets: updatedMap,
-      ticketItems: targetItems,
     });
+    await get().loadActiveOrder();
   },
 
-  openWalkinOrder: () => {
-    const currentKey = get().isWalkin ? 'walkin' : (get().activeTableId || 'tbl_01');
-    const updatedMap = {
-      ...get().tableTickets,
-      [currentKey]: get().ticketItems,
-    };
-
-    const walkinItems = updatedMap['walkin'] || [];
-
+  openWalkinOrder: async () => {
     set({
       activeTableId: null,
       activeTableName: 'Tezgah Satışı (Al-Götür)',
       isWalkin: true,
       guestCount: 1,
       selectedTicketItemId: null,
-      tableTickets: updatedMap,
-      ticketItems: walkinItems,
     });
+    await get().loadActiveOrder();
   },
 
-  bindWalkinToTable: (tableId, tableName) => {
-    const walkinItems = get().ticketItems;
-    set((state) => ({
+  // Taslak masaya taşınır. Mutfağa gitmiş tezgâh adisyonu burada taşınmaz.
+  bindWalkinToTable: async (tableId, tableName) => {
+    const state = get();
+    if (state.activeOrderId) {
+      set({ orderError: 'Mutfağa gönderilmiş tezgâh adisyonu masaya bağlanamaz.' });
+      return;
+    }
+    const draft = draftOf(state);
+    set((current) => ({
       activeTableId: tableId,
       activeTableName: tableName,
       isWalkin: false,
-      tableTickets: {
-        ...state.tableTickets,
-        [tableId]: [...(state.tableTickets[tableId] || []), ...walkinItems],
-        walkin: [],
+      drafts: {
+        ...current.drafts,
+        [COUNTER_TABLE]: [],
+        [tableId]: [...(current.drafts[tableId] ?? []), ...draft],
       },
-      ticketItems: [...(state.tableTickets[tableId] || []), ...walkinItems],
     }));
-  },
-
-  getTableTicketItems: (tableId: string) => {
-    if (get().activeTableId === tableId) {
-      return get().ticketItems;
-    }
-    return get().tableTickets[tableId] || [];
+    await get().loadActiveOrder();
   },
 
   setSelectedCategoryId: (selectedCategoryId) => set({ selectedCategoryId }),
@@ -144,191 +227,112 @@ export const usePosStore = create<PosStore>((set, get) => ({
   selectTicketItem: (selectedTicketItemId) => set({ selectedTicketItemId }),
 
   addItemToTicket: (product, selectedModifiers = [], cookingDegree, course = 1, notes) => {
-    const modifierTotalCents = selectedModifiers.reduce((acc, m) => acc + m.priceDeltaCents, 0);
-    const unitPriceWithMods = product.unitPriceCents + modifierTotalCents;
-
+    const taxRateBp = product.taxRateBp ?? Math.round(product.vatRate * 100);
+    const unitPrice = selectedModifiers.reduce((sum, m) => sum + m.priceDeltaCents, product.unitPriceCents);
     set((state) => {
-      const hasCustomization =
-        selectedModifiers.length > 0 || !!cookingDegree || !!notes || course !== 1;
-
-      if (!hasCustomization) {
-        const existingIdx = state.ticketItems.findIndex(
-          (i) => i.productId === product.id && !i.notes && !i.cookingDegree && i.course === 1
-        );
-        if (existingIdx >= 0) {
-          const updated = [...state.ticketItems];
-          const item = updated[existingIdx];
-          const newQty = item.quantity + 1;
-          updated[existingIdx] = {
-            ...item,
-            quantity: newQty,
-            totalCents: newQty * item.unitPriceCents,
-          };
-          const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-          return {
-            ticketItems: updated,
-            tableTickets: { ...state.tableTickets, [currentKey]: updated },
-          };
-        }
+      const draft = draftOf(state);
+      const isPlain = selectedModifiers.length === 0 && !cookingDegree && !notes && course === 1;
+      const same = isPlain
+        ? draft.find((i) => i.productId === product.id && !i.notes && !i.cookingDegree &&
+            i.course === 1 && i.selectedModifiers.length === 0)
+        : undefined;
+      if (same) {
+        const quantity = same.quantity + 1;
+        const totalCents = lineTotalCents(same.unitPriceCents, quantity, taxRateBp);
+        return withDraft(state, draft.map((i) => (i === same ? { ...i, quantity, totalCents } : i)));
       }
-
-      const newItem: OrderItem = {
-        id: `oi_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      const item: OrderItem = {
+        id: `drf_${crypto.randomUUID()}`,
         productId: product.id,
         name: product.name,
         quantity: 1,
-        unitPriceCents: unitPriceWithMods,
+        unitPriceCents: unitPrice,
         vatRate: product.vatRate,
+        taxRateBp,
         station: product.station,
         course,
         cookingDegree,
         notes,
         selectedModifiers,
-        totalCents: unitPriceWithMods,
+        totalCents: lineTotalCents(unitPrice, 1, taxRateBp),
         isSentToKitchen: false,
       };
-
-      const updated = [...state.ticketItems, newItem];
-      const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-      return {
-        ticketItems: updated,
-        tableTickets: { ...state.tableTickets, [currentKey]: updated },
-      };
+      return withDraft(state, [...draft, item]);
     });
   },
 
+  // Sunucudaki kalem burada değişmez; iptal onaylı akıştan geçer.
   updateItemQty: (itemId, delta) => {
     set((state) => {
-      const updated = state.ticketItems
-        .map((i) => {
-          if (i.id === itemId) {
-            const newQty = Math.max(0, i.quantity + delta);
-            return {
-              ...i,
-              quantity: newQty,
-              totalCents: newQty * i.unitPriceCents,
-            };
-          }
-          return i;
+      const draft = draftOf(state)
+        .map((item) => {
+          if (item.id !== itemId) return item;
+          const quantity = Math.max(0, item.quantity + delta);
+          const totalCents = lineTotalCents(item.unitPriceCents, quantity, item.taxRateBp ?? 0);
+          return { ...item, quantity, totalCents };
         })
-        .filter((i) => i.quantity > 0);
-
-      const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-      return {
-        ticketItems: updated,
-        tableTickets: { ...state.tableTickets, [currentKey]: updated },
-      };
+        .filter((item) => item.quantity > 0);
+      return withDraft(state, draft);
     });
   },
 
   removeItem: (itemId) => {
-    set((state) => {
-      const updated = state.ticketItems.filter((i) => i.id !== itemId);
-      const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-      return {
-        ticketItems: updated,
-        tableTickets: { ...state.tableTickets, [currentKey]: updated },
-        selectedTicketItemId: state.selectedTicketItemId === itemId ? null : state.selectedTicketItemId,
-      };
-    });
+    set((state) => ({
+      ...withDraft(state, draftOf(state).filter((item) => item.id !== itemId)),
+      selectedTicketItemId: state.selectedTicketItemId === itemId ? null : state.selectedTicketItemId,
+    }));
   },
 
   setItemCourse: (itemId, course) => {
-    set((state) => {
-      const updated = state.ticketItems.map((i) => (i.id === itemId ? { ...i, course } : i));
-      const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-      return {
-        ticketItems: updated,
-        tableTickets: { ...state.tableTickets, [currentKey]: updated },
-      };
-    });
+    set((state) => withDraft(state, draftOf(state).map((i) => (i.id === itemId ? { ...i, course } : i))));
   },
 
   setItemNote: (itemId, notes) => {
-    set((state) => {
-      const updated = state.ticketItems.map((i) => (i.id === itemId ? { ...i, notes } : i));
-      const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-      return {
-        ticketItems: updated,
-        tableTickets: { ...state.tableTickets, [currentKey]: updated },
-      };
-    });
-  },
-
-  deductPaidItems: (selectedQuantities: Record<string, number>) => {
-    set((state) => {
-      const updated = state.ticketItems
-        .map((item) => {
-          const qtyToDeduct = selectedQuantities[item.id] || 0;
-          if (qtyToDeduct <= 0) return item;
-          const remainingQty = Math.max(0, item.quantity - qtyToDeduct);
-          return {
-            ...item,
-            quantity: remainingQty,
-            totalCents: remainingQty * item.unitPriceCents,
-          };
-        })
-        .filter((item) => item.quantity > 0);
-
-      const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-      return {
-        ticketItems: updated,
-        tableTickets: { ...state.tableTickets, [currentKey]: updated },
-      };
-    });
-  },
-
-  deductPaidAmount: (amountCents: number) => {
-    set((state) => {
-      const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-      const currentPaid = state.tablePaidCents[currentKey] || 0;
-      return {
-        tablePaidCents: {
-          ...state.tablePaidCents,
-          [currentKey]: currentPaid + amountCents,
-        },
-      };
-    });
+    set((state) => withDraft(state, draftOf(state).map((i) => (i.id === itemId ? { ...i, notes } : i))));
   },
 
   clearTicket: () => {
-    set((state) => {
-      const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-      return {
-        ticketItems: [],
-        selectedTicketItemId: null,
-        tableTickets: { ...state.tableTickets, [currentKey]: [] },
-        tablePaidCents: { ...state.tablePaidCents, [currentKey]: 0 },
-      };
-    });
+    set((state) => ({ ...withDraft(state, []), selectedTicketItemId: null }));
   },
 
-  markItemsSentToKitchen: () => {
-    set((state) => {
-      const updated = state.ticketItems.map((i) => ({ ...i, isSentToKitchen: true }));
-      const currentKey = state.isWalkin ? 'walkin' : (state.activeTableId || 'tbl_01');
-      return {
-        ticketItems: updated,
-        tableTickets: { ...state.tableTickets, [currentKey]: updated },
-      };
-    });
+  setLastSale: (lastSale) => set({ lastSale }),
+
+  sendToKitchen: async () => {
+    const state = get();
+    const key = orderKey(state);
+    const draft = draftOf(state);
+    if (!key || draft.length === 0 || state.isSending) return false;
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    set({ isSending: true, orderError: null });
+    try {
+      await invokeIPC('submit_order', {
+        payload: { orderId: '', tableId: key, items: draft.map(toSubmitItem), notes: null, waiterId: actorId },
+        tenantId,
+        actorId,
+        actorRole,
+      });
+      set((current) => ({ drafts: { ...current.drafts, [key]: [] } }));
+      await get().loadActiveOrder();
+      return true;
+    } catch (error) {
+      // Taslak durur; yeniden denemeden önce sunucu görünümü tazelenir ki
+      // sonucu belirsiz gönderim ikinci kez yazılmasın.
+      set({ orderError: String(error) });
+      await get().loadActiveOrder();
+      return false;
+    } finally {
+      set({ isSending: false });
+    }
   },
 
-  calculateSubtotalCents: () => {
-    const total = get().calculateTotalCents();
-    return Math.round(total / 1.1);
-  },
+  calculateSubtotalCents: () => get().calculateTotalCents() - get().calculateTaxCents(),
 
-  calculateTaxCents: () => {
-    const total = get().calculateTotalCents();
-    const subtotal = get().calculateSubtotalCents();
-    return total - subtotal;
-  },
+  calculateTaxCents: () => get().ticketItems.reduce((sum, item) => sum + itemTaxCents(item), 0),
 
+  // Kalan bakiye sunucudandır; yalnız gönderilmemiş taslak üstüne eklenir.
   calculateTotalCents: () => {
-    const currentKey = get().isWalkin ? 'walkin' : (get().activeTableId || 'tbl_01');
-    const grossTotal = get().ticketItems.reduce((acc, i) => acc + i.totalCents, 0);
-    const paid = get().tablePaidCents[currentKey] || 0;
-    return Math.max(0, grossTotal - paid);
+    const state = get();
+    const pending = draftOf(state).reduce((sum, item) => sum + item.totalCents, 0);
+    return (state.balance?.remainingCents ?? 0) + pending;
   },
 }));

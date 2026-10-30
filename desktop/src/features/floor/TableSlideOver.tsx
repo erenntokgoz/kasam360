@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ShoppingBag, CreditCard, ArrowRight, Merge, Users, Clock } from 'lucide-react';
 import type { FloorTable } from '../../types/floor';
 import { formatMoney } from '../../lib/formatMoney';
@@ -6,7 +6,10 @@ import { minutesElapsed } from '../../lib/date';
 import { Drawer } from '../../ui/Drawer';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
-import { usePosStore } from '../../stores/posStore';
+import { invokeIPC } from '../../services/tauriClient';
+import { sessionArgs } from '../../stores/cariStore';
+import { mapServerItem, type CartItemWire } from '../../lib/orderMath';
+import type { OrderItem } from '../../types/pos';
 
 export interface TableSlideOverProps {
   isOpen: boolean;
@@ -53,8 +56,17 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
     setShowMergeBox(false);
   };
 
-  const { getTableTicketItems } = usePosStore();
-  const tableItems = getTableTicketItems(table.id);
+  const [tableItems, setTableItems] = useState<OrderItem[]>([]);
+  useEffect(() => {
+    if (!isOpen || !isOccupied) {
+      setTableItems([]);
+      return;
+    }
+    const { tenantId } = sessionArgs();
+    void invokeIPC<CartItemWire[]>('get_order_items', { tableId: table.id, tenantId })
+      .then((wire) => setTableItems(wire.map(mapServerItem).filter((item): item is OrderItem => item !== null)))
+      .catch(() => setTableItems([]));
+  }, [isOpen, isOccupied, table.id]);
 
   return (
     <Drawer

@@ -2,29 +2,26 @@ export type PaymentMethod = 'CASH' | 'CARD' | 'MEAL_CARD' | 'VERESIYE';
 
 export type PaymentSplitMode = 'FULL' | 'ITEMS' | 'PARTIAL';
 
-export interface SplitItemSelection {
-  orderItemId: string;
-  selectedQty: number;
-  unitPriceCents: number;
+export interface PaymentResultWire {
+  success: boolean;
+  transactionId: string;
+  fiscalReceiptNo?: string | null;
+  remainingCents?: number;
+  orderClosed?: boolean;
 }
 
-export interface ProcessPaymentPayload {
-  orderId: string;
+export interface PaymentStatusWire {
+  processed: boolean;
+  balance: { totalCents: number; paidCents: number; remainingCents: number };
+}
+
+/** Fiş önizlemesinin kaynağı: adisyon boşaldıktan sonra da gösterilir. */
+export interface LastSale {
+  transactionId: string;
+  tableName: string;
+  items: import('./pos').OrderItem[];
   amountCents: number;
-  paymentMethod: PaymentMethod;
-  splitMode: PaymentSplitMode;
-  splitItems?: SplitItemSelection[];
-  discountCents?: number;
-  directoryId?: string; // Veresiye (Cari) seçildiyse müşteri kimliği
-  cashierId: string;
-}
-
-export interface PaymentResult {
-  paymentId: string;
-  orderId: string;
-  amountPaidCents: number;
-  remainingOrderCents: number;
-  isOrderClosed: boolean;
-  receiptNumber: string;
-  printedReceiptText?: string;
+  method: PaymentMethod;
+  changeCents: number;
+  remainingCents: number;
 }

@@ -4,6 +4,7 @@ import { useFloorStore } from '../../stores/floorStore';
 import { usePosStore } from '../../stores/posStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import { AddTableModal } from './AddTableModal';
 import type { FloorTable } from '../../types/floor';
 import { TableCardGrid } from './TableCardGrid';
 import { FloorBlueprint } from './FloorBlueprint';
@@ -32,6 +33,7 @@ export const FloorModule: React.FC = () => {
     mergeTables,
     addReservation,
     checkReservationLocks,
+    floorError,
   } = useFloorStore();
 
   const { openOrderForTable, openWalkinOrder } = usePosStore();
@@ -39,6 +41,7 @@ export const FloorModule: React.FC = () => {
   const { user } = useAuthStore();
 
   const [isResModalOpen, setIsResModalOpen] = useState(false);
+  const [isAddTableOpen, setIsAddTableOpen] = useState(false);
 
   useEffect(() => {
     loadFloorPlan();
@@ -58,7 +61,7 @@ export const FloorModule: React.FC = () => {
   const currentSelectedTable = tables.find((t) => t.id === selectedTableId) || null;
 
   const handleOpenTable = (table: FloorTable, guestCount: number) => {
-    openOrderForTable(table.id, table.tableNumber, guestCount);
+    void openOrderForTable(table.id, table.tableNumber, guestCount);
     setActiveModule('POS');
   };
 
@@ -67,23 +70,29 @@ export const FloorModule: React.FC = () => {
   };
 
   const handleWalkin = () => {
-    openWalkinOrder();
+    void openWalkinOrder();
     setActiveModule('POS');
   };
 
   const handleGoToPosFromDrawer = (table: FloorTable) => {
     closeTableSlideOver();
-    openOrderForTable(table.id, table.tableNumber, table.occupiedSeats || 2);
+    void openOrderForTable(table.id, table.tableNumber, table.occupiedSeats || 2);
     setActiveModule('POS');
   };
 
-  const handlePayFromDrawer = (table: FloorTable) => {
-    openOrderForTable(table.id, table.tableNumber, table.occupiedSeats || 2);
+  const handlePayFromDrawer = async (table: FloorTable) => {
+    await openOrderForTable(table.id, table.tableNumber, table.occupiedSeats || 2);
     openModal('payment');
   };
 
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden select-none">
+      {floorError ? (
+        <p role="alert" className="m-3 p-3 rounded-lg text-xs font-medium break-words bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
+          Salon planı okunamadı: {floorError}
+        </p>
+      ) : null}
+      <AddTableModal isOpen={isAddTableOpen} onClose={() => setIsAddTableOpen(false)} />
       {/* Üst Operasyon Barı */}
       <div className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
         {/* Sol: Bölge Filtreleri */}
@@ -115,6 +124,11 @@ export const FloorModule: React.FC = () => {
 
         {/* Sağ: Görünüm Şalteri, Tezgah Satışı ve Rezervasyon */}
         <div className="flex items-center gap-2 flex-wrap">
+          {isOwnerOrManager ? (
+            <Button variant="secondary" size="sm" onClick={() => setIsAddTableOpen(true)} className="min-h-12 text-xs font-bold">
+              Masa Ekle
+            </Button>
+          ) : null}
           <div className="p-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center gap-1">
             <button
               type="button"

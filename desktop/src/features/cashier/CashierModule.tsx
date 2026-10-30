@@ -8,6 +8,9 @@ import { Button } from '../../ui/Button';
 import { BlindCloseModal } from './BlindCloseModal';
 import { CashMovementModal } from './CashMovementModal';
 
+/** Okunamayan tutar sıfır gösterilmez: kasa farkı sanılır. */
+const money = (cents?: number | null) => (cents == null ? 'Okunamadı' : formatMoney(cents));
+
 export const CashierModule: React.FC = () => {
   const { activeShift, summary, lastZReport, loadShiftData, recordCashMovement } = useShiftStore();
   const { openModal } = useUIStore();
@@ -104,27 +107,24 @@ export const CashierModule: React.FC = () => {
               <div className="bg-[var(--bg-panel)] border border-[var(--accent-emerald-border)] rounded-xl p-4 shadow-sm">
                 <span className="text-xs text-[var(--text-secondary)] block">Kasa Çekmecesindeki Nakit</span>
                 <span className="text-2xl font-bold text-[var(--accent-emerald)] tabular-nums mt-1 block">
-                  {formatMoney(summary?.expectedCashInDrawerCents || 150000)}
+                  {money(summary?.expectedCashInDrawerCents)}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-1 block">
-                  Açılış: {formatMoney(summary?.openingCashCents || 150000)}
+                  Açılış: {money(summary?.openingCashCents)}
                 </span>
               </div>
 
               <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
                 <span className="text-xs text-[var(--text-secondary)] block">Toplam Vardiya Cirosu</span>
                 <span className="text-2xl font-bold text-[var(--text-primary)] tabular-nums mt-1 block">
-                  {formatMoney(summary?.totalSalesCents || 2130000)}
-                </span>
-                <span className="text-[11px] text-[var(--text-muted)] mt-1 block">
-                  Toplam {summary?.orderCount || 14} Adisyon Kapatıldı
+                  {summary ? formatMoney(summary.totalSalesCents) : 'Okunamadı'}
                 </span>
               </div>
 
               <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
                 <span className="text-xs text-[var(--text-secondary)] block">Vardiya Sorumlusu</span>
                 <span className="text-xl font-bold text-[var(--text-primary)] mt-1 block truncate">
-                  {summary?.cashierName || 'Eren Tokgöz'}
+                  {summary?.cashierName ?? 'Okunamadı'}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1 mt-1">
                   <Clock className="w-3.5 h-3.5" />
@@ -143,28 +143,28 @@ export const CashierModule: React.FC = () => {
                 <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
                   <span className="text-xs text-[var(--text-secondary)] block">Nakit Tahsilat</span>
                   <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {formatMoney(summary?.totalCashSalesCents || 485000)}
+                    {money(summary?.totalCashSalesCents)}
                   </span>
                 </div>
 
                 <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
                   <span className="text-xs text-[var(--text-secondary)] block">Kredi Kartı</span>
                   <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {formatMoney(summary?.totalCardSalesCents || 1240000)}
+                    {money(summary?.totalCardSalesCents)}
                   </span>
                 </div>
 
                 <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
                   <span className="text-xs text-[var(--text-secondary)] block">Yemek Kartları</span>
                   <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {formatMoney(summary?.totalMealCardSalesCents || 320000)}
+                    {money(summary?.totalMealCardSalesCents)}
                   </span>
                 </div>
 
                 <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
                   <span className="text-xs text-[var(--text-secondary)] block">Veresiye (Cari)</span>
                   <span className="text-base font-bold text-[var(--accent-amber)] tabular-nums mt-0.5 block">
-                    {formatMoney(summary?.totalVeresiyeCents || 85000)}
+                    {money(summary?.totalVeresiyeCents)}
                   </span>
                 </div>
               </div>
@@ -193,13 +193,12 @@ export const CashierModule: React.FC = () => {
 
             <div className="receipt-paper p-5 rounded-lg border text-xs space-y-3">
               <div className="text-center pb-2 border-b border-dashed border-gray-400">
-                <div className="font-bold text-sm">KASAM360 DEMO RESTORAN</div>
-                <div className="text-[11px] text-gray-600">VKN: 9028374615 · MERSİS: 090283746150001</div>
+                <div className="font-bold text-sm">KASAM360 GÜN SONU RAPORU</div>
                 <div className="font-bold text-xs mt-1">
                   {lastZReport ? 'GÜN SONU MALİ Z RAPORU (KAPANIŞ)' : 'GÜN SONU MALİ Z RAPORU (CANLI ÖNİZLEME)'}
                 </div>
                 <div className="text-[10px] text-gray-600">
-                  Rapor No: {lastZReport?.reportNumber || 'Z-009182'} · Tarih: {lastZReport?.dateStr || new Date().toLocaleDateString('tr-TR')}
+                  Rapor No: {lastZReport?.reportNumber ?? 'Ön izleme'} · Tarih: {lastZReport?.dateStr || new Date().toLocaleDateString('tr-TR')}
                 </div>
               </div>
 
@@ -207,31 +206,31 @@ export const CashierModule: React.FC = () => {
                 <div className="flex justify-between">
                   <span>Açılış Kasa Nakiti:</span>
                   <span className="font-bold tabular-nums">
-                    {formatMoney(lastZReport?.openingCashCents ?? (summary?.openingCashCents || 150000))}
+                    {money(lastZReport?.openingCashCents ?? summary?.openingCashCents)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Toplam Nakit Satış:</span>
                   <span className="font-bold tabular-nums">
-                    {formatMoney(lastZReport?.cashSalesCents ?? (summary?.totalCashSalesCents || 485000))}
+                    {money(lastZReport?.cashSalesCents ?? summary?.totalCashSalesCents)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Toplam Kredi Kartı:</span>
                   <span className="font-bold tabular-nums">
-                    {formatMoney(lastZReport?.cardSalesCents ?? (summary?.totalCardSalesCents || 1240000))}
+                    {money(lastZReport?.cardSalesCents ?? summary?.totalCardSalesCents)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Toplam Yemek Kartı:</span>
                   <span className="font-bold tabular-nums">
-                    {formatMoney(lastZReport?.mealCardSalesCents ?? (summary?.totalMealCardSalesCents || 320000))}
+                    {money(lastZReport?.mealCardSalesCents ?? summary?.totalMealCardSalesCents)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Toplam Veresiye:</span>
                   <span className="font-bold tabular-nums">
-                    {formatMoney(lastZReport?.veresiyeSalesCents ?? (summary?.totalVeresiyeCents || 85000))}
+                    {money(lastZReport?.veresiyeSalesCents ?? summary?.totalVeresiyeCents)}
                   </span>
                 </div>
                 {lastZReport ? (
@@ -259,13 +258,7 @@ export const CashierModule: React.FC = () => {
                 <div className="flex justify-between pt-1 border-t border-gray-300 font-bold">
                   <span>GENEL GÜNLÜK CİRO:</span>
                   <span className="text-sm tabular-nums">
-                    {formatMoney(lastZReport?.totalRevenueCents ?? (summary?.totalSalesCents || 2130000))}
-                  </span>
-                </div>
-                <div className="flex justify-between text-gray-600 text-[11px]">
-                  <span>Hesaplanan KDV (%10 Dahil):</span>
-                  <span className="tabular-nums">
-                    {formatMoney(lastZReport?.totalVatCents ?? (summary?.totalTaxCents || 193636))}
+                    {money(lastZReport?.totalRevenueCents ?? summary?.totalSalesCents)}
                   </span>
                 </div>
               </div>

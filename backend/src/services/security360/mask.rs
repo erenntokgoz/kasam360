@@ -121,6 +121,12 @@ fn hassas_anahtar_mi(anahtar: &str) -> bool {
     let normalize = |s: &str| s.to_lowercase().replace(['_', '-'], "");
     let normalize_anahtar = normalize(anahtar);
 
+    // Kuruş alanı para kanıtıdır, kişisel veri değil. `cardAmountCents` maskelenince
+    // vardiya özeti bütün kart satışlarını sıfır okuyordu.
+    if normalize_anahtar.ends_with("cents") {
+        return false;
+    }
+
     let uzun_isabet = HASSAS_ANAHTARLAR
         .iter()
         .any(|parca| !KISA_PARCA.contains(parca) && normalize_anahtar.contains(&normalize(parca)));
