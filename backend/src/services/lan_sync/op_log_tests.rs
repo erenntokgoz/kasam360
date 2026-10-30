@@ -220,7 +220,11 @@ async fn sonuc_baska_kiraciya_sizmaz() {
     run(&pool, &mutex, &card_op()).await;
 
     let mut conn = pool.acquire().await.expect("bağlantı");
-    assert!(lookup(&mut conn, "tnt_b", "op_card", None).await.is_err());
+    // Başka kiracının kaydı görünmez; aynı kimliğin eklenmesini birincil anahtar durdurur.
+    assert!(lookup(&mut conn, "tnt_b", "op_card", None)
+        .await
+        .expect("sorgu")
+        .is_none());
     assert!(lookup(&mut conn, "tnt_b", "op_yok", None)
         .await
         .expect("sorgu")

@@ -16,7 +16,6 @@ import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { PaymentItemSplitTab } from './PaymentItemSplitTab';
 import { PaymentChannelSection } from './PaymentChannelSection';
-import { ManagerPinPrompt } from './ManagerPinPrompt';
 import type { PaymentMethod, PaymentResultWire, PaymentSplitMode, PaymentStatusWire } from '../../types/payment';
 
 const SPLIT_TABS: { mode: PaymentSplitMode; label: string }[] = [
@@ -55,14 +54,12 @@ export const PaymentModal: React.FC = () => {
   const [splitMode, setSplitMode] = useState<PaymentSplitMode>('FULL');
   const [selectedItemQuantities, setSelectedItemQuantities] = useState<Record<string, number>>({});
   const [customPartial, setCustomPartial] = useState('');
-  const [discountCents, setDiscountCents] = useState(0);
   const [channel, setChannel] = useState<PaymentMethod>('CASH');
   const [tendered, setTendered] = useState('');
   const [selectedDirectoryId, setSelectedDirectoryId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isUnresolved, setIsUnresolved] = useState(false);
-  const [needsApproval, setNeedsApproval] = useState(false);
 
   // Aynı niyet aynı kimlikle gider: yeniden deneme ikinci tahsilat olamaz.
   const transactionId = useRef(newTransactionId());
@@ -75,7 +72,7 @@ export const PaymentModal: React.FC = () => {
 
   let payNowCents = 0;
   if (splitMode === 'FULL') {
-    payNowCents = Math.max(0, remainingCents - discountCents);
+    payNowCents = remainingCents;
   } else if (splitMode === 'ITEMS') {
     payNowCents = payableItems.reduce(
       (sum, item) => sum + unitShareCents(item, selectedItemQuantities[item.id] || 0),
@@ -84,12 +81,6 @@ export const PaymentModal: React.FC = () => {
   } else {
     payNowCents = Math.min(remainingCents, parseCents(customPartial) ?? 0);
   }
-
-  const handleQuickFlatRounding = () => {
-    const liras = Math.floor(remainingCents / 100);
-    const target = liras - (liras % 50) || Math.floor(liras / 10) * 10;
-    setDiscountCents(Math.max(0, remainingCents - target * 100));
-  };
 
   const toggleItemSelect = (itemId: string, maxQty: number) => {
     setSelectedItemQuantities((prev) => {
@@ -130,7 +121,6 @@ export const PaymentModal: React.FC = () => {
     transactionId.current = newTransactionId();
     setSelectedItemQuantities({});
     setCustomPartial('');
-    setDiscountCents(0);
     setTendered('');
     setSplitMode('FULL');
     setIsUnresolved(false);
@@ -140,7 +130,7 @@ export const PaymentModal: React.FC = () => {
     openModal('receiptPreview');
   };
 
-  const execute = async (approvalToken?: string) => {
+  const execute = async () => {
     const { actorId, actorRole } = sessionArgs();
     setIsProcessing(true);
     setErrorMsg(null);
@@ -168,8 +158,6 @@ export const PaymentModal: React.FC = () => {
           cashierId: actorId,
           actorId,
           debtDirectoryId: channel === 'VERESIYE' ? selectedDirectoryId : undefined,
-          globalDiscount: discountCents > 0 ? { type: 'FIXED_AMOUNT', value: discountCents } : undefined,
-          approvalToken,
         },
       });
       await finishSale((tenderedCents ?? payNowCents) - payNowCents, reply.remainingCents ?? 0);
@@ -221,8 +209,6 @@ export const PaymentModal: React.FC = () => {
       setErrorMsg('Veresiye işlemi için lütfen bir cari müşteri seçin.');
     } else if (tenderedCents === null || tenderedCents < payNowCents) {
       setErrorMsg('Verilen nakit tahsilat tutarından az olamaz.');
-    } else if (discountCents > 0) {
-      setNeedsApproval(true);
     } else {
       void execute();
     }
@@ -269,8 +255,7 @@ export const PaymentModal: React.FC = () => {
               disabled={isUnresolved}
               onClick={() => {
                 setSplitMode(mode);
-                setDiscountCents(0);
-              }}
+                          }}
               className={`min-h-12 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
                 splitMode === mode
                   ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
@@ -281,21 +266,6 @@ export const PaymentModal: React.FC = () => {
             </button>
           ))}
         </div>
-
-        {splitMode === 'FULL' ? (
-          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3 flex items-center justify-between">
-            <div>
-              <span className="text-xs font-semibold text-[var(--text-primary)] block">Düz Hesap Yuvarlama</span>
-              <span className="text-xs text-[var(--text-secondary)] block mt-0.5">
-                Küsürat yönetici onayıyla indirim olarak düşer
-                {discountCents > 0 ? ` (Uygulanan İndirim: ${formatMoney(discountCents)})` : ''}
-              </span>
-            </div>
-            <Button variant="outline-amber" size="sm" onClick={handleQuickFlatRounding} className="min-h-12 text-xs">
-              Düz Hesap Yap
-            </Button>
-          </div>
-        ) : null}
 
         {splitMode === 'ITEMS' ? (
           <PaymentItemSplitTab
@@ -356,23 +326,6 @@ export const PaymentModal: React.FC = () => {
           </Button>
         )}
       </div>
-
-      {needsApproval ? (
-        <ManagerPinPrompt
-          title="İndirim Onayı"
-          scope={{
-            operation: 'DISCOUNT',
-            resourceId: transactionId.current,
-            amountCents: discountCents,
-            discountPercent: Math.round((discountCents * 100) / remainingCents),
-          }}
-          onClose={() => setNeedsApproval(false)}
-          onApproved={(token) => {
-            setNeedsApproval(false);
-            void execute(token);
-          }}
-        />
-      ) : null}
     </Modal>
   );
 };

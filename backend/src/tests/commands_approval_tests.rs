@@ -145,16 +145,18 @@ async fn baska_kisinin_jetonu_ile_iptal_edilemez() {
 }
 
 #[tokio::test]
-async fn self_approval_iptalde_engellenir() {
+async fn mudur_kendi_iptalini_onaylar() {
     let pool = pool().await;
     seed_user(&pool, "usr_manager", "MANAGER", "3333").await;
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
     let req = request("usr_manager", 12_000);
-    let err = approval_service::verify_and_issue(&mut conn, &req, "3333")
+    let verified = approval_service::verify_and_issue(&mut conn, &req, "3333")
         .await
-        .expect_err("kendi iptalini onaylayamaz");
-    assert_eq!(err, error::SELF_APPROVAL);
+        .expect("müdür kendi iptalini onaylar");
+    require_void_approval(&mut conn, &req, Some(&verified.token))
+        .await
+        .expect("jeton kendi işleminde tüketilir");
 }
 
 #[tokio::test]

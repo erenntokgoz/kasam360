@@ -10,6 +10,7 @@ pub mod runtime;
 pub mod secure_channel;
 pub mod store;
 mod transport;
+pub mod write_gate;
 
 pub use op_log::{Operation, OperationOutcome, OperationStatus};
 pub use runtime::{LanSync, SyncStatus};

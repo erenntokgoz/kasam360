@@ -48,6 +48,24 @@ pub struct AppState {
     pub lan_sync: services::lan_sync::LanSync,
 }
 
+/// Komut gövdesine girmeden önce çalışır: eşitlenmeyen yazma cihazları ayrıştırır.
+fn gated(
+    handler: impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static,
+) -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        let gate = invoke
+            .message
+            .webview()
+            .try_state::<AppState>()
+            .map(|state| state.lan_sync.gate_command(invoke.message.command()));
+        if let Some(Err(reason)) = gate {
+            invoke.resolver.reject(reason);
+            return true;
+        }
+        handler(invoke)
+    }
+}
+
 pub fn run() {
     // Yapılandırılmış günlükleme (tracing + rolling file).
     // Loglama asla uygulamayı durdurmaz; hata olursa konsola fallback.
@@ -79,7 +97,7 @@ pub fn run() {
                 Ok::<(), Box<dyn std::error::Error>>(())
             })
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(gated(tauri::generate_handler![
             commands::process_payment,
             commands::process_split_payment,
             commands::kds_update_ticket_status,
@@ -384,7 +402,7 @@ pub fn run() {
             legal360_commands::e_invoice_commands::mark_e_invoice_accepted_command,
             legal360_commands::e_invoice_commands::mark_e_invoice_rejected_command,
             legal360_commands::e_invoice_commands::cancel_e_invoice_command,
-        ]);
+        ]));
 
     if let Err(err) = builder.run(tauri::generate_context!()) {
         tracing::error!("Tauri uygulaması çalıştırılamadı: {err}");

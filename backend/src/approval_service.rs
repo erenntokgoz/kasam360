@@ -91,8 +91,6 @@ pub mod error {
     pub const INVALID_PIN: &str = "INVALID_APPROVAL_PIN: Onay PIN'i hatalı.";
     pub const NOT_APPROVER: &str =
         "UNAUTHORIZED: Bu rol onay veremez (izin: MASTER, OWNER, MANAGER).";
-    pub const SELF_APPROVAL: &str =
-        "SELF_APPROVAL_FORBIDDEN: Onaylayan kişi işlemi yapan kişi olamaz.";
     pub const LOCKED: &str = "APPROVAL_LOCKED";
     pub const TOKEN_INVALID: &str = "APPROVAL_TOKEN_INVALID: Onay jetonu geçersiz.";
     pub const TOKEN_USED: &str = "APPROVAL_TOKEN_USED: Onay jetonu zaten kullanılmış.";
@@ -259,7 +257,7 @@ pub async fn verify_and_issue(
         return Err(error::NOT_APPROVER.to_string());
     }
 
-    rbac::require_distinct_approver(&found.id, &request.actor_id)?;
+    rbac::require_allowed_approver(&found.id, approver_role, &request.actor_id)?;
 
     clear_failures(conn, request).await?;
 
@@ -370,7 +368,7 @@ pub async fn consume_token(
     // Ayrım gözetimi jetonun kendi satırından yeniden denetlenir. Jetonu üreten
     // yol denetliyordu; burada tekrar denetlemek, elle yazılmış bir satırın veya
     // eski bir kaydın kapıyı atlamasını engeller.
-    rbac::require_distinct_approver(&approver_id, &request.actor_id)?;
+    rbac::require_allowed_approver(&approver_id, approver_role, &request.actor_id)?;
 
     // Eşik kuralı tüketim anında da yeniden denetlenir: jeton üretilirken küçük
     // bir indirim için MASTER onayı verilmişse, işlem yürütme anındaki gerçek

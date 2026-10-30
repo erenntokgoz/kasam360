@@ -235,26 +235,24 @@ async fn baska_terminalin_sayaci_etkilenmez() {
 }
 
 #[tokio::test]
-async fn self_approval_yasaktir() {
+async fn mudur_kendi_islemini_onaylar_platform_hesabi_onaylayamaz() {
     let pool = approval_pool().await;
     seed_user(&pool, "usr_manager", "tenant_a", "MANAGER", "3333", 1).await;
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
 
-    // Müdür kendi işlemini onaylamaya çalışıyor.
-    let err = verify_and_issue(
+    verify_and_issue(
         &mut conn,
         &request("usr_manager", operation::VOID, 0),
         "3333",
     )
     .await
-    .expect_err("kendi işlemini onaylayamaz");
-    assert_eq!(err, error::SELF_APPROVAL);
+    .expect("müdür kendi işlemini onaylar");
 
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM approvals")
         .fetch_one(&mut *conn)
         .await
-        .expect("onay sayısı okunur");
-    assert_eq!(count, 0, "kendi onayı deftere yazılmaz");
+        .expect("sayım");
+    assert_eq!(count, 1);
 }
 
 #[tokio::test]

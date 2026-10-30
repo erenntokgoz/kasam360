@@ -147,18 +147,18 @@ pub async fn lookup(
 ) -> Result<Option<OperationOutcome>, String> {
     let row = sqlx::query(
         "SELECT operation_id, tenant_id, intent_sha256, status, result, error
-         FROM sync_operations WHERE operation_id = ?",
+         FROM sync_operations WHERE operation_id = ? AND tenant_id = ?",
     )
     .bind(operation_id)
+    .bind(tenant_id)
     .fetch_optional(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
     let Some(row) = row else {
         return Ok(None);
     };
-    let owner: String = row.try_get("tenant_id").map_err(|e| e.to_string())?;
     let stored_intent: String = row.try_get("intent_sha256").map_err(|e| e.to_string())?;
-    if owner != tenant_id || intent_sha256.is_some_and(|intent| intent != stored_intent) {
+    if intent_sha256.is_some_and(|intent| intent != stored_intent) {
         return Err("CONFLICT: aynı işlem kimliği farklı içerikle kullanılmış".to_string());
     }
     outcome_from_row(&row).map(Some)

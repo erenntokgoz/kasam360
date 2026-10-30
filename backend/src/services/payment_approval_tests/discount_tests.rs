@@ -162,7 +162,7 @@ async fn buyuk_indirimde_master_jetonu_tuketilemez() {
 }
 
 #[tokio::test]
-async fn self_approval_indirim_yolunda_da_engellenir() {
+async fn patron_kendi_indirimini_onaylar() {
     let pool = pool().await;
     seed_user(&pool, "usr_owner", "OWNER", "2222").await;
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
@@ -174,10 +174,9 @@ async fn self_approval_indirim_yolunda_da_engellenir() {
         actor_id: "usr_owner".to_string(),
         ..issue_base()
     };
-    let err = approval_service::verify_and_issue(&mut conn, &issue, "2222")
+    approval_service::verify_and_issue(&mut conn, &issue, "2222")
         .await
-        .expect_err("kendi indirimini onaylayamaz");
-    assert_eq!(err, approval_service::error::SELF_APPROVAL);
+        .expect("patron kendi indirimini onaylar");
 }
 
 #[tokio::test]

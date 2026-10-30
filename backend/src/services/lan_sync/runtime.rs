@@ -171,6 +171,14 @@ impl LanSync {
         )
     }
 
+    /// IPC kapısı: çok cihazlı modda eşitlenmeyen komutu çalıştırmadan reddeder.
+    pub fn gate_command(&self, command: &str) -> Result<(), String> {
+        if super::write_gate::allowed_in_cluster(command) {
+            return Ok(());
+        }
+        self.require_local_write()
+    }
+
     /// Küme kullanımındaki cari işlemin taşınabilir olduğunu doğrular.
     pub fn require_replicable(&self, op: &CariOp) -> Result<(), String> {
         if !self.is_multi_device() {
