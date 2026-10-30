@@ -8,6 +8,8 @@ import type {
   StaffProfile,
 } from '../types/ledger';
 import { invokeIPC } from '../services/tauriClient';
+import { sessionArgs } from './cariStore';
+import { errorText, localDate, newOperationId } from '../lib/cariInput';
 
 interface LedgerStore {
   directories: DirectoryContact[];
@@ -17,6 +19,7 @@ interface LedgerStore {
   staffProfiles: StaffProfile[];
   activeErpTab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT';
   isLoading: boolean;
+  ledgerError: string | null;
   loadLedgerData: () => Promise<void>;
   setActiveErpTab: (tab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT') => void;
   executePatronAction: (
@@ -25,9 +28,8 @@ interface LedgerStore {
     directoryId?: string,
     category?: string,
     description?: string
-  ) => Promise<boolean>;
+  ) => Promise<void>;
   createContact: (name: string, phone: string, type: DirectoryContact['type']) => Promise<DirectoryContact>;
-  payDebt: (debtId: string, amountCents: number) => Promise<boolean>;
   giveStaffAdvance: (staffId: string, amountCents: number) => Promise<boolean>;
 }
 
@@ -73,21 +75,26 @@ export const useLedgerStore = create<LedgerStore>((set, get) => ({
   ],
   activeErpTab: 'WIZARD',
   isLoading: false,
+  ledgerError: null,
 
   loadLedgerData: async () => {
     try {
       set({ isLoading: true });
+      const { actorRole, tenantId } = sessionArgs();
       const [dirs, debtsList, finSummary] = await Promise.all([
-        invokeIPC<DirectoryContact[]>('get_directories'),
-        invokeIPC<LedgerDebt[]>('get_debts'),
-        invokeIPC<FinancialProfitSummary>('get_financial_report'),
+        invokeIPC<DirectoryContact[]>('get_directories', { actorRole, tenantId }),
+        invokeIPC<LedgerDebt[]>('get_debts', { actorRole, tenantId }),
+        invokeIPC<FinancialProfitSummary>('get_financial_report', { actorRole, tenantId }),
       ]);
 
       set({
         directories: dirs || [],
         debts: debtsList || [],
         summary: finSummary || null,
+        ledgerError: null,
       });
+    } catch (error) {
+      set({ ledgerError: errorText(error) });
     } finally {
       set({ isLoading: false });
     }
@@ -96,82 +103,59 @@ export const useLedgerStore = create<LedgerStore>((set, get) => ({
   setActiveErpTab: (activeErpTab) => set({ activeErpTab }),
 
   executePatronAction: async (actionType, amountCents, directoryId, category, description = '') => {
-    try {
-      if (actionType === 'BORC' || actionType === 'ALACAK') {
-        const isReceivable = actionType === 'ALACAK';
-        const targetDir = get().directories.find((d) => d.id === directoryId);
-        const newDebt: LedgerDebt = {
-          id: `dbt_${Date.now()}`,
-          directoryId: directoryId || 'dir_gen',
-          directoryName: targetDir?.name || 'Genel Cari',
-          debtType: isReceivable ? 'RECEIVABLE' : 'PAYABLE',
-          amountCents,
-          remainingCents: amountCents,
-          description: description || `${actionType === 'BORC' ? 'Para Alındı' : 'Para Verildi'}`,
-          createdAt: new Date().toISOString(),
-          isPaid: false,
-        };
-
-        set((state) => ({
-          debts: [newDebt, ...state.debts],
-          directories: state.directories.map((d) =>
-            d.id === directoryId
-              ? {
-                  ...d,
-                  balanceCents: d.balanceCents + (isReceivable ? amountCents : -amountCents),
-                }
-              : d
-          ),
-        }));
-      } else if (actionType === 'GIDER') {
-        const newExpense: LedgerExpense = {
-          id: `exp_${Date.now()}`,
-          category: category || 'İşletme Gideri',
+    const { actorRole, actorId, tenantId } = sessionArgs();
+    if (actionType === 'BORC' || actionType === 'ALACAK') {
+      if (!directoryId) throw new Error('Cari kart seçilmelidir.');
+      await invokeIPC('create_debt', {
+        actorRole,
+        actorId,
+        payload: {
+          operationId: newOperationId(),
+          tenantId,
+          directoryId,
+          // BORC: bize verilen para, ALACAK: bizim verdiğimiz para.
+          type: actionType === 'ALACAK' ? 'GIVEN' : 'TAKEN',
+          totalAmountCents: amountCents,
+          description: description || undefined,
+        },
+      });
+    } else if (actionType === 'GIDER') {
+      await invokeIPC('create_expense', {
+        actorRole,
+        payload: {
+          tenantId,
+          category: 'OTHER',
           amountCents,
           paymentMethod: 'CASH',
-          description,
-          createdAt: new Date().toISOString(),
-        };
-
-        set((state) => ({
-          expenses: [newExpense, ...state.expenses],
-        }));
-      }
-
-      await get().loadLedgerData();
-      return true;
-    } catch {
-      return false;
+          directoryId: directoryId || undefined,
+          actorId,
+          description: [category, description].filter(Boolean).join(': '),
+          expenseDate: localDate(new Date()),
+        },
+      });
+    } else {
+      throw new Error('Kasa girişi Kasa ekranından yapılır.');
     }
+    await get().loadLedgerData();
   },
 
   createContact: async (name, phone, type) => {
+    const { actorRole, actorId, tenantId } = sessionArgs();
     const created = await invokeIPC<DirectoryContact>('create_directory', {
-      name,
-      phone,
-      type,
+      actorRole,
+      actorId,
+      payload: {
+        operationId: newOperationId(),
+        tenantId,
+        name,
+        phone: phone || undefined,
+        type,
+      },
     });
     set((state) => ({
       directories: [...state.directories, created],
     }));
     return created;
-  },
-
-  payDebt: async (debtId, amountCents) => {
-    set((state) => ({
-      debts: state.debts.map((d) => {
-        if (d.id === debtId) {
-          const remaining = Math.max(0, d.remainingCents - amountCents);
-          return {
-            ...d,
-            remainingCents: remaining,
-            isPaid: remaining === 0,
-          };
-        }
-        return d;
-      }),
-    }));
-    return true;
   },
 
   giveStaffAdvance: async (staffId, amountCents) => {

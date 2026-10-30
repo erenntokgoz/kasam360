@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { FloorTable } from '../types/floor';
 import type { Shift, ShiftSummary, CashMovement, ZReportData } from '../types/shift';
-import type { DirectoryContact, FinancialProfitSummary } from '../types/ledger';
+import type { FinancialProfitSummary } from '../types/ledger';
 import type { ProcessPaymentPayload, PaymentResult } from '../types/payment';
 import {
   SEED_ZONES,
@@ -9,8 +9,6 @@ import {
   SEED_CATEGORIES,
   SEED_PRODUCTS,
   SEED_KDS_TICKETS,
-  SEED_DIRECTORIES,
-  SEED_DEBTS,
 } from './mockSeedData';
 import { handleManagementMockIPC } from './mockManagementIPC';
 
@@ -50,8 +48,6 @@ let mockActiveShift: Shift | null = {
 };
 const mockCashMovements: CashMovement[] = [];
 let mockKdsTickets = [...SEED_KDS_TICKETS];
-const mockDirectories = [...SEED_DIRECTORIES];
-const mockDebts = [...SEED_DEBTS];
 
 async function handleMockIPC<T>(command: string, args: Record<string, unknown>): Promise<T> {
   // Simüle edilmiş mikro gecikme (10ms)
@@ -289,26 +285,18 @@ async function handleMockIPC<T>(command: string, args: Record<string, unknown>):
       return { success: isValid, approverRole: pin === '2222' ? 'OWNER' : 'MANAGER' } as unknown as T;
     }
 
-    case 'get_directories': {
-      return mockDirectories as unknown as T;
-    }
-
-    case 'create_directory': {
-      const newDir: DirectoryContact = {
-        id: `dir_${Date.now()}`,
-        tenantId: 'ten_01',
-        name: (args.name as string) || 'Yeni Müşteri',
-        phone: (args.phone as string) || '',
-        type: (args.type as DirectoryContact['type']) || 'CUSTOMER',
-        balanceCents: 0,
-      };
-      mockDirectories.push(newDir);
-      return newDir as unknown as T;
-    }
-
-    case 'get_debts': {
-      return mockDebts as unknown as T;
-    }
+    // Cari kayıtları gerçek para defteridir; tarayıcıda sahte bakiye gösterilmez.
+    case 'get_directories':
+    case 'find_similar_directories':
+    case 'create_directory':
+    case 'get_debts':
+    case 'create_debt':
+    case 'pay_debt':
+    case 'get_directory_statement':
+    case 'get_awaiting_supplier_documents':
+    case 'approve_supplier_document':
+    case 'get_operation_result':
+      throw new Error('Cari hesaplar için masaüstü uygulaması gerekli.');
 
     case 'get_financial_report':
     case 'get_net_balance': {

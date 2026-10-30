@@ -3,6 +3,7 @@ import { Banknote, CreditCard, Utensils, BookOpen } from 'lucide-react';
 import type { PaymentMethod } from '../../types/payment';
 import type { DirectoryContact } from '../../types/ledger';
 import { formatMoney } from '../../lib/formatMoney';
+import { errorText } from '../../lib/cariInput';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 
@@ -32,6 +33,7 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
   const [showQuickAddCari, setShowQuickAddCari] = useState(false);
   const [newCariName, setNewCariName] = useState('');
   const [newCariPhone, setNewCariPhone] = useState('');
+  const [cariError, setCariError] = useState<string | null>(null);
 
   const tenderedCents = tenderedLiras ? Math.round(parseFloat(tenderedLiras) * 100) : payNowCents;
   const changeDueCents = Math.max(0, tenderedCents - payNowCents);
@@ -42,10 +44,16 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
 
   const handleCreateCariSubmit = async () => {
     if (!newCariName) return;
-    await onCreateContact(newCariName, newCariPhone);
-    setNewCariName('');
-    setNewCariPhone('');
-    setShowQuickAddCari(false);
+    // Benzer kart reddi burada görünür; form kapanırsa kullanıcı nedenini göremez.
+    try {
+      await onCreateContact(newCariName, newCariPhone);
+      setCariError(null);
+      setNewCariName('');
+      setNewCariPhone('');
+      setShowQuickAddCari(false);
+    } catch (error) {
+      setCariError(errorText(error));
+    }
   };
 
   return (
@@ -158,6 +166,11 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
                   className="w-32 text-xs"
                 />
               </div>
+              {cariError ? (
+                <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
+                  {cariError}
+                </p>
+              ) : null}
               <Button
                 variant="primary"
                 size="sm"

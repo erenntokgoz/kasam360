@@ -1,6 +1,5 @@
 import type { FloorTable, FloorZone } from '../types/floor';
 import type { KdsTicket } from '../types/kds';
-import type { DirectoryContact, LedgerDebt } from '../types/ledger';
 
 export { SEED_CATEGORIES, SEED_PRODUCTS } from './mockProducts';
 
@@ -309,68 +308,5 @@ export const SEED_KDS_TICKETS: KdsTicket[] = [
         status: 'READY',
       },
     ],
-  },
-];
-
-export const SEED_DIRECTORIES: DirectoryContact[] = [
-  {
-    id: 'dir_01',
-    tenantId: 'ten_01',
-    name: 'Ahmet Yılmaz',
-    phone: '0532 555 1234',
-    type: 'CUSTOMER',
-    balanceCents: 85000,
-    notes: 'Sürekli müşteri, haftalık kapatır',
-  },
-  {
-    id: 'dir_02',
-    tenantId: 'ten_01',
-    name: 'Demir Ticaret (Serkan)',
-    phone: '0544 444 9876',
-    type: 'CUSTOMER',
-    balanceCents: 195000,
-  },
-  {
-    id: 'dir_03',
-    tenantId: 'ten_01',
-    name: 'Metro Toptan Et & Gıda',
-    phone: '0212 333 4455',
-    type: 'SUPPLIER',
-    balanceCents: -1450000,
-    notes: 'Et ve tavuk tedarikçisi',
-  },
-  {
-    id: 'dir_04',
-    tenantId: 'ten_01',
-    name: 'Öz Süt ve Süt Ürünleri',
-    phone: '0216 222 1100',
-    type: 'SUPPLIER',
-    balanceCents: -420000,
-  },
-];
-
-export const SEED_DEBTS: LedgerDebt[] = [
-  {
-    id: 'dbt_01',
-    directoryId: 'dir_01',
-    directoryName: 'Ahmet Yılmaz',
-    debtType: 'RECEIVABLE',
-    amountCents: 85000,
-    remainingCents: 85000,
-    description: '19.10 Masa 04 Hesabı Veresiye',
-    createdAt: new Date(Date.now() - 48 * 3600000).toISOString(),
-    isPaid: false,
-  },
-  {
-    id: 'dbt_02',
-    directoryId: 'dir_03',
-    directoryName: 'Metro Toptan Et & Gıda',
-    debtType: 'PAYABLE',
-    amountCents: 1450000,
-    remainingCents: 1450000,
-    dueDate: new Date(Date.now() + 5 * 86400000).toISOString(),
-    description: 'Fatura No: ET-9042 Parti Girişi',
-    createdAt: new Date(Date.now() - 24 * 3600000).toISOString(),
-    isPaid: false,
   },
 ];
