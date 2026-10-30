@@ -13,6 +13,7 @@ pub async fn process_payment(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<PaymentResultDto, String> {
+    state.lan_sync.require_local_write()?;
     // İşletme sahibi ve kasiyer ödeme alabilir.
     crate::rbac::require_any(
         &actor_role,

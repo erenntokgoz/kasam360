@@ -29,6 +29,7 @@ pub async fn create_compensation_refund(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
+    state.lan_sync.require_local_write()?;
     use crate::services::audit_service::category;
 
     let _payment_lock = state.payment_mutex.lock().await;

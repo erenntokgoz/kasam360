@@ -75,6 +75,7 @@ pub async fn record_owner_personal(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<OwnerPersonalDto, String> {
+    state.lan_sync.require_local_write()?;
     crate::rbac::require_any_present(actor_role.as_deref(), &[crate::rbac::Role::Owner])?;
 
     if payload.amount_cents <= 0 {

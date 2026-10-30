@@ -221,6 +221,7 @@ pub async fn create_expense(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ExpenseDto, String> {
+    state.lan_sync.require_local_write()?;
     require_ledger_write(actor_role.as_deref())?;
 
     if payload.amount_cents <= 0 {

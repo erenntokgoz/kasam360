@@ -104,6 +104,7 @@ pub async fn close_day(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<CloseDayResultDto, String> {
+    state.lan_sync.require_local_write()?;
     // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
     // düşerse gün sonu başka bir işletmenin kasanızı devrederdi
     // (AGENTS.md §3.3).

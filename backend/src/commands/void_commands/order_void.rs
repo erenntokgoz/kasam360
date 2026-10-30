@@ -62,6 +62,7 @@ pub async fn void_order(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
+    state.lan_sync.require_local_write()?;
     let _payment_lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
@@ -260,6 +261,7 @@ pub async fn create_compensation_void(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<bool, String> {
+    state.lan_sync.require_local_write()?;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 

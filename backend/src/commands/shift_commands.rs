@@ -33,6 +33,7 @@ pub async fn open_shift(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ShiftDto, String> {
+    state.lan_sync.require_local_write()?;
     // Neden yetki eklendi (AGENTS.md §6): komut `actor_role`'ü yalnız denetim
     // kaydına yazıyordu, kontrol etmiyordu. Böylece mutfak ve garson rolü de
     // kasa vardiyası açıp beklenen bakiyeyi belirleyebiliyordu.
@@ -192,6 +193,7 @@ pub async fn close_shift(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ShiftDto, String> {
+    state.lan_sync.require_local_write()?;
     // Neden yetki eklendi (AGENTS.md §6): `actor_role` kontrol edilmiyordu.
     // Vardiya kapatma `actual_amount_cents` ile kasa farkı üretir; bunu
     // kasiyer dışındaki bir rol yapabiliyorsa muhasebe kaydı güvenilmez olur.

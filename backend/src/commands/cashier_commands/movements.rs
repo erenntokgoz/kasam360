@@ -76,6 +76,7 @@ pub async fn cash_in(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<CashMovementDto, String> {
+    state.lan_sync.require_local_write()?;
     use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 
     let role = cash_hareket_kapisi(actor_role.as_deref())?;
@@ -145,6 +146,7 @@ pub async fn cash_out(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<CashMovementDto, String> {
+    state.lan_sync.require_local_write()?;
     use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 
     let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
