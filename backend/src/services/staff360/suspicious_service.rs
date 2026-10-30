@@ -63,7 +63,7 @@ async fn void_radar(
                 SUM(CASE WHEN o.status = 'VOID' THEN 1 ELSE 0 END) AS iptal
            FROM orders o
            JOIN users u ON u.id = o.cashier_id AND u.tenant_id = o.tenant_id
-          WHERE o.tenant_id = ?1 AND o.created_at >= ?2 AND o.created_at <= ?3
+          WHERE o.tenant_id = ?1 AND datetime(o.created_at) >= datetime(?2) AND datetime(o.created_at) <= datetime(?3)
           GROUP BY o.cashier_id, u.name
          HAVING COUNT(*) >= ?4 AND SUM(CASE WHEN o.status = 'VOID' THEN 1 ELSE 0 END) > 0",
     )
@@ -114,7 +114,7 @@ async fn approval_radar(
            JOIN users u ON u.id = a.requester_id AND u.tenant_id = a.tenant_id
           WHERE a.tenant_id = ?1 AND a.status = 'APPROVED'
             AND a.request_type IN ('DISCOUNT', 'VOID', 'VOID_ORDER', 'GIFT', 'COMPLIMENTARY', 'REFUND')
-            AND a.created_at >= ?2 AND a.created_at <= ?3
+            AND datetime(a.created_at) >= datetime(?2) AND datetime(a.created_at) <= datetime(?3)
           GROUP BY a.requester_id, u.name
          HAVING COUNT(DISTINCT date(a.created_at)) >= ?4",
     )

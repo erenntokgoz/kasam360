@@ -31,12 +31,12 @@ pub(crate) fn date_filter(range: &AnalyticsRange) -> (String, String) {
     match range {
         Some((from, to)) => {
             let from_part = if is_safe_iso(from) {
-                format!(" AND o.created_at >= '{from}'")
+                format!(" AND datetime(o.created_at) >= datetime('{from}')")
             } else {
                 String::new()
             };
             let to_part = if is_safe_iso(to) {
-                format!(" AND o.created_at <= '{to}'")
+                format!(" AND datetime(o.created_at) <= datetime('{to}')")
             } else {
                 String::new()
             };

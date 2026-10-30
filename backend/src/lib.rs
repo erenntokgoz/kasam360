@@ -298,6 +298,7 @@ pub fn run() {
             modifier_commands::get_product_modifier_group_ids,
             // Tek rapor merkezi. `get_daily_summary`, `get_receipts` ve
             // `get_shift_history` tenant'sız kaldığı için bu kapıdan geçemez.
+            report_commands::get_panorama,
             report_commands::get_sales_report,
             report_commands::get_shift_report,
             report_commands::get_receipts_report,

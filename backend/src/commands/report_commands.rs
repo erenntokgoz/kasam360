@@ -178,3 +178,53 @@ mod tests {
         assert!(rbac::require_reporting("MANAGER").is_ok());
     }
 }
+
+/// Yönetim panosu. Uyarılar ayrı toplanır; biri okunamazsa rakamlar yine gelir.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanoramaDto {
+    #[serde(flatten)]
+    pub board: crate::services::panorama::Panorama,
+    pub alerts: Vec<crate::services::panorama_alerts::Alert>,
+}
+
+#[tauri::command]
+pub async fn get_panorama(
+    actor_role: String,
+    tenant_id: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    compare_seconds: i64,
+    utc_offset_minutes: i64,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<PanoramaDto, String> {
+    let role = rbac::require_reporting(&actor_role)?;
+    let tid = require_tenant(tenant_id.as_deref())?;
+    let range = require_range(from.as_deref(), to.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut board = crate::services::panorama::build(
+        &mut conn,
+        &tid,
+        &range.from,
+        &range.to,
+        compare_seconds,
+        utc_offset_minutes,
+    )
+    .await?;
+    drop(conn);
+    if role != rbac::Role::Owner {
+        board.hide_profit();
+    }
+    let last_backup = match state.db_path.as_ref() {
+        Some(path) => crate::services::backup::schedule::load_status(&pool, path)
+            .await
+            .map(|status| status.last_backup_at)
+            .map_err(|e| e.to_string()),
+        None => Err("Veritabanı yolu bilinmiyor.".to_string()),
+    };
+    let alerts =
+        crate::services::panorama_alerts::collect(&pool, &tid, &range.from, &range.to, last_backup)
+            .await;
+    Ok(PanoramaDto { board, alerts })
+}

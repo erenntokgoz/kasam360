@@ -30,7 +30,7 @@ pub async fn sales_report(
     let row = sqlx::query(
         "SELECT COALESCE(SUM(total_cents), 0) AS revenue, COUNT(*) AS order_count \
          FROM orders \
-         WHERE tenant_id = ? AND status = 'PAID' AND created_at >= ? AND created_at <= ?",
+         WHERE tenant_id = ? AND status = 'PAID' AND datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?)",
     )
     .bind(tenant_id)
     .bind(&range.from)
@@ -59,7 +59,7 @@ pub async fn sales_report(
     let voided_cents: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(CAST(json_extract(payload, '$.orderTotalCents') AS INTEGER)), 0) \
          FROM audit_ledger \
-         WHERE tenant_id = ? AND action = 'order:voided' AND timestamp >= ? AND timestamp <= ?",
+         WHERE tenant_id = ? AND action = 'order:voided' AND datetime(timestamp) >= datetime(?) AND datetime(timestamp) <= datetime(?)",
     )
     .bind(tenant_id)
     .bind(&range.from)
@@ -93,7 +93,7 @@ async fn payment_method_shares(
                 COALESCE(SUM(CAST(json_extract(payload, '$.totalAmount') AS INTEGER)), 0) AS amount \
          FROM audit_ledger \
          WHERE tenant_id = ? AND action = 'payment:settled_fifo' \
-           AND timestamp >= ? AND timestamp <= ? \
+           AND datetime(timestamp) >= datetime(?) AND datetime(timestamp) <= datetime(?) \
          GROUP BY method ORDER BY amount DESC",
     )
     .bind(tenant_id)
@@ -140,7 +140,7 @@ async fn category_volumes(
          JOIN products p ON p.id = oi.product_id AND p.tenant_id = ? \
          LEFT JOIN categories c ON c.id = p.category_id AND c.tenant_id = ? \
          WHERE o.tenant_id = ? AND o.status = 'PAID' \
-           AND o.created_at >= ? AND o.created_at <= ? \
+           AND datetime(o.created_at) >= datetime(?) AND datetime(o.created_at) <= datetime(?) \
          GROUP BY c.id, COALESCE(c.name, 'Kategorisiz') ORDER BY qty DESC",
     )
     .bind(tenant_id)
@@ -250,7 +250,7 @@ pub async fn receipts_report(
          FROM orders o \
          LEFT JOIN order_items oi ON oi.order_id = o.id \
          WHERE o.tenant_id = ? AND o.status IN ('PAID', 'VOID') \
-           AND o.created_at >= ? AND o.created_at <= ? \
+           AND datetime(o.created_at) >= datetime(?) AND datetime(o.created_at) <= datetime(?) \
          GROUP BY o.id ORDER BY o.created_at DESC LIMIT ?",
     )
     .bind(tenant_id)
@@ -314,7 +314,7 @@ pub async fn adjustments_report(
         "SELECT action, resource_id, actor_id, actor_role, timestamp, payload \
          FROM audit_ledger \
          WHERE tenant_id = ? AND action IN ('order:voided', 'compensation:refund', 'payment:refund', 'stok:waste_recorded', 'stock:waste') \
-           AND timestamp >= ? AND timestamp <= ? \
+           AND datetime(timestamp) >= datetime(?) AND datetime(timestamp) <= datetime(?) \
          ORDER BY timestamp DESC",
     )
     .bind(tenant_id)

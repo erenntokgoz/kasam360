@@ -20,6 +20,8 @@ pub mod modifier_service;
 pub mod order_settlement;
 pub mod order_stock;
 pub mod outbox_dispatcher;
+pub mod panorama;
+pub mod panorama_alerts;
 pub mod payment_approval;
 pub mod payment_service;
 pub mod pnl_service;

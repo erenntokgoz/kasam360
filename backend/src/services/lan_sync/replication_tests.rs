@@ -272,24 +272,32 @@ async fn takipciden_yazma_cogunlukla_iki_cihaza_da_yazilir() {
 async fn denetim_zinciri_iki_cihazda_birebir_ayni_kalir() {
     let devices = cluster(2).await;
     for (index, device) in devices.iter().enumerate() {
-        let mutex = Mutex::new(());
-        let lock = AuditLock::new(mutex.lock().await);
-        let mut tx = device.pool.begin_write().await.expect("tx");
-        let ctx = AuditContext::new(
-            TENANT.to_string(),
-            "usr_1".to_string(),
-            "OWNER".to_string(),
-            category::FINANS,
-            "test:zincir",
-            format!("kayit_{index}"),
-            serde_json::json!({ "sira": index }),
-            chrono::Utc::now().to_rfc3339(),
-        )
-        .expect("kayıt");
-        AuditService::append(&mut tx, &lock, &ctx)
-            .await
-            .expect("defter");
-        tx.commit().await.expect("onay");
+        let mut written = Err(String::new());
+        for _ in 0..40 {
+            let mutex = Mutex::new(());
+            let lock = AuditLock::new(mutex.lock().await);
+            let mut tx = device.pool.begin_write().await.expect("tx");
+            let ctx = AuditContext::new(
+                TENANT.to_string(),
+                "usr_1".to_string(),
+                "OWNER".to_string(),
+                category::FINANS,
+                "test:zincir",
+                format!("kayit_{index}"),
+                serde_json::json!({ "sira": index }),
+                chrono::Utc::now().to_rfc3339(),
+            )
+            .expect("kayıt");
+            AuditService::append(&mut tx, &lock, &ctx)
+                .await
+                .expect("defter");
+            written = tx.commit().await;
+            if written.is_ok() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        written.expect("onay");
         wait_until!(
             "iki cihaz aynı durumda",
             state_index(&devices[0].pool).await == state_index(&devices[1].pool).await

@@ -37,26 +37,26 @@ pub async fn kpi(
                           JOIN orders o ON o.id = oi.order_id AND o.tenant_id = oi.tenant_id
                          WHERE oi.tenant_id = u.tenant_id AND oi.waiter_id = u.id
                            AND o.status = 'PAID'
-                           AND o.created_at >= ?2 AND o.created_at <= ?3
+                           AND datetime(o.created_at) >= datetime(?2) AND datetime(o.created_at) <= datetime(?3)
                       ), 0) AS item_count,
                       COALESCE((
                         SELECT SUM(oi.total_cents) FROM order_items oi
                           JOIN orders o ON o.id = oi.order_id AND o.tenant_id = oi.tenant_id
                          WHERE oi.tenant_id = u.tenant_id AND oi.waiter_id = u.id
                            AND o.status = 'PAID'
-                           AND o.created_at >= ?2 AND o.created_at <= ?3
+                           AND datetime(o.created_at) >= datetime(?2) AND datetime(o.created_at) <= datetime(?3)
                       ), 0) AS kalem_cirosu,
                       COALESCE((
                         SELECT COUNT(*) FROM orders o
                          WHERE o.tenant_id = u.tenant_id AND o.cashier_id = u.id
                            AND o.status = 'PAID'
-                           AND o.created_at >= ?2 AND o.created_at <= ?3
+                           AND datetime(o.created_at) >= datetime(?2) AND datetime(o.created_at) <= datetime(?3)
                       ), 0) AS order_count,
                       COALESCE((
                         SELECT SUM(o.total_cents) FROM orders o
                          WHERE o.tenant_id = u.tenant_id AND o.cashier_id = u.id
                            AND o.status = 'PAID'
-                           AND o.created_at >= ?2 AND o.created_at <= ?3
+                           AND datetime(o.created_at) >= datetime(?2) AND datetime(o.created_at) <= datetime(?3)
                            AND NOT EXISTS (
                              SELECT 1 FROM order_items oi
                               WHERE oi.order_id = o.id AND oi.tenant_id = o.tenant_id
@@ -67,7 +67,7 @@ pub async fn kpi(
                         SELECT COUNT(*) FROM orders o
                          WHERE o.tenant_id = u.tenant_id AND o.cashier_id = u.id
                            AND o.status = 'VOID'
-                           AND o.created_at >= ?2 AND o.created_at <= ?3
+                           AND datetime(o.created_at) >= datetime(?2) AND datetime(o.created_at) <= datetime(?3)
                       ), 0) AS void_count
                  FROM users u
                 WHERE u.tenant_id = ?1 AND u.is_active = 1
@@ -95,7 +95,7 @@ pub async fn kpi(
         // Ortalama fiş yalnız fiş varsa hesaplanır; fiş yoksa 0 değil `None`
         // döner, ekranda "veri yok" yazar.
         let avg_ticket = if order_count > 0 {
-            siparis_cirosu / order_count
+            ciro / order_count
         } else {
             0
         };
@@ -129,7 +129,7 @@ async fn top_product(
            JOIN orders o ON o.id = oi.order_id AND o.tenant_id = oi.tenant_id
            JOIN products p ON p.id = oi.product_id AND p.tenant_id = oi.tenant_id
           WHERE oi.tenant_id = ?1 AND oi.waiter_id = ?2 AND o.status = 'PAID'
-            AND o.created_at >= ?3 AND o.created_at <= ?4
+            AND datetime(o.created_at) >= datetime(?3) AND datetime(o.created_at) <= datetime(?4)
           GROUP BY p.id, p.name
           ORDER BY SUM(oi.quantity) DESC, p.name ASC
           LIMIT 1",
