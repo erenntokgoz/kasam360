@@ -5,6 +5,7 @@ use crate::commands::void_commands::order_void::{require_void_approval, void_app
 use crate::db::DbPool;
 use crate::rbac::Role;
 use crate::services::audit_service::category;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -208,7 +209,7 @@ pub async fn void_order_item(
     state.lan_sync.require_local_write()?;
     let _payment_lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant_id = require_tenant_id(Some(&tenant_id))?;
     let res = execute_void_order_item(&mut tx, &audit_lock, &tenant_id, &payload).await?;
@@ -239,7 +240,7 @@ pub async fn comp_order_item(
     state.lan_sync.require_local_write()?;
     let _payment_lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant_id = require_tenant_id(Some(&tenant_id))?;
     let actor_role = crate::rbac::canonical_role(&payload.actor_role)

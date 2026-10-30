@@ -58,6 +58,7 @@ async fn kod_tek_kullanimliktir_ve_sureye_baglidir() {
 fn grant(tenant: &str, snapshot: Vec<(String, String)>) -> JoinGrant {
     JoinGrant {
         tenant_id: tenant.to_string(),
+        state_index: 0,
         cluster_id: "cls_1".to_string(),
         authority_id: "dev_a".to_string(),
         term: 3,

@@ -6,6 +6,7 @@
 use super::PLATFORM_AUDIT_TENANT;
 use crate::db::DbPool;
 use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
@@ -109,7 +110,7 @@ pub async fn create_tenant(
     crate::rbac::require_master_present(caller_role.as_deref())?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let tenant_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     // 1. Tenants tablosuna işletmeyi ekle
     sqlx::query(
@@ -276,7 +277,7 @@ pub async fn update_tenant(
 ) -> Result<TenantDto, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     sqlx::query(
         "UPDATE tenants SET name = ?, contact_person = ?, email = ?, phone = ?, tax_id = ?, tax_office = ?, address = ? WHERE id = ?"
     )
@@ -343,6 +344,7 @@ pub async fn update_tenant(
     )?;
     AuditService::append(&mut conn, &audit_lock, &audit_ctx).await?;
 
+    conn.commit().await?;
     Ok(TenantDto {
         id: row.try_get("id").unwrap_or_default(),
         name: row.try_get("name").unwrap_or_default(),
@@ -367,17 +369,17 @@ pub async fn suspend_tenant(
 ) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     sqlx::query("UPDATE tenants SET status = 'SUSPENDED' WHERE id = ?")
         .bind(&tenant_id)
-        .execute(&*pool)
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
     let _ = sqlx::query("UPDATE subscriptions SET status = 'SUSPENDED' WHERE tenant_id = ?")
         .bind(&tenant_id)
-        .execute(&*pool)
+        .execute(&mut *conn)
         .await;
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let ctx = AuditContext::new(
         PLATFORM_AUDIT_TENANT.to_string(),
         "usr_master".to_string(),
@@ -389,6 +391,7 @@ pub async fn suspend_tenant(
         chrono::Utc::now().to_rfc3339(),
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    conn.commit().await?;
     Ok(())
 }
 
@@ -401,17 +404,17 @@ pub async fn activate_tenant(
 ) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     sqlx::query("UPDATE tenants SET status = 'ACTIVE' WHERE id = ?")
         .bind(&tenant_id)
-        .execute(&*pool)
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
     let _ = sqlx::query("UPDATE subscriptions SET status = 'ACTIVE' WHERE tenant_id = ?")
         .bind(&tenant_id)
-        .execute(&*pool)
+        .execute(&mut *conn)
         .await;
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let ctx = AuditContext::new(
         PLATFORM_AUDIT_TENANT.to_string(),
         "usr_master".to_string(),
@@ -423,6 +426,7 @@ pub async fn activate_tenant(
         chrono::Utc::now().to_rfc3339(),
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    conn.commit().await?;
     Ok(())
 }
 
@@ -436,7 +440,7 @@ pub async fn update_tenant_modules(
 ) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let previous: Vec<String> = sqlx::query_scalar(
         "SELECT module_id FROM tenant_modules WHERE tenant_id = ? AND is_active = 1 ORDER BY module_id ASC",
@@ -479,5 +483,6 @@ pub async fn update_tenant_modules(
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
+    conn.commit().await?;
     Ok(())
 }

@@ -1,8 +1,8 @@
-//! Çok cihazlı modda IPC komutlarının tek kapısı.
+//! Çok cihazlı modda IPC komutlarının erken kapısı.
 //!
-//! Neden merkezi: kapı komut başına yazılınca menü ve stok gibi yazmalar unutulmuştu;
-//! bir cihazdaki değişiklik diğerine gitmiyor, cihazlar sessizce ayrışıyordu. Burada
-//! liste kapalıdır: yeni bir komut açıkça eklenmedikçe çok cihazlı modda durur.
+//! Yazmanın asıl güvencesi işlem günlüğü ve tetikleyici kapısıdır (`capture`). Bu kapı
+//! yalnız çoğunluk yokken yazma komutunu çalıştırmadan, anlaşılır hatayla durdurur.
+//! Liste kapalıdır: yeni komut açıkça eklenmedikçe çoğunluk ister.
 //!
 //! Komut adından okuma varsaymak bu listeyi kısaltır; `get_`/`list_` ile başlayıp
 //! yazan komut açılmamalıdır. Tek cihazda kapı devre dışıdır.
@@ -28,7 +28,7 @@ const DEVICE_LOCAL: [&str; 16] = [
 ];
 
 /// İşlem günlüğünden geçen veya eşitlemeyi yöneten komutlar. Kendi kapıları vardır.
-const REPLICATED: [&str; 7] = [
+const REPLICATED: [&str; 8] = [
     "create_directory",
     "update_directory",
     "create_debt",
@@ -36,6 +36,7 @@ const REPLICATED: [&str; 7] = [
     "approve_supplier_document",
     "create_pairing_code",
     "set_device_passive",
+    "take_over_device",
 ];
 
 fn is_read(command: &str) -> bool {
@@ -53,7 +54,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn eslenmeyen_yazmalar_durur() {
+    fn yazma_komutlari_cogunluk_ister() {
         for command in [
             "create_product",
             "update_product",

@@ -13,6 +13,7 @@ use crate::ledger_commands::guard::{
     require_ledger_read, require_ledger_tenant, require_ledger_write,
 };
 use crate::services::audit_service::{self, AuditContext, AuditService};
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -235,7 +236,7 @@ pub async fn create_expense(
         .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
 
     let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     // Aktif vardiya kontrolü
     let active_shift_id: Option<String> = sqlx::query_scalar(

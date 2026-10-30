@@ -2,6 +2,7 @@
 
 use crate::commands::command_helpers::{audit_actor, require_tenant_id, table_tenant};
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 
 #[tauri::command]
 pub async fn add_table(
@@ -16,7 +17,7 @@ pub async fn add_table(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let seats_val = seats.unwrap_or(4);
     sqlx::query(
@@ -66,7 +67,7 @@ pub async fn remove_table(
 ) -> Result<(), String> {
     let _lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant_id = table_tenant(&mut tx, &id).await?;
 
@@ -108,7 +109,7 @@ pub async fn update_table_name(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let previous_name: Option<String> =
         sqlx::query_scalar("SELECT name FROM tables WHERE id = ? AND tenant_id = ?")
@@ -162,7 +163,7 @@ pub async fn move_table(
 ) -> Result<(), String> {
     let _lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 
@@ -283,7 +284,7 @@ pub async fn merge_tables(
 ) -> Result<(), String> {
     let _lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 

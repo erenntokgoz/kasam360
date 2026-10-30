@@ -4,13 +4,13 @@
 //! kullanılması, ağ beklerken veritabanı kilidi tutulmasını baştan engeller.
 
 use super::actor::Actor;
+use super::capture;
 use super::engine::{Engine, Message, Role};
-use super::op_log::{LogOp, Operation, OperationOutcome};
+use super::op_log::{Operation, OperationOutcome};
 use super::pairing::{self, JoinGrant, JoinRequest, PairingCode};
 use super::secure_channel::DeviceKey;
 use super::store::{self, Member};
 use super::transport;
-use crate::services::cari::CariOp;
 use crate::services::device_identity::ensure_local_device;
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -31,6 +31,10 @@ pub fn sync_port() -> u16 {
 
 pub enum Command {
     Submit {
+        operation: Box<Operation>,
+        reply: oneshot::Sender<Result<OperationOutcome, String>>,
+    },
+    TakeOver {
         operation: Box<Operation>,
         reply: oneshot::Sender<Result<OperationOutcome, String>>,
     },
@@ -117,16 +121,18 @@ pub struct LanSync {
 
 impl LanSync {
     pub fn new(pool: SqlitePool, audit: Arc<Mutex<()>>, bind_host: &str) -> Self {
-        Self {
+        let sync = Self {
             inner: Arc::new(Inner {
-                pool,
+                pool: pool.clone(),
                 audit,
                 bind_host: bind_host.to_string(),
                 status: RwLock::new(SyncStatus::single()),
                 commands: Mutex::new(None),
                 listener: Mutex::new(None),
             }),
-        }
+        };
+        super::write_tx::register(&pool, sync.clone());
+        sync
     }
 
     pub fn status(&self) -> SyncStatus {
@@ -152,23 +158,34 @@ impl LanSync {
         self.status().members.len() > 1
     }
 
-    /// Henüz günlüğe taşınmamış finansal yazmaların kapısı.
-    ///
-    /// Bu yazmalar diğer cihazlara ulaşmaz. Çok cihazlı kurulumda kabul edilirse
-    /// cihaz kaybında onaylanmış işlem kaybolur; bu yüzden tümü durur.
+    /// Yazmalar bu cihazda çoğunluk onayından mı geçer? Üyelikten çıkarılan cihaz da
+    /// bu yoldadır: tek başına yazarsa kümeden sessizce ayrışırdı.
+    pub fn replicates_writes(&self) -> bool {
+        let status = self.status();
+        status.mode == "CLUSTER"
+            && (status.members.len() > 1 || !status.members.iter().any(|member| member.is_local))
+    }
+
+    /// Küme kimliği ve bu cihaz; yazma günlüğe bunlarla girer.
+    pub(super) async fn identity(&self) -> Result<(String, String), String> {
+        let mut conn = self.inner.pool.acquire().await.map_err(|e| e.to_string())?;
+        let row = store::load_cluster(&mut conn)
+            .await?
+            .ok_or_else(|| "UNCONFIGURED: küme kaydı yok".to_string())?;
+        let device = ensure_local_device(&mut conn, &row.tenant_id).await?;
+        Ok((row.tenant_id, device))
+    }
+
+    /// Yazma komutunun erken kapısı: çoğunluk yoksa kullanıcı işlemi boşuna hazırlamaz.
+    /// Asıl güvence günlüktür; bu kapı yalnız hızlı ve anlaşılır hata verir.
     pub fn require_local_write(&self) -> Result<(), String> {
         let status = self.status();
-        if status.members.len() <= 1 && status.state != "INTERVENTION" {
-            return Ok(());
-        }
-        if status.state == "NO_CONNECTION" || status.state == "INTERVENTION" {
+        if status.state == "INTERVENTION"
+            || (self.replicates_writes() && status.state == "NO_CONNECTION")
+        {
             return Err("QUORUM_LOST: çoğunluk yok; finansal yazma durduruldu".to_string());
         }
-        Err(
-            "SYNC_UNSUPPORTED: bu işlem çok cihazlı eşitlemeye henüz taşınmadı; \
-             cihazı pasife almadan kullanılamaz"
-                .to_string(),
-        )
+        Ok(())
     }
 
     /// IPC kapısı: çok cihazlı modda eşitlenmeyen komutu çalıştırmadan reddeder.
@@ -177,25 +194,6 @@ impl LanSync {
             return Ok(());
         }
         self.require_local_write()
-    }
-
-    /// Küme kullanımındaki cari işlemin taşınabilir olduğunu doğrular.
-    pub fn require_replicable(&self, op: &CariOp) -> Result<(), String> {
-        if !self.is_multi_device() {
-            return Ok(());
-        }
-        match op {
-            // Kasa vardiyası ve mal kabulü henüz eşitlenmez; diğer cihazda
-            // uygulanamayan işlem günlüğe girerse cihazlar ayrışır.
-            CariOp::RecordPayment(input) if input.payment_method == "CASH" => Err(
-                "SYNC_UNSUPPORTED: nakit cari hareketi vardiya eşitlemesi gelene kadar kapalı"
-                    .to_string(),
-            ),
-            CariOp::ApproveDocument(_) => {
-                Err("SYNC_UNSUPPORTED: belge onayı stok eşitlemesi gelene kadar kapalı".to_string())
-            }
-            _ => Ok(()),
-        }
     }
 
     pub async fn is_running(&self) -> bool {
@@ -220,9 +218,13 @@ impl LanSync {
     async fn try_resume(&self) -> Result<(), String> {
         let mut conn = self.inner.pool.acquire().await.map_err(|e| e.to_string())?;
         let Some(row) = store::load_cluster(&mut conn).await? else {
-            return Ok(());
+            // Geri yükleme kümeden ayırır; eski tetikleyici yazmaları kilitli bırakmamalı.
+            return capture::sync_triggers(&mut conn, false).await;
         };
         let members = store::current_members(&mut conn, &row).await?;
+        let me = ensure_local_device(&mut conn, &row.tenant_id).await?;
+        let replicated = members.len() > 1 || !members.iter().any(|m| m.device_id == me);
+        capture::sync_triggers(&mut conn, replicated).await?;
         drop(conn);
         let mut status = self.status();
         status.mode = "CLUSTER";
@@ -348,7 +350,10 @@ impl LanSync {
                 .await
                 .map_err(|e| format!("Eşitleme portu açılamadı: {e}"))?;
             let bound = listener.local_addr().map_err(|e| e.to_string())?.port();
-            let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+            let mut tx = pool
+                .begin_with("BEGIN IMMEDIATE")
+                .await
+                .map_err(|e| e.to_string())?;
             let key = DeviceKey::load_or_create(&mut tx).await?;
             pairing::init_cluster(&mut tx, tenant_id, device_name, &key.public_key, bound).await?;
             tx.commit().await.map_err(|e| e.to_string())?;
@@ -399,9 +404,13 @@ impl LanSync {
             listen_port: bound,
         };
         let grant = transport::request_join(&code, &me, &request).await?;
-        let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+        let mut tx = pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(|e| e.to_string())?;
         pairing::accept_grant(&mut tx, local_tenant, &grant, bound).await?;
         crate::services::setup::mark_joined(&mut tx, &grant.tenant_id).await?;
+        capture::sync_triggers(&mut tx, true).await?;
         tx.commit().await.map_err(|e| e.to_string())?;
         for member in &grant.base_members {
             if !member.address.is_empty() {
@@ -420,46 +429,5 @@ impl LanSync {
             .await
             .map_err(|e| e.to_string())?;
         self.start_with(listener).await
-    }
-
-    /// Cihazı planlı olarak üyelikten çıkarır; otorite cihazdan yapılır.
-    pub async fn set_device_passive(
-        &self,
-        tenant_id: &str,
-        device_id: &str,
-        actor_id: &str,
-        actor_role: &str,
-    ) -> Result<OperationOutcome, String> {
-        let (members, local_device) = {
-            let mut conn = self.inner.pool.acquire().await.map_err(|e| e.to_string())?;
-            let row = store::load_cluster(&mut conn)
-                .await?
-                .ok_or_else(|| "UNCONFIGURED: bu cihaz eşleştirilmemiş".to_string())?;
-            (
-                store::current_members(&mut conn, &row).await?,
-                ensure_local_device(&mut conn, tenant_id).await?,
-            )
-        };
-        if !members.iter().any(|member| member.device_id == device_id) {
-            return Err("NOT_FOUND: cihaz üyelikte değil".to_string());
-        }
-        let remaining: Vec<Member> = members
-            .into_iter()
-            .filter(|member| member.device_id != device_id)
-            .collect();
-        if remaining.is_empty() {
-            return Err("CONFLICT: son cihaz pasife alınamaz".to_string());
-        }
-        self.submit(Operation {
-            operation_id: crate::id_generator::generate_id("op"),
-            tenant_id: tenant_id.to_string(),
-            device_id: local_device,
-            actor_id: actor_id.to_string(),
-            actor_role: actor_role.to_string(),
-            intent_sha256: String::new(),
-            op: LogOp::SetMembers(remaining),
-            created_at: chrono::Utc::now().to_rfc3339(),
-        })
-        .await
     }
 }

@@ -4,6 +4,7 @@
 //! ama `can_view_amounts` yetkisi yoksa `None` olarak döner. `0` bir maaş
 //! olabilir; "görünmüyor" ile "sıfır" ayrılır.
 
+use crate::services::lan_sync::WritePool;
 use chrono::{Datelike, NaiveDate};
 use sqlx::{Row, SqlitePool};
 
@@ -64,12 +65,13 @@ pub async fn upsert_profile(
     can_write_amounts: bool,
     input: &StaffProfileInput,
 ) -> Result<(), String> {
+    let mut tx = pool.begin_write().await?;
     let exists: Option<i64> = sqlx::query_scalar(
         "SELECT 1 FROM users WHERE tenant_id = ?1 AND id = ?2 AND is_active = 1",
     )
     .bind(tenant_id)
     .bind(&input.user_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     if exists.is_none() {
@@ -142,11 +144,12 @@ pub async fn upsert_profile(
     .bind(input.address.as_deref())
     .bind(input.emergency_contact.as_deref())
     .bind(input.notes.as_deref())
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
 
     let _ = actor_id;
+    tx.commit().await?;
     Ok(())
 }
 

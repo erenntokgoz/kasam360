@@ -5,6 +5,7 @@
 //! Bu desen `shift_commands.rs` ile aynıdır: kapıyı atlamak kolay olmasın diye
 //! tek yardımcıda toplandı.
 
+use crate::services::lan_sync::WritePool;
 use serde::Serialize;
 use tauri::State;
 
@@ -318,7 +319,7 @@ pub async fn record_tip_entry(
     let now = chrono::Local::now().to_rfc3339();
     let id = tip_service::record_tip(&pool, &tenant, None, amount_cents, &now).await?;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let ctx = crate::services::audit_service::AuditContext::new(
         tenant,
         actor_id,
@@ -330,6 +331,7 @@ pub async fn record_tip_entry(
         now,
     )?;
     crate::services::audit_service::AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    conn.commit().await?;
     Ok(id)
 }
 

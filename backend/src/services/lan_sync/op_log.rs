@@ -5,6 +5,7 @@
 //! göndermek yerine kimlikle sonucu sorar. Sonuç ve iş kayıtları aynı SQLite
 //! transaction'ında yazıldığından "uygulandı ama sonucu kayboldu" durumu olmaz.
 
+use super::capture::{self, RowChange};
 use super::store::Member;
 use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 use crate::services::cari::{self, ApplyError, CariOp};
@@ -20,6 +21,11 @@ use sqlx::{Acquire, Row, SqliteConnection, SqlitePool};
 pub enum LogOp {
     Cari(Box<CariOp>),
     SetMembers(Vec<Member>),
+    /// Yazma transaction'ının satır değişiklikleri; bkz. `write_tx`.
+    Changes {
+        base_state: i64,
+        changes: Vec<RowChange>,
+    },
     Noop,
 }
 
@@ -28,6 +34,7 @@ impl LogOp {
         match self {
             Self::Cari(op) => op.kind(),
             Self::SetMembers(_) => "SET_MEMBERS",
+            Self::Changes { .. } => "CHANGES",
             Self::Noop => "NOOP",
         }
     }
@@ -35,7 +42,7 @@ impl LogOp {
     pub fn target_id(&self) -> &str {
         match self {
             Self::Cari(op) => op.target_id(),
-            Self::SetMembers(_) | Self::Noop => "cluster",
+            Self::SetMembers(_) | Self::Changes { .. } | Self::Noop => "cluster",
         }
     }
 }
@@ -217,7 +224,13 @@ async fn apply_members(
     audit_lock: &AuditLock<'_>,
     operation: &Operation,
     members: &[Member],
+    device_id: &str,
 ) -> Result<(), ApplyError> {
+    // Üyelikten çıkan cihaz da kapıda kalır: tek başına yazıp kümeden ayrışamaz.
+    let replicated = members.len() > 1 || !members.iter().any(|m| m.device_id == device_id);
+    capture::sync_triggers(conn, replicated)
+        .await
+        .map_err(ApplyError::Internal)?;
     let tenant_id = operation.tenant_id.as_str();
     // Cihaz ekranı üyeliği gösterir; üyelikten çıkan cihaz silinmez, pasif olur.
     sqlx::query("UPDATE devices SET status = 'INACTIVE' WHERE tenant_id = ?")
@@ -257,6 +270,27 @@ async fn apply_members(
     Ok(())
 }
 
+/// Eski duruma dayanan değişiklik her cihazda aynı biçimde reddedilir.
+async fn apply_row_changes(
+    conn: &mut SqliteConnection,
+    base_state: i64,
+    changes: &[RowChange],
+    from_this_device: bool,
+) -> Result<(), ApplyError> {
+    let current: i64 =
+        sqlx::query_scalar("SELECT COALESCE((SELECT state_index FROM sync_cluster), 0)")
+            .fetch_one(&mut *conn)
+            .await?;
+    if current != base_state {
+        return Err(ApplyError::Rejected(
+            "SYNC_RETRY: başka cihaz aynı anda yazdı; işlem yeniden denenmeli".to_string(),
+        ));
+    }
+    capture::apply_changes(conn, changes, from_this_device)
+        .await
+        .map_err(ApplyError::Internal)
+}
+
 /// `PROPOSED` kaydı uygular; red ve başarı aynı transaction'da mühürlenir.
 ///
 /// Altyapı hatasında tamamı geri alınır ve kayıt `PROPOSED` kalır; sahte
@@ -265,8 +299,13 @@ pub(super) async fn apply_proposed(
     conn: &mut SqliteConnection,
     audit_lock: &AuditLock<'_>,
     operation: &Operation,
+    device_id: &str,
 ) -> Result<OperationOutcome, String> {
     let mut savepoint = conn.begin().await.map_err(|e| e.to_string())?;
+    sqlx::query("INSERT INTO sync_write_gate (mode) VALUES ('APPLY')")
+        .execute(&mut *savepoint)
+        .await
+        .map_err(|e| e.to_string())?;
     let applied = match &operation.op {
         LogOp::Cari(op) => {
             cari::apply(
@@ -280,13 +319,36 @@ pub(super) async fn apply_proposed(
             )
             .await
         }
-        LogOp::SetMembers(members) => apply_members(&mut savepoint, audit_lock, operation, members)
-            .await
-            .map(|()| Value::Null),
+        LogOp::SetMembers(members) => {
+            apply_members(&mut savepoint, audit_lock, operation, members, device_id)
+                .await
+                .map(|()| Value::Null)
+        }
+        LogOp::Changes {
+            base_state,
+            changes,
+        } => apply_row_changes(
+            &mut savepoint,
+            *base_state,
+            changes,
+            operation.device_id == device_id,
+        )
+        .await
+        .map(|()| Value::Null),
         LogOp::Noop => Ok(Value::Null),
     };
     let (status, result, error) = match applied {
         Ok(value) => {
+            sqlx::query("DELETE FROM sync_write_gate")
+                .execute(&mut *savepoint)
+                .await
+                .map_err(|e| e.to_string())?;
+            if !matches!(operation.op, LogOp::Noop) {
+                sqlx::query("UPDATE sync_cluster SET state_index = state_index + 1")
+                    .execute(&mut *savepoint)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
             savepoint.commit().await.map_err(|e| e.to_string())?;
             ("APPLIED", Some(value.to_string()), None)
         }
@@ -322,7 +384,10 @@ pub async fn execute_local(
     audit_lock: &AuditLock<'_>,
     operation: &Operation,
 ) -> Result<OperationOutcome, String> {
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool
+        .begin_with("BEGIN IMMEDIATE")
+        .await
+        .map_err(|e| e.to_string())?;
     if let Some(existing) = lookup(
         &mut tx,
         &operation.tenant_id,
@@ -341,7 +406,7 @@ pub async fn execute_local(
     .await
     .map_err(|e| e.to_string())?;
     append(&mut tx, operation, next, 0).await?;
-    let outcome = apply_proposed(&mut tx, audit_lock, operation).await?;
+    let outcome = apply_proposed(&mut tx, audit_lock, operation, &operation.device_id).await?;
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(outcome)
 }

@@ -8,6 +8,7 @@ use crate::db::DbPool;
 use crate::rbac::Role;
 use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 use crate::services::device_session::{self, DeviceSession};
+use crate::services::lan_sync::WritePool;
 use crate::services::setup;
 
 const ACCOUNT_ROLES: [Role; 2] = [Role::Owner, Role::Manager];
@@ -67,7 +68,7 @@ pub async fn account_create(
     let credential_hash = crate::auth::hash_credential(&password)?;
 
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     sqlx::query(
         "UPDATE users SET email = ?, login_identifier = ?, credential_hash = ?
          WHERE id = ? AND tenant_id = ?",
@@ -108,7 +109,7 @@ pub async fn account_sign_out(
 ) -> Result<DeviceSession, String> {
     crate::rbac::require_any(&actor_role, &ACCOUNT_ROLES)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     device_session::sign_out(&mut tx).await?;
     let ctx = AuditContext::new(
         tenant_id.clone(),
@@ -139,7 +140,7 @@ pub async fn set_session_policy(
 ) -> Result<DeviceSession, String> {
     crate::rbac::require_any(&actor_role, &ACCOUNT_ROLES)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     device_session::set_policy(&mut tx, keep_signed_in, staff_idle_seconds).await?;
     let ctx = AuditContext::new(
         tenant_id.clone(),

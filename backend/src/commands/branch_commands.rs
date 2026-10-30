@@ -21,6 +21,7 @@ use crate::management_commands::{audit_actor, record_audit};
 use crate::rbac::{self, Role};
 use crate::services::audit_service::{category, AuditLock};
 use crate::services::branch_service::{self, Branch};
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -138,7 +139,7 @@ pub async fn create_branch(
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(caller_id, "MASTER");
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let branch =
         branch_service::create(&mut tx, &tid, &new_branch_id(), &name, address.as_deref()).await?;
@@ -187,7 +188,7 @@ pub async fn update_branch(
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(caller_id, "MASTER");
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let previous_name = branch_service::load(&mut tx, &tid, &bid).await?.name;
     let branch =
@@ -236,7 +237,7 @@ pub async fn archive_branch(
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(caller_id, "MASTER");
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let branch = branch_service::archive(&mut tx, &tid, &bid).await?;
 

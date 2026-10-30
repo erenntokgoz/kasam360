@@ -193,6 +193,7 @@ pub fn run() {
             commands::backup_commands::set_backup_mirror,
             commands::backup_commands::restore_backup,
             commands::backup_commands::restore_backup_on_setup,
+            commands::sync_commands::take_over_device,
             commands::account_commands::get_device_session,
             commands::account_commands::account_sign_in,
             commands::account_commands::account_create,

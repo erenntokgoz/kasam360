@@ -227,7 +227,7 @@ async fn close_order(
 }
 
 pub async fn settle_order_payment(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    tx: &mut sqlx::SqliteConnection,
     audit_lock: &AuditLock<'_>,
     payload: &PaymentPayloadDto,
     tenant_id: &str,
@@ -253,7 +253,7 @@ pub async fn settle_order_payment(
     let order = sqlx::query("SELECT table_id, status FROM orders WHERE id = ? AND tenant_id = ?")
         .bind(order_id)
         .bind(tenant_id)
-        .fetch_optional(&mut **tx)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(text_error)?
         .ok_or_else(|| format!("NOT_FOUND: adisyon bulunamadı: {order_id}"))?;
@@ -324,7 +324,7 @@ pub async fn settle_order_payment(
             .bind(remaining_cents)
             .bind(&table_id)
             .bind(tenant_id)
-            .execute(&mut **tx)
+            .execute(&mut *tx)
             .await
             .map_err(text_error)?;
         None

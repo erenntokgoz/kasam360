@@ -3,6 +3,7 @@
 //! Gerçekleşen vardiya `shifts` tablosunda tutulur (kasa vardiyası). Plan ile
 //! gerçekleşen vardiyayı karıştırmamak için ayrı yüzeylerdir.
 
+use crate::services::lan_sync::WritePool;
 use sqlx::{Row, SqlitePool};
 
 use crate::services::staff360::staff_types::{ShiftPlan, ShiftPlanInput};
@@ -63,6 +64,7 @@ pub async fn add_shift_plan(
     actor_id: &str,
     plan: &ShiftPlanInput,
 ) -> Result<String, String> {
+    let mut tx = pool.begin_write().await?;
     if !is_iso_date(&plan.plan_date) {
         return Err("plan tarihi YYYY-MM-DD biciminde olmali".to_string());
     }
@@ -77,7 +79,7 @@ pub async fn add_shift_plan(
     )
     .bind(tenant_id)
     .bind(&plan.user_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     if exists.is_none() {
@@ -103,8 +105,9 @@ pub async fn add_shift_plan(
     .bind(&plan.role_required)
     .bind(plan.station.as_deref())
     .bind(actor_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(id)
 }

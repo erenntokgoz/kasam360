@@ -1,0 +1,58 @@
+# Saha Testi Talimatı
+
+Bu testler gerçek donanım ister; yazılım testleri ve aynı bilgisayardaki çok uygulamalı testler bunların yerine geçmez. Hepsi geçmeden ürün üretime hazır sayılmaz. Her satıra gözlenen sonucu ve tarihi yazın.
+
+## Hazırlık
+
+- Aynı sürümü iki Windows cihaza (A, B) kurun. Üç cihaz testi için üçüncü cihaz (C) gerekir.
+- Cihazlar aynı Wi-Fi veya kablolu ağda olsun. Windows Güvenlik Duvarı 47360 numaralı TCP portuna izin versin.
+- A'da Kayıt Ol ile işletme kurun, ürün ve masa ekleyin. Ayarlar > Cihazlar'dan eşleştirme kodu üretin.
+- B'de ilk ekranda Cihazı Bağla'yı seçip kodu girin, sonra aynı e-posta ve şifreyle giriş yapın.
+- Üst çubukta iki cihazda da `Hazır` görünmeli.
+
+## İki cihaz
+
+| No | Adım | Beklenen | Gözlenen |
+|---|---|---|---|
+| 1 | B'den sipariş girin | A'da masa 1 saniyede dolu görünür | |
+| 2 | A ve B'de aynı masanın tahsilat ekranını açın, ikisinde aynı anda Tamamla'ya basın | Yalnız bir tahsilat yazılır, diğer ekran kapalı hesap hatası verir | |
+| 3 | Menüde fiyat değiştirin | Diğer cihazda görünür, açık adisyonun fiyatı değişmez | |
+| 4 | Vardiya aç, nakit satış yap, kör sayımla kapat | Kasa farkı iki cihazda aynı | |
+| 5 | Wi-Fi'yi B'de kapatın | B `Bağlantı yok` der, yazmaz, okur. A da yazmayı durdurur | |
+| 6 | Wi-Fi'yi açın | İki cihaz 10 saniye içinde `Hazır` olur | |
+| 7 | A'nın IP'sini değiştirin (modemden yeni adres veya başka ağ) | Cihazlar yeniden bağlanır, yeni kod gerekmez | |
+| 8 | Cihazlar ekranından B'yi pasife alın | A tek başına satışa devam eder, B yazamaz | |
+
+## Elektrik kesintisi
+
+| No | Adım | Beklenen | Gözlenen |
+|---|---|---|---|
+| 9 | Tahsilat tamamlandıktan hemen sonra A'nın fişini çekin | Açılınca tahsilat kayıtlı, adisyon kapalı | |
+| 10 | Tamamla'ya basar basmaz A'nın fişini çekin | Açılınca tahsilat ya tam vardır ya hiç yoktur; yarım kayıt olmaz | |
+| 11 | 3 cihazda otorite cihazın fişini çekin | Diğer ikisi 5 saniye içinde satışa döner | |
+| 12 | Fişi çekilen cihazı açın | Eksikleri kendi tamamlar, `Hazır` olur | |
+| 13 | Her testten sonra Yönetim'den denetim zincirini doğrulayın | Zincir sağlam | |
+
+Madde 11 ve 12 için üç cihaz gerekir. İki cihazda otoritenin fişi çekilirse kalan cihazın durması doğrudur.
+
+## Yedek ve geri yükleme
+
+| No | Adım | Beklenen | Gözlenen |
+|---|---|---|---|
+| 14 | Ayarlar'dan yedek alın, USB belleğe aynalayın | Yedek listede doğrulanmış görünür | |
+| 15 | Yeni satış yapın, yedeğe dönün | Yedek anındaki duruma döner, dönüş öncesi durum ayrıca yedeklenir | |
+| 16 | Temiz bilgisayara kurup USB'deki yedekten açın | İşletme, personel ve fişler gelir | |
+| 17 | Eşleşmiş cihazda yedeğe dönün | Cihaz kümeden ayrılır, tek başına açılır; diğer cihazda onu pasife alın ve boş kurulumla yeniden eşleştirin | |
+
+## Kalıcı cihaz kaybı
+
+| No | Adım | Beklenen | Gözlenen |
+|---|---|---|---|
+| 18 | İki cihazda A'yı kapalı bırakın, B'de Cihazlar > Bu Cihazla Tek Başına Devam Et, sahip PIN'i | B satışa döner, eski kayıtlar durur | |
+| 19 | A'yı yeniden açın | A kümeye dönmez ve yazamaz; temiz kurulumla yeniden eşleştirilmelidir | |
+
+Madde 18 yalnız cihaz gerçekten kayıpsa yapılır. Cihazlar açık ama ağ kopuksa iki tarafta devralma yapmak kayıtları ayırır ve birleştirilemez.
+
+## Sonuç yazımı
+
+Başarısız satırda ekran görüntüsü, işlem kimliği ve iki cihazın saatini not edin.

@@ -4,6 +4,7 @@
 //! olduğu gibi taşındı, davranış değiştirilmedi.
 
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -85,7 +86,7 @@ pub async fn kds_update_ticket_status(
     kds_kapisi(Some(payload.actor_role.as_str()))?;
 
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let event_id = format!("evt_kds_{}", Uuid::new_v4());
     let payload_json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
@@ -378,7 +379,7 @@ pub async fn recall_kds_ticket(
     }
 
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let order_exists: Option<(String,)> =
         sqlx::query_as("SELECT id FROM orders WHERE id = ? AND tenant_id = ?")

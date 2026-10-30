@@ -40,16 +40,32 @@ pub struct ClusterRow {
     pub base_term: i64,
     pub base_members: Vec<Member>,
     pub listen_port: u16,
+    pub state_index: i64,
 }
 
 fn text_error(error: sqlx::Error) -> String {
     error.to_string()
 }
 
+/// Eski kümede kolon yoktur; sayaç sıfırdan başlar, karşılaştırma yalnız eşitliğe bakar.
+pub async fn ensure_state_column(pool: &sqlx::SqlitePool) -> Result<(), sqlx::Error> {
+    let exists: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('sync_cluster') WHERE name = 'state_index'",
+    )
+    .fetch_one(pool)
+    .await?;
+    if exists == 0 {
+        sqlx::query("ALTER TABLE sync_cluster ADD COLUMN state_index INTEGER NOT NULL DEFAULT 0")
+            .execute(pool)
+            .await?;
+    }
+    Ok(())
+}
+
 pub async fn load_cluster(conn: &mut SqliteConnection) -> Result<Option<ClusterRow>, String> {
     let row = sqlx::query(
         "SELECT tenant_id, cluster_id, current_term, voted_for, commit_index, base_index,
-                base_term, base_members, listen_port
+                base_term, base_members, listen_port, state_index
          FROM sync_cluster WHERE slot = 1",
     )
     .fetch_optional(&mut *conn)
@@ -70,6 +86,7 @@ pub async fn load_cluster(conn: &mut SqliteConnection) -> Result<Option<ClusterR
         base_term: row.try_get("base_term").map_err(text_error)?,
         base_members: serde_json::from_str(&base_members).map_err(|e| e.to_string())?,
         listen_port: u16::try_from(listen_port).map_err(|e| e.to_string())?,
+        state_index: row.try_get("state_index").map_err(text_error)?,
     }))
 }
 
@@ -77,8 +94,9 @@ pub async fn insert_cluster(conn: &mut SqliteConnection, row: &ClusterRow) -> Re
     let members = serde_json::to_string(&row.base_members).map_err(|e| e.to_string())?;
     sqlx::query(
         "INSERT INTO sync_cluster (slot, tenant_id, cluster_id, current_term, voted_for,
-                                   commit_index, base_index, base_term, base_members, listen_port)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                   commit_index, base_index, base_term, base_members, listen_port,
+                                   state_index)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&row.tenant_id)
     .bind(&row.cluster_id)
@@ -89,6 +107,7 @@ pub async fn insert_cluster(conn: &mut SqliteConnection, row: &ClusterRow) -> Re
     .bind(row.base_term)
     .bind(members)
     .bind(i64::from(row.listen_port))
+    .bind(row.state_index)
     .execute(&mut *conn)
     .await
     .map_err(text_error)?;

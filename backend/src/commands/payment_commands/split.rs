@@ -7,6 +7,7 @@ use super::types::{resolve_payment_tenant, PaymentPayloadDto, PaymentResultDto};
 use crate::commands::receipt_commands::require_tenant_scope;
 use crate::db::DbPool;
 use crate::repositories::payment_repository::PaymentRepository;
+use crate::services::lan_sync::WritePool;
 use crate::services::order_settlement::{self, OrderBalance};
 use serde::Serialize;
 
@@ -26,7 +27,7 @@ pub(super) async fn settle(
     // Kilit sırası her yerde aynıdır: önce payment_mutex, sonra audit_mutex.
     let _lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant_id = resolve_payment_tenant(&mut tx, &payload).await?;
     let settlement = order_settlement::settle_order_payment(

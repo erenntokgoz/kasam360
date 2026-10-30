@@ -4,6 +4,7 @@
 //! sipariş ve vardiya satırlarının referansı olduğu için fiziksel olarak
 //! korunur.
 
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::{Acquire, Row};
 
@@ -205,7 +206,7 @@ pub async fn delete_staff_member(
     // vardiya satırlarının referansı olduğu için fiziksel olarak korunur.
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "users", &staff_id, &tenant_id).await?;
 
@@ -249,6 +250,7 @@ pub async fn delete_staff_member(
     )
     .await?;
 
+    conn.commit().await?;
     Ok(())
 }
 
@@ -282,7 +284,7 @@ pub async fn update_staff_member(
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     // Fail-closed mülkiyet doğrulaması
     ensure_owned(&mut conn, "users", &staff_id, &tenant_id).await?;
@@ -325,6 +327,7 @@ pub async fn update_staff_member(
     )
     .await?;
 
+    conn.commit().await?;
     Ok(StaffMemberDto {
         id: staff_id,
         name,

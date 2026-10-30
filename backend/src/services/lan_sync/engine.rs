@@ -127,6 +127,12 @@ impl Engine {
             .ok_or_else(|| "UNCONFIGURED: küme kaydı yok".to_string())
     }
 
+    async fn cluster_in(&self, conn: &mut sqlx::SqliteConnection) -> Result<ClusterRow, String> {
+        store::load_cluster(conn)
+            .await?
+            .ok_or_else(|| "UNCONFIGURED: küme kaydı yok".to_string())
+    }
+
     pub async fn members(&self) -> Result<Vec<Member>, String> {
         let row = self.cluster().await?;
         let mut conn = self.pool.acquire().await.map_err(|e| e.to_string())?;
@@ -247,14 +253,18 @@ impl Engine {
         self.append_local(&noop, effects).await
     }
 
-    async fn append_local(
+    pub(super) async fn append_local(
         &mut self,
         operation: &Operation,
         effects: &mut Effects,
     ) -> Result<(), String> {
         let row = self.cluster().await?;
         {
-            let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+            let mut tx = self
+                .pool
+                .begin_with("BEGIN IMMEDIATE")
+                .await
+                .map_err(|e| e.to_string())?;
             let (last_index, _) = store::last_position(&mut tx, &row).await?;
             op_log::append(&mut tx, operation, last_index + 1, row.term).await?;
             tx.commit().await.map_err(|e| e.to_string())?;
@@ -332,7 +342,11 @@ impl Engine {
             return Err("CONFLICT: cihaz zaten üye".to_string());
         }
         let grant = {
-            let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+            let mut tx = self
+                .pool
+                .begin_with("BEGIN IMMEDIATE")
+                .await
+                .map_err(|e| e.to_string())?;
             // Yeniden denemede bekleyen kayıt bu cihazın kendi üyeliğidir ve ancak
             // cihaz dönünce onaylanabilir; beklemek iki cihazı kilitli bırakırdı.
             if !rejoining && store::has_pending_membership(&mut tx, &self.tenant_id).await? {
@@ -343,6 +357,7 @@ impl Engine {
                 .await?
                 .ok_or_else(|| "INTERNAL: onay konumu bulunamadı".to_string())?;
             let snapshot = pairing::export_snapshot(&mut tx, &self.tenant_id).await?;
+            let row = self.cluster_in(&mut tx).await?;
             tx.commit().await.map_err(|e| e.to_string())?;
             JoinGrant {
                 tenant_id: self.tenant_id.clone(),
@@ -352,6 +367,7 @@ impl Engine {
                 base_index: row.commit_index,
                 base_term,
                 base_members: members.clone(),
+                state_index: row.state_index,
                 snapshot,
             }
         };
@@ -434,7 +450,7 @@ impl Engine {
                 // Kimlik bağlantıdan gelir; iletinin kendi beyanına güvenilmez.
                 let allowed = operation.tenant_id == self.tenant_id
                     && operation.device_id == from
-                    && matches!(operation.op, LogOp::Cari(_));
+                    && matches!(operation.op, LogOp::Cari(_) | LogOp::Changes { .. });
                 let proposed = if allowed {
                     self.propose(&operation, now).await
                 } else {
@@ -446,13 +462,22 @@ impl Engine {
                         effects.send.extend(result.send);
                         effects.applied.extend(result.applied);
                     }
-                    Err(error) => effects.send.push((
-                        from.to_string(),
-                        Message::ForwardRejected {
-                            operation_id,
-                            error,
-                        },
-                    )),
+                    Err(error) => {
+                        // Otorite az önce değişti: işlem günlüğe girmedi, güvenle tekrarlanır.
+                        let error = if error.starts_with("NOT_LEADER") {
+                            "SYNC_RETRY: işlem otoritesi değişti; işlem yeniden denenmeli"
+                                .to_string()
+                        } else {
+                            error
+                        };
+                        effects.send.push((
+                            from.to_string(),
+                            Message::ForwardRejected {
+                                operation_id,
+                                error,
+                            },
+                        ));
+                    }
                 }
             }
             Message::ForwardRejected {

@@ -65,6 +65,8 @@ pub struct JoinGrant {
     pub base_index: i64,
     pub base_term: i64,
     pub base_members: Vec<Member>,
+    #[serde(default)]
+    pub state_index: i64,
     pub snapshot: Vec<(String, String)>,
 }
 
@@ -202,6 +204,7 @@ pub async fn init_cluster(
             address: String::new(),
         }],
         listen_port,
+        state_index: 0,
     };
     store::insert_cluster(conn, &row).await?;
     Ok(row)
@@ -252,6 +255,15 @@ async fn snapshot_sources(
         }
     }
     Ok(sources)
+}
+
+/// Cihazlar arasında taşınan tablolar: anlık görüntü ve günlük aynı listeyi kullanır.
+pub async fn replicated_tables(conn: &mut SqliteConnection) -> Result<Vec<String>, String> {
+    Ok(snapshot_sources(conn)
+        .await?
+        .into_iter()
+        .map(|(table, _, _)| table)
+        .collect())
 }
 
 /// İşletmenin kiracı kapsamlı tam kopyası.
@@ -447,6 +459,7 @@ pub async fn accept_grant(
             base_term: grant.base_term,
             base_members: grant.base_members.clone(),
             listen_port,
+            state_index: grant.state_index,
         },
     )
     .await

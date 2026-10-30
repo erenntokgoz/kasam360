@@ -1,5 +1,6 @@
 //! Tutanak servisi — personel olay kaydı ve listeleme.
 
+use crate::services::lan_sync::WritePool;
 use sqlx::{Row, SqlitePool};
 
 use crate::services::staff360::staff_types::{Incident, IncidentInput};
@@ -58,6 +59,7 @@ pub async fn record_incident(
     recorder_id: &str,
     input: &IncidentInput,
 ) -> Result<String, String> {
+    let mut tx = pool.begin_write().await?;
     let ozet = input.summary.trim();
     if ozet.is_empty() {
         return Err("tutanak ozeti bos olamaz".to_string());
@@ -78,8 +80,9 @@ pub async fn record_incident(
     .bind(ozet)
     .bind(input.details.as_deref())
     .bind(recorder_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(id)
 }

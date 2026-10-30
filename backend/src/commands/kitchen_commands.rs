@@ -1,5 +1,6 @@
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
@@ -93,7 +94,7 @@ pub async fn get_stations(
 ) -> Result<Vec<StationDto>, String> {
     let tenant = istasyon_okuma_kapisi(actor_role.as_deref(), tenant_id.as_deref())?;
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let mut rows = sqlx::query(
         "SELECT id, name, description FROM stations WHERE tenant_id = ? ORDER BY name ASC",
@@ -147,6 +148,7 @@ pub async fn get_stations(
         });
     }
 
+    conn.commit().await?;
     Ok(res)
 }
 
@@ -170,7 +172,7 @@ pub async fn create_station(
 ) -> Result<StationDto, String> {
     let tenant = istasyon_yazma_kapisi(actor_role.as_deref(), tenant_id.as_deref())?;
 
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let id = format!("st_{}", Uuid::new_v4());
 
@@ -218,7 +220,7 @@ pub async fn update_kds_item_status(
 ) -> Result<bool, String> {
     let tenant = kds_durum_kapisi(actor_role.as_deref(), tenant_id.as_deref())?;
 
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     // Kalem bu kiracının mı? Yazmadan önce doğrulanır: `UPDATE ... WHERE
     // tenant_id = ?` koşulsuz yazsa "0 satır güncellendi" sessizce başarı

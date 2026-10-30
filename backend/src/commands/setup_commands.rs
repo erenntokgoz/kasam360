@@ -5,6 +5,7 @@
 
 use crate::db::DbPool;
 use crate::services::lan_sync::runtime::sync_port;
+use crate::services::lan_sync::WritePool;
 use crate::services::setup::{self, NewBusinessInput, SetupDraft, SetupState};
 
 #[tauri::command]
@@ -36,7 +37,7 @@ pub async fn complete_business_setup(
     let credential_hash = crate::auth::hash_credential(&payload.password)?;
 
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     setup::complete_new_business(&mut tx, &audit_lock, &payload, &pin_hash, &credential_hash)
         .await?;
     tx.commit().await.map_err(|e| e.to_string())

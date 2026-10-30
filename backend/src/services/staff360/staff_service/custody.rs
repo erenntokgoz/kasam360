@@ -1,5 +1,6 @@
 //! Zimmet servisi — demirbaş teslim ve iade.
 
+use crate::services::lan_sync::WritePool;
 use sqlx::{Row, SqlitePool};
 
 use crate::services::staff360::staff_types::CustodyRecord;
@@ -47,6 +48,7 @@ pub async fn add_custody(
     quantity: i64,
     notes: Option<&str>,
 ) -> Result<String, String> {
+    let mut tx = pool.begin_write().await?;
     let name = item_name.trim();
     if name.is_empty() {
         return Err("zimmet kalemi bos olamaz".to_string());
@@ -67,9 +69,10 @@ pub async fn add_custody(
     .bind(name)
     .bind(quantity)
     .bind(notes)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(id)
 }
 
@@ -79,10 +82,11 @@ pub async fn return_custody(
     custody_id: &str,
     damaged: bool,
 ) -> Result<(), String> {
+    let mut tx = pool.begin_write().await?;
     let row = sqlx::query("SELECT status FROM custody_records WHERE tenant_id = ?1 AND id = ?2")
         .bind(tenant_id)
         .bind(custody_id)
-        .fetch_optional(pool)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     let Some(row) = row else {
@@ -99,8 +103,9 @@ pub async fn return_custody(
     .bind(custody_id)
     .bind(if damaged { "Hasarli" } else { "Iade" })
     .bind(chrono::Utc::now().to_rfc3339())
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(())
 }

@@ -1,6 +1,6 @@
 # Yerel Ağ Eşitlemesi
 
-Durum: Cari işlemler için aktarım uygulandı; gerçek cihaz testi yapılmadı, üretime hazır değildir.
+Durum: Bütün iş yazmaları günlükten geçer. Aynı bilgisayarda üç uygulamayla ve gerçek bağlantıyla sınandı; iki fiziksel cihaz testi `docs/field-test.md` tamamlanmadan üretime hazır değildir.
 
 ## Hedef
 
@@ -9,9 +9,13 @@ Durum: Cari işlemler için aktarım uygulandı; gerçek cihaz testi yapılmadı
 ## Mevcut durum
 
 - Tek cihazlı kurulum eşleştirme gerektirmez; cari işlemler yine de işlem günlüğünden geçer.
-- Eşitlenen işlemler: cari kart, borç açma ve banka/kart ödemesi. Küme üyeliği de aynı günlükten geçer.
+- Eşitlenen işlemler: sipariş, ödeme, iade, kasa, vardiya, gün sonu, menü, stok, personel, cari, üyelik ve denetim defteri.
 - Kod `backend/src/services/lan_sync` altındadır: işlem günlüğü (`op_log`), otorite ve çoğunluk (`engine`), şifreli kanal (`secure_channel`), eşleştirme (`pairing`), TCP çalışma döngüsü (`runtime`, `transport`).
-- Sipariş, ödeme, kasa, vardiya, gün sonu, menü, stok ve personel henüz günlüğe taşınmadı. İki veya daha fazla cihaz eşleştirildiğinde her IPC çağrısı tek kapıdan geçer (`lan_sync/write_gate.rs`): yalnız okuma, cihaz oturumu ve günlüğe giren komutlar çalışır, kalan her şey `SYNC_UNSUPPORTED` ile durur. Liste kapalıdır; yeni komut eklenmedikçe çok cihazlı modda çalışmaz. nakit cari hareketi ve tedarikçi belgesi de vardiya ve stok eşitlenene kadar kapalıdır.
+- Yazma komutları `begin_write` ile açılır (`write_tx`). Çok cihazda transaction yalnız satır değişikliklerini üretir (`capture`): liste okunur, transaction geri alınır, liste günlüğe önerilir, çoğunluk onayından sonra her cihazda aynı sırayla uygulanır. Komut cevabı onaydan sonra döner.
+- Değişiklik başladığı durumu taşır (`base_state`). Araya başka yazma girdiyse her cihazda aynı biçimde reddedilir (`SYNC_RETRY`) ve istemci taze durumla yeniden dener. Aynı adisyonun iki kasadan tahsil edilememesi buna dayanır.
+- Tetikleyiciler yalnız çok cihazlı kurulumda vardır. Kapıdan geçmeyen yazma `SYNC_UNSUPPORTED` ile durur; yeni bir yazma yolu unutulursa cihazlar sessizce ayrışmaz, hata görünür.
+- Eşleşmiş cihazlar güvenilir sayılır: otorite takipçinin gönderdiği satırları yeniden hesaplamaz, yalnız tablo adını ve kapsamını denetler.
+- Cihaza özel tablolardan onay jetonu ve dış teslim kuyruğu işlemle birlikte yalnız kaynak cihazda yazılır.
 - `outbox` harici sistem teslimatı içindir; cihazlar arası eşitlemede kullanılmaz.
 - Yeni cihaz, ilk kurulumda tek kullanımlık kodla katılır ve işletmenin kiracı kapsamlı tam görüntüsünü (kullanıcılar, menü, stok, cari, denetim zinciri) alır. Oturum, giriş sayacı, teslim kuyrukları ve eşitleme durumu cihaza özeldir, taşınmaz. Görüntü tek şifreli çerçevede 32 MB ile sınırlıdır.
 - Onay yanıtı cihaza ulaşmadan kesilen katılım, aynı cihaz anahtarı ve yeni kodla tekrarlanır; cihaz çift eklenmez. Kurulumdan vazgeçilirse otorite o cihazı Cihazlar ekranından pasife alır.
@@ -22,7 +26,9 @@ Bir cihazın bozulması ile cihazlar arasındaki ağın bölünmesi diğer cihaz
 
 - Tek cihazlı kurulumda yerel SQLite kalıcı yazımı işlem için yeterlidir. Otomatik yedekleme ayrıca izlenir.
 - Çok cihazlı kurulumda kritik yazma için tek bir güncel işlem otoritesi ve kalıcı çoğunluk onayı gerekir. Ağ bölünmesinde çoğunluğu kaybeden taraf yeni finansal işlem açamaz; mevcut ekranı ve kayıtlarını korur.
-- Üç veya daha fazla aktif cihazda tek cihaz kaybı çoğunluğu bozmaz. İki cihazlı kurulumda ani cihaz/ağ kaybı finansal yazmayı durdurabilir; cihazın planlı olarak pasife alınması kalan cihazı güvenle tek cihaz moduna geçirir.
+- Üç veya daha fazla aktif cihazda tek cihaz kaybı çoğunluğu bozmaz. İki cihazlı kurulumda ani cihaz/ağ kaybı finansal yazmayı durdurur; cihazın planlı olarak pasife alınması kalan cihazı güvenle tek cihaz moduna geçirir.
+- Diğer cihazlar kalıcı olarak kaybolduysa sahip, PIN'iyle kalan cihazdan devam eder (`take_over_device`). Bu çoğunluk kuralını bilerek aşar: cihazlar yalnız ağdan kopuksa iki tarafta yapılırsa kayıtlar birleştirilemez. Kaybolan cihaz dönerse kümeye girmez, temiz kurulumla yeniden eşleştirilir.
+- Yedekten dönen cihaz kümeden ayrılır ve tek başına açılır; diğer cihazlarda pasife alınıp boş kurulumla yeniden eşleştirilir. Geri sarılmış günlükle kümeye dönmesine izin verilmez.
 - “İşlem tamamlandı” cevabı yalnızca kalıcı kayıt ve gereken onaylar alındıktan sonra verilir. Zaman aşımında kullanıcı işlem kimliğiyle sonucu sorgular; körlemesine ikinci kez ödeme göndermez.
 
 ## İşlem sözleşmesi

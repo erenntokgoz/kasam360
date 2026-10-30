@@ -5,6 +5,7 @@
 
 use crate::commands::command_helpers::audit_actor;
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -167,7 +168,7 @@ pub async fn close_day(
 
     // D1: gün sonu yüksek riskli komutlardandır (kasa devri).
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     let (bildirilen_id, bildirilen_rol) = audit_actor(actor_id, actor_role.clone());
     let (user_id, role) = crate::services::security360::session::oturum_aktoru(
         &mut tx,

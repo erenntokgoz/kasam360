@@ -268,7 +268,7 @@ pub struct VeresiyeSettlement {
 /// müşteri sonradan `pay_debt` ile kapatır, o zaman kasa hareketi `pay_debt`
 /// yazar, burada değil.
 pub async fn record_veresiye_settlement(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    tx: &mut sqlx::SqliteConnection,
     tenant_id: &str,
     directory_id: &str,
     order_id: &str,
@@ -286,7 +286,7 @@ pub async fn record_veresiye_settlement(
     let row = sqlx::query("SELECT name, type FROM directories WHERE id = ? AND tenant_id = ?")
         .bind(directory_id)
         .bind(tenant_id)
-        .fetch_optional(&mut **tx)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| format!("Veresiye cari kartı okunamadı: {}", e))?
         .ok_or_else(|| "Veresiye için geçerli bir müşteri cari kartı seçilmelidir.".to_string())?;
@@ -315,7 +315,7 @@ pub async fn record_veresiye_settlement(
     .bind(amount_cents)
     .bind(order_id)
     .bind(description)
-    .execute(&mut **tx)
+    .execute(&mut *tx)
     .await
     .map_err(|e| format!("Veresiye borcu açılamadı: {}", e))?;
 

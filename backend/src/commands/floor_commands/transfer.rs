@@ -2,6 +2,7 @@
 
 use crate::commands::command_helpers::audit_actor;
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 use sqlx::Row;
 
 #[tauri::command]
@@ -32,7 +33,7 @@ pub async fn transfer_order_item(
 
     let _lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     // Hedef masayı doğrula
     let target_table = sqlx::query("SELECT id FROM tables WHERE id = ? AND tenant_id = ?")

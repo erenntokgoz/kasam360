@@ -6,6 +6,7 @@
 use crate::commands::command_helpers::audit_actor;
 use crate::commands::receipt_commands::require_tenant_scope;
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
@@ -46,7 +47,7 @@ pub async fn open_shift(
         ],
     )?;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
     // düşerse vardiya kimliğine sahip olmayan bir defter
     // yazılır (AGENTS.md §3.3).
@@ -207,7 +208,7 @@ pub async fn close_shift(
         ],
     )?;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     // Kiracı zorunludur: eksik gelen kiracı varsayılan kiracıya
     // düşerse vardiya kapanışı başka işletmenin kasanın
     // devresini yazabilir (AGENTS.md §3.3).

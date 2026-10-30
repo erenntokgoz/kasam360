@@ -2108,7 +2108,22 @@ CREATE TABLE IF NOT EXISTS sync_cluster (
     base_index INTEGER NOT NULL DEFAULT 0,
     base_term INTEGER NOT NULL DEFAULT 0,
     base_members TEXT NOT NULL CHECK (json_valid(base_members)),
-    listen_port INTEGER NOT NULL
+    listen_port INTEGER NOT NULL,
+    -- Uygulanan durum değiştirici işlem sayısı; iyimser kilidin dayanağı.
+    state_index INTEGER NOT NULL DEFAULT 0
+);
+
+-- Yalnız yazma transaction'ı içinde satır taşır: kapı ve yakalanan değişiklikler.
+CREATE TABLE IF NOT EXISTS sync_write_gate (
+    mode TEXT NOT NULL CHECK (mode IN ('CAPTURE', 'APPLY'))
+);
+
+CREATE TABLE IF NOT EXISTS sync_capture (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    table_name TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('I', 'U', 'D')),
+    row_key TEXT,
+    row_data TEXT
 );
 
 -- Bu cihazın imza anahtarı. Gizli anahtar cihazdan çıkmaz.

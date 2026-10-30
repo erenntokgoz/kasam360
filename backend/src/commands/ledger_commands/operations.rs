@@ -40,9 +40,6 @@ pub(crate) async fn submit(
         op: LogOp::Cari(Box::new(op)),
     };
     if state.lan_sync.status().mode == "CLUSTER" {
-        if let LogOp::Cari(op) = &operation.op {
-            state.lan_sync.require_replicable(op)?;
-        }
         return state.lan_sync.submit(operation).await?.into_result();
     }
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);

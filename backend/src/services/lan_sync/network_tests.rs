@@ -169,10 +169,6 @@ async fn iki_kurulum_eslesir_para_cogunlukla_yazilir_cihaz_kaybinda_durur() {
     );
     wait_until!("takipçi hazır", sync_b.status().state == "READY");
     assert!(sync_a.is_multi_device());
-    assert!(
-        sync_a.require_local_write().is_err(),
-        "taşınmamış yazma kapalı"
-    );
 
     // Takipçiden gelen ödeme otoriteye gider, iki diske de yazılır.
     let paid = sync_b

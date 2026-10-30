@@ -30,6 +30,7 @@ interface SyncStore {
   refresh: () => Promise<void>;
   createPairingCode: (deviceName: string) => Promise<{ code: string; expiresAt: string }>;
   setDevicePassive: (deviceId: string) => Promise<void>;
+  takeOver: (pin: string) => Promise<void>;
 }
 
 export const SYNC_STATE_LABEL: Record<SyncState, string> = {
@@ -70,6 +71,12 @@ export const useSyncStore = create<SyncStore>((set, get) => ({
   setDevicePassive: async (deviceId) => {
     const { actorRole, actorId, tenantId } = sessionArgs();
     await invokeIPC('set_device_passive', { actorRole, actorId, tenantId, deviceId });
+    await get().refresh();
+  },
+
+  takeOver: async (pin) => {
+    const { tenantId } = sessionArgs();
+    await invokeIPC('take_over_device', { pin, tenantId });
     await get().refresh();
   },
 }));

@@ -1,4 +1,5 @@
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 
 pub use crate::services::modifier_service::{ModifierGroupDto, ModifierOptionDto};
@@ -125,7 +126,7 @@ pub async fn update_table_status(
         ));
     }
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let exists: Option<String> =
         sqlx::query_scalar("SELECT id FROM tables WHERE id = ? AND tenant_id = ?")
             .bind(table_id.trim())
@@ -158,6 +159,7 @@ pub async fn update_table_status(
         .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
+    conn.commit().await?;
     Ok(())
 }
 
@@ -176,6 +178,7 @@ pub async fn waiter_clock_in(
     actor_role: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<String, String> {
+    let mut tx = pool.begin_write().await?;
     // Garson kendi vardiyasını açabilir; müdür ve patron da açabilir.
     crate::rbac::require_any_present(
         Some(actor_role.as_str()),
@@ -205,9 +208,10 @@ pub async fn waiter_clock_in(
     .bind(&waiter_id)
     // `to_string` hatası yutulmaz: bozuk payload yazmak sessizce veri kaybıdır.
     .bind(serde_json::to_string(&payload).map_err(|e| e.to_string())?)
-    .execute(&*pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(event_id)
 }
 

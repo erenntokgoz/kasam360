@@ -14,6 +14,7 @@
 //! durur; repo'ya gömülü varsayılan kod yoktur.
 
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 use serde::Serialize;
 
 use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
@@ -42,7 +43,7 @@ pub async fn master_vault_configure(
 ) -> Result<serde_json::Value, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     crate::services::master_vault::configure_passcode(&mut conn, &new_passcode).await?;
 
@@ -60,6 +61,7 @@ pub async fn master_vault_configure(
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
+    conn.commit().await?;
     Ok(serde_json::json!({ "success": true }))
 }
 
@@ -73,7 +75,7 @@ pub async fn master_vault_unlock(
 ) -> Result<VaultUnlockResultDto, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let opened = crate::services::master_vault::unlock(&mut conn, &passcode).await?;
 
@@ -89,6 +91,7 @@ pub async fn master_vault_unlock(
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
+    conn.commit().await?;
     Ok(VaultUnlockResultDto { unlocked: opened })
 }
 

@@ -83,3 +83,21 @@ pub async fn set_device_passive(
         .set_device_passive(&tid, &device_id, &actor, "OWNER")
         .await
 }
+
+/// Diğer cihazlar kalıcı olarak kaybolduysa bu cihazla devam eder.
+///
+/// PIN yeniden istenir: oturumu açık bırakılmış kasada tek dokunuşla çoğunluk kuralı
+/// kaldırılamaz. Kapalı cihaz sonradan açılırsa kümeye dönmez, yeniden eşleştirilir.
+#[tauri::command]
+pub async fn take_over_device(
+    pin: String,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, crate::db::DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<OperationOutcome, String> {
+    let tid = require_ledger_tenant(tenant_id.as_deref())?;
+    let owner =
+        crate::commands::auth_commands::authenticate_by_pin(&pool, &pin, Some(&tid)).await?;
+    rbac::require_any(&owner.role, &[Role::Owner])?;
+    state.lan_sync.take_over(&tid, &owner.id, &owner.role).await
+}

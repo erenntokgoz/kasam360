@@ -4,6 +4,7 @@
 //! Dağıtımda kuruş kaybı olmaz: toplam bölünürken kalan kuruş, deterministik
 //! sıradaki (kullanıcı kimliğine göre) son kişiye verilir ve sonra doğrulanır.
 
+use crate::services::lan_sync::WritePool;
 use sqlx::SqlitePool;
 
 use crate::services::staff360::payroll_types::{TipAllocation, TipAllocationInput, TipPoolSummary};
@@ -18,6 +19,7 @@ pub async fn record_tip(
     amount_cents: i64,
     paid_at: &str,
 ) -> Result<String, String> {
+    let mut tx = pool.begin_write().await?;
     if amount_cents <= 0 {
         return Err("bahsis sifirdan buyuk olmali".to_string());
     }
@@ -34,9 +36,10 @@ pub async fn record_tip(
     .bind(order_id)
     .bind(amount_cents)
     .bind(paid_at)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(id)
 }
 
@@ -102,6 +105,7 @@ pub async fn distribute_pool(
     period: &str,
     allocations: &[TipAllocationInput],
 ) -> Result<Vec<TipAllocation>, String> {
+    let mut tx = pool.begin_write().await?;
     if allocations.is_empty() {
         return Err("dagitilacak calisan yok".to_string());
     }
@@ -155,7 +159,7 @@ pub async fn distribute_pool(
         )
         .bind(tenant_id)
         .bind(user_id)
-        .fetch_optional(pool)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| e.to_string())?
         .unwrap_or_else(|| user_id.clone());
@@ -185,7 +189,7 @@ pub async fn distribute_pool(
     sqlx::query("DELETE FROM tip_distributions WHERE tenant_id = ?1 AND period = ?2")
         .bind(tenant_id)
         .bind(period)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     for a in &out {
@@ -202,11 +206,12 @@ pub async fn distribute_pool(
         .bind(a.amount_cents)
         .bind(a.basis_cents)
         .bind(a.multiplier_percent)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
 
+    tx.commit().await?;
     Ok(out)
 }
 

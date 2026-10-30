@@ -353,6 +353,7 @@ async fn grant_from(
         .expect("görüntü");
     crate::services::lan_sync::pairing::JoinGrant {
         tenant_id: tenant.to_string(),
+        state_index: 0,
         cluster_id: "cls_1".to_string(),
         authority_id: "dev_a".to_string(),
         term: 1,

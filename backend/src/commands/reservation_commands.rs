@@ -15,6 +15,7 @@
 //! Rezervasyon kaydı silinmez (iptal/gelmedi terminalleri), dolayısıyla geçmiş
 //! yalnız denetim defterinden değil, `reservations` tablosundan da okunabilir.
 
+use crate::services::lan_sync::WritePool;
 use serde::Deserialize;
 
 use crate::db::DbPool;
@@ -127,7 +128,7 @@ pub async fn reserve_table(
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(caller_id, caller_role.as_deref().unwrap_or("WAITER"));
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let reservation = reservation_service::create(
         &mut tx,
@@ -185,7 +186,7 @@ async fn close_with_reason(
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(caller_id, caller_role.as_deref().unwrap_or("WAITER"));
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let reservation =
         reservation_service::cancel(&mut tx, &tenant, &id, &actor_id, reason.as_deref()).await?;
@@ -288,7 +289,7 @@ pub async fn mark_reservation_arrived(
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(caller_id, caller_role.as_deref().unwrap_or("WAITER"));
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let reservation = reservation_service::mark_arrived(&mut tx, &tenant, &id, &actor_id).await?;
 

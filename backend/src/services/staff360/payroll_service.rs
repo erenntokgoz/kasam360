@@ -6,6 +6,7 @@
 //!
 //! Gizlilik: `can_see_amounts` false ise `amounts: None` döner.
 
+use crate::services::lan_sync::WritePool;
 use sqlx::Row;
 use sqlx::SqlitePool;
 
@@ -21,6 +22,7 @@ pub async fn set_rule(
     tenant_id: &str,
     input: &PayrollRuleInput,
 ) -> Result<(), String> {
+    let mut tx = pool.begin_write().await?;
     const MODELLER: [&str; 5] = ["FIXED", "COMMISSION", "TIP", "HOURLY", "PROFIT_SHARE"];
     if !MODELLER.contains(&input.model.as_str()) {
         return Err(format!("gecersiz maas modeli: {}", input.model));
@@ -43,7 +45,7 @@ pub async fn set_rule(
     )
     .bind(tenant_id)
     .bind(&input.user_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     if var.is_none() {
@@ -75,9 +77,10 @@ pub async fn set_rule(
     .bind(input.hourly_rate_cents)
     .bind(input.tip_multiplier_percent)
     .bind(input.profit_share_percent)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -180,6 +183,7 @@ pub async fn run_payroll(
     period: &str,
     can_see_amounts: bool,
 ) -> Result<Vec<PayrollRun>, String> {
+    let mut tx = pool.begin_write().await?;
     let (baslangic, bitis) = period_range(period)?;
     let rules = list_rules(pool, tenant_id, can_see_amounts).await?;
     if rules.is_empty() {
@@ -285,7 +289,7 @@ pub async fn run_payroll(
         .bind(kar_payi)
         .bind(brut)
         .bind(&not)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -293,7 +297,7 @@ pub async fn run_payroll(
             sqlx::query_scalar("SELECT role FROM users WHERE tenant_id = ?1 AND id = ?2")
                 .bind(tenant_id)
                 .bind(&kural.user_id)
-                .fetch_optional(pool)
+                .fetch_optional(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?
                 .unwrap_or_else(|| "BILINMIYOR".to_string());
@@ -327,6 +331,7 @@ pub async fn run_payroll(
             },
         });
     }
+    tx.commit().await?;
     Ok(out)
 }
 

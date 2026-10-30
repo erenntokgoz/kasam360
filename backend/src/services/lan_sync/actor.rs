@@ -35,10 +35,19 @@ fn jitter() -> u64 {
 
 /// Otoriteye ulaşılamayınca işlem kuyruğa alınmaz: kullanıcı beklemez, bilir.
 const NO_AUTHORITY: &str = "NO_CONNECTION: işlem otoritesine ulaşılamıyor";
+/// Otorite değişirken takipçi kısa süre hedefsiz kalır; bu anda kasiyere hata göstermemek
+/// için işlem bekletilir. Henüz gönderilmediği için süre dolunca reddi güvenlidir.
+const AUTHORITY_WAIT_MS: u64 = 2_000;
 
 struct Waiter {
     reply: oneshot::Sender<Result<OperationOutcome, String>>,
     deadline: u64,
+}
+
+struct ParkedSubmit {
+    operation: Operation,
+    waiter: Waiter,
+    give_up_at: u64,
 }
 
 struct PeerLink {
@@ -56,6 +65,7 @@ pub(super) struct Actor {
     peers: BTreeMap<String, PeerLink>,
     dialing: BTreeSet<String>,
     waiters: HashMap<String, Waiter>,
+    parked: Vec<ParkedSubmit>,
     unresolved: BTreeMap<String, u64>,
     clock: Instant,
     election_deadline: u64,
@@ -82,6 +92,7 @@ impl Actor {
             peers: BTreeMap::new(),
             dialing: BTreeSet::new(),
             waiters: HashMap::new(),
+            parked: Vec::new(),
             unresolved: BTreeMap::new(),
             clock: Instant::now(),
             election_deadline: 0,
@@ -143,6 +154,24 @@ impl Actor {
         match command {
             Command::Submit { operation, reply } => {
                 self.on_submit(*operation, reply, now).await;
+            }
+            Command::TakeOver { operation, reply } => {
+                let operation_id = operation.operation_id.clone();
+                self.waiters.insert(
+                    operation_id.clone(),
+                    Waiter {
+                        reply,
+                        deadline: now + SUBMIT_TIMEOUT_MS,
+                    },
+                );
+                match self.engine.take_over(&operation).await {
+                    Ok(effects) => self.dispatch(effects),
+                    Err(error) => {
+                        if let Some(waiter) = self.waiters.remove(&operation_id) {
+                            let _ = waiter.reply.send(Err(error));
+                        }
+                    }
+                }
             }
             Command::Join {
                 request,
@@ -230,6 +259,24 @@ impl Actor {
             reply,
             deadline: now + SUBMIT_TIMEOUT_MS,
         };
+        if let Err(unsent) = self.route(operation, waiter, now).await {
+            let (operation, waiter) = *unsent;
+            self.parked.push(ParkedSubmit {
+                operation,
+                waiter,
+                give_up_at: now + AUTHORITY_WAIT_MS,
+            });
+        }
+    }
+
+    /// İşlemi otoriteye yollar; hedef yoksa geri verir.
+    async fn route(
+        &mut self,
+        operation: Operation,
+        waiter: Waiter,
+        now: u64,
+    ) -> Result<(), Box<(Operation, Waiter)>> {
+        let operation_id = operation.operation_id.clone();
         if self.engine.role == Role::Leader {
             self.waiters.insert(operation_id.clone(), waiter);
             match self.engine.propose(&operation, now).await {
@@ -240,7 +287,7 @@ impl Actor {
                     }
                 }
             }
-            return;
+            return Ok(());
         }
         let link = self
             .engine
@@ -257,9 +304,29 @@ impl Actor {
                     .is_ok() =>
             {
                 self.waiters.insert(operation_id, waiter);
+                Ok(())
             }
-            _ => {
-                let _ = waiter.reply.send(Err(NO_AUTHORITY.to_string()));
+            _ => Err(Box::new((operation, waiter))),
+        }
+    }
+
+    async fn retry_parked(&mut self, now: u64) {
+        for parked in std::mem::take(&mut self.parked) {
+            let give_up_at = parked.give_up_at;
+            match self.route(parked.operation, parked.waiter, now).await {
+                Ok(()) => {}
+                Err(unsent) => {
+                    let (operation, waiter) = *unsent;
+                    if give_up_at <= now {
+                        let _ = waiter.reply.send(Err(NO_AUTHORITY.to_string()));
+                    } else {
+                        self.parked.push(ParkedSubmit {
+                            operation,
+                            waiter,
+                            give_up_at,
+                        });
+                    }
+                }
             }
         }
     }
@@ -283,6 +350,7 @@ impl Actor {
 
     async fn on_tick(&mut self) -> Result<(), String> {
         let now = self.now();
+        self.retry_parked(now).await;
         self.unresolved
             .retain(|_, visible_until| *visible_until > now);
         let expired: Vec<String> = self

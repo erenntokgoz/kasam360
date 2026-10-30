@@ -10,6 +10,7 @@ use crate::rbac;
 use crate::rbac::Role;
 use crate::services::analytics_service as svc;
 use crate::services::analytics_service::analytics_types::AnalyticsRange;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -335,7 +336,7 @@ pub async fn set_monthly_target(
         category.to_string()
     };
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     sqlx::query(
         "INSERT INTO monthly_targets
              (id, tenant_id, month, category, target_cents, created_at, updated_at)
@@ -354,6 +355,7 @@ pub async fn set_monthly_target(
     .await
     .map_err(|e| e.to_string())?;
 
+    conn.commit().await?;
     Ok(())
 }
 
@@ -378,7 +380,7 @@ pub async fn set_competitor_price(
         return Err("urun bos olamaz".to_string());
     }
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     // Ürünün bu kiracıya ait olduğunu doğrula: yabancı ürün kimliği sızdırılamaz.
     let exists: Option<i64> =
         sqlx::query_scalar("SELECT 1 FROM products WHERE tenant_id = ?1 AND id = ?2")
@@ -405,5 +407,6 @@ pub async fn set_competitor_price(
     .await
     .map_err(|e| e.to_string())?;
 
+    conn.commit().await?;
     Ok(())
 }

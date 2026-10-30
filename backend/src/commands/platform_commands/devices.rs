@@ -14,6 +14,7 @@
 //!     AGENTS.md §4.1'deki donmuş kategoriler arasında güvenlik olaylarına
 //!     ayrılmış olan `GUVENLIK` kullanılır.
 
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqliteConnection};
 
@@ -268,7 +269,7 @@ pub async fn register_device(
 ) -> Result<DeviceDto, String> {
     crate::rbac::require_master(&caller_role)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let dto = cihaz_kaydet(&mut conn, &tenant_id, &name, &device_type).await?;
 
@@ -287,6 +288,7 @@ pub async fn register_device(
         chrono::Utc::now().to_rfc3339(),
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    conn.commit().await?;
     Ok(dto)
 }
 
@@ -300,7 +302,7 @@ pub async fn toggle_device_status(
 ) -> Result<DeviceDto, String> {
     crate::rbac::require_master(&caller_role)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let onceki: Option<String> = sqlx::query_scalar("SELECT status FROM devices WHERE id = ?")
         .bind(device_id.trim())
@@ -323,6 +325,7 @@ pub async fn toggle_device_status(
         chrono::Utc::now().to_rfc3339(),
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    conn.commit().await?;
     Ok(dto)
 }
 
@@ -336,7 +339,7 @@ pub async fn delete_device(
 ) -> Result<(), String> {
     crate::rbac::require_master(&caller_role)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let onceki_ad: Option<String> = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?")
         .bind(device_id.trim())
@@ -364,6 +367,7 @@ pub async fn delete_device(
         chrono::Utc::now().to_rfc3339(),
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    conn.commit().await?;
     Ok(())
 }
 

@@ -7,6 +7,7 @@
 use super::summary::{calculate_expected_shift_balance, vardiya_oku_kapisi};
 use crate::db::DbPool;
 use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
+use crate::services::lan_sync::WritePool;
 use serde::Serialize;
 use sqlx::{Row, SqliteConnection};
 
@@ -173,7 +174,7 @@ pub async fn explain_shift_difference(
         return Err("VALIDATION: fark açıklaması zorunludur.".to_string());
     }
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     let difference: Option<Option<i64>> =
         sqlx::query_scalar("SELECT difference_cents FROM shifts WHERE id = ? AND tenant_id = ?")
             .bind(&shift_id)

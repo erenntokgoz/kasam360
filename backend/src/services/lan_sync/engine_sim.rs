@@ -79,6 +79,7 @@ impl Sim {
                     base_term: 0,
                     base_members: members.clone(),
                     listen_port: 1,
+                    state_index: 0,
                 },
             )
             .await

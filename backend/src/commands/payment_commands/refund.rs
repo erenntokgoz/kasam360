@@ -6,6 +6,7 @@
 use super::types::CompensationRefundPayloadDto;
 use crate::db::DbPool;
 use crate::rbac::Role;
+use crate::services::lan_sync::WritePool;
 
 /// Compensation refund: yapılmış bir tahsilatı tersine çevirir.
 ///
@@ -34,7 +35,7 @@ pub async fn create_compensation_refund(
 
     let _payment_lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant_id = tenant_id.trim().to_string();
     if tenant_id.is_empty() {

@@ -14,9 +14,10 @@ interface SyncDevicesModalProps {
 }
 
 export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({ isOpen, onClose }) => {
-  const { status, createPairingCode, setDevicePassive } = useSyncStore();
+  const { status, createPairingCode, setDevicePassive, takeOver } = useSyncStore();
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const [deviceName, setDeviceName] = useState('');
+  const [ownerPin, setOwnerPin] = useState('');
   const [pairing, setPairing] = useState<{ code: string; expiresAt: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -91,12 +92,39 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({ isOpen, onCl
           </section>
         ) : null}
 
-        {isOwner && (canPair || status?.mode === 'SINGLE') ? (
+        {isOwner && status?.mode === 'CLUSTER' && status.state === 'NO_CONNECTION' ? (
           <section className="space-y-2">
             <p className="text-xs p-3 rounded-lg bg-[var(--accent-amber-soft)] text-[var(--accent-amber)] border border-[var(--accent-amber-border)]">
-              İki cihaz eşleşince satış, kasa ve vardiya yazmaları durur: bu işlemler henüz
-              eşitlenmiyor. Üretim kullanımı için hazır değildir.
+              Yalnız diğer cihazlar bozulduysa ve geri dönmeyecekse kullanın. Cihazlar açık ama ağ
+              kopuksa önce ağı düzeltin: iki cihaz ayrı ayrı devam ederse kayıtlar birleştirilemez.
             </p>
+            <Input
+              aria-label="Sahip PIN"
+              type="password"
+              inputMode="numeric"
+              placeholder="Sahip PIN"
+              className="min-h-12"
+              value={ownerPin}
+              onChange={(event) => setOwnerPin(event.target.value)}
+            />
+            <Button
+              variant="danger"
+              disabled={isBusy || ownerPin.length < 4}
+              onClick={() =>
+                void run(async () => {
+                  await takeOver(ownerPin);
+                  setOwnerPin('');
+                })
+              }
+              className="w-full min-h-12"
+            >
+              Bu Cihazla Tek Başına Devam Et
+            </Button>
+          </section>
+        ) : null}
+
+        {isOwner && (canPair || status?.mode === 'SINGLE') ? (
+          <section className="space-y-2">
             <div>
               <label htmlFor="sync-device-name" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
                 Cihaz Adı

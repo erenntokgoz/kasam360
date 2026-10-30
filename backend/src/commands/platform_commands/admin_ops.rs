@@ -6,6 +6,7 @@
 use super::PLATFORM_AUDIT_TENANT;
 use crate::db::DbPool;
 use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::{Acquire, Row};
 
@@ -122,7 +123,7 @@ pub async fn create_remote_session(
         uuid::Uuid::new_v4().to_string()[..12].to_uppercase()
     );
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let now_iso = chrono::Utc::now().to_rfc3339();
     let payload = serde_json::json!({
         "sessionId": session_id,
@@ -146,6 +147,7 @@ pub async fn create_remote_session(
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
+    conn.commit().await?;
     Ok(serde_json::json!({
         "success": true,
         "sessionId": session_id,
@@ -184,7 +186,7 @@ pub async fn execute_it_action(
         _ => ("İşlem başarıyla yürütüldü.".to_string(), None),
     };
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let now_iso = chrono::Utc::now().to_rfc3339();
     let payload = serde_json::json!({
         "actionType": action_type,
@@ -203,6 +205,7 @@ pub async fn execute_it_action(
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
+    conn.commit().await?;
     Ok(serde_json::json!({
         "success": true,
         "actionType": action_type,
@@ -410,7 +413,7 @@ pub async fn regenerate_license_key(
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let new_key = format!("LIC-{}", uuid::Uuid::new_v4().to_string().to_uppercase());
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let tenant_id: String =
         sqlx::query_scalar::<_, String>("SELECT tenant_id FROM users WHERE id = ?")
             .bind(&user_id)
@@ -443,6 +446,7 @@ pub async fn regenerate_license_key(
     )?;
     AuditService::append(&mut conn, &audit_lock, &ctx).await?;
 
+    conn.commit().await?;
     Ok(serde_json::json!({
         "user_id": user_id,
         "new_key": new_key,

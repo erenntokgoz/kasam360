@@ -1,7 +1,7 @@
 //! Günlük çoğaltma: otoriteden takipçiye taşıma, onay ve uygulama.
 
 use super::engine::{majority, Effects, Engine, Message, Role};
-use super::op_log;
+use super::op_log::{self, Operation};
 use super::store::{self, LogEntry};
 use crate::services::audit_service::AuditLock;
 
@@ -17,6 +17,27 @@ impl Engine {
             effects.send.push((peer, message));
         }
         Ok(())
+    }
+
+    /// Kalan cihazı tek başına otorite yapar; diğer cihazlar kalıcı olarak kaybolduysa
+    /// işletmeyi durmaktan kurtaran tek çıkıştır.
+    ///
+    /// Çoğunluk şartını bilerek aşar: bu yüzden kararı yalnız işletme sahibi verir.
+    /// Elindeki bütün kayıtlar onaylanır, çünkü bir kısmı kasiyere "tamam" denmiş olabilir.
+    pub async fn take_over(&mut self, operation: &Operation) -> Result<Effects, String> {
+        let row = self.cluster().await?;
+        {
+            let mut conn = self.pool.acquire().await.map_err(|e| e.to_string())?;
+            store::save_vote(&mut conn, row.term + 1, Some(&self.me)).await?;
+        }
+        self.role = Role::Leader;
+        self.leader_id = Some(self.me.clone());
+        self.next_index.clear();
+        self.match_index.clear();
+        self.last_ack.clear();
+        let mut effects = Effects::default();
+        self.append_local(operation, &mut effects).await?;
+        Ok(effects)
     }
 
     /// Düzenli kalp atışı: eksik kayıtları taşır ve otoriteyi duyurur.
@@ -82,7 +103,11 @@ impl Engine {
         self.leader_id = Some(from.to_string());
         self.last_leader_contact = Some(now);
 
-        let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+        let mut tx = self
+            .pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(|e| e.to_string())?;
         let matches_prev = store::term_at(&mut tx, &row, prev_index).await? == Some(prev_term);
         if !matches_prev {
             let (last_index, _) = store::last_position(&mut tx, &row).await?;
@@ -158,7 +183,13 @@ impl Engine {
             let known = self.match_index.entry(from.to_string()).or_insert(0);
             *known = (*known).max(last_index);
             self.next_index.insert(from.to_string(), *known + 1);
+            let before = row.commit_index;
             self.advance_commit(effects).await?;
+            // Onay kalp atışını beklemez: kaynak cihaz sonucu hemen alır, sonraki yazma
+            // eski duruma dayanıp boşuna reddedilmez.
+            if self.cluster().await?.commit_index > before {
+                self.replicate_all(effects).await?;
+            }
         } else {
             let (own_last, _) = self.last_position(&row).await?;
             let current = self.next_index.get(from).copied().unwrap_or(own_last + 1);
@@ -221,11 +252,23 @@ impl Engine {
             let mut conn = self.pool.acquire().await.map_err(|e| e.to_string())?;
             store::proposed_up_to(&mut conn, &self.tenant_id, row.commit_index).await?
         };
+        // Çok cihazda komut denetim kilidini tutarak onay bekler; uygulama aynı kilidi
+        // beklerse ikisi kilitlenirdi. Bu modda defteri yalnız bu döngü kalıcı yazar.
+        let replicated = self.members().await?.len() > 1;
+        let private = tokio::sync::Mutex::new(());
         for operation in pending {
-            let guard = self.audit.lock().await;
+            let guard = if replicated {
+                private.lock().await
+            } else {
+                self.audit.lock().await
+            };
             let lock = AuditLock::new(guard);
-            let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
-            match op_log::apply_proposed(&mut tx, &lock, &operation).await {
+            let mut tx = self
+                .pool
+                .begin_with("BEGIN IMMEDIATE")
+                .await
+                .map_err(|e| e.to_string())?;
+            match op_log::apply_proposed(&mut tx, &lock, &operation, &self.me).await {
                 Ok(outcome) => {
                     tx.commit().await.map_err(|e| e.to_string())?;
                     effects.applied.push(outcome);

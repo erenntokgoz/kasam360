@@ -3,6 +3,7 @@
 use crate::db::DbPool;
 use crate::rbac::Role;
 use crate::services::audit_service::category;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -65,7 +66,7 @@ pub async fn void_order(
     state.lan_sync.require_local_write()?;
     let _payment_lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant_id = tenant_id.trim().to_string();
     if tenant_id.is_empty() {
@@ -285,7 +286,7 @@ pub async fn create_compensation_void(
 ) -> Result<bool, String> {
     state.lan_sync.require_local_write()?;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant_id = tenant_id.trim().to_string();
     if tenant_id.is_empty() {

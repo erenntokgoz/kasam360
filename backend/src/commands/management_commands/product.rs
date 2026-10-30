@@ -6,6 +6,7 @@
 //! baglanir ve menu orada gorunur.
 
 use crate::id_generator::generate_id;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -120,7 +121,7 @@ pub async fn create_product(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let is_86_val = is_86.unwrap_or(false);
@@ -129,10 +130,6 @@ pub async fn create_product(
     let stock_unit = stock_unit.unwrap_or_else(|| "adet".to_string());
     valid_stock_unit(&stock_unit)?;
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
     let result: Result<ProductDto, String> = async {
         let id = generate_id("prd");
         // Kategori kimliği başka işletmeye aitse ürün o işletmenin menüsünde
@@ -192,19 +189,9 @@ pub async fn create_product(
         })
     }.await;
 
-    match result {
-        Ok(v) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(v)
-        }
-        Err(e) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(e)
-        }
-    }
+    let value = result?;
+    conn.commit().await?;
+    Ok(value)
 }
 
 #[tauri::command]
@@ -233,7 +220,7 @@ pub async fn update_product(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "products", &id, &tenant_id).await?;
@@ -241,10 +228,6 @@ pub async fn update_product(
     let tax_rate_val = tax_rate_bp.unwrap_or(1000);
     let sku_val = sku.clone().unwrap_or_default();
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
     let result: Result<ProductDto, String> = async {
         // Ürünün taşınacağı kategori de bu işletmenin menüsünde olmalı; aksi
         // halde ürün başka işletmenin kategorisine bağlanır ve menü orada görünür.
@@ -341,19 +324,9 @@ pub async fn update_product(
         })
     }.await;
 
-    match result {
-        Ok(v) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(v)
-        }
-        Err(e) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(e)
-        }
-    }
+    let value = result?;
+    conn.commit().await?;
+    Ok(value)
 }
 
 #[tauri::command]
@@ -369,7 +342,7 @@ pub async fn update_product_status(
     rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "products", &id, &tenant_id).await?;
@@ -381,10 +354,6 @@ pub async fn update_product_status(
             .await
             .map_err(|e| e.to_string())?;
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
     let result: Result<(), String> = async {
         sqlx::query("UPDATE products SET is_active = ? WHERE id = ? AND tenant_id = ?")
             .bind(is_active)
@@ -413,19 +382,9 @@ pub async fn update_product_status(
     }
     .await;
 
-    match result {
-        Ok(v) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(v)
-        }
-        Err(e) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(e)
-        }
-    }
+    result?;
+    conn.commit().await?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -440,7 +399,7 @@ pub async fn delete_product(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "products", &id, &tenant_id).await?;
@@ -452,10 +411,6 @@ pub async fn delete_product(
             .await
             .map_err(|e| e.to_string())?;
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
     let result: Result<(), String> = async {
         sqlx::query("DELETE FROM products WHERE id = ? AND tenant_id = ?")
             .bind(&id)
@@ -481,17 +436,7 @@ pub async fn delete_product(
     }
     .await;
 
-    match result {
-        Ok(v) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(v)
-        }
-        Err(e) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(e)
-        }
-    }
+    result?;
+    conn.commit().await?;
+    Ok(())
 }

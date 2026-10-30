@@ -1,5 +1,6 @@
 //! İzin servisi — talep, listeleme ve onay.
 
+use crate::services::lan_sync::WritePool;
 use sqlx::{Row, SqlitePool};
 
 use crate::services::staff360::staff_types::{LeaveInput, LeaveRequest};
@@ -60,6 +61,7 @@ pub async fn request_leave(
     tenant_id: &str,
     input: &LeaveInput,
 ) -> Result<String, String> {
+    let mut tx = pool.begin_write().await?;
     if !is_iso_date(&input.start_date) || !is_iso_date(&input.end_date) {
         return Err("izin tarihleri YYYY-MM-DD biciminde olmali".to_string());
     }
@@ -75,7 +77,7 @@ pub async fn request_leave(
     .bind(&input.user_id)
     .bind(&input.end_date)
     .bind(&input.start_date)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     if cakisma > 0 {
@@ -96,9 +98,10 @@ pub async fn request_leave(
     .bind(&input.start_date)
     .bind(&input.end_date)
     .bind(input.reason.as_deref())
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(id)
 }
 
@@ -110,11 +113,12 @@ pub async fn decide_leave(
     leave_id: &str,
     approve: bool,
 ) -> Result<(), String> {
+    let mut tx = pool.begin_write().await?;
     let row =
         sqlx::query("SELECT user_id, status FROM leave_requests WHERE tenant_id = ?1 AND id = ?2")
             .bind(tenant_id)
             .bind(leave_id)
-            .fetch_optional(pool)
+            .fetch_optional(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
     let Some(row) = row else {
@@ -138,8 +142,9 @@ pub async fn decide_leave(
     .bind(if approve { "Onaylandi" } else { "Reddedildi" })
     .bind(approver_id)
     .bind(chrono::Utc::now().to_rfc3339())
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(())
 }

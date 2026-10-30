@@ -1,3 +1,4 @@
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 
 use crate::db::DbPool;
@@ -119,7 +120,9 @@ pub async fn verify_manager_pin(
                     serde_json::json!({ "operation": request.operation }),
                     chrono::Utc::now().to_rfc3339(),
                 )?;
-                AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+                let mut tx = pool.begin_write().await?;
+                AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+                tx.commit().await?;
             }
             return Err(err);
         }
@@ -139,7 +142,9 @@ pub async fn verify_manager_pin(
         }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    let mut tx = pool.begin_write().await?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+    tx.commit().await?;
 
     Ok(ApprovalTokenDto {
         approved: true,
@@ -166,7 +171,7 @@ pub async fn set_staff_approval(
 ) -> Result<(), String> {
     crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner])?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     crate::services::approval_grant::set_grant(&mut tx, &tenant_id, &staff_id, can_approve).await?;
     let ctx = AuditContext::new(
         tenant_id,

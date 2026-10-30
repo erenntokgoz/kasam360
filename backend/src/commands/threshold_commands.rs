@@ -14,6 +14,7 @@
 //! Neden denetim kaydı: eşiği düşüren bir işlem, sonradan "neden onay
 //! istemedi?" sorusunun tek cevabıdır.
 
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::SqliteConnection;
 
@@ -154,7 +155,7 @@ pub async fn set_approval_threshold(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ApprovalThresholdDto, String> {
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     esik_degistir(
         &mut tx,
         &audit_lock,
@@ -179,7 +180,7 @@ pub async fn reset_approval_threshold(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ApprovalThresholdDto, String> {
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     esik_degistir(
         &mut tx,
         &audit_lock,

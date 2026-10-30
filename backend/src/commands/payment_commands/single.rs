@@ -5,6 +5,7 @@
 
 use super::types::{resolve_payment_tenant, PaymentPayloadDto, PaymentResultDto};
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 
 #[tauri::command]
 pub async fn process_payment(
@@ -29,7 +30,7 @@ pub async fn process_payment(
     // beklerse kilitlenme (deadlock) oluşur.
     let _lock = state.payment_mutex.lock().await;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let tenant_id = resolve_payment_tenant(&mut tx, &payload).await?;
 

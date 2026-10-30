@@ -279,7 +279,7 @@ async fn otorite_degilse_iletilen_islem_gerekceyle_reddedilir() {
     sim.collect("b", effects);
     sim.deliver().await;
     assert_eq!(sim.rejected.len(), 1);
-    assert!(sim.rejected[0].1.starts_with("NOT_LEADER"));
+    assert!(sim.rejected[0].1.starts_with("SYNC_RETRY"));
 }
 
 #[tokio::test]

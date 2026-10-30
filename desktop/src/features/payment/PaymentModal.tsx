@@ -26,8 +26,8 @@ const SPLIT_TABS: { mode: PaymentSplitMode; label: string }[] = [
 
 /** İş kuralı reddi kesindir: para alınmamıştır. Diğer hatalarda sonuç bilinmez. */
 // Kodlu her hata işlem geri alındıktan sonra döner: para alınmamıştır. Kodsuz hata
-// (bağlantı, disk) sonucu bilinmez sayılır ve sunucuya sorulur.
-const DEFINITE_REJECTION = /^[A-Z][A-Z_]+:/;
+// (bağlantı, disk) ve `PENDING_RESULT` sonucu bilinmez sayılır ve sunucuya sorulur.
+const DEFINITE_REJECTION = /^(?!PENDING_RESULT)[A-Z][A-Z_]+:/;
 
 function newTransactionId(): string {
   return `txn_${crypto.randomUUID()}`;

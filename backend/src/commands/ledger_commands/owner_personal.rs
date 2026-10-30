@@ -18,6 +18,7 @@ use crate::db::DbPool;
 use crate::id_generator::generate_id;
 use crate::ledger_commands::guard::require_ledger_tenant;
 use crate::services::audit_service::{category::FINANS, AuditContext, AuditService};
+use crate::services::lan_sync::WritePool;
 use crate::services::ledger_statement::format_cents;
 use serde::{Deserialize, Serialize};
 
@@ -95,7 +96,7 @@ pub async fn record_owner_personal(
     let tid = require_ledger_tenant(payload.tenant_id.as_deref())?;
 
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     // Neden tip kapısı şart: bu komut `general_expenses`a dokunmadığı için
     // yanlış tipte bir kart (örneğin müşteri) seçilirse kayıt sessizce

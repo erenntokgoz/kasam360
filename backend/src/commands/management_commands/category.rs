@@ -6,6 +6,7 @@
 //! kaydina isaret edebilir.
 
 use crate::id_generator::generate_id;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -89,15 +90,11 @@ pub async fn create_category(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let resolved_station = default_station.unwrap_or_else(|| "Sıcak".to_string());
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
     let result: Result<CategoryDto, String> = async {
         let id = generate_id("cat");
         sqlx::query(
@@ -136,19 +133,9 @@ pub async fn create_category(
     }
     .await;
 
-    match result {
-        Ok(v) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(v)
-        }
-        Err(e) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(e)
-        }
-    }
+    let value = result?;
+    conn.commit().await?;
+    Ok(value)
 }
 
 #[tauri::command]
@@ -167,15 +154,11 @@ pub async fn update_category(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "categories", &id, &tenant_id).await?;
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
     let result: Result<CategoryDto, String> = async {
         let previous: Option<(String, i32, Option<String>, Option<String>)> = sqlx::query_as(
             "SELECT name, display_order, icon, default_station FROM categories WHERE id = ? AND tenant_id = ?",
@@ -244,19 +227,9 @@ pub async fn update_category(
     }
     .await;
 
-    match result {
-        Ok(v) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(v)
-        }
-        Err(e) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(e)
-        }
-    }
+    let value = result?;
+    conn.commit().await?;
+    Ok(value)
 }
 
 #[tauri::command]
@@ -271,7 +244,7 @@ pub async fn delete_category(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "categories", &id, &tenant_id).await?;
@@ -283,10 +256,6 @@ pub async fn delete_category(
             .await
             .map_err(|e| e.to_string())?;
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
     let result: Result<(), String> = async {
         ensure_empty_category(&mut conn, &id, &tenant_id).await?;
 
@@ -317,17 +286,7 @@ pub async fn delete_category(
     }
     .await;
 
-    match result {
-        Ok(v) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(v)
-        }
-        Err(e) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(e)
-        }
-    }
+    result?;
+    conn.commit().await?;
+    Ok(())
 }
