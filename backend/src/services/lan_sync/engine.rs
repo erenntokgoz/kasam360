@@ -10,6 +10,7 @@
 //! iki cihazdan biri kaybolunca kalan cihaz finansal yazmayı durdurur.
 
 use super::op_log::{self, LogOp, Operation, OperationOutcome, OperationStatus};
+use super::pairing::{self, JoinGrant, JoinRequest};
 use super::store::{self, ClusterRow, LogEntry, Member};
 use crate::services::audit_service::AuditLock;
 use serde::{Deserialize, Serialize};
@@ -300,6 +301,68 @@ impl Engine {
         }
         self.append_local(operation, &mut effects).await?;
         Ok(effects)
+    }
+
+    /// Yeni cihazı kabul eder: kodu tüketir, anlık görüntüyü alır, üyeliği ekler.
+    ///
+    /// Anlık görüntü onay konumunu kapsar; sonrası günlükle taşındığından kayıt
+    /// kaybı olmaz. Üye eklendiği an çoğunluk hesabına girer.
+    pub async fn admit(
+        &mut self,
+        request: &JoinRequest,
+        address: &str,
+        now: u64,
+    ) -> Result<(JoinGrant, Effects), String> {
+        let row = self.cluster().await?;
+        let mut members = self.members().await?;
+        if !members.iter().any(|m| m.device_id == self.me) {
+            return Err("CONFLICT: bu cihaz üyelikte değil".to_string());
+        }
+        if members.iter().any(|m| m.device_id == request.device_id) {
+            return Err("CONFLICT: cihaz zaten üye".to_string());
+        }
+        let grant = {
+            let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+            if store::has_pending_membership(&mut tx, &self.tenant_id).await? {
+                return Err("CONFLICT: önceki üyelik değişikliği onay bekliyor".to_string());
+            }
+            pairing::consume_code(&mut tx, &self.tenant_id).await?;
+            let base_term = store::term_at(&mut tx, &row, row.commit_index)
+                .await?
+                .ok_or_else(|| "INTERNAL: onay konumu bulunamadı".to_string())?;
+            let snapshot = pairing::export_snapshot(&mut tx, &self.tenant_id).await?;
+            tx.commit().await.map_err(|e| e.to_string())?;
+            JoinGrant {
+                tenant_id: self.tenant_id.clone(),
+                cluster_id: row.cluster_id,
+                authority_id: self.me.clone(),
+                term: row.term,
+                base_index: row.commit_index,
+                base_term,
+                base_members: members.clone(),
+                snapshot,
+            }
+        };
+        members.push(Member {
+            device_id: request.device_id.clone(),
+            name: request.name.clone(),
+            public_key: request.public_key.clone(),
+            address: address.to_string(),
+        });
+        let operation = Operation {
+            operation_id: crate::id_generator::generate_id("op"),
+            tenant_id: self.tenant_id.clone(),
+            device_id: self.me.clone(),
+            actor_id: "SYSTEM".to_string(),
+            actor_role: "System".to_string(),
+            intent_sha256: String::new(),
+            op: LogOp::SetMembers(members),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        // Yeni üye hemen görülmüş sayılır; yoksa katılım anında çoğunluk düşerdi.
+        self.last_ack.insert(request.device_id.clone(), now);
+        let effects = self.propose(&operation, now).await?;
+        Ok((grant, effects))
     }
 
     async fn replicate_all(&mut self, effects: &mut Effects) -> Result<(), String> {
@@ -598,13 +661,15 @@ impl Engine {
             self.next_index.insert(from.to_string(), *known + 1);
             self.advance_commit(effects).await?;
         } else {
-            let next = self
-                .next_index
-                .get(from)
-                .copied()
-                .unwrap_or(last_index + 1)
-                .saturating_sub(1)
-                .min(last_index + 1);
+            let (own_last, _) = self.last_position(&row).await?;
+            let current = self.next_index.get(from).copied().unwrap_or(own_last + 1);
+            // Geride kalan cihaz kendi sonundan devam eder; aynı konumda çakışma
+            // varsa bir adım geri gidilir. Anlık görüntünün altına inilmez.
+            let next = if current > last_index + 1 {
+                last_index + 1
+            } else {
+                current - 1
+            };
             self.next_index.insert(from.to_string(), next.max(1));
             let message = self.append_for(from).await?;
             effects.send.push((from.to_string(), message));

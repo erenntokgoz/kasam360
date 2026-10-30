@@ -18,6 +18,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{Row, SqliteConnection};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::TcpStream;
 
 /// Anlık görüntü taşıyabilecek kadar büyük, belleği tüketmeyecek kadar küçük.
 const MAX_FRAME: usize = 32 * 1024 * 1024;
@@ -91,6 +93,60 @@ pub struct SecureChannel<S> {
     recv_key: LessSafeKey,
     send_counter: u64,
     recv_counter: u64,
+}
+
+/// Ayrı görevde okunabilen yarım kanal; okuma iptal edilirse çerçeve bölünmesin diye.
+pub struct SecureReader {
+    stream: OwnedReadHalf,
+    key: LessSafeKey,
+    counter: u64,
+}
+
+pub struct SecureWriter {
+    stream: OwnedWriteHalf,
+    key: LessSafeKey,
+    counter: u64,
+}
+
+impl SecureChannel<TcpStream> {
+    pub fn split(self) -> (SecureReader, SecureWriter) {
+        let (read, write) = self.stream.into_split();
+        (
+            SecureReader {
+                stream: read,
+                key: self.recv_key,
+                counter: self.recv_counter,
+            },
+            SecureWriter {
+                stream: write,
+                key: self.send_key,
+                counter: self.send_counter,
+            },
+        )
+    }
+}
+
+impl SecureWriter {
+    pub async fn send<T: Serialize>(&mut self, value: &T) -> Result<(), String> {
+        let mut body = serde_json::to_vec(value).map_err(|e| e.to_string())?;
+        self.key
+            .seal_in_place_append_tag(nonce(self.counter), Aad::empty(), &mut body)
+            .map_err(|_| "Şifreleme başarısız".to_string())?;
+        self.counter += 1;
+        write_frame(&mut self.stream, &body).await
+    }
+}
+
+impl SecureReader {
+    pub async fn recv<T: DeserializeOwned>(&mut self) -> Result<T, String> {
+        let mut body = read_frame(&mut self.stream).await?;
+        let plain = self
+            .key
+            .open_in_place(nonce(self.counter), Aad::empty(), &mut body)
+            .map_err(|_| "UNAUTHORIZED: çerçeve doğrulanamadı".to_string())?;
+        self.counter += 1;
+        serde_json::from_slice(plain).map_err(|e| e.to_string())
+    }
 }
 
 fn nonce(counter: u64) -> Nonce {

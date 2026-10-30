@@ -8,7 +8,7 @@ use crate::services::device_identity::ensure_local_device;
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sqlx::{Row, SqliteConnection};
+use sqlx::SqliteConnection;
 
 const CODE_LIFETIME_MINUTES: i64 = 10;
 
@@ -79,6 +79,7 @@ pub struct JoinRequest {
 pub struct JoinGrant {
     pub tenant_id: String,
     pub cluster_id: String,
+    pub authority_id: String,
     pub term: i64,
     pub base_index: i64,
     pub base_term: i64,
@@ -190,6 +191,7 @@ pub async fn consume_code(conn: &mut SqliteConnection, tenant_id: &str) -> Resul
 pub async fn init_cluster(
     conn: &mut SqliteConnection,
     tenant_id: &str,
+    device_name: &str,
     public_key: &str,
     listen_port: u16,
 ) -> Result<ClusterRow, String> {
@@ -214,7 +216,7 @@ pub async fn init_cluster(
         base_term: 0,
         base_members: vec![Member {
             device_id,
-            name: "Bu cihaz".to_string(),
+            name: device_name.to_string(),
             public_key: public_key.to_string(),
             address: String::new(),
         }],
@@ -372,16 +374,6 @@ pub async fn accept_grant(
     .await
 }
 
-/// Kuruluma kayıtlı anahtarı okur.
-pub async fn local_public_key(conn: &mut SqliteConnection) -> Result<Option<String>, String> {
-    let row = sqlx::query("SELECT public_key FROM sync_device_key WHERE slot = 1")
-        .fetch_optional(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-    row.map(|r| r.try_get("public_key").map_err(|e| e.to_string()))
-        .transpose()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,6 +435,7 @@ mod tests {
         JoinGrant {
             tenant_id: tenant.to_string(),
             cluster_id: "cls_1".to_string(),
+            authority_id: "dev_a".to_string(),
             term: 3,
             base_index: 7,
             base_term: 2,
