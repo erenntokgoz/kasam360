@@ -1,8 +1,6 @@
 import { create } from 'zustand';
 import type {
   DirectoryContact,
-  LedgerDebt,
-  LedgerExpense,
   FinancialProfitSummary,
   PatronActionType,
   StaffProfile,
@@ -13,8 +11,6 @@ import { errorText, localDate, newOperationId } from '../lib/cariInput';
 
 interface LedgerStore {
   directories: DirectoryContact[];
-  debts: LedgerDebt[];
-  expenses: LedgerExpense[];
   summary: FinancialProfitSummary | null;
   staffProfiles: StaffProfile[];
   activeErpTab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK';
@@ -35,8 +31,6 @@ interface LedgerStore {
 
 export const useLedgerStore = create<LedgerStore>((set, get) => ({
   directories: [],
-  debts: [],
-  expenses: [],
   summary: null,
   staffProfiles: [
     {
@@ -81,15 +75,13 @@ export const useLedgerStore = create<LedgerStore>((set, get) => ({
     try {
       set({ isLoading: true });
       const { actorRole, tenantId } = sessionArgs();
-      const [dirs, debtsList, finSummary] = await Promise.all([
+      const [dirs, finSummary] = await Promise.all([
         invokeIPC<DirectoryContact[]>('get_directories', { actorRole, tenantId }),
-        invokeIPC<LedgerDebt[]>('get_debts', { actorRole, tenantId }),
         invokeIPC<FinancialProfitSummary>('get_financial_report', { actorRole, tenantId }),
       ]);
 
       set({
         directories: dirs || [],
-        debts: debtsList || [],
         summary: finSummary || null,
         ledgerError: null,
       });

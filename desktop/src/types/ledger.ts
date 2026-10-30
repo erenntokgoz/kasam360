@@ -82,15 +82,6 @@ export interface OperationOutcome {
   error?: string | null;
 }
 
-export interface LedgerExpense {
-  id: string;
-  category: string;
-  amountCents: number;
-  paymentMethod: 'CASH' | 'CARD';
-  description: string;
-  createdAt: string;
-}
-
 export interface StaffProfile {
   id: string;
   userId: string;
