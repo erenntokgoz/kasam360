@@ -269,7 +269,7 @@ export const usePosStore = create<PosStore>((set, get) => ({
         : undefined;
       if (same) {
         const quantity = same.quantity + 1;
-        const totalCents = lineTotalCents(same.unitPriceCents, quantity, taxRateBp);
+        const totalCents = lineTotalCents(same.unitPriceCents, quantity);
         return withDraft(state, draft.map((i) => (i === same ? { ...i, quantity, totalCents } : i)));
       }
       const item: OrderItem = {
@@ -285,7 +285,7 @@ export const usePosStore = create<PosStore>((set, get) => ({
         cookingDegree,
         notes,
         selectedModifiers,
-        totalCents: lineTotalCents(unitPrice, 1, taxRateBp),
+        totalCents: lineTotalCents(unitPrice, 1),
         isSentToKitchen: false,
       };
       return withDraft(state, [...draft, item]);
@@ -299,7 +299,7 @@ export const usePosStore = create<PosStore>((set, get) => ({
         .map((item) => {
           if (item.id !== itemId) return item;
           const quantity = Math.max(0, item.quantity + delta);
-          const totalCents = lineTotalCents(item.unitPriceCents, quantity, item.taxRateBp ?? 0);
+          const totalCents = lineTotalCents(item.unitPriceCents, quantity);
           return { ...item, quantity, totalCents };
         })
         .filter((item) => item.quantity > 0);

@@ -27,7 +27,6 @@ export const OrderTicket: React.FC = () => {
     sendToKitchen,
     orderError,
     isSending,
-    calculateTaxCents,
     calculateTotalCents,
   } = usePosStore();
 
@@ -39,7 +38,6 @@ export const OrderTicket: React.FC = () => {
   const [authModalMode, setAuthModalMode] = useState<'VOID' | 'COMP'>('VOID');
   const [transferModalItem, setTransferModalItem] = useState<OrderItem | null>(null);
 
-  const tax = calculateTaxCents();
   const total = calculateTotalCents();
   const unsentCount = ticketItems.filter((i) => !i.isSentToKitchen).length;
 
@@ -144,10 +142,6 @@ export const OrderTicket: React.FC = () => {
       {/* Alt Toplam ve Ödeme Alanı */}
       <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-subtle)] space-y-3 shrink-0">
         <div className="space-y-1 text-xs">
-          <div className="flex justify-between text-[var(--text-secondary)]">
-            <span>KDV</span>
-            <span className="tabular-nums font-semibold">{formatMoney(tax)}</span>
-          </div>
           <div className="flex justify-between items-baseline pt-1">
             <span className="text-xs font-semibold text-[var(--text-primary)]">Toplam Tutar</span>
             <span className="text-2xl font-bold text-[var(--accent-amber)] tabular-nums">

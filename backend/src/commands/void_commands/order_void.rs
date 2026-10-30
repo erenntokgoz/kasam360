@@ -140,6 +140,28 @@ pub async fn void_order(
     .await
     .map_err(|e| e.to_string())?;
 
+    // Kalem durumu değişmeden önce: iptal edilmiş kalemin stoğu zaten çözülmüştür.
+    let live_items: Vec<String> = sqlx::query_scalar(
+        "SELECT id FROM order_items WHERE order_id = ? AND tenant_id = ? AND status != 'CANCELLED'",
+    )
+    .bind(&payload.order_id)
+    .bind(&tenant_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let release_at = chrono::Utc::now().to_rfc3339();
+    for item_id in &live_items {
+        crate::services::order_stock::release_line(
+            &mut tx,
+            &tenant_id,
+            item_id,
+            &payload.reason,
+            &payload.actor_id,
+            &release_at,
+        )
+        .await?;
+    }
+
     // Siparişin tüm kalemlerini CANCELLED olarak işaretle
     sqlx::query(
         "UPDATE order_items \

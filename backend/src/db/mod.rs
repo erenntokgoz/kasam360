@@ -205,6 +205,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     let schema = include_str!("../../migrations/schema.sql");
     sqlx::raw_sql(schema).execute(&pool).await?;
     crate::services::approval_grant::ensure_column(&pool).await?;
+    crate::services::order_stock::ensure_column(&pool).await?;
     // Karar yükseltme adımlarından önce verilir: temiz kurulumda işletme ve
     // kullanıcı açılmaz, mevcut veritabanı sihirbaza düşmez.
     crate::services::setup::classify_install(&pool).await?;

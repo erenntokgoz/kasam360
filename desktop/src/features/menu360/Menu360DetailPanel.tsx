@@ -227,7 +227,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
                 {selectedProduct ? formatMoney(selectedProduct.priceCents) : '—'}
               </div>
               <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
-                KDV dahil tabak satış fiyatı
+                Tabak satış fiyatı
               </span>
             </div>
 

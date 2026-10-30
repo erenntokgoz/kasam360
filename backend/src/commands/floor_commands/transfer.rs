@@ -139,10 +139,20 @@ pub async fn transfer_order_item(
             .map_err(|e| e.to_string())?;
     } else {
         // Kalemi böl
+        // Tutar kalemin dondurulmuş toplamından paylaşılır: birim fiyattan yeniden
+        // hesaplamak eski adisyonun fiyatını değiştirirdi.
+        let line_total: i64 = sqlx::query_scalar(
+            "SELECT total_cents FROM order_items WHERE id = ? AND tenant_id = ?",
+        )
+        .bind(&item_id)
+        .bind(&tenant_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
         let rem_qty = current_qty - quantity;
-        let rem_subtotal = rem_qty * unit_price_cents;
-        let rem_tax = (rem_subtotal * tax_rate_bp) / 10_000;
-        let rem_total = rem_subtotal + rem_tax;
+        let rem_total = line_total * rem_qty / current_qty;
+        let (rem_subtotal, rem_tax) =
+            crate::domain::money::split_inclusive_tax(rem_total, tax_rate_bp);
 
         sqlx::query(
             "UPDATE order_items \
@@ -159,16 +169,17 @@ pub async fn transfer_order_item(
         .await
         .map_err(|e| e.to_string())?;
 
-        let trans_subtotal = quantity * unit_price_cents;
-        let trans_tax = (trans_subtotal * tax_rate_bp) / 10_000;
-        let trans_total = trans_subtotal + trans_tax;
+        let trans_total = line_total - rem_total;
+        let (trans_subtotal, trans_tax) =
+            crate::domain::money::split_inclusive_tax(trans_total, tax_rate_bp);
         let new_item_id = crate::id_generator::generate_id("itm");
 
         sqlx::query(
             "INSERT INTO order_items (id, tenant_id, order_id, product_id, quantity, paid_quantity, \
                 is_comp, course_number, unit_price_cents, tax_rate_bp, subtotal_cents, tax_amount_cents, \
-                total_cents, modifiers, notes, station, status, waiter_id) \
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                total_cents, modifiers, notes, station, status, waiter_id, stock_source_id) \
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
+                (SELECT stock_source_id FROM order_items WHERE id = ? AND tenant_id = ?))",
         )
         .bind(&new_item_id)
         .bind(&tenant_id)
@@ -187,6 +198,8 @@ pub async fn transfer_order_item(
         .bind(&station)
         .bind(&status)
         .bind(&waiter_id)
+        .bind(&item_id)
+        .bind(&tenant_id)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

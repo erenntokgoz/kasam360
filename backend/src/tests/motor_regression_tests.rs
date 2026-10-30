@@ -87,7 +87,7 @@ async fn pos_86_kilidi_ve_ek_siparis_append_testi() {
     );
     assert!(err_res.unwrap_err().contains("PRODUCT_86D"));
 
-    // 2. Açık siparişi olmayan masaya ilk sipariş (Mercimek Çorbası, 3000 + 300 KDV = 3300)
+    // 2. Açık siparişi olmayan masaya ilk sipariş (Mercimek Çorbası, KDV dahil 3000)
     let payload_1 = SubmitOrderPayloadDto {
         order_id: "".into(),
         table_id: "tbl_10".into(),
@@ -113,9 +113,9 @@ async fn pos_86_kilidi_ve_ek_siparis_append_testi() {
     .await
     .expect("masa sorgusu");
     assert_eq!(table_1.0, "OCCUPIED");
-    assert_eq!(table_1.1, 3300);
+    assert_eq!(table_1.1, 3000);
 
-    // 3. Masada açık sipariş varken ikinci kez sipariş gönderme (Pilav 2 adet, 2 * 4400 = 8800)
+    // 3. Masada açık sipariş varken ikinci kez sipariş gönderme (Pilav 2 adet, 2 * 4000 = 8000)
     // Yeni kalemler mevcut açık siparişe eklenmeli (append)
     let payload_2 = SubmitOrderPayloadDto {
         order_id: "".into(),
@@ -144,7 +144,7 @@ async fn pos_86_kilidi_ve_ek_siparis_append_testi() {
     .expect("sipariş sayısı");
     assert_eq!(order_count, 1, "Mevcut siparişe append yapılmalı");
 
-    // Masa yürüyen toplamı güncellenmeli: 3300 + 8800 = 12100 kuruş
+    // Masa yürüyen toplamı güncellenmeli: 3000 + 8000 = 11000 kuruş
     let table_2_total: i64 = sqlx::query_scalar(
         "SELECT current_total FROM tables WHERE id = 'tbl_10' AND tenant_id = ?",
     )
@@ -152,7 +152,7 @@ async fn pos_86_kilidi_ve_ek_siparis_append_testi() {
     .fetch_one(&mut *conn)
     .await
     .expect("masa toplamı");
-    assert_eq!(table_2_total, 12100);
+    assert_eq!(table_2_total, 11000);
 
     // 4. execute_get_order_items çağrıldığında tüm kalemlerin eksiksiz dönmesi
     let items = execute_get_order_items(&mut conn, "tbl_10", tenant)
@@ -449,7 +449,7 @@ async fn kds_aktif_biletler_iptal_edilen_kalemi_gostermez() {
     assert_eq!(tickets[0].items.len(), 2, "Bilette 2 kalem görünmeli");
 
     // 4. Kola kalemi için iptal onayı al ve void_order_item çağır
-    // Kola: 3000 kuruş + %10 KDV = 3300 kuruş
+    // Kola: KDV dahil 3000 kuruş
     let kola_item = tickets[0]
         .items
         .iter()
@@ -460,7 +460,7 @@ async fn kds_aktif_biletler_iptal_edilen_kalemi_gostermez() {
     let app_req = crate::commands::void_commands::order_void::void_approval_request(
         tenant,
         kola_id,
-        3300,
+        3000,
         "usr_garson",
         "WAITER",
     );
@@ -479,7 +479,7 @@ async fn kds_aktif_biletler_iptal_edilen_kalemi_gostermez() {
         approval_token: Some(verified.token),
     };
     let void_res = execute_void_order_item(&mut conn, &audit_lock, tenant, &void_payload).await;
-    assert!(void_res.is_ok(), "Kola kalemi başarıyla iptal edilmeli");
+    void_res.expect("Kola kalemi başarıyla iptal edilmeli");
 
     // 5. get_active_tickets sorgulandığında iptal edilen kolanın KDS'ten düşmesi
     let tickets_after = execute_get_active_tickets(&mut conn, tenant)

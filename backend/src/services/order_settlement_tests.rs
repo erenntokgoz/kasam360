@@ -192,7 +192,7 @@ async fn tam_tahsilat_adisyonu_kapatir_masayi_bosaltir_stogu_bir_kez_duser() {
 }
 
 #[tokio::test]
-async fn parcali_tutar_kalan_bakiyeyi_izler_stok_yalniz_son_odemede_tam_duser() {
+async fn parcali_tutar_kalan_bakiyeyi_izler_stok_eski_kalemde_bir_kez_duser() {
     let p = pool().await;
     let first = pay(&p, &payment("txn_1", "CARD", 1300, &[]))
         .await
@@ -208,7 +208,7 @@ async fn parcali_tutar_kalan_bakiyeyi_izler_stok_yalniz_son_odemede_tam_duser() 
     assert_eq!(stock(&p, "bat_1").await, 47.0, "bütün kalemler düşer");
     assert_eq!(stock(&p, "bat_2").await, 49.0);
     let events = "SELECT COUNT(*) FROM events WHERE event_type = 'FIFO_STOCK_DEDUCTED'";
-    assert_eq!(scalar(&p, events).await, 1, "stok tek kez düşer");
+    assert_eq!(scalar(&p, events).await, 2, "her kalem tek kez düşer");
 }
 
 #[tokio::test]

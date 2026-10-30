@@ -615,6 +615,8 @@ CREATE TABLE IF NOT EXISTS order_items (
     -- `orders.cashier_id` masanın sahibidir; aynı masada kalemleri farklı
     -- garsonlar girebilir, bu yüzden kırılım kalem bazlıdır.
     waiter_id TEXT,
+    -- Stok düşüm kaydının kimliği; boşsa bu kalemden stok düşülmedi.
+    stock_source_id TEXT,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id)
 );

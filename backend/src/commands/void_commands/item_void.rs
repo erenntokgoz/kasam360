@@ -84,6 +84,17 @@ pub async fn execute_void_order_item(
     let approver =
         require_void_approval(conn, &approval_request, payload.approval_token.as_deref()).await?;
 
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    let waste_cost_cents = crate::services::order_stock::release_line(
+        conn,
+        tenant_id,
+        &payload.item_id,
+        &payload.reason,
+        &payload.actor_id,
+        &now_iso,
+    )
+    .await?;
+
     sqlx::query(
         "UPDATE order_items \
          SET status = 'CANCELLED', \
@@ -127,7 +138,27 @@ pub async fn execute_void_order_item(
     .await
     .map_err(|e| e.to_string())?;
 
-    let now_iso = chrono::Utc::now().to_rfc3339();
+    if let Some(total_cost_cents) = waste_cost_cents {
+        let waste_ctx = crate::services::audit_service::AuditContext::new(
+            tenant_id.to_string(),
+            payload.actor_id.clone(),
+            actor_role.as_str().to_string(),
+            category::FINANS,
+            "stok:waste_recorded",
+            payload.item_id.clone(),
+            serde_json::json!({
+                "itemId": payload.item_id,
+                "orderId": order_id,
+                "reason": payload.reason,
+                "totalCostCents": total_cost_cents,
+                "approverId": approver.approver_id,
+                "approverRole": approver.approver_role.as_str(),
+            }),
+            now_iso.clone(),
+        )?;
+        crate::services::audit_service::AuditService::append(conn, audit_lock, &waste_ctx).await?;
+    }
+
     let audit_ctx = crate::services::audit_service::AuditContext::new(
         tenant_id.to_string(),
         payload.actor_id.clone(),

@@ -53,7 +53,7 @@ describe('adisyon', () => {
     usePosStore.getState().addItemToTicket(product);
     usePosStore.getState().addItemToTicket(product);
     expect(usePosStore.getState().ticketItems).toHaveLength(1);
-    expect(usePosStore.getState().calculateTotalCents()).toBe(22000);
+    expect(usePosStore.getState().calculateTotalCents()).toBe(20000);
 
     await usePosStore.getState().openOrderForTable('tbl_2', 'Masa 2');
     expect(usePosStore.getState().ticketItems).toHaveLength(0);

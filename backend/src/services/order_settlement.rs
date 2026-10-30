@@ -9,7 +9,6 @@
 use crate::commands::{CartItemDto, PaymentPayloadDto};
 use crate::repositories::payment_repository::{PaymentRepository, ServerTruth};
 use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
-use crate::services::inventory_service::InventoryService;
 use crate::services::ledger_service::{record_veresiye_settlement, VeresiyeSettlement};
 use crate::services::payment_service::PaymentService;
 use sqlx::{Row, SqliteConnection};
@@ -32,7 +31,6 @@ pub struct OrderBalance {
 
 struct OrderLine {
     id: String,
-    product_id: String,
     quantity: i64,
     paid_quantity: i64,
     total_cents: i64,
@@ -98,7 +96,7 @@ async fn order_lines(
     order_id: &str,
 ) -> Result<Vec<OrderLine>, String> {
     let rows = sqlx::query(
-        "SELECT id, product_id, quantity, COALESCE(paid_quantity, 0) AS paid_quantity, total_cents
+        "SELECT id, quantity, COALESCE(paid_quantity, 0) AS paid_quantity, total_cents
          FROM order_items
          WHERE order_id = ? AND tenant_id = ? AND status != 'CANCELLED'",
     )
@@ -111,7 +109,6 @@ async fn order_lines(
         .map(|row| {
             Ok(OrderLine {
                 id: row.try_get("id").map_err(text_error)?,
-                product_id: row.try_get("product_id").map_err(text_error)?,
                 quantity: row.try_get("quantity").map_err(text_error)?,
                 paid_quantity: row.try_get("paid_quantity").map_err(text_error)?,
                 total_cents: row.try_get("total_cents").map_err(text_error)?,
@@ -182,18 +179,15 @@ fn channel_amounts(method: &str, amount: i64) -> Result<[i64; 4], String> {
     }
 }
 
-/// Adisyon kapanışı: masa boşalır, satırlar ödenir, stok tek kez düşer.
+/// Adisyon kapanışı: masa boşalır, satırlar ödenir, maliyet deftere geçer.
 ///
-/// Stok, ödeme yükünden değil adisyon satırlarından düşülür; parçalı ödemede son
-/// ödeme yalnız kalanı taşır. Kapanış kapalı adisyonda tekrar edemediği için
-/// düşüm de tekrarlanamaz (AGENTS.md §7.2).
+/// Stok mutfağa gönderimde düşmüştür; burada yalnız kalemlerin kayıtlı maliyeti
+/// toplanır, böylece parçalı ödeme stoğu ikinci kez düşüremez (AGENTS.md §7.2).
 async fn close_order(
     conn: &mut SqliteConnection,
     tenant_id: &str,
     order_id: &str,
     table_id: &str,
-    transaction_id: &str,
-    lines: &[OrderLine],
     now_iso: &str,
 ) -> Result<crate::services::inventory_service::FifoResult, String> {
     sqlx::query(
@@ -229,17 +223,7 @@ async fn close_order(
     .await
     .map_err(text_error)?;
 
-    let stock_items: Vec<CartItemDto> = lines
-        .iter()
-        .map(|line| CartItemDto {
-            id: line.id.clone(),
-            product: serde_json::json!({ "id": line.product_id }),
-            quantity: line.quantity,
-            ..CartItemDto::default()
-        })
-        .collect();
-    InventoryService::execute_fifo_deduction(conn, tenant_id, transaction_id, &stock_items, now_iso)
-        .await
+    crate::services::order_stock::settle_order_lines(conn, tenant_id, order_id, now_iso).await
 }
 
 pub async fn settle_order_payment(
@@ -334,18 +318,7 @@ pub async fn settle_order_payment(
     let remaining_cents = balance.remaining_cents - amount - discount;
     let order_closed = remaining_cents == 0;
     let fifo = if order_closed {
-        Some(
-            close_order(
-                tx,
-                tenant_id,
-                order_id,
-                &table_id,
-                &payload.transaction_id,
-                &lines,
-                &now_iso,
-            )
-            .await?,
-        )
+        Some(close_order(tx, tenant_id, order_id, &table_id, &now_iso).await?)
     } else {
         sqlx::query("UPDATE tables SET current_total = ? WHERE id = ? AND tenant_id = ?")
             .bind(remaining_cents)

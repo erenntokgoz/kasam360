@@ -36,6 +36,12 @@ Mal kabulü gerçek teslim miktarını stoğa ekler. Tedarikçi belgesi daha son
 - Geri dönen cihazda hesap oturumu kapanır, küme kayıtları silinir ve dönüş kritik işlem listesine yazılır. Çok cihazlı modda geri dönüş kapalıdır: geride kalan üye diğer cihazların günlüğünü geri saramaz.
 - Yeni cihaz kurulum ekranındaki `Yedekten Geri Dön` ile harici diskteki `.db` dosyasından (yanında `.sha256` ile) açılır. İşaretli yedek açılışta doğrulanamazsa uygulama mevcut veriyle açılır ve hatayı gösterir.
 
+## Fiyat, KDV ve stok
+
+- Menü fiyatı KDV dahildir; müşteri yazan fiyatı öder. KDV satış ekranlarında görünmez, yalnız fişte ve Z raporunda ayrılır. Ürün formundaki KDV oranı bu ayrım için tutulur.
+- Stok kalem mutfağa gönderilince düşer. Hazırlık başlamadan iptal edilirse aynı partilere geri döner; hazırlık başladıysa veya gerekçe `Mutfak Zayi` ise dönmez, maliyetiyle fire yazılır. İkram edilen kalem stoktan düşmüş kalır. Tahsilat stoğa dokunmaz.
+- Yükseltmeden önce mutfağa gitmiş açık kalemin stoğu adisyon kapanırken bir kez düşer.
+
 ## İlk kurulum, giriş ve kilit
 
 - Kurulum durumu `app_setup` satırındadır ve cihaza özeldir. Kullanıcısı olan mevcut veritabanı ilk yükseltmede tamamlanmış sayılır; sihirbaza düşmez.

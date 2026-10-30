@@ -12,8 +12,8 @@ const wire = {
 
 describe('adisyon hesapları', () => {
   it('satır toplamı KDV tabanını aşağı yuvarlar', () => {
-    expect(lineTotalCents(15000, 2, 1000)).toBe(33000);
-    expect(lineTotalCents(91, 3, 1000)).toBe(300);
+    expect(lineTotalCents(15000, 2)).toBe(30000);
+    expect(lineTotalCents(91, 3)).toBe(273);
   });
 
   it('adetler tek tek ödense de kuruş kaybolmaz', () => {

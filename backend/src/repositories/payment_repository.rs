@@ -140,9 +140,11 @@ impl PaymentRepository {
                 }
             }
 
-            let subtotal_cents = (gross_cents - discount_amount_cents).max(0);
-            // KDV: basis-point (binde) cinsinden. %10 = 1000 bp, payda 10_000.
-            let tax_amount_cents = (subtotal_cents * db_tax_rate_bp) / 10_000;
+            // Menü fiyatı KDV dahildir; KDV indirimli tutarın içinden ayrılır.
+            let (subtotal_cents, tax_amount_cents) = crate::domain::money::split_inclusive_tax(
+                (gross_cents - discount_amount_cents).max(0),
+                db_tax_rate_bp,
+            );
 
             subtotal_all_cents += subtotal_cents;
             tax_all_cents += tax_amount_cents;
@@ -334,12 +336,12 @@ mod tests {
             .await
             .expect("hesaplanır");
 
-        // 2 x 10000 = 20000 brüt, %10 = 2000 indirim, ara toplam 18000, KDV %20 = 3600.
+        // 2 x 10000 = 20000 brüt, %10 = 2000 indirim, KDV dahil 18000: matrah 15000, KDV %20 = 3000.
         assert_eq!(truth.gross_cents, 20000);
         assert_eq!(truth.discount_cents, 2000);
-        assert_eq!(truth.subtotal_cents, 18000);
-        assert_eq!(truth.tax_cents, 3600);
-        assert_eq!(truth.total_cents, 21600);
+        assert_eq!(truth.subtotal_cents, 15000);
+        assert_eq!(truth.tax_cents, 3000);
+        assert_eq!(truth.total_cents, 18000);
     }
 
     /// Sepet geneli indirim kalem indirimine eklenir; toplam alanı tek yerde
@@ -363,9 +365,9 @@ mod tests {
         .await
         .expect("hesaplanır");
 
-        // 10000 brüt - 2000 kalem = 8000, +%20 KDV = 9600, -%10 sepet geneli = 8640.
-        assert_eq!(truth.discount_cents, 2000 + 960);
-        assert_eq!(truth.total_cents, 8640);
+        // 10000 brüt - 2000 kalem = 8000 (KDV dahil), -%10 sepet geneli = 7200.
+        assert_eq!(truth.discount_cents, 2000 + 800);
+        assert_eq!(truth.total_cents, 7200);
 
         // Eski tek alanlı yardımcı da aynı sonucu vermeli (ikinci gerçek yok).
         let total = PaymentRepository::calculate_server_truth_total(
@@ -390,6 +392,6 @@ mod tests {
             .await
             .expect("hesaplanır");
         assert_eq!(truth.discount_cents, 0);
-        assert_eq!(truth.total_cents, 12000);
+        assert_eq!(truth.total_cents, 10000);
     }
 }

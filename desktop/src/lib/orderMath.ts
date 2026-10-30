@@ -19,10 +19,9 @@ export interface CartItemWire {
   status?: string | null;
 }
 
-/** Satır toplamı: KDV tabanı üzerinden aşağı yuvarlanır (`execute_submit_order`). */
-export function lineTotalCents(unitPriceCents: number, quantity: number, taxRateBp: number): number {
-  const subtotal = unitPriceCents * quantity;
-  return subtotal + Math.floor((subtotal * taxRateBp) / 10_000);
+/** Fiyat KDV dahildir: müşteri yazan fiyatı öder, KDV yalnız fişte ayrılır. */
+export function lineTotalCents(unitPriceCents: number, quantity: number): number {
+  return unitPriceCents * quantity;
 }
 
 /** Adetin payı kümülatif türetilir; üç adetlik satır tek tek ödenince kuruş kaybolmaz. */

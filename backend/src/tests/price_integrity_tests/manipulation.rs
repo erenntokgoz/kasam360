@@ -29,7 +29,7 @@ async fn istemci_sifir_fiyat_gondererek_ekstre_ucretinden_kacamaz() {
     // 34000 brüt + %20 KDV = 40800
     assert_eq!(truth.gross_cents, 34000, "ürün 300 TL + ekstra 40 TL");
     assert_eq!(
-        truth.total_cents, 40800,
+        truth.total_cents, 34000,
         "istemcinin 0 fiyatı geçerli olmamalı"
     );
 }
@@ -131,7 +131,7 @@ async fn donmus_fiyat_modifieri_iki_kez_eklemez() {
         truth.gross_cents, 34000,
         "çift sayım: 34000 + 4000 = 38000 olmamalı"
     );
-    assert_eq!(truth.total_cents, 40800);
+    assert_eq!(truth.total_cents, 34000);
 }
 
 #[tokio::test]

@@ -82,7 +82,7 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
 
       <div>
         <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
-          Satış Fiyatı (KDV Dahil)
+          Satış Fiyatı
         </label>
         <div className="relative">
           <input

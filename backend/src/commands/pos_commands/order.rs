@@ -217,9 +217,10 @@ pub async fn execute_submit_order(
             None,
         )
         .await?;
-        let item_subtotal = item_unit_price * qty;
-        let item_tax = (item_subtotal * db_tax_rate_bp) / 10_000;
-        let item_total = item_subtotal + item_tax;
+        // Menü fiyatı KDV dahildir: müşteri yazan fiyatı öder, KDV içinden ayrılır.
+        let item_total = item_unit_price * qty;
+        let (item_subtotal, item_tax) =
+            crate::domain::money::split_inclusive_tax(item_total, db_tax_rate_bp);
         total_cents += item_total;
 
         let modifiers_json =
@@ -291,8 +292,8 @@ pub async fn execute_submit_order(
     // 3. Insert items
     for item in prepared_items {
         sqlx::query(
-            "INSERT INTO order_items (id, order_id, product_id, quantity, paid_quantity, is_comp, course_number, unit_price_cents, tax_rate_bp, subtotal_cents, tax_amount_cents, total_cents, modifiers, notes, station, status, waiter_id, tenant_id)
-             VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?)"
+            "INSERT INTO order_items (id, order_id, product_id, quantity, paid_quantity, is_comp, course_number, unit_price_cents, tax_rate_bp, subtotal_cents, tax_amount_cents, total_cents, modifiers, notes, station, status, waiter_id, tenant_id, stock_source_id)
+             VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)"
         )
         .bind(&item.id)
         .bind(&effective_order_id)
@@ -309,9 +310,20 @@ pub async fn execute_submit_order(
         .bind(&item.station)
         .bind(waiter_id)
         .bind(tenant_id)
+        .bind(&item.id)
         .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
+        // Stok mutfağa gidince düşer; adisyon açıkken ürünün bittiği görünür.
+        crate::services::order_stock::deduct_line(
+            &mut *conn,
+            tenant_id,
+            &item.id,
+            &item.product_id,
+            item.quantity,
+            &chrono::Utc::now().to_rfc3339(),
+        )
+        .await?;
     }
 
     // 4. Update table status and total
