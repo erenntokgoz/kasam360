@@ -43,6 +43,20 @@ fn unreadable(area: &str, reason: &str, target: &'static str) -> Alert {
     )
 }
 
+fn category_label(category: &str) -> &str {
+    match category {
+        "RENT" => "Kira",
+        "UTILITIES" => "Fatura",
+        "SUPPLIER" => "Tedarikçi",
+        "STAFF_ADVANCE" => "Personel avansı",
+        "TAX" => "Vergi",
+        "PERSONAL" => "Şahsi",
+        "MAINTENANCE" => "Bakım",
+        "OTHER" => "Diğer",
+        other => other,
+    }
+}
+
 fn money(cents: i64) -> String {
     format!("{},{:02} ₺", cents / 100, (cents % 100).abs())
 }
@@ -289,18 +303,18 @@ pub async fn collect(
                 .map(|row| {
                     alert(
                         "WARNING",
-                        format!("{} bütçesi aşıldı", row.category),
+                        format!("{} bütçesi aşıldı", category_label(&row.category)),
                         format!(
                             "{} harcandı, sınır {}.",
                             money(row.spent_cents),
                             money(row.monthly_limit_cents)
                         ),
-                        "PROFIT",
+                        "EXPENSES",
                     )
                 })
                 .collect()
         });
-    add(budgets, "Bütçe", "PROFIT");
+    add(budgets, "Bütçe", "EXPENSES");
     match last_backup {
         Ok(at) => alerts.extend(backup_alert(at.as_deref())),
         Err(reason) => alerts.push(unreadable("Yedek durumu", &reason, "SETTINGS")),

@@ -10,6 +10,7 @@ import {
   Users,
   TrendingUp,
   ArrowLeft,
+  Receipt,
   FileBarChart,
   Gauge,
   Package,
@@ -29,6 +30,7 @@ import { SessionSettingsTab } from './SessionSettingsTab';
 import { CriticalLogTab } from './CriticalLogTab';
 import { PanoramaTab } from './panorama/PanoramaTab';
 import { ReportsTab } from './reports/ReportsTab';
+import { ExpensesTab } from './expenses/ExpensesTab';
 
 export const ErpModule: React.FC = () => {
   const { activeErpTab, setActiveErpTab, loadLedgerData } = useLedgerStore();
@@ -49,6 +51,7 @@ export const ErpModule: React.FC = () => {
   }> = [
     { id: 'PANORAMA', label: 'Panorama', icon: Gauge },
     { id: 'REPORTS', label: 'Raporlar', icon: FileBarChart },
+    { id: 'EXPENSES', label: 'Gider ve Bütçe', icon: Receipt },
     { id: 'WIZARD', label: 'Hızlı Kasa İşlemi', icon: Zap },
     { id: 'DEBTS', label: 'Borç & Alacak Defteri', icon: BookOpen },
     { id: 'STAFF', label: 'Personel', icon: Users },
@@ -106,6 +109,7 @@ export const ErpModule: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-5">
             {activeErpTab === 'PANORAMA' && <PanoramaTab />}
             {activeErpTab === 'REPORTS' && <ReportsTab />}
+            {activeErpTab === 'EXPENSES' && <ExpensesTab />}
             {activeErpTab === 'WIZARD' && <PatronWizardTab />}
             {activeErpTab === 'DEBTS' && <DebtsTab />}
             {activeErpTab === 'STAFF' && <StaffTab />}
