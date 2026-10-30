@@ -63,6 +63,31 @@ pub async fn get_local_device(
     ))
 }
 
+/// Tek cihazlı kurulum eşleştirme beklemeden çalışsın diye kimliği ilk yazmada açar.
+pub async fn ensure_local_device(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+) -> Result<String, String> {
+    let existing: Option<String> =
+        sqlx::query_scalar("SELECT device_id FROM local_device_identity WHERE slot = 1")
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+    if let Some(device_id) = existing {
+        return Ok(device_id);
+    }
+    let device_id = crate::id_generator::generate_id("dev");
+    sqlx::query("INSERT INTO devices (id, tenant_id, name, device_type) VALUES (?, ?, ?, 'POS')")
+        .bind(&device_id)
+        .bind(tenant_id)
+        .bind("Bu cihaz")
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+    bind_local_device(conn, tenant_id, &device_id).await?;
+    Ok(device_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

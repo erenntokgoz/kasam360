@@ -6,15 +6,17 @@
 //! `debts` alt sorgusunda kiracı filtresi, para okumalarında hata yükseltme,
 //! her yazma işleminde `audit_ledger` kaydı.
 
-use crate::commands::command_helpers::audit_actor;
 use crate::db::DbPool;
 use crate::id_generator::generate_id;
 use crate::ledger_commands::guard::{
     require_ledger_read, require_ledger_tenant, require_ledger_write,
 };
-use crate::services::audit_service::{self, AuditContext, AuditService};
+use crate::ledger_commands::operations::submit;
+use crate::services::cari::search::{is_similar_name, matches_card};
+use crate::services::cari::{CardFields, CariOp};
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
+use serde_json::json;
+use sqlx::{Row, SqliteConnection};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DirectoryDto {
@@ -42,6 +44,12 @@ pub struct DirectoryDto {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CreateDirectoryPayload {
+    /// Yeniden denemede aynı kalan istemci işlem anahtarı.
+    #[serde(rename = "operationId")]
+    pub operation_id: String,
+    /// Benzer kartlar görüldükten sonra bilinçli olarak yeni kart açılır.
+    #[serde(rename = "allowSimilar", default)]
+    pub allow_similar: bool,
     #[serde(rename = "tenantId")]
     pub tenant_id: Option<String>,
     pub name: String,
@@ -61,6 +69,8 @@ pub struct CreateDirectoryPayload {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateDirectoryPayload {
+    #[serde(rename = "operationId")]
+    pub operation_id: String,
     pub id: String,
     #[serde(rename = "tenantId")]
     pub tenant_id: Option<String>,
@@ -121,12 +131,64 @@ fn row_to_directory(r: &sqlx::sqlite::SqliteRow) -> Result<DirectoryDto, String>
     })
 }
 
+const CARD_COLUMNS: &str =
+    "d.id, d.tenant_id, d.name, d.type, d.phone, d.email, d.tax_no, d.tax_office,
+     d.address, d.credit_limit_cents, d.notes, d.created_at";
+
+async fn load_cards(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    directory_type: Option<&str>,
+) -> Result<Vec<DirectoryDto>, String> {
+    let sql = format!(
+        "SELECT {CARD_COLUMNS}, {BALANCE_SUBQUERY} as balance_cents
+         FROM directories d
+         WHERE d.tenant_id = ?{}
+         ORDER BY d.name ASC, d.id ASC",
+        if directory_type.is_some() {
+            " AND d.type = ?"
+        } else {
+            ""
+        }
+    );
+    let mut query = sqlx::query(&sql).bind(tenant_id);
+    if let Some(dtype) = directory_type {
+        query = query.bind(dtype);
+    }
+    let rows = query
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+    rows.iter().map(row_to_directory).collect()
+}
+
+/// Aynı türde benzer adlı ya da aynı telefonlu kartlar.
+pub(crate) async fn similar_cards(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    directory_type: &str,
+    name: &str,
+    phone: Option<&str>,
+) -> Result<Vec<DirectoryDto>, String> {
+    let digits = |text: &str| -> String { text.chars().filter(char::is_ascii_digit).collect() };
+    let wanted_phone = phone.map(digits).filter(|value| value.len() >= 7);
+    let mut cards = load_cards(conn, tenant_id, Some(directory_type)).await?;
+    cards.retain(|card| {
+        is_similar_name(name, &card.name)
+            || (wanted_phone.is_some() && card.phone.as_deref().map(digits) == wanted_phone)
+    });
+    Ok(cards)
+}
+
 /// İşletmeye ait cari kartları ve bakiye durumlarını listeler.
+///
+/// Arama Türkçe karakter ve harf büyüklüğünden bağımsızdır.
 #[tauri::command]
 pub async fn get_directories(
     actor_role: Option<String>,
     tenant_id: Option<String>,
     directory_type: Option<String>,
+    search: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<DirectoryDto>, String> {
     require_ledger_read(actor_role.as_deref())?;
@@ -134,37 +196,41 @@ pub async fn get_directories(
     let tid = require_ledger_tenant(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
-    let sql = format!(
-        "SELECT d.id, d.tenant_id, d.name, d.type, d.phone, d.email, d.tax_no, d.tax_office,
-                d.address, d.credit_limit_cents, d.notes, d.created_at,
-                {} as balance_cents
+    let mut cards = load_cards(&mut conn, &tid, directory_type.as_deref()).await?;
+    if let Some(query) = search.as_deref() {
+        cards.retain(|card| matches_card(query, &card.name, card.phone.as_deref()));
+    }
+    Ok(cards)
+}
+
+/// Yeni kart öncesi benzer kayıtları gösterir; hiçbir kaydı birleştirmez.
+#[tauri::command]
+pub async fn find_similar_directories(
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
+    directory_type: String,
+    name: String,
+    phone: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<DirectoryDto>, String> {
+    require_ledger_read(actor_role.as_deref())?;
+    let tid = require_ledger_tenant(tenant_id.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    similar_cards(&mut conn, &tid, &directory_type, &name, phone.as_deref()).await
+}
+
+async fn read_card(pool: &DbPool, tenant_id: &str, id: &str) -> Result<DirectoryDto, String> {
+    let row = sqlx::query(&format!(
+        "SELECT {CARD_COLUMNS}, {BALANCE_SUBQUERY} as balance_cents
          FROM directories d
-         WHERE d.tenant_id = ?{} 
-         ORDER BY d.name ASC",
-        BALANCE_SUBQUERY,
-        if directory_type.is_some() {
-            " AND d.type = ?"
-        } else {
-            ""
-        }
-    );
-
-    let mut query = sqlx::query(&sql).bind(&tid);
-    if let Some(ref dtype) = directory_type {
-        query = query.bind(dtype);
-    }
-
-    let rows = query
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let mut result = Vec::with_capacity(rows.len());
-    for r in rows {
-        result.push(row_to_directory(&r)?);
-    }
-
-    Ok(result)
+         WHERE d.id = ? AND d.tenant_id = ?"
+    ))
+    .bind(id)
+    .bind(tenant_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Cari kart okunamadı: {e}"))?;
+    row_to_directory(&row)
 }
 
 /// Yeni bir cari rehber kartı oluşturur.
@@ -177,68 +243,68 @@ pub async fn create_directory(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<DirectoryDto, String> {
     require_ledger_write(actor_role.as_deref())?;
-
     let tid = require_ledger_tenant(payload.tenant_id.as_deref())?;
-    let id = generate_id("dir");
-    let limit = payload.credit_limit_cents.unwrap_or(0);
 
-    let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    // Uyarı arayüzden atlanamaz; kart yine de yalnız bilinçli onayla açılır.
+    if !payload.allow_similar {
+        let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+        let similar = similar_cards(
+            &mut conn,
+            &tid,
+            &payload.directory_type,
+            &payload.name,
+            payload.phone.as_deref(),
+        )
+        .await?;
+        if !similar.is_empty() {
+            return Err(format!(
+                "SIMILAR_NAME: {} benzer kart var; kontrol edip onaylayın",
+                similar.len()
+            ));
+        }
+    }
 
-    sqlx::query(
-        "INSERT INTO directories (id, tenant_id, name, type, phone, email, tax_no, tax_office, address, credit_limit_cents, notes, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"
-    )
-    .bind(&id)
-    .bind(&tid)
-    .bind(&payload.name)
-    .bind(&payload.directory_type)
-    .bind(&payload.phone)
-    .bind(&payload.email)
-    .bind(&payload.tax_no)
-    .bind(&payload.tax_office)
-    .bind(&payload.address)
-    .bind(limit)
-    .bind(&payload.notes)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| format!("Cari kart oluşturulamadı: {}", e))?;
-
-    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
-    let ctx = AuditContext::new(
-        tid.clone(),
+    let intent = json!({
+        "name": payload.name,
+        "type": payload.directory_type,
+        "phone": payload.phone,
+        "email": payload.email,
+        "taxNo": payload.tax_no,
+        "taxOffice": payload.tax_office,
+        "address": payload.address,
+        "creditLimitCents": payload.credit_limit_cents,
+        "notes": payload.notes,
+    });
+    let op = CariOp::CreateCard {
+        directory_type: payload.directory_type,
+        card: CardFields {
+            directory_id: generate_id("dir"),
+            name: payload.name,
+            phone: payload.phone,
+            email: payload.email,
+            tax_no: payload.tax_no,
+            tax_office: payload.tax_office,
+            address: payload.address,
+            credit_limit_cents: payload.credit_limit_cents,
+            notes: payload.notes,
+        },
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+    let outcome = submit(
+        &pool,
+        &state,
+        &tid,
+        &payload.operation_id,
         actor_id,
         actor_role,
-        audit_service::category::FINANS,
-        "directory:created",
-        id.clone(),
-        serde_json::json!({
-            "directoryId": id,
-            "name": payload.name,
-            "type": payload.directory_type,
-            "creditLimitCents": limit,
-        }),
-        chrono::Utc::now().to_rfc3339(),
-    )?;
-    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-
-    Ok(DirectoryDto {
-        id,
-        tenant_id: tid,
-        name: payload.name,
-        directory_type: payload.directory_type,
-        phone: payload.phone,
-        email: payload.email,
-        tax_no: payload.tax_no,
-        tax_office: payload.tax_office,
-        address: payload.address,
-        credit_limit_cents: limit,
-        notes: payload.notes,
-        created_at: chrono::Utc::now().to_rfc3339(),
-        balance_cents: 0,
-    })
+        intent,
+        op,
+    )
+    .await?;
+    let id = outcome["directoryId"]
+        .as_str()
+        .ok_or_else(|| "INTERNAL: cari sonucu eksik".to_string())?;
+    read_card(&pool, &tid, id).await
 }
 
 /// Mevcut bir cari rehber kartını günceller.
@@ -251,73 +317,43 @@ pub async fn update_directory(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<DirectoryDto, String> {
     require_ledger_write(actor_role.as_deref())?;
-
     let tid = require_ledger_tenant(payload.tenant_id.as_deref())?;
-    let limit = payload.credit_limit_cents.unwrap_or(0);
 
-    let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-
-    let updated = sqlx::query(
-        "UPDATE directories
-         SET name = ?, phone = ?, email = ?, tax_no = ?, tax_office = ?, address = ?, credit_limit_cents = ?, notes = ?
-         WHERE id = ? AND tenant_id = ?"
-    )
-    .bind(&payload.name)
-    .bind(&payload.phone)
-    .bind(&payload.email)
-    .bind(&payload.tax_no)
-    .bind(&payload.tax_office)
-    .bind(&payload.address)
-    .bind(limit)
-    .bind(&payload.notes)
-    .bind(&payload.id)
-    .bind(&tid)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| format!("Cari kart güncellenemedi: {}", e))?;
-
-    // Neden bu kontrol şart: `tenant_id` filtresi yazmayı başka kiracının
-    // kartına kaydırır, ama etkilenen satır 0 ise komut yine de `Ok` dönerdi.
-    // Çağıran "güncelledim" sanıp gerçek kartın eski kalmasını görmezdi.
-    if updated.rows_affected() == 0 {
-        return Err("Cari kart bulunamadı (kiracı eşleşmedi).".to_string());
-    }
-
-    let r = sqlx::query(&format!(
-        "SELECT d.id, d.tenant_id, d.name, d.type, d.phone, d.email, d.tax_no, d.tax_office,
-                d.address, d.credit_limit_cents, d.notes, d.created_at,
-                {} as balance_cents
-         FROM directories d
-         WHERE d.id = ? AND d.tenant_id = ?",
-        BALANCE_SUBQUERY
-    ))
-    .bind(&payload.id)
-    .bind(&tid)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|e| format!("Güncellenen cari kart okunamadı: {}", e))?;
-
-    let dto = row_to_directory(&r)?;
-
-    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
-    let ctx = AuditContext::new(
-        tid.clone(),
+    let intent = json!({
+        "id": payload.id,
+        "name": payload.name,
+        "phone": payload.phone,
+        "email": payload.email,
+        "taxNo": payload.tax_no,
+        "taxOffice": payload.tax_office,
+        "address": payload.address,
+        "creditLimitCents": payload.credit_limit_cents,
+        "notes": payload.notes,
+    });
+    let id = payload.id.clone();
+    let op = CariOp::UpdateCard {
+        card: CardFields {
+            directory_id: payload.id,
+            name: payload.name,
+            phone: payload.phone,
+            email: payload.email,
+            tax_no: payload.tax_no,
+            tax_office: payload.tax_office,
+            address: payload.address,
+            credit_limit_cents: payload.credit_limit_cents,
+            notes: payload.notes,
+        },
+    };
+    submit(
+        &pool,
+        &state,
+        &tid,
+        &payload.operation_id,
         actor_id,
         actor_role,
-        audit_service::category::FINANS,
-        "directory:updated",
-        payload.id.clone(),
-        serde_json::json!({
-            "directoryId": payload.id,
-            "name": dto.name,
-            "creditLimitCents": dto.credit_limit_cents,
-        }),
-        chrono::Utc::now().to_rfc3339(),
-    )?;
-    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-
-    Ok(dto)
+        intent,
+        op,
+    )
+    .await?;
+    read_card(&pool, &tid, &id).await
 }

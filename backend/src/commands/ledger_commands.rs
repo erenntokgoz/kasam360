@@ -11,8 +11,10 @@ pub mod expenses;
 pub mod financial_report;
 pub mod guard;
 pub mod net_balance;
+pub mod operations;
 pub mod owner_personal;
 pub mod statement;
+pub mod supplier_documents;
 
 pub use budget::*;
 pub use debts::*;
@@ -20,8 +22,10 @@ pub use directories::*;
 pub use expenses::*;
 pub use financial_report::*;
 pub use net_balance::*;
+pub use operations::get_operation_result;
 pub use owner_personal::*;
 pub use statement::*;
+pub use supplier_documents::*;
 
 #[cfg(test)]
 #[path = "ledger_commands/security_tests.rs"]
