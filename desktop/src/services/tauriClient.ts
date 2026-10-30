@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
 const SYNC_RETRY_LIMIT = 6;
+const RETRYABLE = /^(SYNC_RETRY|QUORUM_LOST)/;
 const SYNC_RETRY_DELAY_MS = 40;
 
 // Tauri ortamında mıyız kontrolü
@@ -20,8 +21,8 @@ export async function invokeIPC<T>(command: string, args: Record<string, unknown
     try {
       return await invoke<T>(command, args);
     } catch (error) {
-      // Başka cihaz aynı anda yazdı: işlem hiç uygulanmadı, taze durumla yeniden denenir.
-      if (attempt < SYNC_RETRY_LIMIT && String(error).startsWith('SYNC_RETRY')) {
+      // İşlem hiç uygulanmadı: başka cihaz aynı anda yazdı ya da otorite el değiştiriyor.
+      if (attempt < SYNC_RETRY_LIMIT && RETRYABLE.test(String(error))) {
         await new Promise((resolve) => setTimeout(resolve, attempt * SYNC_RETRY_DELAY_MS));
         continue;
       }

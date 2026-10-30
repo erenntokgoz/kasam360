@@ -222,6 +222,21 @@ async fn pay(pool: &SqlitePool, id: &str) -> Result<(), String> {
     tx.commit().await
 }
 
+/// Otorite el değiştirirken istemci gibi yeniden dener; `SYNC_RETRY` asıl sınavdır, kalır.
+async fn pay_through_failover(pool: &SqlitePool, id: &str) -> Result<(), String> {
+    for _ in 0..40 {
+        match pay(pool, id).await {
+            Err(error)
+                if error.starts_with("QUORUM_LOST") || error.starts_with("NO_CONNECTION") =>
+            {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            other => return other,
+        }
+    }
+    Err("QUORUM_LOST: süre doldu".to_string())
+}
+
 async fn sales(pool: &SqlitePool) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE event_type = 'SALE_SETTLED'")
         .fetch_one(pool)
@@ -313,8 +328,8 @@ async fn denetim_zinciri_iki_cihazda_birebir_ayni_kalir() {
 async fn ayni_kalemi_iki_kasa_ayni_anda_tahsil_edemez() {
     let devices = cluster(2).await;
     let (first, second) = tokio::join!(
-        pay(&devices[0].pool, "txn_a"),
-        pay(&devices[1].pool, "txn_b")
+        pay_through_failover(&devices[0].pool, "txn_a"),
+        pay_through_failover(&devices[1].pool, "txn_b")
     );
     let accepted = [first.is_ok(), second.is_ok()]
         .iter()
@@ -323,7 +338,20 @@ async fn ayni_kalemi_iki_kasa_ayni_anda_tahsil_edemez() {
     assert_eq!(accepted, 1, "{first:?} {second:?}");
 
     for device in &devices {
-        wait_until!("satış ulaştı", sales(&device.pool).await == 1);
+        for _ in 0..200 {
+            if sales(&device.pool).await == 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(
+            sales(&device.pool).await,
+            1,
+            "{:?} {:?} {:?}",
+            device.sync.status().detail,
+            device.sync.status().state,
+            (&first, &second)
+        );
         assert_eq!(stock(&device.pool).await, 49.0, "stok tek kez düşer");
     }
     // Reddedilen kasa aynı isteği yeniler: taze durumda hesabın kapandığını görür.
@@ -332,7 +360,9 @@ async fn ayni_kalemi_iki_kasa_ayni_anda_tahsil_edemez() {
     } else {
         &devices[1]
     };
-    let retry = pay(&loser.pool, "txn_c").await.expect_err("kapalı adisyon");
+    let retry = pay_through_failover(&loser.pool, "txn_c")
+        .await
+        .expect_err("kapalı adisyon");
     assert!(retry.starts_with("ORDER_CLOSED"), "{retry}");
     assert_eq!(sales(&devices[0].pool).await, 1);
 }

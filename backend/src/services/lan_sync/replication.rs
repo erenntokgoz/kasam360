@@ -43,6 +43,8 @@ impl Engine {
     /// Düzenli kalp atışı: eksik kayıtları taşır ve otoriteyi duyurur.
     pub async fn on_heartbeat(&mut self) -> Result<Effects, String> {
         let mut effects = Effects::default();
+        // Geçici hatayla veya kapanışla yarım kalan onaylı kayıt yeni yazma beklemez.
+        self.apply_committed(&mut effects).await?;
         self.replicate_all(&mut effects).await?;
         Ok(effects)
     }
@@ -145,12 +147,10 @@ impl Engine {
 
         let new_commit = commit_index.min(match_index);
         if new_commit > row.commit_index {
-            {
-                let mut conn = self.pool.acquire().await.map_err(|e| e.to_string())?;
-                store::save_commit(&mut conn, new_commit).await?;
-            }
-            self.apply_committed(effects).await?;
+            let mut conn = self.pool.acquire().await.map_err(|e| e.to_string())?;
+            store::save_commit(&mut conn, new_commit).await?;
         }
+        self.apply_committed(effects).await?;
         effects.send.push((
             from.to_string(),
             Message::AppendReply {
@@ -263,16 +263,16 @@ impl Engine {
                 self.audit.lock().await
             };
             let lock = AuditLock::new(guard);
-            let mut tx = self
-                .pool
-                .begin_with("BEGIN IMMEDIATE")
-                .await
-                .map_err(|e| e.to_string())?;
+            let Ok(mut tx) = self.pool.begin_with("BEGIN IMMEDIATE").await else {
+                return Ok(());
+            };
             match op_log::apply_proposed(&mut tx, &lock, &operation, &self.me).await {
                 Ok(outcome) => {
                     tx.commit().await.map_err(|e| e.to_string())?;
                     effects.applied.push(outcome);
                 }
+                // Yoğun anda yazma kilidi alınamadı: kayıt durur, sonraki turda uygulanır.
+                Err(reason) if reason.contains("database is locked") => return Ok(()),
                 Err(reason) => {
                     // Onaylanmış kayıt atlanamaz: sıra bozulursa cihazlar ayrışır.
                     self.halted =
