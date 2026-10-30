@@ -24,7 +24,6 @@ pub mod report_service;
 pub mod reservation_service;
 pub mod security360;
 pub mod staff360;
-pub mod sync_inbox;
 
 #[cfg(test)]
 mod inventory360_tests;

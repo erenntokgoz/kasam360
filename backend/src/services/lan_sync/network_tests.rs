@@ -45,7 +45,7 @@ fn operation(id: &str, device: &str, op: CariOp) -> Operation {
         actor_id: "usr_1".to_string(),
         actor_role: "OWNER".to_string(),
         intent_sha256: intent_hash(op.kind(), &json!(id)),
-        op: LogOp::Cari(op),
+        op: LogOp::Cari(Box::new(op)),
         created_at: "2026-10-30T10:00:00Z".to_string(),
     }
 }
@@ -95,6 +95,16 @@ fn payment(id: &str, amount: i64, version: i64) -> CariOp {
         shift_id: None,
         created_at: "2026-10-30T11:00:00Z".to_string(),
     })
+}
+
+/// İletilen işlem bağlantı kimliğiyle eşleşmelidir.
+fn local_id(sync: &LanSync) -> String {
+    sync.status()
+        .members
+        .into_iter()
+        .find(|member| member.is_local)
+        .map(|member| member.device_id)
+        .expect("yerel cihaz üyelikte")
 }
 
 async fn remaining(pool: &SqlitePool) -> Option<i64> {
@@ -166,7 +176,11 @@ async fn iki_kurulum_eslesir_para_cogunlukla_yazilir_cihaz_kaybinda_durur() {
 
     // Takipçiden gelen ödeme otoriteye gider, iki diske de yazılır.
     let paid = sync_b
-        .submit(operation("op_pay", "b", payment("op_pay", 4_000, 0)))
+        .submit(operation(
+            "op_pay",
+            &local_id(&sync_b),
+            payment("op_pay", 4_000, 0),
+        ))
         .await
         .expect("ödeme");
     assert_eq!(paid.status, OperationStatus::Applied);
@@ -175,7 +189,11 @@ async fn iki_kurulum_eslesir_para_cogunlukla_yazilir_cihaz_kaybinda_durur() {
 
     // Aynı kimlik tekrarı ikinci ödeme üretmez.
     let again = sync_b
-        .submit(operation("op_pay", "b", payment("op_pay", 4_000, 0)))
+        .submit(operation(
+            "op_pay",
+            &local_id(&sync_b),
+            payment("op_pay", 4_000, 0),
+        ))
         .await
         .expect("tekrar");
     assert_eq!(again, paid);
@@ -267,14 +285,18 @@ async fn yeniden_baslayan_uye_otoriteye_baglanip_eksigini_alir() {
         sync_b.status().state == "NO_CONNECTION"
     );
     let cut_off = sync_b
-        .submit(operation("op_x", "b", payment("op_x", 1_000, 0)))
+        .submit(operation(
+            "op_x",
+            &local_id(&sync_b),
+            payment("op_x", 1_000, 0),
+        ))
         .await;
     assert!(cut_off.is_err(), "ağdan kopmuş cihaz yeni işlem açmaz");
     assert_eq!(remaining(&pool_b).await, Some(10_000));
 
     // Otorite yeniden açılınca seçim tamamlanır, ikisi de aynı sonuca ulaşır.
     let restarted = LanSync::new(pool_a.clone(), Arc::new(Mutex::new(())), "127.0.0.1");
-    restarted.resume().await.expect("yeniden başlama");
+    restarted.resume().await;
     wait_until!(
         "küme toparlandı",
         restarted.status().state == "READY" && sync_b.status().state == "READY"
@@ -285,7 +307,11 @@ async fn yeniden_baslayan_uye_otoriteye_baglanip_eksigini_alir() {
     let paid = match paid {
         Ok(outcome) => outcome,
         Err(_) => sync_b
-            .submit(operation("op_y", "b", payment("op_y", 1_000, 0)))
+            .submit(operation(
+                "op_y",
+                &local_id(&sync_b),
+                payment("op_y", 1_000, 0),
+            ))
             .await
             .expect("yeni otorite üzerinden"),
     };

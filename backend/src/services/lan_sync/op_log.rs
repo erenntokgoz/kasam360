@@ -6,7 +6,7 @@
 //! transaction'ında yazıldığından "uygulandı ama sonucu kayboldu" durumu olmaz.
 
 use super::store::Member;
-use crate::services::audit_service::AuditLock;
+use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 use crate::services::cari::{self, ApplyError, CariOp};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,7 +18,7 @@ use sqlx::{Acquire, Row, SqliteConnection, SqlitePool};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "domain", content = "body", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum LogOp {
-    Cari(CariOp),
+    Cari(Box<CariOp>),
     SetMembers(Vec<Member>),
     Noop,
 }
@@ -214,9 +214,11 @@ pub(super) fn operation_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Operat
 
 async fn apply_members(
     conn: &mut SqliteConnection,
-    tenant_id: &str,
+    audit_lock: &AuditLock<'_>,
+    operation: &Operation,
     members: &[Member],
 ) -> Result<(), ApplyError> {
+    let tenant_id = operation.tenant_id.as_str();
     // Cihaz ekranı üyeliği gösterir; üyelikten çıkan cihaz silinmez, pasif olur.
     sqlx::query("UPDATE devices SET status = 'INACTIVE' WHERE tenant_id = ?")
         .bind(tenant_id)
@@ -235,6 +237,23 @@ async fn apply_members(
         .execute(&mut *conn)
         .await?;
     }
+    // Finansal yazabilen cihaz kümesi değişti: denetimde kalıcı iz bırakır.
+    let ctx = AuditContext::new(
+        tenant_id.to_string(),
+        operation.actor_id.clone(),
+        operation.actor_role.clone(),
+        category::GUVENLIK,
+        "sync:members_changed",
+        operation.operation_id.clone(),
+        serde_json::json!({
+            "members": members.iter().map(|m| &m.device_id).collect::<Vec<_>>(),
+        }),
+        operation.created_at.clone(),
+    )
+    .map_err(ApplyError::Internal)?;
+    AuditService::append(conn, audit_lock, &ctx)
+        .await
+        .map_err(ApplyError::Internal)?;
     Ok(())
 }
 
@@ -261,7 +280,7 @@ pub(super) async fn apply_proposed(
             )
             .await
         }
-        LogOp::SetMembers(members) => apply_members(&mut savepoint, &operation.tenant_id, members)
+        LogOp::SetMembers(members) => apply_members(&mut savepoint, audit_lock, operation, members)
             .await
             .map(|()| Value::Null),
         LogOp::Noop => Ok(Value::Null),

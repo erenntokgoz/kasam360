@@ -44,7 +44,7 @@ fn operation(id: &str, intent: &str, op: CariOp) -> Operation {
         actor_id: "usr_1".to_string(),
         actor_role: "OWNER".to_string(),
         intent_sha256: intent_hash(op.kind(), &json!(intent)),
-        op: LogOp::Cari(op),
+        op: LogOp::Cari(Box::new(op)),
         created_at: "2026-10-30T10:00:00Z".to_string(),
     }
 }
