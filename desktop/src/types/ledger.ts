@@ -95,12 +95,12 @@ export interface StaffProfile {
 }
 
 export interface FinancialProfitSummary {
-  grossSalesCents: number;
-  fifoCostOfGoodsCents: number; // Gerçek FIFO reçete maliyeti
+  totalRevenueCents: number;
+  totalCogsCents: number;
+  totalRefundsCents: number;
   grossProfitCents: number;
-  operatingExpensesCents: number;
+  totalExpensesCents: number;
   netProfitCents: number;
-  totalReceivablesCents: number; // Dışarıdaki alacaklar
-  totalPayablesCents: number; // Tedarikçiye borçlar
-  cashInDrawerCents: number;
+  receivablesCents: number;
+  payablesCents: number;
 }

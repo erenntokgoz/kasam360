@@ -1,134 +1,127 @@
-import React, { useState } from 'react';
-import { useLedgerStore } from '../../stores/ledgerStore';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Pencil, UserPlus } from 'lucide-react';
+import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
+import { invokeIPC } from '../../services/tauriClient';
+import { useAuthStore } from '../../stores/authStore';
+import { sessionArgs } from '../../stores/cariStore';
 import { Button } from '../../ui/Button';
-import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
+import { ROLE_LABEL, StaffFormModal, type StaffMember } from './StaffFormModal';
+import { TipPoolPanel } from './TipPoolPanel';
 
+interface ProfileRow {
+  userId: string;
+  baseSalaryCents: number | null;
+  phone: string | null;
+}
+
+/** Personel kayıtları. Pasif personel listede kalır: geçmiş kayıtlar ona bağlıdır. */
 export const StaffTab: React.FC = () => {
-  const { staffProfiles, giveStaffAdvance } = useLedgerStore();
+  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+  const [staff, setStaff] = useState<StaffMember[] | null>(null);
+  const [profiles, setProfiles] = useState<Record<string, ProfileRow>>({});
+  const [editing, setEditing] = useState<StaffMember | 'NEW' | null>(null);
+  const [shares, setShares] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
 
-  const [advanceStaffId, setAdvanceStaffId] = useState<string | null>(null);
-  const [advanceLiras, setAdvanceLiras] = useState('');
+  const load = useCallback(async () => {
+    const { actorRole, tenantId } = sessionArgs();
+    try {
+      const [rows, details] = await Promise.all([
+        invokeIPC<StaffMember[]>('get_staff', { actorRole, tenantId, includeInactive: true }),
+        invokeIPC<ProfileRow[]>('list_staff_profiles', { actorRole, tenantId }),
+      ]);
+      setStaff(rows);
+      setProfiles(Object.fromEntries(details.map((profile) => [profile.userId, profile])));
+      setError(null);
+    } catch (caught) {
+      setStaff(null);
+      setError(errorText(caught));
+    }
+  }, []);
 
-  const selectedStaff = staffProfiles.find((s) => s.id === advanceStaffId) || null;
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const handleGiveAdvance = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!advanceStaffId) return;
-    const liras = parseFloat(advanceLiras) || 0;
-    const cents = Math.round(liras * 100);
-    await giveStaffAdvance(advanceStaffId, cents);
-    setAdvanceStaffId(null);
-    setAdvanceLiras('');
+  const salaryText = (id: string) => {
+    const profile = profiles[id];
+    if (!profile) return 'Maaş girilmedi';
+    return profile.baseSalaryCents == null ? 'Gizli' : formatMoney(profile.baseSalaryCents);
   };
+
+  const active = staff?.filter((member) => member.is_active) ?? [];
+  const editingProfile = editing && editing !== 'NEW' ? profiles[editing.id] : undefined;
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-base font-bold text-[var(--text-primary)]">
-          Personel, Avans ve Prim Yönetimi
-        </h2>
-        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-          Personel bazında maaş, verilen avanslar ve satıştan hak kazanılan primler.
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-[var(--text-primary)]">Personel</h2>
+          <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+            Rol ekranları, PIN girişi belirler. Pay alanı bahşiş dağıtımı içindir.
+          </p>
+        </div>
+        <Button variant="primary" className="min-h-12 shrink-0" onClick={() => setEditing('NEW')}>
+          <UserPlus className="w-4 h-4 mr-1.5" />
+          <span>Personel Ekle</span>
+        </Button>
+      </div>
+
+      {error ? (
+        <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
+          Personel okunamadı: {error}
         </p>
-      </div>
+      ) : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {staffProfiles.map((staff) => (
-          <div
-            key={staff.id}
-            className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 shadow-sm space-y-3"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="text-sm font-bold text-[var(--text-primary)] block">
-                  {staff.name}
-                </span>
-                <span className="text-xs text-[var(--text-muted)] block mt-0.5">{staff.role}</span>
-              </div>
-              <Button
-                variant="outline-amber"
-                size="sm"
-                onClick={() => setAdvanceStaffId(staff.id)}
-                className="text-xs !min-h-[32px]"
-              >
-                + Avans Ver
+      <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
+        {(staff ?? []).map((member) => (
+          <li key={member.id} className={`flex items-center gap-3 px-4 py-2 min-h-14 ${member.is_active ? '' : 'opacity-60'}`}>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-[var(--text-primary)] truncate">{member.name}</p>
+              <p className="text-xs text-[var(--text-secondary)]">
+                {ROLE_LABEL[member.role] ?? member.role}
+                {member.is_active ? '' : ' · Pasif'}
+                {profiles[member.id]?.phone ? ` · ${profiles[member.id].phone}` : ''}
+              </p>
+            </div>
+            <span className="text-xs tabular-nums text-[var(--text-secondary)]">{salaryText(member.id)}</span>
+            {isOwner && member.is_active ? (
+              <Input
+                aria-label={`${member.name} bahşiş payı`}
+                inputMode="numeric"
+                placeholder="Pay"
+                className="min-h-12 w-20"
+                value={shares[member.id] ?? ''}
+                onChange={(event) => setShares({ ...shares, [member.id]: event.target.value })}
+              />
+            ) : null}
+            {member.role !== 'OWNER' ? (
+              <Button variant="secondary" className="min-h-12" onClick={() => setEditing(member)} aria-label={`${member.name} düzenle`}>
+                <Pencil className="w-4 h-4 mr-1" />
+                <span>Düzenle</span>
               </Button>
-            </div>
-
-            <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3 space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-[var(--text-secondary)]">Sabit Maaş:</span>
-                <span className="font-bold tabular-nums text-[var(--text-primary)]">
-                  {formatMoney(staff.baseSalaryCents)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[var(--text-secondary)]">Açık Avans:</span>
-                <span className="font-bold tabular-nums text-[var(--accent-red)]">
-                  {formatMoney(staff.advanceBalanceCents)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[var(--text-secondary)]">Aylık Prim:</span>
-                <span className="font-bold tabular-nums text-[var(--accent-emerald)]">
-                  {formatMoney(staff.monthlyCommissionCents)}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)] pt-1 border-t border-[var(--border)]">
-              <span>{staff.ordersServed} Sipariş Tamamladı</span>
-              <span className="font-bold text-[var(--text-primary)] tabular-nums">
-                {formatMoney(staff.totalSalesCents)} Ciro
-              </span>
-            </div>
-          </div>
+            ) : null}
+          </li>
         ))}
-      </div>
+      </ul>
 
-      {/* Avans Verme Modalı */}
-      <Modal
-        isOpen={advanceStaffId !== null}
-        onClose={() => setAdvanceStaffId(null)}
-        title="Personel Avans Ödemesi"
-        subtitle={selectedStaff?.name}
-        maxWidth="sm"
-      >
-        <form onSubmit={handleGiveAdvance} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
-              Verilecek Avans Tutarı (₺)
-            </label>
-            <Input
-              type="number"
-              min="1"
-              step="50"
-              value={advanceLiras}
-              onChange={(e) => setAdvanceLiras(e.target.value)}
-              placeholder="Örn: 1000"
-              className="text-base font-bold tabular-nums"
-              required
-              autoFocus
-            />
-          </div>
+      <TipPoolPanel canDistribute={isOwner} staffIds={active.map((member) => member.id)} shares={shares} />
 
-          <div className="flex gap-2 pt-1">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setAdvanceStaffId(null)}
-              className="flex-1"
-            >
-              Vazgeç
-            </Button>
-            <Button type="submit" variant="primary" className="flex-1">
-              Avansı Kasadan Çık ve Kaydet
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      {editing ? (
+        <StaffFormModal
+          member={editing === 'NEW' ? null : editing}
+          phone={editingProfile?.phone ?? ''}
+          salaryCents={editingProfile?.baseSalaryCents ?? null}
+          canSetSalary={isOwner}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void load();
+          }}
+        />
+      ) : null}
     </div>
   );
 };

@@ -18,6 +18,8 @@ interface Menu360DetailTemelProps {
   setDescription: (val: string) => void;
   stockUnit: string;
   setStockUnit: (val: string) => void;
+  taxRateBp: number;
+  setTaxRateBp: (val: number) => void;
   categories: CategoryDto[];
   selectedProduct?: ProductDto;
   detailMode: 'view' | 'new';
@@ -38,6 +40,8 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
   setDescription,
   stockUnit,
   setStockUnit,
+  taxRateBp,
+  setTaxRateBp,
   categories,
   selectedProduct,
   detailMode,
@@ -93,6 +97,13 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
           </span>
         </div>
       </div>
+
+      <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase space-y-1">
+        <span>KDV Oranı</span>
+        <select aria-label="KDV Oranı" value={taxRateBp} onChange={(e) => setTaxRateBp(Number(e.target.value))} className="w-full min-h-12 bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 text-sm text-[var(--text-primary)]">
+          {[0, 100, 1000, 2000].map((rate) => <option key={rate} value={rate}>%{rate / 100}</option>)}
+        </select>
+      </label>
 
       <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase space-y-1">
         <span>Stok Birimi</span>

@@ -41,4 +41,5 @@ export interface StockState {
   createSupplier: (name: string) => Promise<boolean>;
   createOrder: (supplierId: string, orderNumber: string, items: StockOrderLineInput[]) => Promise<boolean>;
   receiveOrder: (orderId: string) => Promise<boolean>;
+  quickReceive: (productId: string, quantity: number, unitCostCents: number) => Promise<boolean>;
 }

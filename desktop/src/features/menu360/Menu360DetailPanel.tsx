@@ -52,6 +52,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
   const [barcode, setBarcode] = useState('');
   const [description, setDescription] = useState('');
   const [stockUnit, setStockUnit] = useState('adet');
+  const [taxRateBp, setTaxRateBp] = useState(1000);
   const [formError, setFormError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -64,6 +65,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
       setBarcode('');
       setDescription('');
       setStockUnit('adet');
+      setTaxRateBp(1000);
       setFormError(null);
     } else if (selectedProduct) {
       setName(selectedProduct.name);
@@ -72,6 +74,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
       setBarcode(selectedProduct.barcode || '');
       setDescription(selectedProduct.description || '');
       setStockUnit(selectedProduct.stockUnit || 'adet');
+      setTaxRateBp(selectedProduct.taxRateBp ?? 1000);
       setFormError(null);
     }
   }, [selectedProductId, detailMode, selectedProduct, categories]);
@@ -104,6 +107,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
         barcode: barcode.trim() || undefined,
         description: description.trim() || undefined,
         stockUnit,
+        taxRateBp,
       });
 
       if (!success) {
@@ -183,6 +187,8 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
             setDescription={setDescription}
             stockUnit={stockUnit}
             setStockUnit={setStockUnit}
+              taxRateBp={taxRateBp}
+              setTaxRateBp={setTaxRateBp}
             categories={categories}
             selectedProduct={selectedProduct}
             detailMode={detailMode}

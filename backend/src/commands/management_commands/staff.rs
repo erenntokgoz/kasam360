@@ -137,6 +137,56 @@ pub async fn create_staff_member(
     })
 }
 
+/// Personelin PIN'ini sıfırlar. Personel ilk girişte kendi PIN'ini belirler: patronun
+/// bildiği PIN kalıcı olursa denetim kaydındaki işlemin sahibi belirsizleşir.
+#[tauri::command]
+pub async fn reset_staff_pin(
+    actor_role: String,
+    actor_id: Option<String>,
+    tenant_id: Option<String>,
+    staff_id: String,
+    new_pin: String,
+    pool: tauri::State<'_, DbPool>,
+    app_state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
+    let tenant_id = require_tenant(tenant_id.as_deref())?;
+    let hash = crate::user_credentials::hash_pin(&new_pin)?;
+
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    crate::user_credentials::ensure_pin_available(&mut tx, &tenant_id, &new_pin, Some(&staff_id))
+        .await?;
+    let updated = sqlx::query(
+        "UPDATE users SET pin_hash = ?, must_change_pin = 1
+         WHERE id = ? AND tenant_id = ? AND role != 'OWNER'",
+    )
+    .bind(&hash)
+    .bind(&staff_id)
+    .bind(&tenant_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    if updated.rows_affected() != 1 {
+        return Err("NOT_FOUND: personel bulunamadı.".to_string());
+    }
+    record_audit(
+        &mut tx,
+        &lock,
+        &tenant_id,
+        &actor_id,
+        &actor_role,
+        category::PERSONEL,
+        "staff:pin_reset",
+        &staff_id,
+        serde_json::json!({}),
+    )
+    .await?;
+    tx.commit().await.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn delete_staff_member(
     actor_role: String,

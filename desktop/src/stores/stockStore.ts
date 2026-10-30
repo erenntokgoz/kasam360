@@ -143,4 +143,17 @@ export const useStockStore = create<StockState>((set, get) => ({
       set({ busy: false });
     }
   },
+
+  // Tek adımda sipariş ve teslim: stok yine FIFO partisi olarak açılır, ayrı yol yoktur.
+  quickReceive: async (productId, quantity, unitCostCents) => {
+    let supplier = get().suppliers[0];
+    if (!supplier) {
+      if (!(await get().createSupplier('Genel Alım'))) return false;
+      supplier = get().suppliers[0];
+    }
+    const orderNumber = `HZL-${Date.now()}`;
+    const created = await get().createOrder(supplier.id, orderNumber, [{ productId, quantity, unitCostCents }]);
+    const order = get().orders.find((item) => item.orderNumber === orderNumber);
+    return created && !!order && get().receiveOrder(order.id);
+  },
 }));

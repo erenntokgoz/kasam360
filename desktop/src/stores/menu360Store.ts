@@ -136,6 +136,7 @@ export const useMenu360Store = create<Menu360State>((set, get) => ({
           is86: false,
           stockoutReason: null,
           stockUnit: productData.stockUnit ?? 'adet',
+          taxRateBp: productData.taxRateBp ?? 1000,
         });
         const created = mapProduct(createdWire);
         set((state) => ({
@@ -164,6 +165,7 @@ export const useMenu360Store = create<Menu360State>((set, get) => ({
           is86: current?.is86 ?? false,
           stockoutReason: current?.stockoutReason ?? null,
           stockUnit: productData.stockUnit ?? current?.stockUnit ?? 'adet',
+          taxRateBp: productData.taxRateBp ?? current?.taxRateBp ?? 1000,
         });
         const updated = mapProduct(updatedWire);
         set((state) => ({

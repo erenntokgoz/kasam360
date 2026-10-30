@@ -295,6 +295,44 @@ pub async fn run_payroll(
 // Bahşiş havuzu
 // ---------------------------------------------------------------------------
 
+/// Nakit bahşişi havuza yazar. Kart bahşişi terminalde kaldığı için buraya girmez.
+#[tauri::command]
+pub async fn record_tip_entry(
+    amount_cents: i64,
+    actor_id: String,
+    actor_role: String,
+    tenant_id: Option<String>,
+    pool: State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<String, String> {
+    state.lan_sync.require_local_write()?;
+    crate::rbac::require_any(
+        &actor_role,
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Cashier,
+        ],
+    )?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let now = chrono::Local::now().to_rfc3339();
+    let id = tip_service::record_tip(&pool, &tenant, None, amount_cents, &now).await?;
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::FINANS,
+        "tip:recorded",
+        id.clone(),
+        serde_json::json!({ "amountCents": amount_cents }),
+        now,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    Ok(id)
+}
+
 #[tauri::command]
 pub async fn get_tip_pool_summary(
     tenant_id: Option<String>,

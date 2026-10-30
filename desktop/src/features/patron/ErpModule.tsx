@@ -12,26 +12,31 @@ import {
   ArrowLeft,
   Package,
   Settings,
+  ShieldAlert,
 } from 'lucide-react';
 import { useLedgerStore } from '../../stores/ledgerStore';
 import { useUIStore } from '../../stores/uiStore';
 import { Menu360Module } from '../menu360/Menu360Module';
-import { StockModule } from '../stock/StockModule';
+import { StockHub } from '../stock/StockHub';
 import { useAuthStore } from '../../stores/authStore';
 import { PatronWizardTab } from './PatronWizardTab';
 import { DebtsTab } from './DebtsTab';
 import { StaffTab } from './StaffTab';
 import { ProfitTab } from './ProfitTab';
 import { SessionSettingsTab } from './SessionSettingsTab';
+import { CriticalLogTab } from './CriticalLogTab';
 
 export const ErpModule: React.FC = () => {
   const { activeErpTab, setActiveErpTab, loadLedgerData } = useLedgerStore();
   const { setActiveModule } = useUIStore();
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
 
+  const activeModule = useUIStore((state) => state.activeModule);
+
+  // Modül açık kalır: satış sonrası rapor eski kalmasın diye her girişte okunur.
   useEffect(() => {
-    loadLedgerData();
-  }, [loadLedgerData]);
+    if (activeModule === 'ERP') void loadLedgerData();
+  }, [loadLedgerData, activeModule, activeErpTab]);
 
   const tabs: Array<{
     id: typeof activeErpTab;
@@ -40,10 +45,11 @@ export const ErpModule: React.FC = () => {
   }> = [
     { id: 'WIZARD', label: 'Hızlı Kasa İşlemi', icon: Zap },
     { id: 'DEBTS', label: 'Borç & Alacak Defteri', icon: BookOpen },
-    { id: 'STAFF', label: 'Personel & Avans', icon: Users },
-    { id: 'PROFIT', label: 'Kasa & Net Kâr (FIFO)', icon: TrendingUp },
+    { id: 'STAFF', label: 'Personel', icon: Users },
+    { id: 'PROFIT', label: 'Net Kâr', icon: TrendingUp },
     { id: 'MENU', label: 'Menü', icon: UtensilsCrossed },
     ...(isOwner ? [{ id: 'STOCK' as const, label: 'Stok', icon: Package }] : []),
+    { id: 'LOG', label: 'Kritik İşlemler', icon: ShieldAlert },
     { id: 'SETTINGS', label: 'Ayarlar', icon: Settings },
   ];
 
@@ -90,12 +96,13 @@ export const ErpModule: React.FC = () => {
 
       {/* Modül İçeriği */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-        {activeErpTab === 'MENU' ? <Menu360Module /> : activeErpTab === 'STOCK' && isOwner ? <StockModule /> : (
+        {activeErpTab === 'MENU' ? <Menu360Module /> : activeErpTab === 'STOCK' && isOwner ? <StockHub /> : (
           <div className="flex-1 overflow-y-auto p-5">
             {activeErpTab === 'WIZARD' && <PatronWizardTab />}
             {activeErpTab === 'DEBTS' && <DebtsTab />}
             {activeErpTab === 'STAFF' && <StaffTab />}
             {activeErpTab === 'PROFIT' && <ProfitTab />}
+            {activeErpTab === 'LOG' && <CriticalLogTab />}
             {activeErpTab === 'SETTINGS' && <SessionSettingsTab />}
           </div>
         )}

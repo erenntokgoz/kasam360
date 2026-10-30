@@ -3,7 +3,6 @@ import type {
   DirectoryContact,
   FinancialProfitSummary,
   PatronActionType,
-  StaffProfile,
 } from '../types/ledger';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
@@ -12,12 +11,11 @@ import { errorText, localDate, newOperationId } from '../lib/cariInput';
 interface LedgerStore {
   directories: DirectoryContact[];
   summary: FinancialProfitSummary | null;
-  staffProfiles: StaffProfile[];
-  activeErpTab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'SETTINGS';
+  activeErpTab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'LOG' | 'SETTINGS';
   isLoading: boolean;
   ledgerError: string | null;
   loadLedgerData: () => Promise<void>;
-  setActiveErpTab: (tab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'SETTINGS') => void;
+  setActiveErpTab: (tab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'LOG' | 'SETTINGS') => void;
   executePatronAction: (
     actionType: PatronActionType,
     amountCents: number,
@@ -26,47 +24,11 @@ interface LedgerStore {
     description?: string
   ) => Promise<void>;
   createContact: (name: string, phone: string, type: DirectoryContact['type']) => Promise<DirectoryContact>;
-  giveStaffAdvance: (staffId: string, amountCents: number) => Promise<boolean>;
 }
 
 export const useLedgerStore = create<LedgerStore>((set, get) => ({
   directories: [],
   summary: null,
-  staffProfiles: [
-    {
-      id: 'stf_01',
-      userId: 'usr_waiter',
-      name: 'Mehmet Kaya',
-      role: 'Garson',
-      baseSalaryCents: 2200000, // 22.000,00 TL
-      advanceBalanceCents: 350000, // 3.500,00 TL avans
-      monthlyCommissionCents: 185000, // 1.850,00 TL prim
-      totalSalesCents: 4850000,
-      ordersServed: 142,
-    },
-    {
-      id: 'stf_02',
-      userId: 'usr_waiter2',
-      name: 'Ayşe Sarı',
-      role: 'Garson',
-      baseSalaryCents: 2200000,
-      advanceBalanceCents: 0,
-      monthlyCommissionCents: 210000,
-      totalSalesCents: 5200000,
-      ordersServed: 158,
-    },
-    {
-      id: 'stf_03',
-      userId: 'usr_chef',
-      name: 'Ali Usta',
-      role: 'Mutfak Şefi',
-      baseSalaryCents: 3500000, // 35.000,00 TL
-      advanceBalanceCents: 500000,
-      monthlyCommissionCents: 0,
-      totalSalesCents: 0,
-      ordersServed: 0,
-    },
-  ],
   activeErpTab: 'WIZARD',
   isLoading: false,
   ledgerError: null,
@@ -86,7 +48,8 @@ export const useLedgerStore = create<LedgerStore>((set, get) => ({
         ledgerError: null,
       });
     } catch (error) {
-      set({ ledgerError: errorText(error) });
+      // Eski rapor gösterilmez: okunamayan tutar güncel sanılmasın.
+      set({ summary: null, ledgerError: errorText(error) });
     } finally {
       set({ isLoading: false });
     }
@@ -148,16 +111,5 @@ export const useLedgerStore = create<LedgerStore>((set, get) => ({
       directories: [...state.directories, created],
     }));
     return created;
-  },
-
-  giveStaffAdvance: async (staffId, amountCents) => {
-    set((state) => ({
-      staffProfiles: state.staffProfiles.map((s) =>
-        s.id === staffId
-          ? { ...s, advanceBalanceCents: s.advanceBalanceCents + amountCents }
-          : s
-      ),
-    }));
-    return true;
   },
 }));
