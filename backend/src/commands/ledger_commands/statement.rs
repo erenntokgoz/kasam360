@@ -6,7 +6,7 @@
 use crate::db::DbPool;
 use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant};
 use crate::services::ledger_statement::{
-    directory_statement, format_cents, payment_receipt_lines, StatementLine,
+    directory_statement, format_cents, method_label, payment_receipt_lines, StatementLine,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -179,12 +179,6 @@ pub async fn print_payment_receipt(
     let status: String = row.try_get("status").map_err(|e| e.to_string())?;
     let issued_at: String = row.try_get("created_at").map_err(|e| e.to_string())?;
 
-    let method_label = match method.as_str() {
-        "CASH" => "Nakit",
-        "CREDIT_CARD" => "Kredi Kartı",
-        "BANK_TRANSFER" => "Havale/EFT",
-        _ => method.as_str(),
-    };
     let status_label = match status.as_str() {
         "PAID" => "ÖDENDİ",
         "PARTIAL" => "KISMEN ÖDENDİ",
@@ -199,7 +193,7 @@ pub async fn print_payment_receipt(
         &payment_id,
         amount_cents,
         remaining_after_cents,
-        method_label,
+        method_label(&method),
         status_label,
         &issued_at,
     );

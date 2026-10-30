@@ -54,6 +54,16 @@ pub struct DirectoryStatement {
     pub to_date: String,
 }
 
+/// Ekstre ve makbuz aynı Türkçe etiketi gösterir.
+pub fn method_label(method: &str) -> &str {
+    match method {
+        "CASH" => "Nakit",
+        "CREDIT_CARD" => "Kredi Kartı",
+        "BANK_TRANSFER" => "Havale/EFT",
+        other => other,
+    }
+}
+
 /// Bir cari kartın hesap ekstresini üretir.
 ///
 /// ## İşaret kuralı
