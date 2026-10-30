@@ -207,6 +207,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // Karar yükseltme adımlarından önce verilir: temiz kurulumda işletme ve
     // kullanıcı açılmaz, mevcut veritabanı sihirbaza düşmez.
     crate::services::setup::classify_install(&pool).await?;
+    crate::services::device_session::end_temporary_session(&pool).await?;
 
     // Sürümlü migration'lar (0001_*.sql, 0002_*.sql, ...). Idempotent:
     // `_migrations` tablosunda version takibi yapar, calistirilmis

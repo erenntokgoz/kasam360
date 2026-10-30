@@ -1,23 +1,8 @@
 import React from 'react';
-import { Link2, Store } from 'lucide-react';
 import { useSetupStore, type SetupMode } from '../../stores/setupStore';
+import { AccountLogin } from '../auth/AccountLogin';
 import { NewBusinessForm } from './NewBusinessForm';
 import { JoinBusinessForm } from './JoinBusinessForm';
-
-const CHOICES: { mode: SetupMode; title: string; detail: string; icon: typeof Store }[] = [
-  {
-    mode: 'NEW',
-    title: 'Yeni işletme kur',
-    detail: 'Bu cihaz işletmenin ilk cihazı olur. İnternet gerekmez.',
-    icon: Store,
-  },
-  {
-    mode: 'JOIN',
-    title: 'Mevcut işletmeye cihaz bağla',
-    detail: 'Aynı ağdaki işletmeye tek kullanımlık kodla katılır.',
-    icon: Link2,
-  },
-];
 
 export const SetupWizard: React.FC = () => {
   const { mode, draft, saveProgress } = useSetupStore();
@@ -32,27 +17,14 @@ export const SetupWizard: React.FC = () => {
               360
             </div>
             <h1 className="font-bold text-base tracking-tight text-[var(--text-primary)]">
-              KASAM360 Kurulumu
+              {mode === null ? 'KASAM360 Giriş' : 'KASAM360 Kurulumu'}
             </h1>
           </div>
 
           {mode === null ? (
-            <div className="grid gap-3">
-              {CHOICES.map(({ mode: option, title, detail, icon: Icon }) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => choose(option)}
-                  className="tactile-btn min-h-12 w-full rounded-xl p-4 flex items-center gap-3 text-left cursor-pointer bg-[var(--bg-card)] hover:bg-[var(--bg-subtle)]"
-                >
-                  <Icon className="w-6 h-6 shrink-0 text-[var(--text-secondary)]" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-bold text-[var(--text-primary)]">{title}</span>
-                    <span className="block text-xs mt-0.5 text-[var(--text-secondary)]">{detail}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
+            // Web kaydı gelince `onRegister` web adresini açacak; o zamana kadar
+            // işletme bu cihazda kurulur, internet zorunlu olmaz.
+            <AccountLogin onRegister={() => choose('NEW')} onJoinDevice={() => choose('JOIN')} />
           ) : null}
 
           {mode === 'NEW' ? <NewBusinessForm onBack={() => choose(null)} /> : null}

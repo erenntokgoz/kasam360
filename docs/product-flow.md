@@ -33,6 +33,10 @@ Mal kabulü gerçek teslim miktarını stoğa ekler. Tedarikçi belgesi daha son
 - Kurulum durumu `app_setup` satırındadır ve cihaza özeldir. Kullanıcısı olan mevcut veritabanı ilk yükseltmede tamamlanmış sayılır; sihirbaza düşmez.
 - Yeni işletme tek transaction'da açılır. Yarıda kesilirse kayıt kalmaz; seçim ve işletme bilgileri taslakta durur, PIN ve eşleştirme kodu diske yazılmaz.
 - Kurulum tamamlanmadan giriş, kilit açma, sipariş ve tahsilat komutları `SETUP_REQUIRED` ile reddedilir. Durum okunamazsa kurulum tamamlanmış sayılmaz.
+- Ürüne ilk giriş işletme hesabıyladır: e-posta ve şifre. Hesap oturumu cihaza özeldir (`device_session`), personel PIN'i bu oturum açılmadan çalışmaz (`ACCOUNT_REQUIRED`). Sırayla: kurulum, hesap, personel PIN'i.
+- `Kayıt Ol` web sitesine yönlendirilecek. Web gelene kadar işletmeyi bu cihazda kurar; hesap yerelde Argon2id ile doğrulanır ve internet gerekmez. Bu yüzden yeni cihaz şimdilik e-postayla değil, kurulu cihazın verdiği eşleştirme koduyla bağlanır; hesap bilgisi bağlanınca gelir.
+- Hesabı olmayan eski işletme kuruluma düşmez: sahip PIN'iyle e-posta ve şifre belirler.
+- Personel oturumu geçicidir: PIN ile açılır, hareketsizlikte kilitlenir (varsayılan 2 dakika). Ayarlar > Oturum bu cihaz için 2, 5, 15 dakika veya kalıcı oturum seçer; hesap oturumu da kapatılabilir, o zaman her açılışta şifre sorulur. Ayarı yalnız sahip ve müdür değiştirir.
 - Giriş oturum yokken, kilit ekranı mevcut oturum hareketsizlikten kilitlendiğinde kullanılır. Başka personelin PIN'i kilitli oturumu açmaz; `Kullanıcı Değiştir` oturumu kapatıp girişe döner.
 - Cihaz bağlama yalnız kurulum sihirbazından yapılır: kayıtlı işletmesi olan cihaz başka işletmeye katılmaz.
 

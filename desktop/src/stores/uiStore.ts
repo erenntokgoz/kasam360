@@ -20,20 +20,23 @@ interface UIStore {
   activeModule: AppModule;
   theme: 'dark' | 'light';
   idleSecondsLeft: number;
+  idleLimitSeconds: number;
   modals: ModalState;
   setActiveModule: (module: AppModule) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   toggleTheme: () => void;
+  setIdleLimit: (seconds: number) => void;
   resetIdleTimer: () => void;
   decrementIdleTimer: () => void;
   openModal: (modalName: keyof ModalState) => void;
   closeModal: (modalName: keyof ModalState) => void;
 }
 
-export const useUIStore = create<UIStore>((set) => ({
+export const useUIStore = create<UIStore>((set, get) => ({
   activeModule: 'FLOOR',
   theme: 'dark',
-  idleSecondsLeft: 120, // 2 dakika hareketsizlik kuralı
+  idleSecondsLeft: 120,
+  idleLimitSeconds: 120, // Varsayılan 2 dakika; 0 kalıcı personel oturumudur.
   modals: {
     payment: false,
     shiftGate: false,
@@ -62,7 +65,9 @@ export const useUIStore = create<UIStore>((set) => ({
       return { theme: nextTheme };
     }),
 
-  resetIdleTimer: () => set({ idleSecondsLeft: 120 }),
+  setIdleLimit: (seconds) => set({ idleLimitSeconds: seconds, idleSecondsLeft: seconds }),
+
+  resetIdleTimer: () => set({ idleSecondsLeft: get().idleLimitSeconds }),
 
   decrementIdleTimer: () =>
     set((state) => ({

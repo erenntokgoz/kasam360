@@ -324,16 +324,6 @@ pub async fn authenticate_by_pin(
 }
 
 #[tauri::command]
-pub async fn auth_login_credentials(
-    identifier: String,
-    secret: String,
-    pool: tauri::State<'_, DbPool>,
-) -> Result<UserDto, String> {
-    crate::services::setup::require_complete(&pool).await?;
-    authenticate_by_identifier(&pool, &identifier, &secret).await
-}
-
-#[tauri::command]
 pub async fn auth_login(
     pin: String,
     tenant_id: Option<String>,
@@ -341,6 +331,7 @@ pub async fn auth_login(
     pool: tauri::State<'_, DbPool>,
 ) -> Result<UserDto, String> {
     crate::services::setup::require_complete(&pool).await?;
+    crate::services::device_session::require_signed_in(&pool).await?;
     let effective_tenant = tenant_id.or(tenantId);
     authenticate_by_pin(&pool, &pin, effective_tenant.as_deref()).await
 }

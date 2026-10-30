@@ -30,12 +30,15 @@ pub async fn complete_business_setup(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     setup::validate_owner_pin(&payload.pin, &payload.pin_confirm)?;
+    crate::services::device_session::validate_password(&payload.password)?;
     // Argon2 yazma kilidi alınmadan önce hesaplanır.
     let pin_hash = crate::user_credentials::hash_pin(&payload.pin)?;
+    let credential_hash = crate::auth::hash_credential(&payload.password)?;
 
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-    setup::complete_new_business(&mut tx, &audit_lock, &payload, &pin_hash).await?;
+    setup::complete_new_business(&mut tx, &audit_lock, &payload, &pin_hash, &credential_hash)
+        .await?;
     tx.commit().await.map_err(|e| e.to_string())
 }
 

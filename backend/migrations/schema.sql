@@ -2072,6 +2072,16 @@ CREATE TABLE IF NOT EXISTS app_setup (
     completed_at TEXT
 );
 
+-- Cihaza özel işletme hesabı oturumu ve personel kilit ayarı.
+CREATE TABLE IF NOT EXISTS device_session (
+    slot INTEGER PRIMARY KEY CHECK (slot = 1),
+    user_id TEXT,
+    tenant_id TEXT,
+    keep_signed_in INTEGER NOT NULL DEFAULT 1 CHECK (keep_signed_in IN (0, 1)),
+    staff_idle_seconds INTEGER NOT NULL DEFAULT 120 CHECK (staff_idle_seconds >= 0),
+    signed_in_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS sync_cluster (
     slot INTEGER PRIMARY KEY CHECK (slot = 1),
     tenant_id TEXT NOT NULL,

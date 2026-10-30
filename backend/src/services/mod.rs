@@ -5,6 +5,7 @@ pub mod branch_service;
 pub mod budget_service;
 pub mod cari;
 pub mod device_identity;
+pub mod device_session;
 pub mod external360;
 pub mod floor360;
 pub mod inventory360;

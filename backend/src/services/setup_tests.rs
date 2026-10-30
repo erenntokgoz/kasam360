@@ -23,6 +23,8 @@ fn input(pin: &str) -> NewBusinessInput {
         phone: String::new(),
         address: String::new(),
         owner_name: "Ayşe Yılmaz".to_string(),
+        email: "ayse@deniz.co".to_string(),
+        password: "gizli-sifre".to_string(),
         pin: pin.to_string(),
         pin_confirm: pin.to_string(),
     }
@@ -35,7 +37,7 @@ async fn finish(pool: &SqlitePool, pin: &str) -> Result<String, String> {
     let mutex = Mutex::new(());
     let lock = AuditLock::new(mutex.lock().await);
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-    let tenant = complete_new_business(&mut tx, &lock, &setup, &hash).await?;
+    let tenant = complete_new_business(&mut tx, &lock, &setup, &hash, "hash_sifre").await?;
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(tenant)
 }
@@ -137,7 +139,7 @@ async fn yarida_kesilen_kurulum_kayit_birakmaz_ikinci_tamamlama_reddedilir() {
     {
         let lock = AuditLock::new(mutex.lock().await);
         let mut tx = pool.begin().await.expect("tx");
-        complete_new_business(&mut tx, &lock, &setup, &hash)
+        complete_new_business(&mut tx, &lock, &setup, &hash, "hash_sifre")
             .await
             .expect("kurulum");
         tx.rollback().await.expect("kesinti");

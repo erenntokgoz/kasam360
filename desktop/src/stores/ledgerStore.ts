@@ -13,11 +13,11 @@ interface LedgerStore {
   directories: DirectoryContact[];
   summary: FinancialProfitSummary | null;
   staffProfiles: StaffProfile[];
-  activeErpTab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK';
+  activeErpTab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'SETTINGS';
   isLoading: boolean;
   ledgerError: string | null;
   loadLedgerData: () => Promise<void>;
-  setActiveErpTab: (tab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK') => void;
+  setActiveErpTab: (tab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK' | 'SETTINGS') => void;
   executePatronAction: (
     actionType: PatronActionType,
     amountCents: number,

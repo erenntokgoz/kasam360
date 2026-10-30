@@ -36,6 +36,7 @@ pub struct SetupDraft {
     pub address: String,
     pub owner_name: String,
     pub device_name: String,
+    pub email: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -60,6 +61,8 @@ pub struct NewBusinessInput {
     #[serde(default)]
     pub address: String,
     pub owner_name: String,
+    pub email: String,
+    pub password: String,
     pub pin: String,
     pub pin_confirm: String,
 }
@@ -325,16 +328,19 @@ async fn upsert_tenant(
 
 /// İşletmeyi, OWNER hesabını ve çalışma için gereken kayıtları tek transaction'da açar.
 ///
-/// `pin_hash` çağırandan gelir: Argon2 bilinçli olarak yavaştır ve yazma kilidi
+/// Özetler çağırandan gelir: Argon2 bilinçli olarak yavaştır ve yazma kilidi
 /// tutulurken hesaplanmamalıdır. Yarıda kesilirse hiçbir kayıt kalmaz, taslak durur.
+/// Kurulumu yapan cihaz işletme hesabıyla açık kalır; şifre hemen yeniden sorulmaz.
 pub async fn complete_new_business(
     conn: &mut SqliteConnection,
     audit_lock: &AuditLock<'_>,
     input: &NewBusinessInput,
     pin_hash: &str,
+    credential_hash: &str,
 ) -> Result<String, String> {
     let business_name = clean_name(&input.business_name, "İşletme adı")?;
     let owner_name = clean_name(&input.owner_name, "Yetkili adı")?;
+    let email = crate::services::device_session::normalize_email(&input.email)?;
 
     let users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
         .fetch_one(&mut *conn)
@@ -359,13 +365,17 @@ pub async fn complete_new_business(
 
     let owner_id = crate::id_generator::generate_id("usr");
     sqlx::query(
-        "INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active, must_change_pin)
-         VALUES (?, ?, 'OWNER', ?, ?, 1, 0)",
+        "INSERT INTO users (id, tenant_id, role, name, pin_hash, credential_hash,
+                            login_identifier, email, is_active, must_change_pin)
+         VALUES (?, ?, 'OWNER', ?, ?, ?, ?, ?, 1, 0)",
     )
     .bind(&owner_id)
     .bind(&tenant_id)
     .bind(&owner_name)
     .bind(pin_hash)
+    .bind(credential_hash)
+    .bind(&email)
+    .bind(&email)
     .execute(&mut *conn)
     .await
     .map_err(text_error)?;
@@ -402,6 +412,7 @@ pub async fn complete_new_business(
         .map_err(text_error)?;
     }
     ensure_local_device(&mut *conn, &tenant_id).await?;
+    crate::services::device_session::sign_in(&mut *conn, &owner_id, &tenant_id).await?;
 
     let ctx = AuditContext::new(
         tenant_id.clone(),

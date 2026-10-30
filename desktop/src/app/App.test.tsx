@@ -12,10 +12,11 @@ describe('iş istasyonu erişimi', () => {
     expect(html).not.toContain('Ana Menü');
   });
 
-  it('kurulmamış cihazda girişi değil kurulum seçimini gösterir', () => {
+  it('kurulmamış cihazda personel girişi değil hesap girişini gösterir', () => {
     const html = renderToStaticMarkup(<SetupGate phase="PENDING" error={null} onRetry={() => undefined} />);
-    expect(html).toContain('Yeni işletme kur');
-    expect(html).toContain('Mevcut işletmeye cihaz bağla');
+    expect(html).toContain('E-posta');
+    expect(html).toContain('Kayıt Ol');
+    expect(html).toContain('Cihazı Bağla');
     expect(html).not.toContain('Personel Girişi');
   });
 

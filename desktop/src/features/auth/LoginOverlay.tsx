@@ -4,17 +4,13 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { Numpad } from '../../ui/Numpad';
 import { Button } from '../../ui/Button';
-import { Input } from '../../ui/Input';
 import { formatDateTime } from '../../lib/date';
 
 export const LoginOverlay: React.FC = () => {
-  const { isAuthenticated, loginWithPin, loginWithCredentials, loginError } = useAuthStore();
+  const { isAuthenticated, loginWithPin, loginError } = useAuthStore();
   const { theme, toggleTheme, resetIdleTimer } = useUIStore();
 
-  const [authMethod, setAuthMethod] = useState<'PIN' | 'CRED'>('PIN');
   const [pinDigits, setPinDigits] = useState<string>('');
-  const [identifier, setIdentifier] = useState('');
-  const [secret, setSecret] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clockStr, setClockStr] = useState(formatDateTime());
   const [shake, setShake] = useState(false);
@@ -49,19 +45,6 @@ export const LoginOverlay: React.FC = () => {
 
   const handleClear = () => setPinDigits('');
   const handleBackspace = () => setPinDigits((prev) => prev.slice(0, -1));
-
-  const handleCredSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    const success = await loginWithCredentials(identifier, secret);
-    setIsSubmitting(false);
-    if (success) {
-      resetIdleTimer();
-    } else {
-      setShake(true);
-      setTimeout(() => setShake(false), 500);
-    }
-  };
 
   return (
     <div
@@ -104,35 +87,6 @@ export const LoginOverlay: React.FC = () => {
             </p>
           </div>
 
-          {/* Yöntem Seçici */}
-          <div className="grid grid-cols-2 p-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMethod('PIN');
-                setPinDigits('');
-              }}
-              className={`py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-                authMethod === 'PIN'
-                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              PIN Girişi
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuthMethod('CRED')}
-              className={`py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-                authMethod === 'CRED'
-                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              Hesap Girişi
-            </button>
-          </div>
-
           {loginError ? (
             <div className="p-3 rounded-lg text-xs font-medium text-center border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center justify-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -141,7 +95,6 @@ export const LoginOverlay: React.FC = () => {
           ) : null}
 
           {/* PIN Ekranı */}
-          {authMethod === 'PIN' ? (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-4 gap-2.5">
                 {Array.from({ length: Math.max(4, pinDigits.length) }, (_, idx) => idx).map((idx) => {
@@ -168,37 +121,6 @@ export const LoginOverlay: React.FC = () => {
                 PIN ile Giriş Yap
               </Button>
             </div>
-          ) : (
-            <form onSubmit={handleCredSubmit} className="flex flex-col gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
-                  E-posta veya Kullanıcı Adı
-                </label>
-                <Input
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="ornek@isletme.com"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
-                  Şifre
-                </label>
-                <Input
-                  type="password"
-                  value={secret}
-                  onChange={(e) => setSecret(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-              <Button type="submit" variant="primary" size="lg" className="w-full mt-1" isLoading={isSubmitting}>
-                Giriş Yap
-              </Button>
-            </form>
-          )}
         </div>
       </div>
 

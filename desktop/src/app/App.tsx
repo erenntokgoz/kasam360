@@ -10,6 +10,8 @@ import { CashierModule } from '../features/cashier/CashierModule';
 import { ErpModule } from '../features/patron/ErpModule';
 import { LoginOverlay } from '../features/auth/LoginOverlay';
 import { LockScreen } from '../features/auth/LockScreen';
+import { AccountGate } from '../features/auth/AccountGate';
+import { useDeviceSessionStore } from '../stores/deviceSessionStore';
 import { SetupGate } from '../features/setup/SetupGate';
 import { useSetupStore } from '../stores/setupStore';
 import { MustChangePinModal } from '../features/auth/MustChangePinModal';
@@ -24,32 +26,38 @@ export const App: React.FC = () => {
     activeModule,
     setActiveModule,
     idleSecondsLeft,
+    idleLimitSeconds,
     decrementIdleTimer,
     resetIdleTimer,
   } = useUIStore();
   const { phase: setupPhase, error: setupError, load: loadSetup } = useSetupStore();
+  const { session: deviceSession, error: deviceError, load: loadDeviceSession } = useDeviceSessionStore();
 
   // Kurulum durumu bilinmeden hiçbir kimlik ekranı açılmaz.
   useEffect(() => {
     void loadSetup();
   }, [loadSetup]);
 
-  // 120 saniye hareketsizlik sayacı ve otomatik kilit
   useEffect(() => {
-    if (!isAuthenticated || isLocked) return;
+    if (setupPhase === 'COMPLETE') void loadDeviceSession();
+  }, [setupPhase, loadDeviceSession]);
+
+  // Hareketsizlik sayacı ve otomatik kilit. Süre sıfırsa personel oturumu kalıcıdır.
+  useEffect(() => {
+    if (!isAuthenticated || isLocked || idleLimitSeconds === 0) return;
 
     const interval = setInterval(() => {
       decrementIdleTimer();
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isAuthenticated, isLocked, decrementIdleTimer]);
+  }, [isAuthenticated, isLocked, idleLimitSeconds, decrementIdleTimer]);
 
   useEffect(() => {
-    if (idleSecondsLeft === 0 && isAuthenticated && !isLocked) {
+    if (idleLimitSeconds > 0 && idleSecondsLeft === 0 && isAuthenticated && !isLocked) {
       lock();
     }
-  }, [idleSecondsLeft, isAuthenticated, isLocked, lock]);
+  }, [idleSecondsLeft, idleLimitSeconds, isAuthenticated, isLocked, lock]);
 
   // Kullanıcı etkileşimi dinleyicisi: Fare ve klavye hareketinde sayaç sıfırlanır
   useEffect(() => {
@@ -96,6 +104,12 @@ export const App: React.FC = () => {
 
   if (setupPhase !== 'COMPLETE') {
     return <SetupGate phase={setupPhase} error={setupError} onRetry={() => void loadSetup()} />;
+  }
+
+  // Durum bilinmeden PIN ekranı açılmaz: kapalı cihaz açık sayılamaz.
+  if (!deviceSession?.signedIn) {
+    if (!deviceSession && !deviceError) return <div className="h-screen w-screen bg-[var(--bg-canvas)]" aria-busy="true" />;
+    return <AccountGate />;
   }
 
   if (!isAuthenticated || mustChangePin) {

@@ -11,6 +11,7 @@ import {
   TrendingUp,
   ArrowLeft,
   Package,
+  Settings,
 } from 'lucide-react';
 import { useLedgerStore } from '../../stores/ledgerStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -21,6 +22,7 @@ import { PatronWizardTab } from './PatronWizardTab';
 import { DebtsTab } from './DebtsTab';
 import { StaffTab } from './StaffTab';
 import { ProfitTab } from './ProfitTab';
+import { SessionSettingsTab } from './SessionSettingsTab';
 
 export const ErpModule: React.FC = () => {
   const { activeErpTab, setActiveErpTab, loadLedgerData } = useLedgerStore();
@@ -42,6 +44,7 @@ export const ErpModule: React.FC = () => {
     { id: 'PROFIT', label: 'Kasa & Net Kâr (FIFO)', icon: TrendingUp },
     { id: 'MENU', label: 'Menü', icon: UtensilsCrossed },
     ...(isOwner ? [{ id: 'STOCK' as const, label: 'Stok', icon: Package }] : []),
+    { id: 'SETTINGS', label: 'Ayarlar', icon: Settings },
   ];
 
   return (
@@ -93,6 +96,7 @@ export const ErpModule: React.FC = () => {
             {activeErpTab === 'DEBTS' && <DebtsTab />}
             {activeErpTab === 'STAFF' && <StaffTab />}
             {activeErpTab === 'PROFIT' && <ProfitTab />}
+            {activeErpTab === 'SETTINGS' && <SessionSettingsTab />}
           </div>
         )}
       </div>

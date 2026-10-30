@@ -36,15 +36,6 @@ describe('oturum sınırı', () => {
     expect(useAuthStore.getState().user).toBeNull();
   });
 
-  it('hesap girişinde backend rol ve kiracısını korur', async () => {
-    invokeMock.mockResolvedValueOnce({
-      id: 'usr_3', name: 'Müdür', role: 'MANAGER', tenant_id: 'ten_3',
-      activeModules: [], mustChangePin: false,
-    });
-    expect(await useAuthStore.getState().loginWithCredentials('mudur', 'secret')).toBe(true);
-    expect(useAuthStore.getState().user).toMatchObject({ role: 'MANAGER', tenantId: 'ten_3' });
-  });
-
   it('kilidi yalnız oturum sahibinin kimliğiyle ister, hatada kilitli kalır', async () => {
     invokeMock.mockResolvedValueOnce({
       id: 'usr_1', name: 'Ayşe', role: 'CASHIER', tenant_id: 'ten_2',

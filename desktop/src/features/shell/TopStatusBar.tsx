@@ -10,7 +10,7 @@ import { SyncStatusChip } from './SyncStatusChip';
 export const TopStatusBar: React.FC = () => {
   const { user, lock } = useAuthStore();
   const { activeShift } = useShiftStore();
-  const { theme, toggleTheme, idleSecondsLeft, openModal } = useUIStore();
+  const { theme, toggleTheme, idleSecondsLeft, idleLimitSeconds, openModal } = useUIStore();
   const [timeStr, setTimeStr] = useState(formatTime());
 
   useEffect(() => {
@@ -85,7 +85,7 @@ export const TopStatusBar: React.FC = () => {
         >
           <span className="text-[var(--text-muted)]">Kilit:</span>
           <span className="font-semibold text-[var(--text-secondary)]">
-            {formatIdleSeconds(idleSecondsLeft)}
+            {idleLimitSeconds === 0 ? 'Kalıcı' : formatIdleSeconds(idleSecondsLeft)}
           </span>
         </div>
 

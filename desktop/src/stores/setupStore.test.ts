@@ -5,7 +5,7 @@ import { invokeIPC } from '../services/tauriClient';
 vi.mock('../services/tauriClient', () => ({ invokeIPC: vi.fn() }));
 
 const invokeMock = vi.mocked(invokeIPC);
-const draft = { businessName: 'Deniz', taxId: '', phone: '', address: '', ownerName: 'Ayşe', deviceName: '' };
+const draft = { businessName: 'Deniz', taxId: '', phone: '', address: '', ownerName: 'Ayşe', deviceName: '', email: 'ayse@deniz.co' };
 
 describe('kurulum durumu', () => {
   beforeEach(() => {
@@ -33,7 +33,7 @@ describe('kurulum durumu', () => {
     invokeMock.mockReset();
     invokeMock.mockResolvedValueOnce(undefined);
     invokeMock.mockResolvedValueOnce({ status: 'COMPLETE', mode: 'NEW', draft });
-    await useSetupStore.getState().completeNew(draft, '4827', '4827');
+    await useSetupStore.getState().completeNew(draft, 'gizli-sifre', '4827', '4827');
     expect(invokeMock.mock.calls[0][0]).toBe('complete_business_setup');
     expect(useSetupStore.getState().phase).toBe('COMPLETE');
   });

@@ -60,5 +60,6 @@ pub async fn auth_unlock(
     pool: tauri::State<'_, DbPool>,
 ) -> Result<(), String> {
     crate::services::setup::require_complete(&pool).await?;
+    crate::services::device_session::require_signed_in(&pool).await?;
     unlock_session(&pool, &tenant_id, &user_id, &pin).await
 }

@@ -12,6 +12,7 @@ export interface SetupDraft {
   address: string;
   ownerName: string;
   deviceName: string;
+  email: string;
 }
 
 interface SetupReply {
@@ -27,7 +28,7 @@ interface SetupStore {
   error: string | null;
   load: () => Promise<void>;
   saveProgress: (mode: SetupMode | null, draft: SetupDraft) => Promise<void>;
-  completeNew: (draft: SetupDraft, pin: string, pinConfirm: string) => Promise<void>;
+  completeNew: (draft: SetupDraft, password: string, pin: string, pinConfirm: string) => Promise<void>;
   joinExisting: (code: string, deviceName: string) => Promise<void>;
 }
 
@@ -38,6 +39,7 @@ const EMPTY_DRAFT: SetupDraft = {
   address: '',
   ownerName: '',
   deviceName: '',
+  email: '',
 };
 
 export const useSetupStore = create<SetupStore>((set, get) => ({
@@ -67,7 +69,7 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
     await invokeIPC('save_setup_draft', { mode, draft });
   },
 
-  completeNew: async (draft, pin, pinConfirm) => {
+  completeNew: async (draft, password, pin, pinConfirm) => {
     await invokeIPC('complete_business_setup', {
       payload: {
         businessName: draft.businessName,
@@ -75,6 +77,8 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
         phone: draft.phone,
         address: draft.address,
         ownerName: draft.ownerName,
+        email: draft.email,
+        password,
         pin,
         pinConfirm,
       },

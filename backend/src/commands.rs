@@ -4,6 +4,7 @@
 //! domain modüllerini tanımlar ve `pub use` ile eski isimleri korur; böylece
 //! `crate::commands::*` ve `tauri::generate_handler!` yolları değişmez.
 
+pub mod account_commands;
 pub mod analytics_commands;
 pub mod approval_commands;
 pub mod audit_commands;

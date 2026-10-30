@@ -9,6 +9,7 @@ import { Numpad } from '../../ui/Numpad';
 const FIELDS: { key: keyof SetupDraft; label: string; required?: boolean }[] = [
   { key: 'businessName', label: 'İşletme Adı', required: true },
   { key: 'ownerName', label: 'İşletme Sahibi Adı Soyadı', required: true },
+  { key: 'email', label: 'E-posta', required: true },
   { key: 'taxId', label: 'Vergi Numarası' },
   { key: 'phone', label: 'Telefon' },
   { key: 'address', label: 'Adres' },
@@ -16,17 +17,24 @@ const FIELDS: { key: keyof SetupDraft; label: string; required?: boolean }[] = [
 
 const PIN_MAX = 8;
 const PIN_MIN = 4;
+const PASSWORD_MIN = 8;
 
 export const NewBusinessForm: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { draft, saveProgress, completeNew } = useSetupStore();
   const [form, setForm] = useState<SetupDraft>(draft);
   const [step, setStep] = useState<'INFO' | 'PIN' | 'CONFIRM'>('INFO');
+  // Şifre taslağa yazılmaz: yarım kalan kurulum diskte sır bırakmaz.
+  const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
-  const ready = form.businessName.trim().length >= 2 && form.ownerName.trim().length >= 2;
+  const ready =
+    form.businessName.trim().length >= 2 &&
+    form.ownerName.trim().length >= 2 &&
+    form.email.includes('@') &&
+    password.length >= PASSWORD_MIN;
   const entry = step === 'PIN' ? pin : pinConfirm;
   const setEntry = step === 'PIN' ? setPin : setPinConfirm;
 
@@ -51,7 +59,7 @@ export const NewBusinessForm: React.FC<{ onBack: () => void }> = ({ onBack }) =>
     setIsBusy(true);
     setError(null);
     try {
-      await completeNew(form, pin, pinConfirm);
+      await completeNew(form, password, pin, pinConfirm);
     } catch (caught) {
       setError(errorText(caught));
       setPin('');
@@ -89,6 +97,12 @@ export const NewBusinessForm: React.FC<{ onBack: () => void }> = ({ onBack }) =>
                 />
               </div>
             ))}
+            <div>
+              <label htmlFor="setup-password" className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
+                Şifre (en az {PASSWORD_MIN} karakter) *
+              </label>
+              <Input id="setup-password" type="password" className="min-h-12" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" variant="secondary" className="min-h-12" onClick={onBack}>
