@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Lock, Printer, Clock } from 'lucide-react';
 import { useShiftStore } from '../../stores/shiftStore';
+import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { formatDateTime } from '../../lib/date';
 import { Button } from '../../ui/Button';
@@ -13,7 +15,9 @@ import { ReceiptsTab } from './ReceiptsTab';
 const money = (cents?: number | null) => (cents == null ? 'Okunamadı' : formatMoney(cents));
 
 export const CashierModule: React.FC = () => {
-  const { activeShift, summary, lastZReport, loadShiftData, recordCashMovement } = useShiftStore();
+  const { activeShift, summary, lastZReport, loadShiftData, recordCashMovement, closeDay } = useShiftStore();
+  const canCloseDay = useAuthStore((state) => state.user?.role === 'OWNER' || state.user?.role === 'MANAGER');
+  const [dayCloseNotice, setDayCloseNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const { openModal } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<'SHIFT' | 'RECEIPTS' | 'DAY_CLOSE'>('SHIFT');
@@ -29,6 +33,14 @@ export const CashierModule: React.FC = () => {
 
   const isShiftOpen = activeShift && activeShift.isOpen;
 
+  const handleCloseDay = async () => {
+    try {
+      setDayCloseNotice({ ok: true, text: await closeDay() });
+    } catch (caught) {
+      setDayCloseNotice({ ok: false, text: errorText(caught) });
+    }
+  };
+
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] select-none">
       {/* Üst Bar */}
@@ -38,7 +50,7 @@ export const CashierModule: React.FC = () => {
             variant={activeTab === 'SHIFT' ? 'primary' : 'secondary'}
             size="sm"
             onClick={() => setActiveTab('SHIFT')}
-            className="!min-h-[38px] text-xs font-bold"
+            className="min-h-12 text-xs font-bold"
           >
             Aktif Vardiya ve Kasa
           </Button>
@@ -56,7 +68,7 @@ export const CashierModule: React.FC = () => {
             variant={activeTab === 'DAY_CLOSE' ? 'primary' : 'secondary'}
             size="sm"
             onClick={() => setActiveTab('DAY_CLOSE')}
-            className="!min-h-[38px] text-xs font-bold"
+            className="min-h-12 text-xs font-bold"
           >
             Gün Sonu (Z Raporu)
           </Button>
@@ -69,7 +81,7 @@ export const CashierModule: React.FC = () => {
                 variant="outline-emerald"
                 size="sm"
                 onClick={() => setCashActionModal('IN')}
-                className="!min-h-[38px] text-xs font-bold"
+                className="min-h-12 text-xs font-bold"
               >
                 <ArrowDownRight className="w-4 h-4 mr-1" />
                 <span>+ Nakit Giriş</span>
@@ -79,7 +91,7 @@ export const CashierModule: React.FC = () => {
                 variant="secondary"
                 size="sm"
                 onClick={() => setCashActionModal('OUT')}
-                className="!min-h-[38px] text-xs font-bold text-[var(--accent-red)] border-[var(--accent-red-border)] hover:bg-[var(--accent-red-soft)]"
+                className="min-h-12 text-xs font-bold text-[var(--accent-red)] border-[var(--accent-red-border)] hover:bg-[var(--accent-red-soft)]"
               >
                 <ArrowUpRight className="w-4 h-4 mr-1" />
                 <span>− Nakit Çıkış</span>
@@ -89,7 +101,7 @@ export const CashierModule: React.FC = () => {
                 variant="primary"
                 size="sm"
                 onClick={() => openModal('blindClose')}
-                className="!min-h-[38px] text-xs font-bold"
+                className="min-h-12 text-xs font-bold"
               >
                 <Lock className="w-4 h-4 mr-1" />
                 <span>Vardiyayı Kapat</span>
@@ -100,7 +112,7 @@ export const CashierModule: React.FC = () => {
               variant="success"
               size="sm"
               onClick={() => openModal('shiftGate')}
-              className="!min-h-[38px] text-xs font-bold"
+              className="min-h-12 text-xs font-bold"
             >
               Vardiya Başlat
             </Button>
@@ -210,7 +222,7 @@ export const CashierModule: React.FC = () => {
                   {lastZReport ? 'GÜN SONU MALİ Z RAPORU (KAPANIŞ)' : 'GÜN SONU MALİ Z RAPORU (CANLI ÖNİZLEME)'}
                 </div>
                 <div className="text-[10px] text-gray-600">
-                  Rapor No: {lastZReport?.reportNumber ?? 'Ön izleme'} · Tarih: {lastZReport?.dateStr || new Date().toLocaleDateString('tr-TR')}
+                  {lastZReport?.tenantName ?? ''} · Rapor No: {lastZReport?.reportNumber ?? 'Ön izleme'} · Tarih: {formatDateTime(lastZReport?.closedAt)}
                 </div>
               </div>
 
@@ -247,6 +259,11 @@ export const CashierModule: React.FC = () => {
                 </div>
                 {lastZReport ? (
                   <>
+                    <div className="flex justify-between"><span>İndirim:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.discountTotalCents)}</span></div>
+                    <div className="flex justify-between"><span>İptal:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.voidTotalCents)}</span></div>
+                    <div className="flex justify-between"><span>İade:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.refundTotalCents)}</span></div>
+                    <div className="flex justify-between"><span>KDV:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.totalVatCents)}</span></div>
+                    <div className="flex justify-between"><span>Adisyon:</span><span className="font-bold tabular-nums">{lastZReport.orderCount}</span></div>
                     <div className="flex justify-between pt-1 border-t border-gray-300">
                       <span>Sayılan Kasa Nakiti:</span>
                       <span className="font-bold tabular-nums">{formatMoney(lastZReport.countedCashCents)}</span>
@@ -279,6 +296,17 @@ export const CashierModule: React.FC = () => {
                 Mali mühür SHA-256 zinciriyle denetim defterine işlenmiştir.
               </div>
             </div>
+
+            {canCloseDay ? (
+              <Button variant="danger" className="w-full min-h-12" onClick={() => void handleCloseDay()}>
+                Günü Kapat
+              </Button>
+            ) : null}
+            {dayCloseNotice ? (
+              <p role="alert" className={`text-xs font-semibold ${dayCloseNotice.ok ? 'text-[var(--accent-emerald)]' : 'text-[var(--accent-red)]'}`}>
+                {dayCloseNotice.text}
+              </p>
+            ) : null}
           </div>
         )}
       </div>

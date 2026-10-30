@@ -141,10 +141,11 @@ pub async fn execute_close_shift(
 
     let difference = actual_amount_cents - calc.expected_balance;
 
-    sqlx::query("UPDATE shifts SET status = 'CLOSED', closed_at = datetime('now'), actual_amount_cents = ?, difference_cents = ? WHERE id = ?")
+    sqlx::query("UPDATE shifts SET status = 'CLOSED', closed_at = datetime('now'), actual_amount_cents = ?, difference_cents = ? WHERE id = ? AND tenant_id = ?")
         .bind(actual_amount_cents)
         .bind(difference)
         .bind(&id)
+        .bind(tenant_id)
         .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
+import { parseCents } from '../../lib/moneyInput';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { ManagerPinPrompt } from '../payment/ManagerPinPrompt';
@@ -18,13 +19,6 @@ interface RefundModalProps {
   target: RefundTarget;
   onClose: () => void;
   onDone: () => void;
-}
-
-/** Kuruşa çevirir; kayan nokta kullanılmaz. Geçersiz girişte `null` döner. */
-function parseCents(text: string): number | null {
-  const match = /^(\d+)(?:[.,](\d{1,2}))?$/.exec(text.trim());
-  if (!match) return null;
-  return Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
 }
 
 export const RefundModal: React.FC<RefundModalProps> = ({ target, onClose, onDone }) => {

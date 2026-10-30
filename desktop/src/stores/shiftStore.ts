@@ -12,7 +12,9 @@ interface ShiftStore {
   shiftError: string | null;
   loadShiftData: () => Promise<void>;
   openShift: (openingCashCents: number, cashierId: string, cashierName: string) => Promise<boolean>;
-  closeShift: (countedCashCents: number, notes?: string) => Promise<ZReportData>;
+  closeShift: (countedCashCents: number) => Promise<ZReportData>;
+  explainDifference: (shiftId: string, note: string) => Promise<void>;
+  closeDay: () => Promise<string>;
   recordCashMovement: (type: 'IN' | 'OUT', amountCents: number, reason: string) => Promise<CashMovement>;
 }
 
@@ -129,7 +131,6 @@ export const useShiftStore = create<ShiftStore>((set, get) => ({
   closeShift: async (countedCashCents) => {
     const user = useAuthStore.getState().user;
     const shift = get().activeShift;
-    const summary = get().summary;
     if (!user || !shift) throw new Error('Açık vardiya yok.');
     const { actorRole, tenantId } = sessionArgs();
     const wire = await invokeIPC<ShiftWire>('close_shift', {
@@ -138,30 +139,23 @@ export const useShiftStore = create<ShiftStore>((set, get) => ({
       tenantId,
       actorRole,
     });
-    const report: ZReportData = {
-      reportNumber: `Z-${wire.id.slice(-6).toUpperCase()}`,
-      tenantName: '',
-      taxNumber: '',
-      dateStr: new Date().toLocaleDateString('tr-TR'),
-      shiftId: wire.id,
-      cashierName: user.name,
-      openingCashCents: shift.openingCashCents,
-      countedCashCents,
-      expectedCashCents: countedCashCents - (wire.differenceCents ?? 0),
-      differenceCents: wire.differenceCents ?? 0,
-      cashSalesCents: summary?.totalCashSalesCents ?? 0,
-      cardSalesCents: summary?.totalCardSalesCents ?? 0,
-      mealCardSalesCents: summary?.totalMealCardSalesCents ?? 0,
-      veresiyeSalesCents: summary?.totalVeresiyeCents ?? 0,
-      totalRevenueCents: summary?.totalSalesCents ?? 0,
-      totalVatCents: 0,
-      voidTotalCents: 0,
-      discountTotalCents: 0,
-      orderCount: 0,
-      closedAt: wire.closedAt ?? new Date().toISOString(),
-    };
-    set({ lastZReport: report, activeShift: null, summary: null });
+    // Vardiya kapandı: rapor okunamazsa sayım tekrar gönderilmemeli.
+    set({ activeShift: null, summary: null, lastZReport: null });
+    const report = await invokeIPC<ZReportData>('get_z_report', { shiftId: wire.id, tenantId, actorRole });
+    set({ lastZReport: report });
     return report;
+  },
+
+  explainDifference: async (shiftId, note) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('explain_shift_difference', { shiftId, note, actorId, actorRole, tenantId });
+  },
+
+  closeDay: async () => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    const reply = await invokeIPC<{ message: string }>('close_day', { actorId, actorRole, tenantId });
+    await get().loadShiftData();
+    return reply.message;
   },
 
   recordCashMovement: async (type, amountCents, reason) => {

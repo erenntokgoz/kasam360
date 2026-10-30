@@ -6,7 +6,9 @@
 pub mod dto;
 pub mod movements;
 pub mod summary;
+pub mod z_report;
 
 pub use dto::*;
 pub use movements::*;
 pub use summary::*;
+pub use z_report::*;

@@ -183,6 +183,8 @@ pub fn run() {
             cashier_commands::get_shift_summary,
             cashier_commands::get_cash_movements,
             commands::get_shift_history,
+            commands::cashier_commands::z_report::get_z_report,
+            commands::cashier_commands::z_report::explain_shift_difference,
             commands::close_day,
             commands::floor_commands::table_ops::merge_tables,
             commands::get_live_orders,

@@ -41,10 +41,9 @@ export interface ShiftSummary {
 export interface ZReportData {
   reportNumber: string;
   tenantName: string;
-  taxNumber: string;
-  dateStr: string;
+  taxNumber: string | null;
   shiftId: string;
-  cashierName: string;
+  cashierName: string | null;
   openingCashCents: number;
   countedCashCents: number;
   expectedCashCents: number;
@@ -56,6 +55,7 @@ export interface ZReportData {
   totalRevenueCents: number;
   totalVatCents: number;
   voidTotalCents: number;
+  refundTotalCents: number;
   discountTotalCents: number;
   orderCount: number;
   closedAt: string;

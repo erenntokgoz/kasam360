@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { FileText } from 'lucide-react';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useUIStore } from '../../stores/uiStore';
+import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
+import { parseCents } from '../../lib/moneyInput';
 import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
@@ -10,10 +12,11 @@ import type { ZReportData } from '../../types/shift';
 
 export const BlindCloseModal: React.FC = () => {
   const { modals, closeModal, openModal } = useUIStore();
-  const { closeShift } = useShiftStore();
+  const { closeShift, explainDifference } = useShiftStore();
 
   const [countedLiras, setCountedLiras] = useState('');
-  const [notes, setNotes] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [completedReport, setCompletedReport] = useState<ZReportData | null>(null);
 
@@ -21,22 +24,40 @@ export const BlindCloseModal: React.FC = () => {
 
   const handleCloseShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    const liras = parseFloat(countedLiras) || 0;
-    const cents = Math.round(liras * 100);
+    // Geçersiz sayım sıfır kabul edilmez: kasa farkı buradan doğar.
+    const cents = parseCents(countedLiras);
+    if (cents === null) {
+      setError('Sayılan tutarı rakamla girin.');
+      return;
+    }
 
     setIsSubmitting(true);
+    setError(null);
     try {
-      const zReport = await closeShift(cents, notes);
-      setCompletedReport(zReport);
+      setCompletedReport(await closeShift(cents));
+    } catch (caught) {
+      setError(errorText(caught));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDone = () => {
+  const handleDone = async () => {
+    if (completedReport && completedReport.differenceCents !== 0) {
+      setIsSubmitting(true);
+      setError(null);
+      try {
+        await explainDifference(completedReport.shiftId, note);
+      } catch (caught) {
+        setError(errorText(caught));
+        return;
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
     setCompletedReport(null);
     setCountedLiras('');
-    setNotes('');
+    setNote('');
     closeModal('blindClose');
     openModal('receiptPreview');
   };
@@ -61,9 +82,7 @@ export const BlindCloseModal: React.FC = () => {
               Sayılan Fiziksel Kasa Nakiti (₺)
             </label>
             <Input
-              type="number"
-              min="0"
-              step="1"
+              inputMode="decimal"
               value={countedLiras}
               onChange={(e) => setCountedLiras(e.target.value)}
               placeholder="Örn: 6350"
@@ -73,18 +92,11 @@ export const BlindCloseModal: React.FC = () => {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
-              Kapanış Notu / Açıklama (Opsiyonel)
-            </label>
-            <Input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Vardiya teslim notu..."
-              className="text-xs"
-            />
-          </div>
+          {error ? (
+            <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
+              {error}
+            </p>
+          ) : null}
 
           <div className="flex gap-2 pt-2">
             <Button
@@ -143,11 +155,26 @@ export const BlindCloseModal: React.FC = () => {
             </div>
           </div>
 
+          {completedReport.differenceCents !== 0 ? (
+            <div>
+              <label htmlFor="difference-note" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
+                Kasa farkının açıklaması
+              </label>
+              <Input id="difference-note" className="min-h-12" value={note} onChange={(e) => setNote(e.target.value)} />
+            </div>
+          ) : null}
+          {error ? (
+            <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
+              {error}
+            </p>
+          ) : null}
           <Button
             type="button"
             variant="primary"
             size="lg"
-            onClick={handleDone}
+            onClick={() => void handleDone()}
+            disabled={completedReport.differenceCents !== 0 && note.trim().length === 0}
+            isLoading={isSubmitting}
             className="w-full"
           >
             <FileText className="w-4 h-4 mr-1.5" />

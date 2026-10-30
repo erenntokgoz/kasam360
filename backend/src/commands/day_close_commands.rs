@@ -76,6 +76,57 @@ pub async fn get_daily_summary(
     })
 }
 
+/// Gün sonunu durduran ilk neden. Kapanış sonrası düzeltme iade akışı gerektirdiği
+/// için eksik kapanıştan hatalı yeni gün açmak yerine işlem burada durur.
+pub async fn day_close_blocker(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+) -> Result<Option<String>, String> {
+    let open_orders: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM orders WHERE tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')",
+    )
+    .bind(tenant_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if open_orders > 0 {
+        return Ok(Some(format!(
+            "OPEN_ORDERS: {open_orders} açık adisyon var. Önce tahsil edin veya iptal edin."
+        )));
+    }
+    let open_shifts: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM shifts WHERE tenant_id = ? AND status = 'OPEN'")
+            .bind(tenant_id)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+    if open_shifts > 0 {
+        return Ok(Some(format!(
+            "SHIFT_OPEN: {open_shifts} açık vardiya var. Önce kasayı sayıp kapatın."
+        )));
+    }
+    let unexplained: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM shifts s
+         WHERE s.tenant_id = ?1 AND COALESCE(s.difference_cents, 0) != 0
+           AND datetime(s.closed_at) > datetime(COALESCE(
+               (SELECT MAX(created_at) FROM audit_ledger
+                WHERE tenant_id = ?1 AND action = 'day:closed'), '1970-01-01'))
+           AND NOT EXISTS (SELECT 1 FROM audit_ledger a
+                           WHERE a.tenant_id = ?1 AND a.resource_id = s.id
+                             AND a.action = 'shift:difference_explained')",
+    )
+    .bind(tenant_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if unexplained > 0 {
+        return Ok(Some(format!(
+            "UNEXPLAINED_DIFFERENCE: {unexplained} vardiyanın kasa farkı açıklanmadı."
+        )));
+    }
+    Ok(None)
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CloseDayResultDto {
@@ -145,6 +196,10 @@ pub async fn close_day(
     let _ = sessionToken;
 
     let now_str = chrono::Utc::now().to_rfc3339();
+
+    if let Some(reason) = day_close_blocker(&mut tx, &effective_tenant).await? {
+        return Err(reason);
+    }
 
     // 1. Yalnızca bu işletmeye ait açık vardiyaları kapat ve dürüst mutabakat farkını mühürle.
     //

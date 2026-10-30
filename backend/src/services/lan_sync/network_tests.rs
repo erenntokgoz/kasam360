@@ -278,6 +278,8 @@ async fn yeniden_baslayan_uye_otoriteye_baglanip_eksigini_alir() {
         "hazır",
         sync_a.status().state == "READY" && sync_a.is_multi_device()
     );
+    // Üyelik kaydı takipçiye ulaşmadan otorite kapanırsa takipçi kendini üyelikte bulamaz.
+    wait_until!("takipçi üyeliği aldı", sync_b.is_multi_device());
 
     sync_a.shutdown().await;
     wait_until!(
