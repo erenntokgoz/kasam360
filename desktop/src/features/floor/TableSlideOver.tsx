@@ -20,6 +20,7 @@ export interface TableSlideOverProps {
   onPayTable: (table: FloorTable) => void;
   onMoveTable: (sourceId: string, targetId: string) => void;
   onMergeTable: (sourceId: string, targetId: string) => void;
+  onCloseReservation: (reservationId: string, action: 'ARRIVED' | 'CANCELLED') => Promise<void>;
 }
 
 export const TableSlideOver: React.FC<TableSlideOverProps> = ({
@@ -31,6 +32,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
   onPayTable,
   onMoveTable,
   onMergeTable,
+  onCloseReservation,
 }) => {
   const [moveTargetId, setMoveTargetId] = useState<string>('');
   const [mergeTargetId, setMergeTargetId] = useState<string>('');
@@ -184,6 +186,22 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
           </div>
         )}
       </div>
+
+      {table.status === 'RESERVED' && table.reservationId ? (
+        <div className="space-y-2 pt-2 border-t border-[var(--border)]">
+          <span className="text-xs font-bold text-[var(--text-secondary)] block">
+            Rezervasyon: {table.customerName}
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="primary" className="min-h-12" onClick={() => void onCloseReservation(table.reservationId!, 'ARRIVED')}>
+              Müşteri Geldi
+            </Button>
+            <Button variant="secondary" className="min-h-12" onClick={() => void onCloseReservation(table.reservationId!, 'CANCELLED')}>
+              İptal Et
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Operasyonlar: Masa Taşı ve Masa Birleştir */}
       {isOccupied ? (

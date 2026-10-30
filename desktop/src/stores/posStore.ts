@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ProductCategory, Product, OrderItem, OrderItemModifier } from '../types/pos';
+import type { ProductCategory, Product, OrderItem, OrderItemModifier, ModifierGroup } from '../types/pos';
 import type { LastSale } from '../types/payment';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
@@ -21,6 +21,14 @@ export interface OrderBalance {
   totalCents: number;
   paidCents: number;
   remainingCents: number;
+}
+
+interface ModifierGroupWire {
+  id: string;
+  name: string;
+  minSelections: number;
+  maxSelections: number | null;
+  options: { id: string; name: string; priceCents: number }[];
 }
 
 interface ProductWire {
@@ -62,6 +70,7 @@ interface PosStore {
   setSelectedCategoryId: (catId: string) => void;
   setSearchQuery: (query: string) => void;
   openModifierModal: (product: Product) => void;
+  loadModifierGroups: (productId: string) => Promise<ModifierGroup[] | null>;
   closeModifierModal: () => void;
   selectTicketItem: (itemId: string | null) => void;
   addItemToTicket: (
@@ -221,6 +230,28 @@ export const usePosStore = create<PosStore>((set, get) => ({
   setSearchQuery: (searchQuery) => set({ searchQuery }),
 
   openModifierModal: (product) => set({ activeModifierProduct: product }),
+
+  // Okunamayan seçenek "seçenek yok" sayılmaz: zorunlu seçim atlanırdı.
+  loadModifierGroups: async (productId) => {
+    const { actorRole, tenantId } = sessionArgs();
+    try {
+      const groups = await invokeIPC<ModifierGroupWire[]>('get_product_modifiers', { productId, tenantId, actorRole });
+      return groups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        minSelections: group.minSelections,
+        maxSelections: group.maxSelections ?? group.options.length,
+        options: group.options.map((option) => ({
+          id: option.id,
+          name: option.name,
+          priceDeltaCents: option.priceCents,
+        })),
+      }));
+    } catch (error) {
+      set({ orderError: String(error) });
+      return null;
+    }
+  },
 
   closeModifierModal: () => set({ activeModifierProduct: null }),
 

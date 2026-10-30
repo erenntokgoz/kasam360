@@ -16,7 +16,7 @@ export interface ReservationModalProps {
     guestCount: number;
     reservationTime: string;
     notes?: string;
-  }) => void;
+  }) => Promise<void>;
 }
 
 export const ReservationModal: React.FC<ReservationModalProps> = ({
@@ -26,32 +26,39 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   onSaveReservation,
 }) => {
   const [tableId, setTableId] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [guestCount, setGuestCount] = useState(2);
   const [resTime, setResTime] = useState('20:00');
   const [notes, setNotes] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const table = tables.find((t) => t.id === tableId);
     if (!table) return;
 
     // Bugünün tarihi ile saat birleştir
-    const today = new Date().toISOString().split('T')[0];
-    const fullTimeStr = new Date(`${today}T${resTime}:00`).toISOString();
+    // Yerel gün: UTC gününü almak gece yarısından sonra rezervasyonu düne yazardı.
+    const reservedAt = new Date();
+    const [hours, minutes] = resTime.split(':').map(Number);
+    reservedAt.setHours(hours, minutes, 0, 0);
 
-    onSaveReservation({
-      tableId,
-      tableNumber: table.tableNumber,
-      customerName,
-      customerPhone,
-      guestCount,
-      reservationTime: fullTimeStr,
-      notes,
-    });
-
-    onClose();
+    setError(null);
+    try {
+      await onSaveReservation({
+        tableId,
+        tableNumber: table.tableNumber,
+        customerName,
+        customerPhone,
+        guestCount,
+        reservationTime: reservedAt.toISOString(),
+        notes,
+      });
+      onClose();
+    } catch (caught) {
+      setError(String(caught));
+    }
   };
 
   return (
@@ -150,6 +157,12 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             placeholder="Örn: Cam kenarı rica edildi"
           />
         </div>
+
+        {error ? (
+          <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
+            {error}
+          </p>
+        ) : null}
 
         <div className="flex gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose} className="flex-1">

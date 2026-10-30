@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { Product, OrderItemModifier } from '../../types/pos';
 import { formatMoney } from '../../lib/formatMoney';
 import { Modal } from '../../ui/Modal';
@@ -27,7 +27,21 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
   const [selectedMods, setSelectedMods] = useState<OrderItemModifier[]>([]);
 
+  // Modal açık kalır, ürün değişir: önceki ürünün seçimi yeni ürüne taşınmasın.
+  const productId = product?.id;
+  useEffect(() => {
+    setSelectedMods([]);
+    setSelectedNotes([]);
+    setCourse(1);
+  }, [productId]);
+
   if (!product) return null;
+
+  const selectedIn = (groupId: string) => {
+    const options = product.modifierGroups?.find((g) => g.id === groupId)?.options ?? [];
+    return selectedMods.filter((m) => options.some((o) => o.id === m.optionId)).length;
+  };
+  const missingRequired = product.modifierGroups?.some((g) => selectedIn(g.id) < g.minSelections) ?? false;
 
   const quickNotes = ['Soğansız', 'Acısız', 'Sos Ayrı', 'Az Tuzlu', 'Paket'];
 
@@ -51,7 +65,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
         const cleaned = prev.filter((m) => !groupOptionIds.includes(m.optionId));
         return [...cleaned, mod];
       }
-      return [...prev, mod];
+      return selectedIn(groupId) >= maxSelections ? prev : [...prev, mod];
     });
   };
 
@@ -88,7 +102,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                   variant={cookingDegree === deg ? 'primary' : 'secondary'}
                   size="sm"
                   onClick={() => setCookingDegree(deg)}
-                  className="!min-h-[40px] text-xs font-semibold"
+                  className="min-h-12 text-xs font-semibold"
                 >
                   {deg}
                 </Button>
@@ -126,7 +140,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                             priceDeltaCents: opt.priceDeltaCents,
                           })
                         }
-                        className="!min-h-[42px] justify-between text-xs font-semibold !px-2.5"
+                        className="min-h-12 justify-between text-xs font-semibold !px-2.5"
                       >
                         <span className="truncate">{opt.name}</span>
                         {opt.priceDeltaCents > 0 ? (
@@ -160,7 +174,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                 variant={course === c.val ? 'primary' : 'secondary'}
                 size="sm"
                 onClick={() => setCourse(c.val)}
-                className="!min-h-[40px] text-xs font-semibold"
+                className="min-h-12 text-xs font-semibold"
               >
                 {c.label}
               </Button>
@@ -198,6 +212,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
           size="lg"
           className="w-full mt-2"
           onClick={handleConfirm}
+          disabled={missingRequired}
         >
           Sepete Ekle
         </Button>

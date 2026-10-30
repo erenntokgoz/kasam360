@@ -32,6 +32,7 @@ export const FloorModule: React.FC = () => {
     moveTable,
     mergeTables,
     addReservation,
+    closeReservation,
     checkReservationLocks,
     floorError,
   } = useFloorStore();
@@ -223,6 +224,7 @@ export const FloorModule: React.FC = () => {
         onPayTable={handlePayFromDrawer}
         onMoveTable={moveTable}
         onMergeTable={mergeTables}
+        onCloseReservation={closeReservation}
       />
 
       {/* Rezervasyon Ekleme Modalı */}

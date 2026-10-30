@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapFloorRow } from './floorStore';
 
-const row = { id: 'tbl_1', name: 'Masa 1', status: 'AVAILABLE', currentTotal: 0, seats: 4 };
+const row = { id: 'tbl_1', name: 'Masa 1', status: 'AVAILABLE', currentTotal: 0, seats: 4, x: 0, y: 0 };
 
 describe('salon planı', () => {
   it('sunucu masasını ekran modeline çevirir', () => {

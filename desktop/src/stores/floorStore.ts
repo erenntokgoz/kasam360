@@ -12,6 +12,9 @@ interface FloorRow {
   currentTotal: number;
   zone?: string | null;
   seats: number;
+  x: number;
+  y: number;
+  reservationId?: string | null;
   waiterName?: string | null;
   guestCount?: number | null;
   reservationCustomerName?: string | null;
@@ -41,8 +44,10 @@ export function mapFloorRow(row: FloorRow, index: number): FloorTable {
     waiterName: row.waiterName ?? undefined,
     reservedAt: row.reservationTime ?? undefined,
     customerName: row.reservationCustomerName ?? undefined,
-    posX: 40 + (index % 6) * 130,
-    posY: 40 + Math.floor(index / 6) * 130,
+    reservationId: row.reservationId ?? undefined,
+    // Yerleştirilmemiş masa (0,0) üst üste binmesin diye ızgaraya dizilir.
+    posX: row.x || row.y ? row.x : 40 + (index % 6) * 130,
+    posY: row.x || row.y ? row.y : 40 + Math.floor(index / 6) * 130,
     width: 100,
     height: 100,
   };
@@ -70,7 +75,8 @@ interface FloorStore {
   saveFloorLayout: () => Promise<boolean>;
   moveTable: (sourceTableId: string, targetTableId: string) => Promise<boolean>;
   mergeTables: (sourceTableId: string, targetTableId: string) => Promise<boolean>;
-  addReservation: (res: Omit<Reservation, 'id' | 'status'>) => Promise<boolean>;
+  addReservation: (res: Omit<Reservation, 'id' | 'status'>) => Promise<void>;
+  closeReservation: (reservationId: string, action: 'ARRIVED' | 'CANCELLED') => Promise<void>;
   checkReservationLocks: () => void;
 }
 
@@ -137,11 +143,28 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
   },
 
   saveFloorLayout: async () => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
     try {
-      await invokeIPC('save_floor_layout', { tables: get().tables });
-      set({ isKrokiEditMode: false });
+      await invokeIPC('save_floor_layout', {
+        actorRole,
+        actorId,
+        tenantId,
+        args: {
+          tables: get().tables.map((table) => ({
+            table_id: table.id,
+            x: Math.round(table.posX),
+            y: Math.round(table.posY),
+            rotation: 0,
+            seats: table.capacity,
+            zone_id: null,
+          })),
+          objects: [],
+        },
+      });
+      set({ isKrokiEditMode: false, floorError: null });
       return true;
-    } catch {
+    } catch (error) {
+      set({ floorError: String(error) });
       return false;
     }
   },
@@ -227,28 +250,34 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
     }
   },
 
+  // Masa durumu sunucuda değişir; ekran kaydı istemcide uydurulmaz.
   addReservation: async (resData) => {
-    const newReservation: Reservation = {
-      id: `res_${Date.now()}`,
-      status: 'CONFIRMED',
-      ...resData,
-    };
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('reserve_table', {
+      request: {
+        tableId: resData.tableId,
+        customerName: resData.customerName,
+        customerPhone: resData.customerPhone,
+        partySize: resData.guestCount,
+        reservedAt: resData.reservationTime,
+        note: resData.notes,
+      },
+      callerRole: actorRole,
+      callerId: actorId,
+      callerTenantId: tenantId,
+    });
+    await get().loadFloorPlan();
+  },
 
-    set((state) => ({
-      reservations: [...state.reservations, newReservation],
-      tables: state.tables.map((t) =>
-        t.id === resData.tableId
-          ? {
-              ...t,
-              status: 'RESERVED',
-              customerName: resData.customerName,
-              reservedAt: resData.reservationTime,
-            }
-          : t
-      ),
-    }));
-
-    return true;
+  closeReservation: async (reservationId, action) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC(action === 'ARRIVED' ? 'mark_reservation_arrived' : 'cancel_reservation', {
+      reservationId,
+      callerRole: actorRole,
+      callerId: actorId,
+      callerTenantId: tenantId,
+    });
+    await get().loadFloorPlan();
   },
 
   checkReservationLocks: () => {

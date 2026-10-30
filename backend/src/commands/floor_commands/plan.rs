@@ -21,6 +21,10 @@ pub struct FloorPlanData {
     pub current_total: i64,
     pub zone: Option<String>,
     pub seats: i64,
+    pub x: i64,
+    pub y: i64,
+    #[serde(rename = "reservationId")]
+    pub reservation_id: Option<String>,
     #[serde(rename = "waiterName")]
     pub waiter_name: Option<String>,
     #[serde(rename = "guestCount")]
@@ -51,6 +55,8 @@ pub async fn get_floor_plan(
             t.current_total,
             t.zone,
             t.seats,
+            t.x,
+            t.y,
             u.name AS waiter_name,
             o_agg.guest_count,
             COALESCE(o_agg.ready_item_count, 0) AS ready_item_count,
@@ -59,6 +65,7 @@ pub async fn get_floor_plan(
                     MAX(0, CAST((strftime('%s', 'now') - strftime('%s', COALESCE(o_agg.last_activity, t.opened_at))) / 60 AS INTEGER))
                 ELSE NULL
             END AS idle_minutes,
+            res.id AS reservation_id,
             res.customer_name AS reservation_customer_name,
             res.reserved_at AS reservation_time
         FROM tables t
@@ -75,7 +82,7 @@ pub async fn get_floor_plan(
             GROUP BY o.table_id
         ) o_agg ON o_agg.table_id = t.id
         LEFT JOIN (
-            SELECT table_id, customer_name, reserved_at
+            SELECT id, table_id, customer_name, reserved_at
             FROM reservations
             WHERE tenant_id = ? AND status = 'ACTIVE'
             GROUP BY table_id
@@ -107,6 +114,9 @@ pub async fn get_floor_plan(
                 .map_err(|e| e.to_string())?,
             zone: row.try_get("zone").ok(),
             seats: row.try_get::<i64, _>("seats").unwrap_or(4),
+            x: row.try_get::<i64, _>("x").map_err(|e| e.to_string())?,
+            y: row.try_get::<i64, _>("y").map_err(|e| e.to_string())?,
+            reservation_id: row.try_get("reservation_id").ok(),
             waiter_name: row.try_get("waiter_name").ok(),
             guest_count: row.try_get::<Option<i64>, _>("guest_count").ok().flatten(),
             ready_item_count: row.try_get::<i64, _>("ready_item_count").unwrap_or(0),

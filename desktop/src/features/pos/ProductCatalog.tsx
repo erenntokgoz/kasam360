@@ -23,6 +23,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
     setSearchQuery,
     addItemToTicket,
     openModifierModal,
+    loadModifierGroups,
   } = usePosStore();
 
   const { setActiveModule } = useUIStore();
@@ -38,9 +39,11 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
     });
   }, [products, selectedCategoryId, searchQuery]);
 
-  const handleProductClick = (product: Product) => {
-    if (product.modifierGroups?.length) {
-      openModifierModal(product);
+  const handleProductClick = async (product: Product) => {
+    const groups = await loadModifierGroups(product.id);
+    if (groups === null) return;
+    if (groups.length > 0) {
+      openModifierModal({ ...product, modifierGroups: groups });
     } else {
       addItemToTicket(product);
     }
@@ -111,7 +114,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
         {filteredProducts.map((prod) => (
           <div
             key={prod.id}
-            onClick={() => handleProductClick(prod)}
+            onClick={() => void handleProductClick(prod)}
             className="bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--accent-amber-border)] rounded-xl p-3.5 min-h-[96px] flex flex-col justify-between cursor-pointer active:translate-y-[1px] transition-all duration-75 shadow-sm group"
           >
             <div>

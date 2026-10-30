@@ -168,6 +168,29 @@ html, body {
   border: 1px solid var(--border);
 }
 
+/* Basımda yalnız fiş kâğıdı çıkar; yazıcı sürücüsü 80 mm ruloyu kullanır. */
+@media print {
+  @page {
+    margin: 0;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .receipt-paper,
+  .receipt-paper * {
+    visibility: visible;
+  }
+  .receipt-paper {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    border: 0;
+    background: #fff;
+    color: #000;
+  }
+}
+
 /* Titreşim Animasyonu */
 @keyframes tactile-shake {
   0%, 100% { transform: translateX(0); }

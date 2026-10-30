@@ -4,6 +4,8 @@ import { useShiftStore } from '../../stores/shiftStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { errorText } from '../../lib/cariInput';
+import { invokeIPC } from '../../services/tauriClient';
+import { sessionArgs } from '../../stores/cariStore';
 import { formatMoney } from '../../lib/formatMoney';
 import { formatDateTime } from '../../lib/date';
 import { Button } from '../../ui/Button';
@@ -32,6 +34,17 @@ export const CashierModule: React.FC = () => {
   };
 
   const isShiftOpen = activeShift && activeShift.isOpen;
+
+  const handlePrintZ = async () => {
+    if (!lastZReport) return;
+    try {
+      const { actorRole, tenantId } = sessionArgs();
+      await invokeIPC('print_z_report', { shiftId: lastZReport.shiftId, actorRole, tenantId });
+      window.print();
+    } catch (caught) {
+      setDayCloseNotice({ ok: false, text: errorText(caught) });
+    }
+  };
 
   const handleCloseDay = async () => {
     try {
@@ -207,7 +220,8 @@ export const CashierModule: React.FC = () => {
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => openModal('receiptPreview')}
+                onClick={() => void handlePrintZ()}
+                disabled={!lastZReport}
                 className="text-xs"
               >
                 <Printer className="w-4 h-4 mr-1.5" />

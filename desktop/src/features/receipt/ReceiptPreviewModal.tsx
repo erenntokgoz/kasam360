@@ -48,6 +48,8 @@ export const ReceiptPreviewModal: React.FC = () => {
       } else {
         throw new Error('Basılacak kayıt yok.');
       }
+      // Komut yetkiyi ve kaydın varlığını doğrular; kâğıda işletim sistemi yazıcısı basar.
+      window.print();
       setPrintSuccess(true);
       setTimeout(() => setPrintSuccess(false), 2500);
     } catch (caught) {
