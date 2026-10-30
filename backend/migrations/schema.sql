@@ -2057,3 +2057,41 @@ CREATE TABLE IF NOT EXISTS sync_operations (
     applied_at TEXT,
     UNIQUE (tenant_id, log_index)
 );
+
+-- Kurulumun küme durumu. Dönem ve oy kaybolursa aynı dönemde iki otorite
+-- çıkabilir; bu yüzden diskte tutulur.
+CREATE TABLE IF NOT EXISTS sync_cluster (
+    slot INTEGER PRIMARY KEY CHECK (slot = 1),
+    tenant_id TEXT NOT NULL,
+    cluster_id TEXT NOT NULL,
+    current_term INTEGER NOT NULL DEFAULT 0,
+    voted_for TEXT,
+    commit_index INTEGER NOT NULL DEFAULT 0,
+    -- Anlık görüntünün kapsadığı son konum ve o andaki üyelik.
+    base_index INTEGER NOT NULL DEFAULT 0,
+    base_term INTEGER NOT NULL DEFAULT 0,
+    base_members TEXT NOT NULL CHECK (json_valid(base_members)),
+    listen_port INTEGER NOT NULL
+);
+
+-- Bu cihazın imza anahtarı. Gizli anahtar cihazdan çıkmaz.
+CREATE TABLE IF NOT EXISTS sync_device_key (
+    slot INTEGER PRIMARY KEY CHECK (slot = 1),
+    private_pkcs8 TEXT NOT NULL,
+    public_key TEXT NOT NULL
+);
+
+-- Yalnız yerel adres defteri; kimlik doğrulaması için kullanılmaz.
+CREATE TABLE IF NOT EXISTS sync_peers (
+    device_id TEXT PRIMARY KEY,
+    address TEXT NOT NULL,
+    last_seen TEXT
+);
+
+-- Tek kullanımlık eşleştirme kodu; kodun kendisi saklanmaz.
+CREATE TABLE IF NOT EXISTS sync_pairing_codes (
+    secret_sha256 TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT
+);
