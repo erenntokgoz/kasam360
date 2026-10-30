@@ -1994,3 +1994,66 @@ CREATE INDEX IF NOT EXISTS idx_refunds_tenant
     ON refunds(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_refunds_original_txn
     ON refunds(tenant_id, original_transaction_id);
+
+-- ============================================================================
+-- CARİ BELGE BAĞLANTILARI
+-- ============================================================================
+-- Stok tarafındaki `suppliers` kaydı cari karta adla değil kimlikle bağlanır.
+CREATE TABLE IF NOT EXISTS supplier_cari_links (
+    tenant_id TEXT NOT NULL,
+    supplier_id TEXT NOT NULL,
+    directory_id TEXT NOT NULL,
+    PRIMARY KEY (tenant_id, supplier_id),
+    UNIQUE (tenant_id, directory_id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    FOREIGN KEY (directory_id) REFERENCES directories(id)
+);
+
+-- Mal kabulü stoğu artırır; tedarikçi borcu ancak belge onayıyla doğar.
+CREATE TABLE IF NOT EXISTS supplier_documents (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    purchase_order_id TEXT NOT NULL,
+    directory_id TEXT NOT NULL,
+    debt_id TEXT NOT NULL,
+    document_no TEXT NOT NULL,
+    document_total_cents INTEGER NOT NULL CHECK (document_total_cents > 0),
+    -- Onay anındaki kabul tutarı; fark sonradan hesaplanmaz, belgeye mühürlenir.
+    received_total_cents INTEGER NOT NULL CHECK (received_total_cents >= 0),
+    difference_reason TEXT,
+    approved_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (tenant_id, purchase_order_id),
+    UNIQUE (tenant_id, directory_id, document_no),
+    FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id),
+    FOREIGN KEY (directory_id) REFERENCES directories(id),
+    FOREIGN KEY (debt_id) REFERENCES debts(id)
+);
+CREATE INDEX IF NOT EXISTS idx_supplier_documents_debt
+    ON supplier_documents(tenant_id, debt_id);
+
+-- ============================================================================
+-- YEREL AĞ EŞİTLEME — KALICI İŞLEM GÜNLÜĞÜ
+-- ============================================================================
+-- `log_index` işlem sırasıdır, tek otorite tarafından verilir. `PROPOSED` kayıt
+-- yalnız günlüktedir; iş kayıtlarına uygulanmamıştır.
+CREATE TABLE IF NOT EXISTS sync_operations (
+    operation_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    actor_role TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    intent_sha256 TEXT NOT NULL,
+    payload TEXT NOT NULL CHECK (json_valid(payload)),
+    log_index INTEGER NOT NULL CHECK (log_index > 0),
+    log_term INTEGER NOT NULL CHECK (log_term >= 0),
+    status TEXT NOT NULL DEFAULT 'PROPOSED'
+        CHECK (status IN ('PROPOSED', 'APPLIED', 'REJECTED')),
+    result TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    applied_at TEXT,
+    UNIQUE (tenant_id, log_index)
+);
