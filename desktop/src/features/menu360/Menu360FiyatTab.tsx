@@ -187,7 +187,7 @@ export const Menu360FiyatTab: React.FC = () => {
             <button
               type="button"
               onClick={handlePreview}
-              className="tactile-btn min-h-[44px] px-4 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-xs font-bold border border-[var(--border)] flex items-center gap-1.5 cursor-pointer"
+              className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-xs font-bold border border-[var(--border)] flex items-center gap-1.5 cursor-pointer"
             >
               <span>Önizlemeyi Hesapla</span>
             </button>
@@ -197,7 +197,7 @@ export const Menu360FiyatTab: React.FC = () => {
                 type="button"
                 onClick={() => setShowApplyConfirm(true)}
                 disabled={busy}
-                className="tactile-btn min-h-[44px] px-5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="tactile-btn min-h-12 px-5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Check className="w-4 h-4" />
                 <span>Fiyatları Uygula ({bulkPreview.length} Ürün)</span>
@@ -329,7 +329,7 @@ export const Menu360FiyatTab: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowApplyConfirm(false)}
-                className="tactile-btn flex-1 min-h-[40px] rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
               >
                 Vazgeç
               </button>
@@ -337,7 +337,7 @@ export const Menu360FiyatTab: React.FC = () => {
                 type="button"
                 onClick={handleApply}
                 disabled={busy}
-                className="tactile-btn flex-1 min-h-[40px] rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
               >
                 Onayla
               </button>
@@ -358,7 +358,7 @@ export const Menu360FiyatTab: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setDeletingPriceListId(null)}
-                className="tactile-btn flex-1 min-h-[40px] rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
               >
                 Vazgeç
               </button>
@@ -366,7 +366,7 @@ export const Menu360FiyatTab: React.FC = () => {
                 type="button"
                 onClick={handleDeletePriceList}
                 disabled={busy}
-                className="tactile-btn flex-1 min-h-[40px] rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
               >
                 Sil
               </button>
@@ -410,14 +410,14 @@ export const Menu360FiyatTab: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsNewListOpen(false)}
-                  className="tactile-btn flex-1 min-h-[38px] rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                  className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
                 >
                   Vazgeç
                 </button>
                 <button
                   type="submit"
                   disabled={busy}
-                  className="tactile-btn flex-1 min-h-[38px] rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+                  className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
                 >
                   Oluştur
                 </button>

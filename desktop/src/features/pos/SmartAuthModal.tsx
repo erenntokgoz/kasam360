@@ -102,7 +102,7 @@ export const SmartAuthModal: React.FC<SmartAuthModalProps> = ({
                 variant={reason === r ? 'primary' : 'secondary'}
                 size="sm"
                 onClick={() => setReason(r)}
-                className="!min-h-[40px] text-xs font-semibold"
+                className="!min-h-12 text-xs font-semibold"
               >
                 {r}
               </Button>

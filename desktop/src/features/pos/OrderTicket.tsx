@@ -82,7 +82,7 @@ export const OrderTicket: React.FC = () => {
             variant="ghost"
             size="sm"
             onClick={() => openModal('receiptPreview')}
-            className="!min-h-[34px] !px-2.5 text-xs"
+            className="!min-h-12 !px-2.5 text-xs"
             title="Fiş Önizleme"
           >
             <FileText className="w-3.5 h-3.5" />
@@ -93,7 +93,7 @@ export const OrderTicket: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={clearTicket}
-              className="!min-h-[34px] !px-2 text-xs text-[var(--accent-red)] hover:bg-[var(--accent-red-soft)]"
+              className="!min-h-12 !px-2 text-xs text-[var(--accent-red)] hover:bg-[var(--accent-red-soft)]"
               title="Adisyonu Temizle"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -177,7 +177,7 @@ export const OrderTicket: React.FC = () => {
             size="md"
             onClick={handleOpenPayment}
             disabled={total <= 0}
-            className="!min-h-[44px] text-xs font-bold"
+            className="!min-h-12 text-xs font-bold"
           >
             Nakit
           </Button>
@@ -187,7 +187,7 @@ export const OrderTicket: React.FC = () => {
             size="md"
             onClick={handleOpenPayment}
             disabled={total <= 0}
-            className="!min-h-[44px] text-xs font-bold"
+            className="!min-h-12 text-xs font-bold"
           >
             <CreditCard className="w-3.5 h-3.5 mr-1" />
             Kart
@@ -198,7 +198,7 @@ export const OrderTicket: React.FC = () => {
             size="md"
             onClick={handleOpenPayment}
             disabled={total <= 0}
-            className="!min-h-[44px] text-xs font-bold"
+            className="!min-h-12 text-xs font-bold"
           >
             Böl / Cari
           </Button>

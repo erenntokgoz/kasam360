@@ -194,7 +194,7 @@ export const PatronWizardTab: React.FC = () => {
                 <select
                   value={selectedDirectoryId}
                   onChange={(e) => setSelectedDirectoryId(e.target.value)}
-                  className="w-full min-h-[44px] px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+                  className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
                   required
                 >
                   <option value="">Cari seçin...</option>
@@ -213,7 +213,7 @@ export const PatronWizardTab: React.FC = () => {
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full min-h-[44px] px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+                  className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
                 >
                   <option value="Dükkan Masrafı">Dükkan Masrafı</option>
                   <option value="Kira / Aidat">Kira / Aidat</option>

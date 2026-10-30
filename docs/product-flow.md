@@ -42,6 +42,8 @@ Mal kabulü gerçek teslim miktarını stoğa ekler. Tedarikçi belgesi daha son
 - Stok kalem mutfağa gönderilince düşer. Hazırlık başlamadan iptal edilirse aynı partilere geri döner; hazırlık başladıysa veya gerekçe `Mutfak Zayi` ise dönmez, maliyetiyle fire yazılır. İkram edilen kalem stoktan düşmüş kalır. Tahsilat stoğa dokunmaz.
 - Yükseltmeden önce mutfağa gitmiş açık kalemin stoğu adisyon kapanırken bir kez düşer.
 
+- İşletmede aynı anda tek kasa vardiyası açık olur; tahsilatlar bu vardiyanın çekmecesine yazılır. Ayrı çekmeceli iki kasa desteklenmez. Veresiye satış iade edilmez, düzeltme cari hesaptan yapılır.
+
 ## İlk kurulum, giriş ve kilit
 
 - Kurulum durumu `app_setup` satırındadır ve cihaza özeldir. Kullanıcısı olan mevcut veritabanı ilk yükseltmede tamamlanmış sayılır; sihirbaza düşmez.

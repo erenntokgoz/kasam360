@@ -158,7 +158,7 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
                     variant="secondary"
                     size="sm"
                     onClick={() => handleSelectGuests(pickerTable, num)}
-                    className="!min-h-[32px] text-xs font-bold tabular-nums"
+                    className="!min-h-12 text-xs font-bold tabular-nums"
                   >
                     {num}
                   </Button>
@@ -170,7 +170,7 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
                 variant="primary"
                 size="sm"
                 onClick={() => handleSelectGuests(pickerTable, 2)}
-                className="!min-h-[30px] text-xs w-full"
+                className="!min-h-12 text-xs w-full"
               >
                 Siparişe Başla (2 Kişi)
               </Button>

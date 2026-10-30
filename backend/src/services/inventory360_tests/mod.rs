@@ -14,6 +14,7 @@ mod pricing;
 mod recipes;
 mod shelf_life;
 mod stock;
+mod stock_count;
 mod suppliers;
 mod support;
 mod units;

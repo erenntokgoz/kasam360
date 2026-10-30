@@ -110,7 +110,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                     onSetNote((e.target as HTMLInputElement).value);
                   }
                 }}
-                className="w-full h-8 px-2.5 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none focus:border-[var(--accent-amber)]"
+                className="w-full min-h-12 px-2.5 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none focus:border-[var(--accent-amber)]"
               />
             </div>
           ) : null}
@@ -122,7 +122,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                 variant="secondary"
                 size="sm"
                 onClick={() => onUpdateQty(-1)}
-                className="!min-h-[32px] !w-8 !p-0"
+                className="!min-h-12 !w-12 !p-0"
                 title="1 Azalt"
               >
                 <Minus className="w-3.5 h-3.5" />
@@ -134,7 +134,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                 variant="secondary"
                 size="sm"
                 onClick={() => onUpdateQty(1)}
-                className="!min-h-[32px] !w-8 !p-0"
+                className="!min-h-12 !w-12 !p-0"
                 title="1 Artır"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -146,7 +146,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onOpenTransfer}
-                className="!min-h-[32px] !px-2 text-[11px]"
+                className="!min-h-12 !px-2 text-[11px]"
                 title="Masaya Taşı"
               >
                 <ArrowRight className="w-3 h-3 text-[var(--accent-blue)] mr-1" />
@@ -157,7 +157,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onOpenComp}
-                className="!min-h-[32px] !px-2 text-[11px]"
+                className="!min-h-12 !px-2 text-[11px]"
                 title="Müdür İkramı"
               >
                 <Gift className="w-3 h-3 text-[var(--accent-emerald)] mr-1" />
@@ -168,7 +168,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onOpenVoid}
-                className="!min-h-[32px] !px-2 text-[11px] text-[var(--accent-red)]"
+                className="!min-h-12 !px-2 text-[11px] text-[var(--accent-red)]"
                 title="İptal Et"
               >
                 <Trash2 className="w-3 h-3 mr-1" />

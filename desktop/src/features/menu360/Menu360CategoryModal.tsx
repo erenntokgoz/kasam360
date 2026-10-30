@@ -98,14 +98,14 @@ export const Menu360CategoryModal: React.FC<Menu360CategoryModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="tactile-btn flex-1 min-h-[42px] rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+              className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
             >
               Vazgeç
             </button>
             <button
               type="submit"
               disabled={busy}
-              className="tactile-btn flex-1 min-h-[42px] rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
               <span>Oluştur</span>

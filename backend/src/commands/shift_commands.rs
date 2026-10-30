@@ -53,15 +53,14 @@ pub async fn open_shift(
     // yazılır (AGENTS.md §3.3).
     let tenant_id = crate::commands::command_helpers::require_tenant_id(tenant_id.as_deref())?;
 
-    // Açık vardiya var mı kontrol et
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?",
-    )
-    .bind(&cashier_id)
-    .bind(&tenant_id)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
+    // İşletmede tek kasa çekmecesi vardiyası açık olur: beklenen nakit tahsilatlardan
+    // zaman aralığıyla hesaplandığı için iki açık vardiya aynı parayı ikişer kez sayardı.
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM shifts WHERE status = 'OPEN' AND tenant_id = ?")
+            .bind(&tenant_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if count > 0 {
         return Err("Vardiya zaten açık (Shift already open)".into());
@@ -118,8 +117,7 @@ pub async fn execute_close_shift(
     actor_role: Option<&str>,
 ) -> Result<ShiftDto, String> {
     // Find open shift
-    let row = sqlx::query("SELECT id, expected_amount_cents, opened_at, tenant_id FROM shifts WHERE cashier_id = ? AND status = 'OPEN' AND tenant_id = ?")
-        .bind(cashier_id)
+    let row = sqlx::query("SELECT id, expected_amount_cents, opened_at, tenant_id FROM shifts WHERE status = 'OPEN' AND tenant_id = ?")
         .bind(tenant_id)
         .fetch_optional(&mut *conn)
         .await
@@ -236,7 +234,7 @@ pub async fn close_shift(
 /// olduğu için "tüm işletmeler bu kimliği paylaşıyor" varsayımı güvenli değildir.
 #[tauri::command]
 pub async fn get_active_shift(
-    cashier_id: String,
+    #[allow(unused_variables)] cashier_id: String,
     tenant_id: String,
     actor_role: String,
     pool: tauri::State<'_, DbPool>,
@@ -255,10 +253,9 @@ pub async fn get_active_shift(
         "SELECT id, tenant_id, cashier_id, status, opened_at, closed_at,
                 expected_amount_cents, actual_amount_cents, difference_cents
            FROM shifts
-          WHERE tenant_id = ? AND cashier_id = ? AND status = 'OPEN'",
+          WHERE tenant_id = ? AND status = 'OPEN'",
     )
     .bind(&tenant)
-    .bind(&cashier_id)
     .fetch_optional(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;

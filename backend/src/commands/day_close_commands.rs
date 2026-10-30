@@ -41,7 +41,18 @@ pub async fn get_daily_summary(
         .await
         .map_err(|e| e.to_string())?;
 
-    let total_revenue_cents: i64 = row.try_get("total").map_err(|e| e.to_string())?;
+    // Ciro tahsil edilen paradır: adisyon toplamı indirimi ve kısmi ödemeyi görmez.
+    let collected: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(CAST(json_extract(payload, '$.totalAmount') AS INTEGER)), 0)
+         FROM audit_ledger
+         WHERE tenant_id = ? AND action = 'payment:settled_fifo'
+           AND datetime(created_at) >= date('now', 'start of day')",
+    )
+    .bind(&tenant_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    let total_revenue_cents = collected;
     let total_orders: i64 = row.try_get("count").map_err(|e| e.to_string())?;
 
     let methods_rows = sqlx::query(
@@ -228,7 +239,18 @@ pub async fn close_day(
     .map_err(|e| e.to_string())?;
 
     // Para okumaları `unwrap_or(0)` olamaz (AGENTS.md §3.4).
-    let total_revenue_cents: i64 = gunluk_satir.try_get("total").map_err(|e| e.to_string())?;
+    // Ciro tahsil edilen paradır: adisyon toplamı indirimi ve kısmi ödemeyi görmez.
+    let collected: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(CAST(json_extract(payload, '$.totalAmount') AS INTEGER)), 0)
+         FROM audit_ledger
+         WHERE tenant_id = ? AND action = 'payment:settled_fifo'
+           AND datetime(created_at) >= date('now', 'start of day')",
+    )
+    .bind(&effective_tenant)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let total_revenue_cents = collected;
     let total_orders: i64 = gunluk_satir.try_get("count").map_err(|e| e.to_string())?;
 
     // Eşik aşımı onay gerektirir (D3). Gün sonu eşiği günün cirosudur: yüksek

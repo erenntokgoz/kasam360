@@ -65,7 +65,7 @@ export const LoginOverlay: React.FC = () => {
           variant="secondary"
           size="sm"
           onClick={toggleTheme}
-          className="!min-h-[38px] !px-3"
+          className="!min-h-12 !px-3"
           aria-label="Tema Değiştir"
         >
           {theme === 'dark' ? <Sun className="w-4 h-4 text-[var(--accent-amber)]" /> : <Moon className="w-4 h-4 text-[var(--text-tertiary)]" />}

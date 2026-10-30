@@ -102,7 +102,7 @@ export const FloorModule: React.FC = () => {
             variant={selectedZoneId === null ? 'primary' : 'secondary'}
             size="sm"
             onClick={() => setSelectedZoneId(null)}
-            className="!min-h-[38px] tabular-nums"
+            className="!min-h-12 tabular-nums"
           >
             Tümü ({tables.length})
           </Button>
@@ -115,7 +115,7 @@ export const FloorModule: React.FC = () => {
                 variant={isSelected ? 'primary' : 'secondary'}
                 size="sm"
                 onClick={() => setSelectedZoneId(zone.id)}
-                className="!min-h-[38px] tabular-nums"
+                className="!min-h-12 tabular-nums"
               >
                 {zone.name} ({count})
               </Button>
@@ -166,7 +166,7 @@ export const FloorModule: React.FC = () => {
               variant={isKrokiEditMode ? 'primary' : 'secondary'}
               size="sm"
               onClick={() => setKrokiEditMode(!isKrokiEditMode)}
-              className="!min-h-[38px]"
+              className="!min-h-12"
             >
               {isKrokiEditMode ? 'Düzenlemeyi Bitir' : 'Krokiyi Düzenle'}
             </Button>
@@ -177,7 +177,7 @@ export const FloorModule: React.FC = () => {
             variant="secondary"
             size="sm"
             onClick={handleWalkin}
-            className="!min-h-[38px]"
+            className="!min-h-12"
           >
             <ShoppingBag className="w-4 h-4 text-[var(--accent-amber)]" />
             <span>Tezgah Satışı</span>
@@ -188,7 +188,7 @@ export const FloorModule: React.FC = () => {
             variant="primary"
             size="sm"
             onClick={() => setIsResModalOpen(true)}
-            className="!min-h-[38px]"
+            className="!min-h-12"
           >
             <Calendar className="w-4 h-4" />
             <span>+ Rezervasyon</span>

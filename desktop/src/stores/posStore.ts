@@ -4,7 +4,6 @@ import type { LastSale } from '../types/payment';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
 import {
-  itemTaxCents,
   lineTotalCents,
   mapServerItem,
   toSubmitItem,
@@ -87,8 +86,6 @@ interface PosStore {
   clearTicket: () => void;
   setLastSale: (sale: LastSale) => void;
   sendToKitchen: () => Promise<boolean>;
-  calculateSubtotalCents: () => number;
-  calculateTaxCents: () => number;
   calculateTotalCents: () => number;
 }
 
@@ -355,10 +352,6 @@ export const usePosStore = create<PosStore>((set, get) => ({
       set({ isSending: false });
     }
   },
-
-  calculateSubtotalCents: () => get().calculateTotalCents() - get().calculateTaxCents(),
-
-  calculateTaxCents: () => get().ticketItems.reduce((sum, item) => sum + itemTaxCents(item), 0),
 
   // Kalan bakiye sunucudandır; yalnız gönderilmemiş taslak üstüne eklenir.
   calculateTotalCents: () => {

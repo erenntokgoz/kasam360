@@ -121,7 +121,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             <select
               value={tableId}
               onChange={(e) => setTableId(e.target.value)}
-              className="w-full min-h-[44px] px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none"
+              className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none"
               required
             >
               <option value="">Masa seçin...</option>

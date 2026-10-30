@@ -93,7 +93,7 @@ export const TopStatusBar: React.FC = () => {
           variant="secondary"
           size="sm"
           onClick={toggleTheme}
-          className="!min-h-[36px] !px-3"
+          className="!min-h-12 !px-3"
           aria-label="Tema Değiştir"
         >
           {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
@@ -111,7 +111,7 @@ export const TopStatusBar: React.FC = () => {
           variant="secondary"
           size="sm"
           onClick={lock}
-          className="!min-h-[36px] !px-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+          className="!min-h-12 !px-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
           aria-label="Terminali Kilitle"
         >
           <Lock className="w-3.5 h-3.5" />

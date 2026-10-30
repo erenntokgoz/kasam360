@@ -60,7 +60,7 @@ export const Menu360Module: React.FC = () => {
           <button
             type="button"
             onClick={toggleFilterTukendi}
-            className={`tactile-btn min-h-[38px] px-3 rounded-md text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+            className={`tactile-btn min-h-12 px-3 rounded-md text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
               filters.tukendi
                 ? 'bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] shadow-[inset_0_0_0_1px_var(--accent-red-border)]'
                 : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
@@ -77,7 +77,7 @@ export const Menu360Module: React.FC = () => {
               setActiveTab('KATALOG');
               setDetailMode('new');
             }}
-            className="tactile-btn min-h-[38px] px-4 rounded-md bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            className="tactile-btn min-h-12 px-4 rounded-md bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>+ Yeni Ürün</span>

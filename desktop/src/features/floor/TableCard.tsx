@@ -127,7 +127,7 @@ export const TableCard: React.FC<TableCardProps> = ({ table, onOpenTable, onInsp
                 variant="secondary"
                 size="sm"
                 onClick={(e) => handleSelectGuests(num, e)}
-                className="!min-h-[34px] text-xs font-bold tabular-nums"
+                className="!min-h-12 text-xs font-bold tabular-nums"
               >
                 {num}
               </Button>
@@ -139,7 +139,7 @@ export const TableCard: React.FC<TableCardProps> = ({ table, onOpenTable, onInsp
             variant="primary"
             size="sm"
             onClick={(e) => handleSelectGuests(2, e)}
-            className="!min-h-[32px] text-xs w-full"
+            className="!min-h-12 text-xs w-full"
           >
             Siparişe Başla (2 Kişi)
           </Button>

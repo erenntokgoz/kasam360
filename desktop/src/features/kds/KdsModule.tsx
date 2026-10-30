@@ -62,7 +62,7 @@ export const KdsModule: React.FC = () => {
                 variant={isSelected ? 'primary' : 'secondary'}
                 size="sm"
                 onClick={() => setSelectedStation(st.id)}
-                className="!min-h-[38px] tabular-nums text-xs"
+                className="!min-h-12 tabular-nums text-xs"
               >
                 {st.label} ({count})
               </Button>
@@ -75,7 +75,7 @@ export const KdsModule: React.FC = () => {
             variant="secondary"
             size="sm"
             onClick={recallLastTicket}
-            className="!min-h-[38px] text-xs"
+            className="!min-h-12 text-xs"
           >
             <RotateCcw className="w-3.5 h-3.5 mr-1" />
             <span>Son Fişi Geri Çağır</span>
@@ -85,7 +85,7 @@ export const KdsModule: React.FC = () => {
             variant="secondary"
             size="sm"
             onClick={toggleSound}
-            className="!min-h-[38px] text-xs"
+            className="!min-h-12 text-xs"
             title={soundEnabled ? 'Sesi Kapat' : 'Sesi Aç'}
           >
             {soundEnabled ? (
@@ -100,7 +100,7 @@ export const KdsModule: React.FC = () => {
             variant="ghost"
             size="sm"
             onClick={playOrderBell}
-            className="!min-h-[38px] text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            className="!min-h-12 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             title="Zil Testi"
           >
             Test
@@ -209,7 +209,7 @@ export const KdsModule: React.FC = () => {
                     variant="success"
                     size="sm"
                     onClick={() => completeTicket(ticket.id)}
-                    className="!min-h-[36px] text-xs font-bold"
+                    className="!min-h-12 text-xs font-bold"
                   >
                     <Check className="w-4 h-4 mr-1" />
                     <span>Fişi Tamamla</span>

@@ -9,7 +9,7 @@ use super::engine::{Engine, Message, Role};
 use super::op_log::{Operation, OperationOutcome};
 use super::pairing::{self, JoinGrant, JoinRequest, PairingCode};
 use super::secure_channel::DeviceKey;
-use super::store::{self, Member};
+use super::store;
 use super::transport;
 use crate::services::device_identity::ensure_local_device;
 use serde::Serialize;

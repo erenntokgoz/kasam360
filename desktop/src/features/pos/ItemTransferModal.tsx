@@ -68,7 +68,7 @@ export const ItemTransferModal: React.FC<ItemTransferModalProps> = ({
           <select
             value={targetTableId}
             onChange={(e) => setTargetTableId(e.target.value)}
-            className="w-full min-h-[44px] px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none"
+            className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none"
             required
           >
             <option value="">Hedef masa seçin...</option>

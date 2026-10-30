@@ -79,7 +79,7 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
                 variant={isSelected ? 'success' : 'secondary'}
                 size="md"
                 onClick={() => onSelectChannel(ch.id)}
-                className="!min-h-[44px] text-xs font-bold"
+                className="!min-h-12 text-xs font-bold"
               >
                 <Icon className="w-4 h-4 mr-1.5 shrink-0" />
                 <span>{ch.label}</span>
@@ -185,7 +185,7 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
             <select
               value={selectedDirectoryId}
               onChange={(e) => onSelectDirectory(e.target.value)}
-              className="w-full min-h-[44px] px-3 rounded-lg bg-[var(--bg-panel)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+              className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-panel)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
             >
               <option value="">Cari müşteri seçin...</option>
               {directories

@@ -43,7 +43,7 @@ export const SyncStatusChip: React.FC = () => {
         type="button"
         onClick={() => setIsOpen(true)}
         title={statusError ?? status?.detail ?? undefined}
-        className="cursor-pointer min-h-[36px]"
+        className="cursor-pointer min-h-12"
       >
         <Badge variant={tone}>{label}</Badge>
       </button>

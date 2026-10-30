@@ -247,7 +247,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
               <select
                 value={moveTargetId}
                 onChange={(e) => setMoveTargetId(e.target.value)}
-                className="w-full min-h-[38px] px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+                className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
               >
                 <option value="">Hedef masa seçin...</option>
                 {emptyTables.map((t) => (
@@ -277,7 +277,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
               <select
                 value={mergeTargetId}
                 onChange={(e) => setMergeTargetId(e.target.value)}
-                className="w-full min-h-[38px] px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+                className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
               >
                 <option value="">Dolu masa seçin...</option>
                 {occupiedTables.map((t) => (

@@ -262,7 +262,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
           type="button"
           onClick={handleSave}
           disabled={busy}
-          className="tactile-btn flex-1 min-h-[44px] rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+          className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
         >
           <Check className="w-4 h-4" />
           <span>{detailMode === 'new' ? 'Ürünü Oluştur' : 'Kaydet'}</span>
@@ -273,7 +273,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
             disabled={busy}
-            className="tactile-btn min-h-[44px] px-3.5 rounded-lg bg-transparent border border-[var(--accent-red-border)] hover:bg-[var(--accent-red-soft)] text-[var(--accent-red)] text-xs font-bold flex items-center justify-center cursor-pointer disabled:opacity-50"
+            className="tactile-btn min-h-12 px-3.5 rounded-lg bg-transparent border border-[var(--accent-red-border)] hover:bg-[var(--accent-red-soft)] text-[var(--accent-red)] text-xs font-bold flex items-center justify-center cursor-pointer disabled:opacity-50"
             aria-label="Sil"
           >
             <Trash2 className="w-4 h-4" />
@@ -293,14 +293,14 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
               <button
                 type="button"
                 onClick={() => setShowDeleteConfirm(false)}
-                className="tactile-btn flex-1 min-h-[40px] rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
               >
                 Vazgeç
               </button>
               <button
                 type="button"
                 onClick={handleDelete}
-                className="tactile-btn flex-1 min-h-[40px] rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-xs font-bold text-white cursor-pointer"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-xs font-bold text-white cursor-pointer"
               >
                 Sil
               </button>

@@ -197,7 +197,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                   variant={active ? 'outline-amber' : 'secondary'}
                   size="sm"
                   onClick={() => toggleNote(note)}
-                  className="!min-h-[34px] !px-3 text-xs"
+                  className="!min-h-12 !px-3 text-xs"
                 >
                   {note}
                 </Button>

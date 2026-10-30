@@ -134,7 +134,7 @@ export const Menu360CategoryTree: React.FC<Menu360CategoryTreeProps> = ({
         <button
           type="button"
           onClick={onOpenNewCategoryModal}
-          className="tactile-btn w-full min-h-[44px] px-3 py-2 rounded-md bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-xs font-bold border border-[var(--border)] flex items-center justify-center gap-1.5 cursor-pointer"
+          className="tactile-btn w-full min-h-12 px-3 py-2 rounded-md bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-xs font-bold border border-[var(--border)] flex items-center justify-center gap-1.5 cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>+ Kategori Ekle</span>
@@ -153,7 +153,7 @@ export const Menu360CategoryTree: React.FC<Menu360CategoryTreeProps> = ({
               <button
                 type="button"
                 onClick={() => setDeletingCat(null)}
-                className="tactile-btn flex-1 min-h-[40px] rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
               >
                 Vazgeç
               </button>
@@ -164,7 +164,7 @@ export const Menu360CategoryTree: React.FC<Menu360CategoryTreeProps> = ({
                   await deleteCategory(deletingCat.id);
                   setDeletingCat(null);
                 }}
-                className="tactile-btn flex-1 min-h-[40px] rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
               >
                 Sil
               </button>

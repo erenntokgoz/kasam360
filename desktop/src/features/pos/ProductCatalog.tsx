@@ -58,7 +58,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
             variant="secondary"
             size="sm"
             onClick={() => setActiveModule('FLOOR')}
-            className="!min-h-[38px] !px-3 text-xs"
+            className="!min-h-12 !px-3 text-xs"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Salona Dön</span>
@@ -85,7 +85,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Ürün veya barkod ara..."
-            className="!min-h-[38px] pl-9 text-xs"
+            className="!min-h-12 pl-9 text-xs"
           />
           <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-2.5 pointer-events-none" />
         </div>
@@ -101,7 +101,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
               variant={isSelected ? 'primary' : 'secondary'}
               size="sm"
               onClick={() => setSelectedCategoryId(cat.id)}
-              className="!min-h-[36px] whitespace-nowrap text-xs"
+              className="!min-h-12 whitespace-nowrap text-xs"
             >
               {cat.name}
             </Button>
