@@ -1,4 +1,5 @@
 use super::types::{ComponentCost, RecipeCost, MAX_RECIPE_DEPTH};
+use crate::services::inventory360::units::convert_stock_quantity;
 use sqlx::{Row, SqliteConnection};
 
 const QUANTITY_SCALE: i128 = 1_000_000;
@@ -36,6 +37,7 @@ pub(super) async fn resolve_component_cost(
     visiting: &mut Vec<String>,
     depth: usize,
     quantity: f64,
+    quantity_unit: &str,
 ) -> Result<Option<(i64, i64)>, String> {
     if depth > MAX_RECIPE_DEPTH {
         return Err(format!(
@@ -53,8 +55,8 @@ pub(super) async fn resolve_component_cost(
     // zincir (kahve → hamur → un) hata sanılır ve maliyet hiç çözülemez.
 
     // 1) Aktif alt reçete
-    let alt_recipe: Option<(String, f64)> = sqlx::query_as(
-        "SELECT id, output_quantity FROM recipes
+    let alt_recipe: Option<(String, f64, String)> = sqlx::query_as(
+        "SELECT id, output_quantity, output_unit FROM recipes
           WHERE tenant_id = ? AND product_id = ? AND is_active = 1",
     )
     .bind(tenant_id)
@@ -63,9 +65,13 @@ pub(super) async fn resolve_component_cost(
     .await
     .map_err(|e| e.to_string())?;
 
-    let needed_micros = quantity_micros(quantity)?;
+    let original_micros = quantity_micros(quantity)?;
     let sonuc = match alt_recipe {
-        Some((alt_id, output_quantity)) => {
+        Some((alt_id, output_quantity, output_unit)) => {
+            let normalized =
+                convert_stock_quantity(conn, tenant_id, quantity_unit, &output_unit, quantity)
+                    .await?;
+            let needed_micros = quantity_micros(normalized)?;
             let ic = Box::pin(calculate_recipe_cost_inner(
                 conn,
                 tenant_id,
@@ -81,13 +87,25 @@ pub(super) async fn resolve_component_cost(
                         .checked_mul(needed_micros)
                         .ok_or_else(|| "OVERFLOW: maliyet hesaplaması taştı".to_string())?;
                     let line = rounded_cents(numerator, output_micros)?;
-                    let unit = rounded_cents(i128::from(total) * QUANTITY_SCALE, output_micros)?;
+                    let unit = rounded_cents(i128::from(line) * QUANTITY_SCALE, original_micros)?;
                     Some((unit, line))
                 }
                 None => None,
             }
         }
         None => {
+            let stock_unit: String = sqlx::query_scalar(
+                "SELECT stock_unit FROM products WHERE tenant_id = ? AND id = ?",
+            )
+            .bind(tenant_id)
+            .bind(product_id)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+            let normalized =
+                convert_stock_quantity(conn, tenant_id, quantity_unit, &stock_unit, quantity)
+                    .await?;
+            let needed_micros = quantity_micros(normalized)?;
             // Reçete okuması stoğu tüketmez; aynı FIFO sırasıyla maliyeti
             // hesaplar. Parti yetmezse teklif fiyatı stok maliyeti sayılmaz.
             let batches = sqlx::query(
@@ -129,7 +147,7 @@ pub(super) async fn resolve_component_cost(
                 None
             } else {
                 Some((
-                    rounded_cents(cost_micros, needed_micros)?,
+                    rounded_cents(cost_micros, original_micros)?,
                     rounded_cents(cost_micros, QUANTITY_SCALE)?,
                 ))
             }
@@ -234,6 +252,7 @@ pub async fn calculate_recipe_cost_inner(
             visiting,
             depth + 1,
             needed,
+            &unit,
         )
         .await?;
         let unit_cost = cost.map(|(unit, _)| unit);

@@ -8,6 +8,7 @@ pub struct StockBatch {
     pub id: String,
     pub product_id: String,
     pub product_name: String,
+    pub stock_unit: String,
     pub remaining_quantity: f64,
     pub unit_cost_cents: i64,
     pub received_at: String,
@@ -19,7 +20,7 @@ pub async fn list_stock_batches(
     tenant_id: &str,
 ) -> Result<Vec<StockBatch>, String> {
     let rows = sqlx::query(
-        "SELECT b.id, b.product_id, p.name AS product_name, b.remaining_quantity,
+        "SELECT b.id, b.product_id, p.name AS product_name, p.stock_unit, b.remaining_quantity,
                 b.unit_cost_cents, b.received_at, b.expiry_date
            FROM inventory_batches b
            JOIN products p ON p.id = b.product_id AND p.tenant_id = b.tenant_id
@@ -37,6 +38,7 @@ pub async fn list_stock_batches(
                 id: row.try_get("id").map_err(|e| e.to_string())?,
                 product_id: row.try_get("product_id").map_err(|e| e.to_string())?,
                 product_name: row.try_get("product_name").map_err(|e| e.to_string())?,
+                stock_unit: row.try_get("stock_unit").map_err(|e| e.to_string())?,
                 remaining_quantity: row
                     .try_get("remaining_quantity")
                     .map_err(|e| e.to_string())?,

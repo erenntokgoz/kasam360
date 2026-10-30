@@ -153,6 +153,38 @@ pub async fn convert_quantity(
     ))
 }
 
+/// Stok hesaplarında standart kütle/hacim çevrimini kullanır; özel birimler
+/// için işletmenin tanımladığı yola döner. Belirsiz eski veri reddedilir.
+pub async fn convert_stock_quantity(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    from_unit: &str,
+    to_unit: &str,
+    quantity: f64,
+) -> Result<f64, String> {
+    if !quantity.is_finite() || quantity <= 0.0 {
+        return Err("VALIDATION: stok miktarı sıfırdan büyük olmalı".into());
+    }
+    let from = from_unit.trim().to_lowercase();
+    let to = to_unit.trim().to_lowercase();
+    if from == "belirsiz" || to == "belirsiz" || from.is_empty() || to.is_empty() {
+        return Err("STOCK: ürünün stok birimi belirlenmeli".into());
+    }
+    let standard = match (from.as_str(), to.as_str()) {
+        ("kg", "g") | ("l", "ml") => Some(quantity * 1000.0),
+        ("g", "kg") | ("ml", "l") => Some(quantity / 1000.0),
+        _ => None,
+    };
+    let converted = match standard {
+        Some(value) => value,
+        None => convert_quantity(conn, tenant_id, &from, &to, quantity).await?,
+    };
+    if !converted.is_finite() || converted <= 0.0 {
+        return Err("VALIDATION: stok birimi dönüşümü geçersiz miktar üretti".into());
+    }
+    Ok(converted)
+}
+
 pub async fn list_unit_conversions(
     conn: &mut SqliteConnection,
     tenant_id: &str,

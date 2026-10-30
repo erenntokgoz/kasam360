@@ -8,6 +8,56 @@ use crate::services::inventory_service::InventoryService;
 const KIRACI: &str = "tnt_fifo_bom";
 
 #[tokio::test]
+async fn recete_kilogram_stok_gram_satis_fifo_miktarini_cevirir() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, KIRACI, "prd_bread", "Ekmek", 1000).await;
+    urun_ekle(&mut conn, KIRACI, "prd_flour", "Un", 0).await;
+    sqlx::query("UPDATE products SET stock_unit = 'g' WHERE tenant_id = ? AND id = 'prd_flour'")
+        .bind(KIRACI)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    parti_ekle(&mut conn, KIRACI, "bat_flour", "prd_flour", 2000.0, 1, None).await;
+    recete_olustur(
+        &mut conn,
+        KIRACI,
+        recete_girdisi(
+            "prd_bread",
+            "Ekmek",
+            100.0,
+            1.0,
+            vec![malzeme("prd_flour", 1.5, "kg", None)],
+        ),
+    )
+    .await;
+    let cart = CartItemDto {
+        id: "itm_1".into(),
+        product: serde_json::json!({"id": "prd_bread"}),
+        quantity: 1,
+        ..Default::default()
+    };
+    let result = InventoryService::execute_fifo_deduction(
+        &mut conn,
+        KIRACI,
+        "txn_unit",
+        &[cart],
+        "2026-10-30T00:00:00Z",
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.total_cogs_cents, 1500);
+    let remaining: f64 = sqlx::query_scalar(
+        "SELECT remaining_quantity FROM inventory_batches WHERE tenant_id = ? AND id = 'bat_flour'",
+    )
+    .bind(KIRACI)
+    .fetch_one(&mut conn)
+    .await
+    .unwrap();
+    assert_eq!(remaining, 500.0);
+}
+
+#[tokio::test]
 async fn bom_receteli_urun_fifo_bilesenlerden_duser_ve_maliyeti_hesaplar() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;

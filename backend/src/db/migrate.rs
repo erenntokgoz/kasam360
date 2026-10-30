@@ -55,53 +55,42 @@ pub async fn run_migrations(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
             continue; // Idempotent: zaten uygulanmış.
         }
 
-        // Migration'ı transaction içinde çalıştır.
-        // Idempotency: SQLite "duplicate column" hatası (SQLITE_BUSY /
-        // duplicate column name) gelirse migration zaten uygulanmış sayılır.
+        // Kolonlar temel şemada zaten bulunabilir; her ifadeyi ayrı yürütmek
+        // kısmi yükseltilmiş eski veritabanında eksik kalan kolonları korur.
         let mut tx = pool.begin().await?;
-        let result = sqlx::raw_sql(sql).execute(&mut *tx).await;
-        match result {
-            Ok(_) => {
-                sqlx::query(&format!(
-                    "INSERT INTO {MIGRATIONS_TABLE} (version, name) VALUES (?, ?)"
-                ))
-                .bind(version)
-                .bind(name)
-                .execute(&mut *tx)
-                .await?;
-                tx.commit().await?;
-            }
-            Err(e) => {
-                let err_str = e.to_string();
-                let is_idempotent =
-                    err_str.contains("duplicate column name") || err_str.contains("already exists");
-
-                if is_idempotent {
-                    tx.rollback().await?;
-                    sqlx::query(&format!(
-                        "INSERT OR IGNORE INTO {MIGRATIONS_TABLE} (version, name) VALUES (?, ?)"
-                    ))
-                    .bind(version)
-                    .bind(name)
-                    .execute(pool)
-                    .await?;
-                    tracing::info!(
-                        "Migration version={} name={} idempotent olarak geçildi (zaten mevcut)",
-                        version,
-                        name
-                    );
-                } else {
+        let statements = sql
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("--"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for statement in statements
+            .split(';')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            if let Err(error) = sqlx::raw_sql(statement).execute(&mut *tx).await {
+                let message = error.to_string();
+                if !message.contains("duplicate column name") && !message.contains("already exists")
+                {
                     tx.rollback().await?;
                     tracing::error!(
                         "Migration başarısız: version={}, name={}, hata={}",
                         version,
                         name,
-                        e
+                        error
                     );
-                    return Err(e);
+                    return Err(error);
                 }
             }
         }
+        sqlx::query(&format!(
+            "INSERT INTO {MIGRATIONS_TABLE} (version, name) VALUES (?, ?)"
+        ))
+        .bind(version)
+        .bind(name)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
     }
 
     Ok(())

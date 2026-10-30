@@ -249,6 +249,12 @@ async fn partisi_olmayan_receteli_urun_recete_maliyeti_fallback_alir() {
     .await
     .expect("un partisi");
 
+    sqlx::query("UPDATE products SET stock_unit = 'g' WHERE tenant_id = ? AND id = 'prd_un'")
+        .bind(tenant)
+        .execute(&pool)
+        .await
+        .expect("stok birimi");
+
     // prd_kek için aktif reçete: 1 adet kek için 100g un gerekir.
     // 100g * 10 kuruş/g = 1000 kuruş birim maliyet.
     sqlx::query(

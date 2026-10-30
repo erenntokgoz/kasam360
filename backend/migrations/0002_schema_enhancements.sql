@@ -1,11 +1,6 @@
 -- Migration 0002: Schema enhancements & performance indexes
 -- db/mod.rs içindeki dağınık ALTER TABLE ifadelerinin sürümlü migration'a taşınması
 
--- Plans tablosu sütunları
-ALTER TABLE plans ADD COLUMN max_branches INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE plans ADD COLUMN features TEXT;
-ALTER TABLE plans ADD COLUMN badge TEXT;
-
 -- Users tablosu kimlik doğrulama sütunları
 ALTER TABLE users ADD COLUMN credential_hash TEXT;
 ALTER TABLE users ADD COLUMN pin_hash TEXT;

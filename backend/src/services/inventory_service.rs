@@ -5,6 +5,7 @@
 
 use crate::commands::CartItemDto;
 use crate::services::inventory360::quantity_cost::line_cost_cents;
+use crate::services::inventory360::units::convert_stock_quantity;
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -87,7 +88,7 @@ impl InventoryService {
                 }
 
                 let recipe_items = sqlx::query(
-                    "SELECT component_product_id, quantity, waste_percent \
+                    "SELECT component_product_id, quantity, unit, waste_percent \
                      FROM recipe_items \
                      WHERE tenant_id = ? AND recipe_id = ? \
                      ORDER BY created_at ASC, id ASC",
@@ -103,6 +104,7 @@ impl InventoryService {
                         .try_get("component_product_id")
                         .map_err(|e| e.to_string())?;
                     let comp_qty: f64 = ri.try_get("quantity").map_err(|e| e.to_string())?;
+                    let recipe_unit: String = ri.try_get("unit").map_err(|e| e.to_string())?;
                     let waste_pct: f64 = ri.try_get("waste_percent").map_err(|e| e.to_string())?;
 
                     if !comp_qty.is_finite()
@@ -113,7 +115,23 @@ impl InventoryService {
                         return Err("STOCK: reçete malzeme miktarı veya fire oranı geçersiz".into());
                     }
                     let waste_factor = 1.0 - (waste_pct / 100.0);
-                    let mut comp_remaining_demand = (comp_qty / waste_factor) * recipe_scale;
+                    let stock_unit: String = sqlx::query_scalar(
+                        "SELECT stock_unit FROM products WHERE tenant_id = ? AND id = ?",
+                    )
+                    .bind(tenant_id)
+                    .bind(&comp_product_id)
+                    .fetch_one(&mut *conn)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                    let recipe_demand = (comp_qty / waste_factor) * recipe_scale;
+                    let mut comp_remaining_demand = convert_stock_quantity(
+                        conn,
+                        tenant_id,
+                        &recipe_unit,
+                        &stock_unit,
+                        recipe_demand,
+                    )
+                    .await?;
 
                     let batch_rows = sqlx::query(
                         "SELECT id, remaining_quantity, unit_cost_cents \
@@ -178,7 +196,17 @@ impl InventoryService {
                 }
             } else {
                 rule_name = "FIFO_DETERMINISTIC_BATCH";
-                let mut remaining_demand = sold_quantity;
+                let stock_unit: String = sqlx::query_scalar(
+                    "SELECT stock_unit FROM products WHERE tenant_id = ? AND id = ?",
+                )
+                .bind(tenant_id)
+                .bind(product_id)
+                .fetch_one(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
+                let mut remaining_demand =
+                    convert_stock_quantity(conn, tenant_id, "adet", &stock_unit, sold_quantity)
+                        .await?;
 
                 // En eski partileri kronolojik sırayla çek (FIFO prensibi)
                 let batch_rows = sqlx::query(

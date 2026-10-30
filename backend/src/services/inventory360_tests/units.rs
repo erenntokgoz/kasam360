@@ -28,6 +28,32 @@ fn cevrim(from: &str, to: &str, factor: f64, cift_yonlu: bool) -> UnitConversion
 }
 
 #[tokio::test]
+async fn standart_stok_birimleri_donusur_uyumsuz_birim_reddedilir() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    assert_eq!(
+        convert_stock_quantity(&mut conn, KIRACI_A, "kg", "g", 1.5)
+            .await
+            .unwrap(),
+        1500.0
+    );
+    assert_eq!(
+        convert_stock_quantity(&mut conn, KIRACI_A, "ml", "l", 500.0)
+            .await
+            .unwrap(),
+        0.5
+    );
+    assert!(convert_stock_quantity(&mut conn, KIRACI_A, "kg", "ml", 1.0)
+        .await
+        .is_err());
+    assert!(
+        convert_stock_quantity(&mut conn, KIRACI_A, "g", "belirsiz", 1.0)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn birim_cevrim_yolu_bulunmazsa_hata_verir_miktar_degismez() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;

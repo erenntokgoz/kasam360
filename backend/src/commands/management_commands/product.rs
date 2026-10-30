@@ -18,6 +18,13 @@ fn default_management_tax_rate() -> Option<i64> {
     Some(1000)
 }
 
+fn valid_stock_unit(unit: &str) -> Result<&str, String> {
+    match unit {
+        "adet" | "g" | "kg" | "ml" | "l" => Ok(unit),
+        _ => Err("VALIDATION: stok birimi adet, g, kg, ml veya l olmalı".into()),
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ProductDto {
     pub id: String,
@@ -40,6 +47,8 @@ pub struct ProductDto {
     pub is_86: bool,
     #[serde(default)]
     pub stockout_reason: Option<String>,
+    #[serde(default)]
+    pub stock_unit: String,
 }
 
 #[tauri::command]
@@ -52,7 +61,7 @@ pub async fn get_management_products(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason FROM products WHERE tenant_id = ? ORDER BY name ASC")
+    let rows = sqlx::query("SELECT id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason, stock_unit FROM products WHERE tenant_id = ? ORDER BY name ASC")
         .bind(&tenant_id)
         .fetch_all(&mut *conn)
         .await
@@ -80,6 +89,7 @@ pub async fn get_management_products(
             color: row.try_get("color").ok(),
             is_86: row.try_get::<bool, _>("is_86").unwrap_or(false),
             stockout_reason: row.try_get("stockout_reason").ok(),
+            stock_unit: row.try_get("stock_unit").map_err(|e| e.to_string())?,
         });
     }
     Ok(res)
@@ -101,6 +111,7 @@ pub async fn create_product(
     color: Option<String>,
     is_86: Option<bool>,
     stockout_reason: Option<String>,
+    stock_unit: Option<String>,
     actor_id: Option<String>,
     tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -115,6 +126,8 @@ pub async fn create_product(
     let is_86_val = is_86.unwrap_or(false);
     let tax_rate_val = tax_rate_bp.unwrap_or(1000);
     let sku_val = sku.clone().unwrap_or_default();
+    let stock_unit = stock_unit.unwrap_or_else(|| "adet".to_string());
+    valid_stock_unit(&stock_unit)?;
 
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut *conn)
@@ -125,7 +138,7 @@ pub async fn create_product(
         // Kategori kimliği başka işletmeye aitse ürün o işletmenin menüsünde
         // görünür. INSERT öncesi sınanır.
         ensure_owned(&mut conn, "categories", &category_id, &tenant_id).await?;
-        sqlx::query("INSERT INTO products (id, tenant_id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO products (id, tenant_id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason, stock_unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&id)
             .bind(&tenant_id)
             .bind(&category_id)
@@ -140,6 +153,7 @@ pub async fn create_product(
             .bind(&color)
             .bind(is_86_val)
             .bind(&stockout_reason)
+            .bind(&stock_unit)
             .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
@@ -156,6 +170,7 @@ pub async fn create_product(
                 "sku": sku_val,
                 "barcode": barcode,
                 "taxRateBp": tax_rate_val,
+                "stockUnit": stock_unit,
             }),
         ).await?;
 
@@ -173,6 +188,7 @@ pub async fn create_product(
             color,
             is_86: is_86_val,
             stockout_reason,
+            stock_unit,
         })
     }.await;
 
@@ -208,6 +224,7 @@ pub async fn update_product(
     color: Option<String>,
     is_86: Option<bool>,
     stockout_reason: Option<String>,
+    stock_unit: Option<String>,
     actor_id: Option<String>,
     tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -234,15 +251,41 @@ pub async fn update_product(
         ensure_owned(&mut conn, "categories", &category_id, &tenant_id).await?;
         // Fiyat ve ad değişikliği mali sonuç doğurur; eski değerler "Eski Değer →
         // Yeni Değer" sütununda gösterilmek üzere kayda geçer.
-        let previous: Option<(String, i64, bool)> =
-            sqlx::query_as("SELECT name, price_cents, is_active FROM products WHERE id = ? AND tenant_id = ?")
+        let previous: Option<(String, i64, bool, String)> =
+            sqlx::query_as("SELECT name, price_cents, is_active, stock_unit FROM products WHERE id = ? AND tenant_id = ?")
                 .bind(&id)
                 .bind(&tenant_id)
                 .fetch_optional(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?;
 
-        sqlx::query("UPDATE products SET category_id = ?, name = ?, price_cents = ?, image_url = ?, is_active = ?, sku = ?, barcode = ?, tax_rate_bp = ?, description = ?, color = ?, is_86 = ?, stockout_reason = ? WHERE id = ? AND tenant_id = ?")
+        let previous_unit = previous.as_ref()
+            .map(|(_, _, _, unit)| unit.as_str())
+            .ok_or_else(|| "NOT_FOUND: ürün bulunamadı".to_string())?;
+        let stock_unit = stock_unit.as_deref().unwrap_or(previous_unit).to_string();
+        valid_stock_unit(&stock_unit)?;
+        if stock_unit != previous_unit && previous_unit != "belirsiz" {
+            let reference_count: i64 = sqlx::query_scalar(
+                "SELECT
+                    (SELECT COUNT(*) FROM inventory_batches WHERE tenant_id = ? AND product_id = ?)
+                  + (SELECT COUNT(*) FROM purchase_order_items WHERE tenant_id = ? AND product_id = ?)
+                  + (SELECT COUNT(*) FROM supplier_products WHERE tenant_id = ? AND product_id = ?)",
+            )
+            .bind(&tenant_id)
+            .bind(&id)
+            .bind(&tenant_id)
+            .bind(&id)
+            .bind(&tenant_id)
+            .bind(&id)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+            if reference_count > 0 {
+                return Err("STOCK: alış veya partisi olan ürünün stok birimi değiştirilemez".into());
+            }
+        }
+
+        sqlx::query("UPDATE products SET category_id = ?, name = ?, price_cents = ?, image_url = ?, is_active = ?, sku = ?, barcode = ?, tax_rate_bp = ?, description = ?, color = ?, is_86 = ?, stockout_reason = ?, stock_unit = ? WHERE id = ? AND tenant_id = ?")
             .bind(&category_id)
             .bind(&name)
             .bind(price_cents)
@@ -255,15 +298,16 @@ pub async fn update_product(
             .bind(&color)
             .bind(is_86_val)
             .bind(&stockout_reason)
+            .bind(&stock_unit)
             .bind(&id)
             .bind(&tenant_id)
             .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
 
-        let (previous_name, previous_price, previous_active) = previous
-            .map(|(n, p, a)| (serde_json::json!(n), p, a))
-            .unwrap_or((serde_json::Value::Null, price_cents, is_active));
+        let (previous_name, previous_price, previous_active, previous_unit) = previous
+            .map(|(n, p, a, u)| (serde_json::json!(n), p, a, u))
+            .ok_or_else(|| "NOT_FOUND: ürün bulunamadı".to_string())?;
 
         record_audit(
             &mut conn, &lock, &tenant_id, &actor_id, &actor_role,
@@ -274,6 +318,7 @@ pub async fn update_product(
                     "name": { "old": previous_name, "new": name },
                     "priceCents": { "old": previous_price, "new": price_cents },
                     "isActive": { "old": previous_active, "new": is_active },
+                    "stockUnit": { "old": previous_unit, "new": stock_unit },
                 }
             }),
         ).await?;
@@ -292,6 +337,7 @@ pub async fn update_product(
             color,
             is_86: is_86_val,
             stockout_reason,
+            stock_unit,
         })
     }.await;
 

@@ -15,7 +15,9 @@ pub(crate) mod floor_plan_migration;
 mod inventory_migration;
 mod migrate;
 mod seeds;
+mod stock_unit_migration;
 mod tables_migration;
+mod workspace_seed;
 
 #[cfg(test)]
 mod floor_plan_migration_tests;
@@ -29,8 +31,8 @@ pub type DbPool = Pool<Sqlite>;
 /// Merkez işletmenin (tek kiracılı kurulum) tenant kimliği.
 ///
 /// Neden şemadan okunur: kiracı kimliği tek kaynaklıdır —
-/// `migrations/seed.sql` içindeki merkez işletme satırıyla
-/// aynıdır ve kaynak kodta sözlü olarak yaşamaz. Böylece
+/// kurulumda oluşturulan merkez işletme satırıyla
+/// aynıdır. Böylece
 /// eski kurulumlarda bu kimlikle yazılmış satırlar yeni
 /// bir tohum değeriyle asla karışmaz ve kiracı kimliği
 /// şema ile senkron kalır.
@@ -188,6 +190,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // DDL şemasını uygula (etki eşitsiz - tüm ifadeler CREATE TABLE IF NOT EXISTS kullanır)
     let schema = include_str!("../../migrations/schema.sql");
     sqlx::raw_sql(schema).execute(&pool).await?;
+    workspace_seed::seed_tenant(&pool).await?;
 
     // Sürümlü migration'lar (0001_*.sql, 0002_*.sql, ...). Idempotent:
     // `_migrations` tablosunda version takibi yapar, calistirilmis
@@ -232,9 +235,6 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     .execute(&pool)
     .await?;
 
-    // Şema zenginleştirmeleri ve indeksler 0002_schema_enhancements.sql üzerinden
-    // sürümlü olarak çalıştırılır; her açılışta gereksiz ALTER TABLE çalıştırılmaz.
-
     // PIN düz metin depolanmaz: eski `users.pin` sütunu Argon2'e taşınır ve
     // kaldırılır. Aynı işlemde tenant içi PIN benzersizliğini taşıyan tekil indeks
     // de düşer (hash'ler karşılaştırılamaz, indeks işe yaramazdı).
@@ -262,6 +262,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // kolon varsayılanı sessiz havuz birleşmesi ürettiği için tablo
     // yeniden kurulur.
     inventory_migration::migrate_products_for_86d(&pool).await?;
+    stock_unit_migration::migrate_stock_units(&pool).await?;
     inventory_migration::migrate_inventory_batches_for_shelf_life(&pool).await?;
     inventory_migration::migrate_stock_movements_for_products(&pool).await?;
     floor_plan_migration::migrate_floor_plan_layout(&pool).await?;
@@ -269,40 +270,8 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // kurulur; burada yalnız on sistem şablonu tohumlanır (idempotent).
     seed_campaign_templates(&pool).await?;
 
-    // -------------------------------------------------------------------------
-    // Tohum koruması (Seed guard) 1: Masalar, ürünler ve kategoriler — sadece ilk çalıştırmada.
-    // -------------------------------------------------------------------------
-    let table_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tables")
-        .fetch_one(&pool)
-        .await?;
-
-    if table_count == 0 {
-        let seed = include_str!("../../migrations/seed.sql");
-        sqlx::raw_sql(seed).execute(&pool).await?;
-    } else {
-        // -------------------------------------------------------------------------
-        // Tohum koruması (Seed guard) 3: Cari rehber kayıtları (Directories) — eksikse ekle
-        // -------------------------------------------------------------------------
-        // Kiracı kimliği merkez işletmeden okunur (tek kaynak).
-        // Kiracı çözülemezse (kurulum bozuğu) tohumlanmaz:
-        // yanlış kiracıya yazmak, eksik kalmaktan kötüdür
-        // (fail-closed, AGENTS.md §3.3).
-        if let Ok(merkez) = merkez_tenant_id(&pool).await {
-            sqlx::raw_sql(&format!(
-                "INSERT OR IGNORE INTO directories (id, tenant_id, name, type, phone, credit_limit_cents) VALUES
-                    ('dir_001', '{merkez}', 'Öz Gıda Toptan A.Ş.', 'SUPPLIER', '0212 555 1010', 5000000),
-                    ('dir_002', '{merkez}', 'Ahmet Yılmaz (Masa 4 Veresiye)', 'CUSTOMER', '0532 111 2233', 100000),
-                    ('dir_003', '{merkez}', 'Mehmet Usta (Aşçıbaşı)', 'STAFF', '0544 333 4455', 200000),
-                    ('dir_004', '{merkez}', 'Dükkan Sahibi (Mülk Sahibi)', 'FIXED_EXPENSE', '0533 777 8899', 0),
-                    ('dir_005', '{merkez}', 'Eren Bey (Patron Şahsi)', 'OWNER_PERSONAL', '0530 000 0001', 0);",
-            ))
-            .execute(&pool)
-            .await?;
-            tracing_fallback_log("db::seed", "Cari rehber kayıtları tohumlandı/doğrulandı");
-        }
-    }
-    // Tohum koruması (Seed guard) 2: Kullanıcılar — her başlatmada, iki dalın da
-    // dışında çalışır. Argon2 SQL içinde üretilemediği için seed.sql'den çıkarıldı.
+    workspace_seed::seed_category(&pool).await?;
+    // Kullanıcı PIN'leri Argon2 ile üretilir; SQL dosyasına yazılmaz.
     seed_default_users(&pool).await?;
 
     Ok(pool)

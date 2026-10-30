@@ -54,6 +54,17 @@ pub async fn recete_olustur(
     kiraci: &str,
     girdi: recipes::RecipeInput,
 ) -> Recipe {
+    // Test ürünleri genel `adet` varsayılanıyla açılır. Bu yardımcı, gerçek
+    // ekrandaki stok birimi seçimini reçete kurulmadan önce temsil eder.
+    for item in &girdi.items {
+        sqlx::query("UPDATE products SET stock_unit = ? WHERE tenant_id = ? AND id = ? AND stock_unit = 'adet'")
+            .bind(&item.unit)
+            .bind(kiraci)
+            .bind(&item.component_product_id)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+    }
     create_recipe(conn, kiraci, AKTOR, girdi).await.unwrap()
 }
 

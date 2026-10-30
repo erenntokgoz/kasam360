@@ -18,7 +18,7 @@ pub(crate) async fn seed_default_users(pool: &DbPool) -> Result<(), sqlx::Error>
     ];
 
     // Kiracı kimliği merkez işletmeden okunur (tek kaynak):
-    // tohum kullanıcıları, seed.sql'deki merkez işletme
+    // tohum kullanıcıları, kurulumda açılan merkez işletme
     // satırıyla aynı kiracıya yazılır. Kimlik kaynak kodta
     // sözlü olarak yaşamaz; kiracı çözülemezse tohumlanmaz
     // (fail-closed, AGENTS.md §3.3).

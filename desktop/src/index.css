@@ -3,36 +3,59 @@
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg-canvas: #0F172A;
-  --bg-panel: #1E293B;
-  --bg-card: #1E293B;
-  --bg-subtle: #0F172A;
-  --bg-hover: #334155;
-  --border: #334155;
-  --border-subtle: #1E293B;
 
-  --text-primary: #F8FAFC;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
+  /* ========================================================================
+     AGENTS.md Tactile Matte Palette — Canonical variable names (v3.0 spec)
+     ======================================================================== */
+  --bg-base: #090A0C;
+  --bg-surface: #111317;
+  --bg-elevated: #171A20;
+  --bg-interactive: #1E222A;
+  --border-subtle: #232730;
+  --border-strong: #323846;
+  --text-primary: #F3F4F6;
+  --text-secondary: #9CA3AF;
+  --text-tertiary: #6B7280;
 
-  --accent-amber: #F59E0B;
-  --accent-amber-hover: #D97706;
+  /* Semantic action colors (AGENTS.md §4.2) */
+  --brand: #2563EB;
+  --brand-hover: #3B82F6;
+  --success: #10B981;
+  --success-hover: #059669;
+  --warning: #F59E0B;
+  --warning-hover: #D97706;
+  --danger: #EF4444;
+  --danger-hover: #DC2626;
+  --info: #06B6D4;
+
+  /* Legacy aliases — kept for existing component references */
+  --bg-canvas: var(--bg-base);
+  --bg-panel: var(--bg-surface);
+  --bg-card: var(--bg-elevated);
+  --bg-subtle: var(--bg-interactive);
+  --bg-hover: #2A2F3A;
+  --border: var(--border-subtle);
+  --text-muted: var(--text-tertiary);
+
+  /* Accent color aliases (map to semantic colors) */
+  --accent-amber: var(--warning);
+  --accent-amber-hover: var(--warning-hover);
   --accent-amber-soft: rgba(245, 158, 11, 0.14);
   --accent-amber-border: rgba(245, 158, 11, 0.40);
 
-  --accent-emerald: #10B981;
-  --accent-emerald-hover: #059669;
+  --accent-emerald: var(--success);
+  --accent-emerald-hover: var(--success-hover);
   --accent-emerald-soft: rgba(16, 185, 129, 0.14);
   --accent-emerald-border: rgba(16, 185, 129, 0.40);
 
-  --accent-red: #EF4444;
-  --accent-red-hover: #DC2626;
+  --accent-red: var(--danger);
+  --accent-red-hover: var(--danger-hover);
   --accent-red-soft: rgba(239, 68, 68, 0.14);
   --accent-red-border: rgba(239, 68, 68, 0.40);
 
-  --accent-blue: #38BDF8;
-  --accent-blue-soft: rgba(56, 189, 248, 0.14);
-  --accent-blue-border: rgba(56, 189, 248, 0.40);
+  --accent-blue: var(--info);
+  --accent-blue-soft: rgba(6, 184, 212, 0.14);
+  --accent-blue-border: rgba(6, 184, 212, 0.40);
 
   --accent-violet: #A78BFA;
   --accent-violet-soft: rgba(167, 139, 250, 0.14);
@@ -41,34 +64,57 @@
 
 [data-theme="light"] {
   color-scheme: light;
-  --bg-canvas: #F8FAFC;
-  --bg-panel: #FFFFFF;
-  --bg-card: #FFFFFF;
-  --bg-subtle: #F1F5F9;
-  --bg-hover: #F1F5F9;
-  --border: #E2E8F0;
-  --border-subtle: #F1F5F9;
 
+  /* ========================================================================
+     AGENTS.md Tactile Matte Palette — Light theme (v3.0 spec)
+     ======================================================================== */
+  --bg-base: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F1F5F9;
+  --bg-interactive: #E2E8F0;
+  --border-subtle: #CBD5E1;
+  --border-strong: #94A3B8;
   --text-primary: #0F172A;
   --text-secondary: #475569;
-  --text-muted: #94A3B8;
+  --text-tertiary: #64748B;
 
-  --accent-amber: #D97706;
-  --accent-amber-hover: #B45309;
+  /* Semantic action colors (light) */
+  --brand: #2563EB;
+  --brand-hover: #1D4ED8;
+  --success: #059669;
+  --success-hover: #047857;
+  --warning: #D97706;
+  --warning-hover: #B45309;
+  --danger: #DC2626;
+  --danger-hover: #B91C1C;
+  --info: #0284C7;
+
+  /* Legacy aliases — kept for existing component references */
+  --bg-canvas: var(--bg-base);
+  --bg-panel: var(--bg-surface);
+  --bg-card: var(--bg-elevated);
+  --bg-subtle: var(--bg-interactive);
+  --bg-hover: #F1F5F9;
+  --border: var(--border-subtle);
+  --text-muted: var(--text-tertiary);
+
+  /* Accent color aliases (light) */
+  --accent-amber: var(--warning);
+  --accent-amber-hover: var(--warning-hover);
   --accent-amber-soft: rgba(217, 119, 6, 0.10);
   --accent-amber-border: rgba(217, 119, 6, 0.32);
 
-  --accent-emerald: #059669;
-  --accent-emerald-hover: #047857;
+  --accent-emerald: var(--success);
+  --accent-emerald-hover: var(--success-hover);
   --accent-emerald-soft: rgba(5, 150, 105, 0.10);
   --accent-emerald-border: rgba(5, 150, 105, 0.32);
 
-  --accent-red: #DC2626;
-  --accent-red-hover: #B91C1C;
+  --accent-red: var(--danger);
+  --accent-red-hover: var(--danger-hover);
   --accent-red-soft: rgba(220, 38, 38, 0.10);
   --accent-red-border: rgba(220, 38, 38, 0.32);
 
-  --accent-blue: #0284C7;
+  --accent-blue: var(--info);
   --accent-blue-soft: rgba(2, 132, 199, 0.10);
   --accent-blue-border: rgba(2, 132, 199, 0.32);
 
@@ -117,9 +163,9 @@ html, body {
 /* Termal Fiş Önizleme Stili */
 .receipt-paper {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  background-color: #FAF9F5;
-  color: #111827;
-  border: 1px solid #D1D5DB;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
 }
 
 /* Titreşim Animasyonu */

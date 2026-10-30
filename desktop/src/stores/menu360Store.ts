@@ -1,0 +1,463 @@
+// Menu360 Zustand Store
+// Finansal hesaplamalar INTEGER kuruş üzerinden yapılır. Fail-closed prensibi geçerlidir.
+// Tüm IPC çağrıları Tauri generate_handler sözleşmesine ve backend arayüzüne birebir uyar.
+
+import { create } from 'zustand';
+import type {
+  ModifierGroupDto,
+  PriceListDto,
+  Menu360BulkPreviewItem,
+  Menu360State,
+} from '../types/menu360';
+import { invokeIPC } from '../services/tauriClient';
+import { useAuthStore } from './authStore';
+import { useFeatureStore } from './featureStore';
+import { mapRecipeCost } from '../lib/recipeCost';
+import { mapBulkPriceResult, mapCategory, mapPriceList, mapProduct } from '../lib/menuWire';
+import { createMenuModifierActions } from './menuModifierActions';
+import { createMenuRecipeActions } from './menuRecipeActions';
+
+export { parseMoneyToCents } from '../lib/moneyParser';
+export type { Menu360BulkPreviewItem } from '../types/menu360';
+
+function getAuthContext() {
+  const auth = useAuthStore.getState();
+  if (!auth.isAuthenticated || auth.isLocked || auth.mustChangePin || !auth.user) {
+    throw new Error('Oturum açılmalı.');
+  }
+  return {
+    actorRole: auth.user.role,
+    actorId: auth.user.userId,
+    tenantId: auth.user.tenantId,
+    activeModules: auth.user.activeModules ?? [],
+  };
+}
+
+export const useMenu360Store = create<Menu360State>((set, get) => ({
+  products: [],
+  categories: [],
+  modifierGroups: [],
+  productModifierGroupIds: [],
+  modifierGroupsLoading: false,
+  priceLists: [],
+  selectedProductId: null,
+  detailMode: 'view',
+  activeTab: 'KATALOG',
+  detailTab: 'temel',
+  searchQuery: '',
+  filters: {
+    tukendi: false,
+    satista: false,
+    categoryId: null,
+  },
+  busy: false,
+  error: null,
+  productRecipe: null,
+  bulkPreview: [],
+
+  clearError: () => set({ error: null }),
+  setSelectedProductId: (id) => {
+    set({ selectedProductId: id, detailMode: 'view', productModifierGroupIds: [] });
+    if (id) {
+      get().loadProductRecipe(id);
+      get().loadProductModifierGroupIds(id);
+    } else set({ productRecipe: null });
+  },
+  setDetailMode: (mode) =>
+    set({ detailMode: mode, selectedProductId: mode === 'new' ? null : get().selectedProductId,
+      productModifierGroupIds: mode === 'new' ? [] : get().productModifierGroupIds }),
+  setActiveTab: (tab) => set({ activeTab: tab }),
+  setDetailTab: (tab) => set({ detailTab: tab }),
+  setSearchQuery: (query) => set({ searchQuery: query }),
+  setCategoryFilter: (categoryId) =>
+    set((state) => ({ filters: { ...state.filters, categoryId } })),
+  toggleFilterTukendi: () =>
+    set((state) => ({
+      filters: { ...state.filters, tukendi: !state.filters.tukendi },
+    })),
+  toggleFilterSatista: () =>
+    set((state) => ({
+      filters: { ...state.filters, satista: !state.filters.satista },
+    })),
+
+  loadCatalog: async () => {
+    try {
+      const { actorRole, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      const [prods, cats, mods, prLists] = await Promise.all([
+        invokeIPC<Parameters<typeof mapProduct>[0][]>('get_management_products', { actorRole, tenantId }),
+        invokeIPC<Parameters<typeof mapCategory>[0][]>('get_management_categories', { actorRole, tenantId }),
+        actorRole === 'OWNER'
+          ? invokeIPC<ModifierGroupDto[]>('get_modifier_groups', { actorRole, tenantId })
+          : Promise.resolve([]),
+        useFeatureStore.getState().isEnabled('feat_dynamic_pricing')
+          ? invokeIPC<Parameters<typeof mapPriceList>[0][]>('list_price_lists', { actorRole, tenantId })
+          : Promise.resolve([]),
+      ]);
+
+      const selected = get().selectedProductId || (prods && prods.length > 0 ? prods[0].id : null);
+      set({
+        products: prods.map(mapProduct),
+        categories: cats.map(mapCategory),
+        modifierGroups: mods,
+        priceLists: prLists.map(mapPriceList),
+        selectedProductId: selected,
+      });
+
+      if (selected) {
+        get().loadProductRecipe(selected);
+        if (actorRole === 'OWNER') get().loadProductModifierGroupIds(selected);
+      }
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  saveProduct: async (productData) => {
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      if (get().detailMode === 'new') {
+        const createdWire = await invokeIPC<Parameters<typeof mapProduct>[0]>('create_product', {
+          actorRole,
+          actorId,
+          tenantId,
+          categoryId: productData.categoryId,
+          name: productData.name,
+          priceCents: productData.priceCents,
+          isActive: true,
+          barcode: productData.barcode || null,
+          description: productData.description || null,
+          imageUrl: productData.imageUrl || null,
+          sku: productData.sku || null,
+          color: productData.color || null,
+          is86: false,
+          stockoutReason: null,
+          stockUnit: productData.stockUnit ?? 'adet',
+        });
+        const created = mapProduct(createdWire);
+        set((state) => ({
+          products: [created, ...state.products],
+          selectedProductId: created.id,
+          detailMode: 'view',
+        }));
+      } else {
+        const prodId = get().selectedProductId;
+        if (!prodId) throw new Error('Güncellenecek ürün seçilmedi');
+        const current = get().products.find((p) => p.id === prodId);
+        const updatedWire = await invokeIPC<Parameters<typeof mapProduct>[0]>('update_product', {
+          actorRole,
+          actorId,
+          tenantId,
+          id: prodId,
+          categoryId: productData.categoryId || current?.categoryId,
+          name: productData.name || current?.name,
+          priceCents: productData.priceCents ?? current?.priceCents,
+          isActive: current?.isActive ?? true,
+          barcode: productData.barcode ?? current?.barcode ?? null,
+          description: productData.description ?? current?.description ?? null,
+          imageUrl: current?.imageUrl ?? null,
+          sku: current?.sku ?? null,
+          color: current?.color ?? null,
+          is86: current?.is86 ?? false,
+          stockoutReason: current?.stockoutReason ?? null,
+          stockUnit: productData.stockUnit ?? current?.stockUnit ?? 'adet',
+        });
+        const updated = mapProduct(updatedWire);
+        set((state) => ({
+          products: state.products.map((p) => (p.id === prodId ? updated : p)),
+        }));
+      }
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  toggleProductActive: async (productId) => {
+    const prod = get().products.find((p) => p.id === productId);
+    if (!prod) return false;
+
+    const newStatus = !prod.isActive;
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      await invokeIPC('update_product_status', {
+        actorRole,
+        actorId,
+        tenantId,
+        id: productId,
+        isActive: newStatus,
+      });
+      set((state) => ({
+        products: state.products.map((p) =>
+          p.id === productId ? { ...p, isActive: newStatus } : p
+        ),
+      }));
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  toggleProduct86: async (productId, is86, reason) => {
+    try {
+      const { actorRole, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      await invokeIPC('set_product_86d_command', {
+        actorRole,
+        tenantId,
+        args: {
+          productId,
+          is86d: is86,
+          reason: reason || (is86 ? 'Tükendi' : null),
+        },
+      });
+      set((state) => ({
+        products: state.products.map((p) =>
+          p.id === productId ? { ...p, is86, stockoutReason: reason } : p
+        ),
+      }));
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  deleteProduct: async (productId) => {
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      await invokeIPC('delete_product', { actorRole, actorId, tenantId, id: productId });
+      set((state) => {
+        const nextProducts = state.products.filter((p) => p.id !== productId);
+        return {
+          products: nextProducts,
+          selectedProductId: nextProducts.length > 0 ? nextProducts[0].id : null,
+        };
+      });
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  createCategory: async (name, defaultStation = 'BAR') => {
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      const displayOrder = get().categories.length + 1;
+      const createdWire = await invokeIPC<Parameters<typeof mapCategory>[0]>('create_category', {
+        actorRole,
+        actorId,
+        tenantId,
+        name,
+        displayOrder,
+        defaultStation,
+        icon: null,
+      });
+      set((state) => ({ categories: [...state.categories, mapCategory(createdWire)] }));
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  deleteCategory: async (categoryId) => {
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      if (get().products.some((product) => product.categoryId === categoryId)) {
+        throw new Error('Ürün içeren kategori silinemez. Önce ürünleri taşıyın.');
+      }
+      set({ busy: true, error: null });
+      await invokeIPC('delete_category', { actorRole, actorId, tenantId, id: categoryId });
+      set((state) => ({
+        categories: state.categories.filter((c) => c.id !== categoryId),
+        products: state.products.filter((p) => p.categoryId !== categoryId),
+        filters: {
+          ...state.filters,
+          categoryId: state.filters.categoryId === categoryId ? null : state.filters.categoryId,
+        },
+      }));
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  calculateBulkPreview: (updateType, valueNum, categoryId) => {
+    const prods = get().products.filter(
+      (p) => !categoryId || (p.categoryId === categoryId && p.isActive)
+    );
+    const preview: Menu360BulkPreviewItem[] = prods.map((p) => {
+      let newPriceCents = p.priceCents;
+      if (updateType === 'PERCENTAGE') {
+        const delta = Math.round((p.priceCents * valueNum) / 100);
+        newPriceCents = Math.max(0, p.priceCents + delta);
+      } else {
+        newPriceCents = Math.max(0, p.priceCents + Math.round(valueNum));
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        oldPriceCents: p.priceCents,
+        newPriceCents,
+      };
+    });
+    set({ bulkPreview: preview });
+  },
+
+  clearBulkPreview: () => set({ bulkPreview: [] }),
+
+  applyBulkPrice: async (input) => {
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      const args = {
+        categoryId: input.categoryId || undefined,
+        productIds: input.categoryId ? undefined : get().products.map((p) => p.id),
+        percent: input.updateType === 'PERCENTAGE' ? input.value : undefined,
+        byCents: input.updateType === 'FIXED_AMOUNT' ? input.value : undefined,
+        roundToTens: false,
+      };
+      const resultWire = await invokeIPC<Parameters<typeof mapBulkPriceResult>[0]>('bulk_update_product_prices', {
+        actorRole,
+        actorId,
+        tenantId,
+        args,
+      });
+      await get().loadCatalog();
+      set({ bulkPreview: [] });
+      return mapBulkPriceResult(resultWire);
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return null;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  createPriceList: async (name, description) => {
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      const createdWire = await invokeIPC<Parameters<typeof mapPriceList>[0]>('create_price_list_command', {
+        actorRole,
+        actorId,
+        tenantId,
+        args: {
+          name,
+          kind: 'PERAKENDE',
+        },
+      });
+      const created = mapPriceList(createdWire);
+      const pl: PriceListDto = {
+        ...created,
+        description: description || created.description,
+      };
+      set((state) => ({ priceLists: [...state.priceLists, pl] }));
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  deletePriceList: async (priceListId) => {
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      await invokeIPC('delete_price_list_command', { actorRole, actorId, tenantId, id: priceListId });
+      set((state) => ({
+        priceLists: state.priceLists.filter((pl) => pl.id !== priceListId),
+      }));
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  loadProductRecipe: async (productId) => {
+    set({ productRecipe: null, error: null });
+    try {
+      const { actorRole, tenantId, activeModules } = getAuthContext();
+      const cost = await invokeIPC<Parameters<typeof mapRecipeCost>[0]>('get_recipe_cost', {
+        actorRole,
+        tenantId,
+        activeModules,
+        args: { productId },
+      });
+      if (get().selectedProductId === productId) set({ productRecipe: mapRecipeCost(cost) });
+    } catch (err: unknown) {
+      if (get().selectedProductId === productId && !String(err).includes('NOT_FOUND')) {
+        set({ error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  },
+
+  loadProductModifierGroupIds: async (productId) => {
+    set({ productModifierGroupIds: [], modifierGroupsLoading: true });
+    try {
+      const { actorRole, tenantId } = getAuthContext();
+      const ids = await invokeIPC<string[]>('get_product_modifier_group_ids', {
+        actorRole, tenantId, productId,
+      });
+      if (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string')) {
+        throw new Error('Ürün seçenekleri okunamadı.');
+      }
+      if (get().selectedProductId === productId) set({ productModifierGroupIds: ids });
+    } catch (err: unknown) {
+      if (get().selectedProductId === productId) {
+        set({ error: err instanceof Error ? err.message : String(err) });
+      }
+    } finally {
+      if (get().selectedProductId === productId) set({ modifierGroupsLoading: false });
+    }
+  },
+
+  setProductModifierGroupIds: async (productId, groupIds) => {
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      if (get().selectedProductId !== productId || get().modifierGroupsLoading) return false;
+      set({ modifierGroupsLoading: true, error: null });
+      await invokeIPC('set_product_modifier_groups', {
+        actorRole, actorId, tenantId, productId, groupIds,
+      });
+      if (get().selectedProductId === productId) set({ productModifierGroupIds: groupIds });
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      if (get().selectedProductId === productId) set({ modifierGroupsLoading: false });
+    }
+  },
+
+  ...createMenuModifierActions(set, getAuthContext),
+  ...createMenuRecipeActions(set, get, getAuthContext),
+}));

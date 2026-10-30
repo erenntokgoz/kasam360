@@ -12,6 +12,7 @@ import {
   SEED_DIRECTORIES,
   SEED_DEBTS,
 } from './mockSeedData';
+import { handleManagementMockIPC } from './mockManagementIPC';
 
 // Tauri ortamında mıyız kontrolü
 export const isTauri = (): boolean => {
@@ -55,6 +56,12 @@ const mockDebts = [...SEED_DEBTS];
 async function handleMockIPC<T>(command: string, args: Record<string, unknown>): Promise<T> {
   // Simüle edilmiş mikro gecikme (10ms)
   await new Promise((r) => setTimeout(r, 10));
+
+  // Yönetim ve ERP modülleri mock delegasyonu
+  const mgmtRes = handleManagementMockIPC<T>(command, args);
+  if (mgmtRes !== null) {
+    return mgmtRes;
+  }
 
   switch (command) {
     case 'auth_login': {
@@ -139,29 +146,30 @@ async function handleMockIPC<T>(command: string, args: Record<string, unknown>):
 
     case 'close_shift': {
       const { countedCashCents, notes } = args as { countedCashCents: number; notes?: string };
-      const expected = (mockActiveShift?.openingCashCents || 0) + 485000;
+      const opening = mockActiveShift?.openingCashCents ?? 0;
+      const expected = opening;
       const diff = countedCashCents - expected;
 
       const zReport: ZReportData = {
         reportNumber: `Z-${Date.now().toString().slice(-6)}`,
-        tenantName: 'KASAM360 DEMO RESTORAN',
+        tenantName: 'İşletme',
         taxNumber: 'VKN: 9028374615',
         dateStr: new Date().toLocaleDateString('tr-TR'),
         shiftId: mockActiveShift?.id || 'shf_01',
         cashierName: mockActiveShift?.cashierName || 'Kasiyer',
-        openingCashCents: mockActiveShift?.openingCashCents || 0,
+        openingCashCents: opening,
         countedCashCents,
         expectedCashCents: expected,
         differenceCents: diff,
-        cashSalesCents: 485000,
-        cardSalesCents: 1240000,
-        mealCardSalesCents: 320000,
-        veresiyeSalesCents: 85000,
-        totalRevenueCents: 2130000,
-        totalVatCents: 193636,
+        cashSalesCents: 0,
+        cardSalesCents: 0,
+        mealCardSalesCents: 0,
+        veresiyeSalesCents: 0,
+        totalRevenueCents: 0,
+        totalVatCents: 0,
         voidTotalCents: 0,
-        discountTotalCents: 1500,
-        orderCount: 14,
+        discountTotalCents: 0,
+        orderCount: 0,
         closedAt: new Date().toISOString(),
       };
 
@@ -208,21 +216,22 @@ async function handleMockIPC<T>(command: string, args: Record<string, unknown>):
     }
 
     case 'get_shift_summary': {
+      const opening = mockActiveShift?.openingCashCents ?? 0;
       const summary: ShiftSummary = {
         shiftId: mockActiveShift?.id || 'shf_01',
         cashierName: mockActiveShift?.cashierName || 'Kasiyer',
         openedAt: mockActiveShift?.openedAt || new Date().toISOString(),
-        openingCashCents: mockActiveShift?.openingCashCents || 150000,
-        totalCashSalesCents: 485000,
-        totalCardSalesCents: 1240000,
-        totalMealCardSalesCents: 320000,
-        totalVeresiyeCents: 85000,
+        openingCashCents: opening,
+        totalCashSalesCents: 0,
+        totalCardSalesCents: 0,
+        totalMealCardSalesCents: 0,
+        totalVeresiyeCents: 0,
         totalCashInCents: mockCashMovements.filter((m) => m.type === 'IN').reduce((s, m) => s + m.amountCents, 0),
         totalCashOutCents: mockCashMovements.filter((m) => m.type === 'OUT').reduce((s, m) => s + m.amountCents, 0),
-        expectedCashInDrawerCents: (mockActiveShift?.openingCashCents || 150000) + 485000,
-        totalSalesCents: 2130000,
-        totalTaxCents: 193636,
-        orderCount: 14,
+        expectedCashInDrawerCents: opening,
+        totalSalesCents: 0,
+        totalTaxCents: 0,
+        orderCount: 0,
       };
       return summary as unknown as T;
     }

@@ -1,8 +1,22 @@
+// ERP (Yönetim) Ana Modülü
+// 48px dokunsal donanım tuşlarıyla üst yatay navigasyon çubuğu ve modül alanları.
+// Açık ve koyu tema tam uyumlu, Tactile Matte Hardware estetiği.
+
 import React, { useEffect } from 'react';
-import { ArrowLeft, Zap, BookOpen, Users, TrendingUp } from 'lucide-react';
+import {
+  UtensilsCrossed,
+  Zap,
+  BookOpen,
+  Users,
+  TrendingUp,
+  ArrowLeft,
+  Package,
+} from 'lucide-react';
 import { useLedgerStore } from '../../stores/ledgerStore';
 import { useUIStore } from '../../stores/uiStore';
-import { Button } from '../../ui/Button';
+import { Menu360Module } from '../menu360/Menu360Module';
+import { StockModule } from '../stock/StockModule';
+import { useAuthStore } from '../../stores/authStore';
 import { PatronWizardTab } from './PatronWizardTab';
 import { DebtsTab } from './DebtsTab';
 import { StaffTab } from './StaffTab';
@@ -11,6 +25,7 @@ import { ProfitTab } from './ProfitTab';
 export const ErpModule: React.FC = () => {
   const { activeErpTab, setActiveErpTab, loadLedgerData } = useLedgerStore();
   const { setActiveModule } = useUIStore();
+  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
 
   useEffect(() => {
     loadLedgerData();
@@ -25,48 +40,61 @@ export const ErpModule: React.FC = () => {
     { id: 'DEBTS', label: 'Borç & Alacak Defteri', icon: BookOpen },
     { id: 'STAFF', label: 'Personel & Avans', icon: Users },
     { id: 'PROFIT', label: 'Kasa & Net Kâr (FIFO)', icon: TrendingUp },
+    { id: 'MENU', label: 'Menü', icon: UtensilsCrossed },
+    ...(isOwner ? [{ id: 'STOCK' as const, label: 'Stok', icon: Package }] : []),
   ];
 
   return (
-    <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] select-none">
-      {/* Üst Bar */}
-      <div className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-1.5 overflow-x-auto">
+    <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] select-none">
+      {/* Üst Yatay Donanım Navigasyon Çubuğu (48px Dokunsal Tuşlar) */}
+      <header className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2 flex items-center justify-between gap-3 shrink-0">
+        <nav className="flex items-center gap-2 overflow-x-auto" aria-label="Yönetim Modülleri">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isSelected = activeErpTab === tab.id;
             return (
-              <Button
+              <button
                 key={tab.id}
-                variant={isSelected ? 'primary' : 'secondary'}
-                size="sm"
+                type="button"
                 onClick={() => setActiveErpTab(tab.id)}
-                className="!min-h-[38px] text-xs font-bold"
+                className={`tactile-btn min-h-12 px-4 rounded-lg flex items-center gap-2 text-xs font-bold cursor-pointer transition-colors ${
+                  isSelected
+                    ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border-[var(--accent-blue)] shadow-[inset_0_0_0_1px_var(--accent-blue)]'
+                    : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                }`}
               >
-                <Icon className="w-3.5 h-3.5 mr-1" />
+                <Icon
+                  className={`w-4 h-4 ${
+                    isSelected ? 'text-[var(--accent-blue)]' : 'text-[var(--text-muted)]'
+                  }`}
+                />
                 <span>{tab.label}</span>
-              </Button>
+              </button>
             );
           })}
-        </div>
+        </nav>
 
-        <Button
-          variant="secondary"
-          size="sm"
+        {/* Salona Dön Butonu (48px Dokunsal Tuş) */}
+        <button
+          type="button"
           onClick={() => setActiveModule('FLOOR')}
-          className="!min-h-[38px] text-xs"
+          className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold border-[var(--border)] flex items-center gap-2 cursor-pointer shrink-0"
         >
-          <ArrowLeft className="w-3.5 h-3.5 mr-1" />
+          <ArrowLeft className="w-4 h-4" />
           <span>Salona Dön</span>
-        </Button>
-      </div>
+        </button>
+      </header>
 
-      {/* İçerik */}
-      <div className="flex-1 overflow-y-auto p-5">
-        {activeErpTab === 'WIZARD' && <PatronWizardTab />}
-        {activeErpTab === 'DEBTS' && <DebtsTab />}
-        {activeErpTab === 'STAFF' && <StaffTab />}
-        {activeErpTab === 'PROFIT' && <ProfitTab />}
+      {/* Modül İçeriği */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+        {activeErpTab === 'MENU' ? <Menu360Module /> : activeErpTab === 'STOCK' && isOwner ? <StockModule /> : (
+          <div className="flex-1 overflow-y-auto p-5">
+            {activeErpTab === 'WIZARD' && <PatronWizardTab />}
+            {activeErpTab === 'DEBTS' && <DebtsTab />}
+            {activeErpTab === 'STAFF' && <StaffTab />}
+            {activeErpTab === 'PROFIT' && <ProfitTab />}
+          </div>
+        )}
       </div>
     </section>
   );

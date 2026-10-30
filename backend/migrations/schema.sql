@@ -177,6 +177,8 @@ CREATE TABLE IF NOT EXISTS products (
     -- Legacy: `stock_quantity` kullanımdan kaldırıldı. Tek kaynak `inventory_batches`.
     -- Kolon veri taşıması için bırakıldı, yeni kod yazmaz.
     stock_quantity INTEGER,
+    -- Stok partileri ve alış fiyatları bu birim üzerinden tutulur.
+    stock_unit TEXT NOT NULL DEFAULT 'adet',
     color TEXT,
     image_url TEXT,
     -- Faz 12 · 86'd: "stok bitti, menüden kalktı". `is_active` ile karışmasın

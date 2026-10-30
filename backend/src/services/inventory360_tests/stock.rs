@@ -32,6 +32,12 @@ async fn teslim_alinan_parti_recete_maliyetini_erisilebilir_yapar() {
     let mut conn = conn_of(&pool).await;
     urun_ekle(&mut conn, "ten_a", "prd_yemek", "Yemek", 5000).await;
     urun_ekle(&mut conn, "ten_a", "prd_un", "Un", 0).await;
+    sqlx::query(
+        "UPDATE products SET stock_unit = 'kg' WHERE tenant_id = 'ten_a' AND id = 'prd_un'",
+    )
+    .execute(&mut conn)
+    .await
+    .unwrap();
     let input = super::recipes::recete_girdisi(
         "prd_yemek",
         "Yemek",

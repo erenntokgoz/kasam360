@@ -71,6 +71,16 @@ pub async fn create_purchase_order(
             return Err("VALIDATION: sipariş miktarı sıfırdan büyük olmalı".into());
         }
         ensure_owned(conn, "products", &item.product_id, tenant_id).await?;
+        let stock_unit: String =
+            sqlx::query_scalar("SELECT stock_unit FROM products WHERE tenant_id = ? AND id = ?")
+                .bind(tenant_id)
+                .bind(&item.product_id)
+                .fetch_one(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
+        if stock_unit == "belirsiz" {
+            return Err("STOCK: alıştan önce ürünün stok birimi belirlenmeli".into());
+        }
 
         let unit_cost = match item.unit_cost_cents {
             Some(cost) => {
@@ -204,6 +214,16 @@ pub async fn receive_purchase_order(
     for kalem in &kalemler {
         let kalem_id: String = kalem.try_get("id").map_err(|e| e.to_string())?;
         let product_id: String = kalem.try_get("product_id").map_err(|e| e.to_string())?;
+        let stock_unit: String =
+            sqlx::query_scalar("SELECT stock_unit FROM products WHERE tenant_id = ? AND id = ?")
+                .bind(tenant_id)
+                .bind(&product_id)
+                .fetch_one(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
+        if stock_unit == "belirsiz" {
+            return Err("STOCK: mal kabulden önce ürünün stok birimi belirlenmeli".into());
+        }
         let quantity: f64 = kalem.try_get("quantity").map_err(|e| e.to_string())?;
         let received: f64 = kalem
             .try_get("received_quantity")
