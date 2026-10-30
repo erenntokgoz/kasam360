@@ -17,11 +17,11 @@ interface LedgerStore {
   expenses: LedgerExpense[];
   summary: FinancialProfitSummary | null;
   staffProfiles: StaffProfile[];
-  activeErpTab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT';
+  activeErpTab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK';
   isLoading: boolean;
   ledgerError: string | null;
   loadLedgerData: () => Promise<void>;
-  setActiveErpTab: (tab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT') => void;
+  setActiveErpTab: (tab: 'WIZARD' | 'DEBTS' | 'STAFF' | 'PROFIT' | 'MENU' | 'STOCK') => void;
   executePatronAction: (
     actionType: PatronActionType,
     amountCents: number,
