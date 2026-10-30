@@ -210,19 +210,20 @@ pub fn require_approver(raw_role: &str) -> Result<Role, String> {
 
 /// Onaylayan kimliğini ve kendi işlemini onaylama kuralını denetler.
 ///
-/// Patron ve müdür yetkinin sahibidir: kendi işlemlerini kendi PIN'leriyle onaylar,
-/// aksi halde tek yöneticili işletmede iade ve iptal yapılamazdı. Denetim izi yine
-/// yazılır. Platform hesabı işletmenin yetkilisi olmadığı için bu izni almaz.
+/// Patron, müdür ve patronun yetki verdiği personel kendi işlemlerini kendi PIN'leriyle
+/// onaylar; aksi halde tek yöneticili işletmede iade ve iptal yapılamazdı. Denetim izi
+/// yine yazılır. Platform hesabı işletmenin yetkilisi olmadığı için bu izni almaz.
 pub fn require_allowed_approver(
     approver_id: &str,
     approver_role: Role,
+    granted: bool,
     actor_id: &str,
 ) -> Result<(), String> {
     if approver_id.trim().is_empty() {
         return Err("UNAUTHORIZED: Onaylayan kimliği boş olamaz.".to_string());
     }
     let same_person = approver_id.trim().eq_ignore_ascii_case(actor_id.trim());
-    if same_person && !matches!(approver_role, Role::Owner | Role::Manager) {
+    if same_person && !granted && !matches!(approver_role, Role::Owner | Role::Manager) {
         return Err(
             "SELF_APPROVAL_FORBIDDEN: Onaylayan kişi işlemi yapan kişi olamaz.".to_string(),
         );
@@ -351,16 +352,27 @@ mod tests {
     /// Patron ve müdür kendi işlemini onaylar; platform hesabı onaylayamaz.
     #[test]
     fn yalniz_patron_ve_mudur_kendi_islemini_onaylar() {
-        assert!(require_allowed_approver("usr_manager", Role::Manager, "usr_cashier").is_ok());
-        assert!(require_allowed_approver("usr_manager", Role::Manager, "usr_manager").is_ok());
-        assert!(require_allowed_approver("usr_owner", Role::Owner, "usr_owner").is_ok());
+        assert!(
+            require_allowed_approver("usr_manager", Role::Manager, false, "usr_cashier").is_ok()
+        );
+        assert!(
+            require_allowed_approver("usr_manager", Role::Manager, false, "usr_manager").is_ok()
+        );
+        assert!(require_allowed_approver("usr_owner", Role::Owner, false, "usr_owner").is_ok());
+        assert!(
+            require_allowed_approver("usr_kidemli", Role::Cashier, true, "usr_kidemli").is_ok()
+        );
+        assert!(require_allowed_approver("usr_kasa", Role::Cashier, false, "usr_kasa").is_err());
 
-        let err = require_allowed_approver("usr_master", Role::Master, "usr_master").unwrap_err();
+        let err =
+            require_allowed_approver("usr_master", Role::Master, false, "usr_master").unwrap_err();
         assert!(err.starts_with("SELF_APPROVAL_FORBIDDEN"), "{}", err);
 
         // Büyük/küçük harf ve boşluk farkı da aynı kişidir.
-        assert!(require_allowed_approver("USR_MASTER", Role::Master, " usr_master ").is_err());
+        assert!(
+            require_allowed_approver("USR_MASTER", Role::Master, false, " usr_master ").is_err()
+        );
         // Onaylayan kimliği boş olamaz (fail-closed).
-        assert!(require_allowed_approver("  ", Role::Owner, "usr_cashier").is_err());
+        assert!(require_allowed_approver("  ", Role::Owner, false, "usr_cashier").is_err());
     }
 }

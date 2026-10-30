@@ -1,4 +1,5 @@
 pub mod analytics_service;
+pub mod approval_grant;
 pub mod audit_service;
 pub mod backup;
 pub mod branch_service;

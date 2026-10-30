@@ -235,6 +235,42 @@ async fn baska_terminalin_sayaci_etkilenmez() {
 }
 
 #[tokio::test]
+async fn patronun_yetki_verdigi_personel_onaylar_yetki_alininca_durur() {
+    let pool = approval_pool().await;
+    seed_user(&pool, "usr_kidemli", "tenant_a", "CASHIER", "6142", 1).await;
+    let mut conn = pool.acquire().await.expect("bağlantı alınır");
+    let req = request("usr_kidemli", operation::VOID, 0);
+
+    assert!(verify_and_issue(&mut conn, &req, "6142").await.is_err());
+
+    crate::services::approval_grant::set_grant(&mut conn, "tenant_a", "usr_kidemli", true)
+        .await
+        .expect("yetki");
+    let verified = verify_and_issue(&mut conn, &req, "6142")
+        .await
+        .expect("yetkili kendi işlemini onaylar");
+
+    crate::services::approval_grant::set_grant(&mut conn, "tenant_a", "usr_kidemli", false)
+        .await
+        .expect("geri alma");
+    assert!(consume_token(&mut conn, &verified.token, &req)
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn patrona_yetki_satiri_yazilmaz() {
+    let pool = approval_pool().await;
+    seed_user(&pool, "usr_owner", "tenant_a", "OWNER", "2222", 1).await;
+    let mut conn = pool.acquire().await.expect("bağlantı alınır");
+    assert!(
+        crate::services::approval_grant::set_grant(&mut conn, "tenant_a", "usr_owner", true)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn mudur_kendi_islemini_onaylar_platform_hesabi_onaylayamaz() {
     let pool = approval_pool().await;
     seed_user(&pool, "usr_manager", "tenant_a", "MANAGER", "3333", 1).await;

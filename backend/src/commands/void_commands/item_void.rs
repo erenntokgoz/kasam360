@@ -215,8 +215,9 @@ pub async fn comp_order_item(
         .ok_or_else(|| "UNAUTHORIZED: Bilinmeyen rol".to_string())?;
 
     match actor_role {
-        Role::Owner | Role::Manager => {}
-        Role::Cashier | Role::Waiter | Role::Kitchen | Role::Master => {
+        // Yetki onay jetonundadır: kasiyer ve garson ikramı başlatır, yetkili onaylar.
+        Role::Owner | Role::Manager | Role::Cashier | Role::Waiter => {}
+        Role::Kitchen | Role::Master => {
             return Err("UNAUTHORIZED: Bu rol ikram işlemi yapamaz".into());
         }
     }

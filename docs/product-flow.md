@@ -38,7 +38,7 @@ Mal kabulü gerçek teslim miktarını stoğa ekler. Tedarikçi belgesi daha son
 - Hesabı olmayan eski işletme kuruluma düşmez: sahip PIN'iyle e-posta ve şifre belirler.
 - Personel oturumu geçicidir: PIN ile açılır, hareketsizlikte kilitlenir (varsayılan 2 dakika). Ayarlar > Oturum bu cihaz için 2, 5, 15 dakika veya kalıcı oturum seçer; hesap oturumu da kapatılabilir, o zaman her açılışta şifre sorulur. Ayarı yalnız sahip ve müdür değiştirir.
 - Giriş oturum yokken, kilit ekranı mevcut oturum hareketsizlikten kilitlendiğinde kullanılır. Başka personelin PIN'i kilitli oturumu açmaz; `Kullanıcı Değiştir` oturumu kapatıp girişe döner.
-- İptal, ikram ve iadede kasiyer müdür veya patron PIN'i ister. Patron ve müdür kendi işlemini kendi PIN'iyle onaylar; onaylayan denetim kaydına yazılır.
+- İptal, ikram ve iadede kasiyer yetkili PIN'i ister. Patron, müdür ve patronun Ayarlar'dan onay yetkisi verdiği personel kendi işlemini kendi PIN'iyle onaylar; onaylayan denetim kaydına yazılır. Geri alınan yetki bekleyen onayı da durdurur.
 - Cihaz bağlama yalnız kurulum sihirbazından yapılır: kayıtlı işletmesi olan cihaz başka işletmeye katılmaz.
 
 ## Cihaz ve bağlantı davranışı

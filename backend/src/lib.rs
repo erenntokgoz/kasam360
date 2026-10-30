@@ -196,6 +196,7 @@ pub fn run() {
             // `get_pending_approvals`, `process_approval`) kaldırıldı: onay
             // anında PIN ile alınır, kuyrukta bekletilmez.
             approval_commands::verify_manager_pin,
+            approval_commands::set_staff_approval,
             cashier_commands::cash_in,
             cashier_commands::cash_out,
             cashier_commands::get_shift_summary,

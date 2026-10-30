@@ -252,12 +252,15 @@ pub async fn verify_and_issue(
     } else {
         rbac::APPROVER_ROLES.to_vec()
     };
-    if !allowed.contains(&approver_role) {
+    // Patronun verdiği yetki rolden bağımsızdır; büyük indirimi de kapsar.
+    let granted =
+        crate::services::approval_grant::is_granted(conn, &request.tenant_id, &found.id).await?;
+    if !granted && !allowed.contains(&approver_role) {
         record_failure(conn, request).await?;
         return Err(error::NOT_APPROVER.to_string());
     }
 
-    rbac::require_allowed_approver(&found.id, approver_role, &request.actor_id)?;
+    rbac::require_allowed_approver(&found.id, approver_role, granted, &request.actor_id)?;
 
     clear_failures(conn, request).await?;
 
@@ -368,7 +371,9 @@ pub async fn consume_token(
     // Ayrım gözetimi jetonun kendi satırından yeniden denetlenir. Jetonu üreten
     // yol denetliyordu; burada tekrar denetlemek, elle yazılmış bir satırın veya
     // eski bir kaydın kapıyı atlamasını engeller.
-    rbac::require_allowed_approver(&approver_id, approver_role, &request.actor_id)?;
+    let granted =
+        crate::services::approval_grant::is_granted(conn, &request.tenant_id, &approver_id).await?;
+    rbac::require_allowed_approver(&approver_id, approver_role, granted, &request.actor_id)?;
 
     // Eşik kuralı tüketim anında da yeniden denetlenir: jeton üretilirken küçük
     // bir indirim için MASTER onayı verilmişse, işlem yürütme anındaki gerçek
@@ -380,7 +385,7 @@ pub async fn consume_token(
     } else {
         rbac::APPROVER_ROLES.to_vec()
     };
-    if !allowed.contains(&approver_role) {
+    if !granted && !allowed.contains(&approver_role) {
         return Err(error::APPROVER_NOT_ALLOWED.to_string());
     }
 

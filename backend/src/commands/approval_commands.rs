@@ -152,3 +152,32 @@ pub async fn verify_manager_pin(
         remaining_attempts: remaining,
     })
 }
+
+/// Personele onay yetkisi verir veya geri alır. Yalnız patron yapabilir.
+#[tauri::command]
+pub async fn set_staff_approval(
+    staff_id: String,
+    can_approve: bool,
+    actor_id: String,
+    actor_role: String,
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    crate::rbac::require_any(&actor_role, &[crate::rbac::Role::Owner])?;
+    let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    crate::services::approval_grant::set_grant(&mut tx, &tenant_id, &staff_id, can_approve).await?;
+    let ctx = AuditContext::new(
+        tenant_id,
+        actor_id,
+        actor_role,
+        audit_service::category::GUVENLIK,
+        "staff:approval_changed",
+        staff_id,
+        serde_json::json!({ "canApprove": can_approve }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+    tx.commit().await.map_err(|e| e.to_string())
+}

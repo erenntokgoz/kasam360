@@ -20,6 +20,8 @@ pub struct StaffMemberDto {
     pub tenant_id: String,
     #[serde(default)]
     pub is_active: bool,
+    #[serde(default)]
+    pub can_approve: bool,
 }
 
 #[tauri::command]
@@ -33,13 +35,13 @@ pub async fn get_staff(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let rows = if include_inactive.unwrap_or(false) {
-        sqlx::query("SELECT id, name, role, tenant_id, is_active FROM users WHERE tenant_id = ? ORDER BY name ASC")
+        sqlx::query("SELECT id, name, role, tenant_id, is_active, can_approve FROM users WHERE tenant_id = ? ORDER BY name ASC")
             .bind(&tenant_id)
             .fetch_all(&mut *conn)
             .await
             .map_err(|e| e.to_string())?
     } else {
-        sqlx::query("SELECT id, name, role, tenant_id, is_active FROM users WHERE tenant_id = ? AND is_active = 1 ORDER BY name ASC")
+        sqlx::query("SELECT id, name, role, tenant_id, is_active, can_approve FROM users WHERE tenant_id = ? AND is_active = 1 ORDER BY name ASC")
             .bind(&tenant_id)
             .fetch_all(&mut *conn)
             .await
@@ -54,6 +56,9 @@ pub async fn get_staff(
                 role: r.try_get("role").map_err(|e| e.to_string())?,
                 tenant_id: r.try_get("tenant_id").map_err(|e| e.to_string())?,
                 is_active: r.try_get::<bool, _>("is_active").unwrap_or(true),
+                can_approve: r
+                    .try_get::<bool, _>("can_approve")
+                    .map_err(|e| e.to_string())?,
             })
         })
         .collect::<Result<Vec<StaffMemberDto>, String>>()?;
@@ -128,6 +133,7 @@ pub async fn create_staff_member(
         role,
         tenant_id,
         is_active: true,
+        ..StaffMemberDto::default()
     })
 }
 
@@ -275,5 +281,6 @@ pub async fn update_staff_member(
         role,
         tenant_id,
         is_active,
+        ..StaffMemberDto::default()
     })
 }

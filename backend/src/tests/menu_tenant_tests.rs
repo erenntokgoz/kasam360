@@ -258,6 +258,7 @@ fn menu_dto_lari_yerinde() {
         role: "WAITER".into(),
         tenant_id: "tenant_a".into(),
         is_active: true,
+        ..StaffMemberDto::default()
     };
     assert_eq!(personel.tenant_id, "tenant_a");
 }
