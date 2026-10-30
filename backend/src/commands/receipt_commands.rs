@@ -70,6 +70,9 @@ pub struct ReceiptDto {
     /// ve arayüz "kalem kaydı yok" durumunu gösterir.
     #[serde(rename = "has_items", alias = "hasItems")]
     pub has_items: bool,
+    /// Bu tahsilattan bugüne kadar iade edilen tutar.
+    #[serde(rename = "refunded_cents", alias = "refundedCents", default)]
+    pub refunded_cents: i64,
 }
 
 /// Fiş listesi — **tahsilat kaydından** türetilir.

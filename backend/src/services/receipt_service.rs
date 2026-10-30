@@ -245,6 +245,8 @@ async fn build_receipt(
         .map_err(|e| e.to_string())?,
         _ => None,
     };
+    let refunded_cents =
+        crate::services::refund_service::refunded_cents(conn, tenant_id, transaction_id).await?;
 
     Ok(ReceiptDto {
         id: transaction_id.to_string(),
@@ -269,6 +271,7 @@ async fn build_receipt(
         tendered_cents: payload_i64(payload, "amountTendered"),
         change_cents: payload_i64(payload, "changeAmount"),
         has_items,
+        refunded_cents,
     })
 }
 

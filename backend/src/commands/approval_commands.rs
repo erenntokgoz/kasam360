@@ -10,7 +10,7 @@ use crate::services::audit_service::{self, AuditContext, AuditLock, AuditService
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyManagerPinPayload {
-    /// `VOID_ORDER` | `DISCOUNT` | `COMPLIMENTARY`
+    /// `VOID_ORDER` | `DISCOUNT` | `COMPLIMENTARY` | `REFUND`
     pub operation: String,
     /// İşlemin bağlandığı kaynak (adisyon, sepet, fiş).
     pub resource_id: String,
@@ -65,6 +65,7 @@ pub async fn verify_manager_pin(
         crate::approval_service::operation::VOID
             | crate::approval_service::operation::DISCOUNT
             | crate::approval_service::operation::COMPLIMENTARY
+            | crate::approval_service::operation::REFUND
     ) {
         return Err("INVALID_OPERATION: Bilinmeyen onay işlemi.".to_string());
     }

@@ -77,11 +77,15 @@ pub async fn calculate_expected_shift_balance(
             ), 0) as veresiye_sales,
             COALESCE(SUM(CAST(json_extract(payload, '$.discountCents') AS INTEGER)), 0) as total_discounts
         FROM audit_ledger
-        WHERE tenant_id = ? AND action = 'payment:settled_fifo' AND created_at >= ?",
+        WHERE tenant_id = ? AND action = 'payment:settled_fifo'
+          AND datetime(created_at) >= datetime(?)",
     );
 
+    // Neden `datetime()`: defter RFC 3339 (`2026-10-30T09:00`), vardiya SQLite
+    // biçimi (`2026-10-30 15:00`) yazar. Metin karşılaştırmasında `T` boşluktan
+    // büyük olduğu için günün önceki vardiyalarının satışı da pencereye girerdi.
     let sales_row = if let Some(closed) = closed_at {
-        sales_query.push_str(" AND created_at <= ?");
+        sales_query.push_str(" AND datetime(created_at) <= datetime(?)");
         sqlx::query(&sales_query)
             .bind(tenant_id)
             .bind(opened_at)

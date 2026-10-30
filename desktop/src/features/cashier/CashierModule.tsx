@@ -7,6 +7,7 @@ import { formatDateTime } from '../../lib/date';
 import { Button } from '../../ui/Button';
 import { BlindCloseModal } from './BlindCloseModal';
 import { CashMovementModal } from './CashMovementModal';
+import { ReceiptsTab } from './ReceiptsTab';
 
 /** Okunamayan tutar sıfır gösterilmez: kasa farkı sanılır. */
 const money = (cents?: number | null) => (cents == null ? 'Okunamadı' : formatMoney(cents));
@@ -15,7 +16,7 @@ export const CashierModule: React.FC = () => {
   const { activeShift, summary, lastZReport, loadShiftData, recordCashMovement } = useShiftStore();
   const { openModal } = useUIStore();
 
-  const [activeTab, setActiveTab] = useState<'SHIFT' | 'DAY_CLOSE'>('SHIFT');
+  const [activeTab, setActiveTab] = useState<'SHIFT' | 'RECEIPTS' | 'DAY_CLOSE'>('SHIFT');
   const [cashActionModal, setCashActionModal] = useState<'IN' | 'OUT' | null>(null);
 
   useEffect(() => {
@@ -40,6 +41,15 @@ export const CashierModule: React.FC = () => {
             className="!min-h-[38px] text-xs font-bold"
           >
             Aktif Vardiya ve Kasa
+          </Button>
+
+          <Button
+            variant={activeTab === 'RECEIPTS' ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={() => setActiveTab('RECEIPTS')}
+            className="min-h-12 text-xs font-bold"
+          >
+            Fişler ve İade
           </Button>
 
           <Button
@@ -170,6 +180,8 @@ export const CashierModule: React.FC = () => {
               </div>
             </div>
           </>
+        ) : activeTab === 'RECEIPTS' ? (
+          <ReceiptsTab onRefunded={() => void loadShiftData()} />
         ) : (
           /* Gün Sonu / Z Raporu Sekmesi */
           <div className="max-w-2xl bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-6 shadow-sm space-y-5">

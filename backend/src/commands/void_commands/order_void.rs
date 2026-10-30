@@ -309,6 +309,22 @@ pub async fn create_compensation_void(
         return Err("INVALID_AMOUNT: Compensation void tutarı 0'dan büyük olmalıdır.".to_string());
     }
 
+    // Tahsilat bazında iade yapılmış adisyon bütünüyle geri alınırsa aynı para iki
+    // kez iade edilmiş olur.
+    let prior_refunds: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM refunds WHERE tenant_id = ? AND original_order_id = ?",
+    )
+    .bind(&tenant_id)
+    .bind(&payload.order_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    if prior_refunds > 0 {
+        return Err(
+            "INVALID_STATE: adisyonda iade var; kalan tutar fişten iade edilir.".to_string(),
+        );
+    }
+
     let approval_request = crate::approval_service::ApprovalRequest {
         tenant_id: tenant_id.clone(),
         operation: crate::approval_service::operation::REFUND.to_string(),

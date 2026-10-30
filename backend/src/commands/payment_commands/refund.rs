@@ -14,8 +14,8 @@ use crate::rbac::Role;
 /// kaydı bulunur; aynı tutarın tersini yazar.
 ///
 /// Süreç:
-///   1. Actor rolü yetkili mi? (OWNER | MANAGER)
-///   2. Orijinal transaction var mı ve tutarı > 0 mı? (hata yükseltilir, 0'a dönülmez)
+///   1. Actor rolü yetkili mi? (OWNER | MANAGER | CASHIER)
+///   2. Tutar kayıtlı tahsilatın iade edilmemiş kısmını aşıyor mu? Kanal da oradan gelir.
 ///   3. Onay tokenı tüketilir (scope: operation=REFUND, resource=original_txn_id).
 ///   4. `refunds` tablosuna ters kayıt eklenir.
 ///   5. `events` tablosuna COMPENSATION_REVERSAL event'i eklenir.
@@ -44,9 +44,11 @@ pub async fn create_compensation_refund(
     let actor_role = crate::rbac::canonical_role(&payload.actor_role)
         .ok_or_else(|| "UNAUTHORIZED: Bilinmeyen rol".to_string())?;
 
+    // Kasiyer iadeyi başlatabilir: tahsilatı yapan odur, para da onun kasasından
+    // çıkar. Yetki onay jetonundadır; onaylayan ayrı bir yönetici olmak zorundadır.
     match actor_role {
-        Role::Owner | Role::Manager => {}
-        Role::Cashier | Role::Waiter | Role::Kitchen | Role::Master => {
+        Role::Owner | Role::Manager | Role::Cashier => {}
+        Role::Waiter | Role::Kitchen | Role::Master => {
             return Err("UNAUTHORIZED: Bu rol compensation refund yapamaz".to_string());
         }
     }
@@ -54,25 +56,18 @@ pub async fn create_compensation_refund(
     if payload.amount_cents <= 0 {
         return Err("INVALID_AMOUNT: Refund tutarı 0'dan büyük olmalıdır.".to_string());
     }
-
-    // Orijinal transaction'ı doğrula (tenant filtresiz arama kesinlikle YASAK).
-    let original_event = sqlx::query(
-        "SELECT aggregate_id, payload FROM events \
-         WHERE aggregate_id = ? AND tenant_id = ? AND aggregate_type = 'SALE' \
-         ORDER BY created_at DESC LIMIT 1",
-    )
-    .bind(&payload.original_transaction_id)
-    .bind(&tenant_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    if original_event.is_none() {
-        return Err(format!(
-            "NOT_FOUND: Transaction '{}' bu kiracı için bulunamadı.",
-            payload.original_transaction_id
-        ));
+    let reason = payload.reason.trim();
+    if reason.is_empty() {
+        return Err("VALIDATION: iade nedeni zorunludur.".to_string());
     }
+
+    let plan = crate::services::refund_service::plan_refund(
+        &mut tx,
+        &tenant_id,
+        &payload.original_transaction_id,
+        payload.amount_cents,
+    )
+    .await?;
 
     // Onay tokenı
     let approval_request = crate::approval_service::ApprovalRequest {
@@ -100,15 +95,16 @@ pub async fn create_compensation_refund(
     sqlx::query(
         "INSERT INTO refunds (id, tenant_id, original_transaction_id, original_order_id, \
             compensation_txn_id, amount_cents, reason, method, actor_id, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'COMPENSATION', ?, datetime('now'))",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
     )
     .bind(&refund_id)
     .bind(&tenant_id)
     .bind(&payload.original_transaction_id)
-    .bind(payload.order_id.as_deref().unwrap_or(""))
+    .bind(plan.order_id.as_deref())
     .bind(&refund_id)
     .bind(payload.amount_cents)
-    .bind(&payload.reason)
+    .bind(reason)
+    .bind(plan.method)
     .bind(&approver.approver_id)
     .execute(&mut *tx)
     .await
@@ -119,7 +115,11 @@ pub async fn create_compensation_refund(
     let comp_payload = serde_json::json!({
         "originalTransactionId": payload.original_transaction_id,
         "amountCents": payload.amount_cents,
-        "reason": payload.reason,
+        "reason": reason,
+        "method": plan.method,
+        "orderId": plan.order_id,
+        "approverId": approver.approver_id,
+        "approverRole": approver.approver_role.as_str(),
         "compensationTxnId": refund_id,
     });
     let comp_payload_json = serde_json::to_string(&comp_payload).map_err(|e| e.to_string())?;

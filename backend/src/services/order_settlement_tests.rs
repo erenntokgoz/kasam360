@@ -82,6 +82,37 @@ async fn pay(pool: &SqlitePool, payload: &PaymentPayloadDto) -> Result<Settlemen
     Ok(result)
 }
 
+/// Defter RFC 3339, vardiya SQLite biçimi yazar; biçim farkı önceki vardiyanın
+/// satışını yeni vardiyanın kasasına eklememelidir.
+#[tokio::test]
+async fn vardiya_kasasi_acilistan_onceki_satisi_saymaz() {
+    let pool = pool().await;
+    pay(&pool, &payment("txn_1", "CASH", 300, &[("itm_1", 3)]))
+        .await
+        .expect("tahsilat");
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let later: String = sqlx::query_scalar("SELECT datetime('now', '+1 hour')")
+        .fetch_one(&mut *conn)
+        .await
+        .expect("saat");
+    let earlier: String = sqlx::query_scalar("SELECT datetime('now', '-1 hour')")
+        .fetch_one(&mut *conn)
+        .await
+        .expect("saat");
+    let after = crate::commands::cashier_commands::calculate_expected_shift_balance(
+        &mut conn, TENANT, "shf_1", &later, None, 0,
+    )
+    .await
+    .expect("sonraki vardiya");
+    assert_eq!(after.cash_sales, 0);
+    let before = crate::commands::cashier_commands::calculate_expected_shift_balance(
+        &mut conn, TENANT, "shf_1", &earlier, None, 0,
+    )
+    .await
+    .expect("önceki vardiya");
+    assert_eq!(before.cash_sales, 300);
+}
+
 async fn scalar(pool: &SqlitePool, query: &str) -> i64 {
     sqlx::query_scalar(query)
         .fetch_one(pool)
