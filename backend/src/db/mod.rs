@@ -59,7 +59,9 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     let options = SqliteConnectOptions::from_str(database_url)?
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal)
-        .synchronous(SqliteSynchronous::Normal)
+        // Eşitleme onayı "diske yazıldı" demektir; WAL + NORMAL elektrik
+        // kesintisinde son işlemleri kaybedebilir.
+        .synchronous(SqliteSynchronous::Full)
         .foreign_keys(true)
         .busy_timeout(std::time::Duration::from_millis(5000));
 
