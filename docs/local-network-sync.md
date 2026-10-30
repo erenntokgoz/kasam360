@@ -1,6 +1,6 @@
 # Yerel Ağ Eşitlemesi
 
-Durum: Tasarım; çok cihazlı aktarım henüz uygulanmadı.
+Durum: Cari işlemler için aktarım uygulandı; gerçek cihaz testi yapılmadı, üretime hazır değildir.
 
 ## Hedef
 
@@ -8,13 +8,11 @@ Durum: Tasarım; çok cihazlı aktarım henüz uygulanmadı.
 
 ## Mevcut durum
 
-- Her Tauri süreci kendi SQLite dosyasını açar. Cihazlar arası ağ dinleyicisi ve kayıt aktarımı yoktur.
-- `events` ve `outbox` tabloları vardır; satış olaylarının bir kısmı yazılır. Menü, stok, cari ve bütün adisyon değişiklikleri aynı olay sözleşmesinde değildir.
-- `devices` tablosu cihaz adı/durumu tutar; eşitleme konumu henüz yerel süreçle ilişkilendirilmemiştir.
-- `local_device_identity` artık kurulumun cihaz kaydını kalıcı tutabilir; kurulum ekranı ve ağ bağlantısı henüz bu yordamı çağırmaz.
-- Masa kilidi süreç belleğindedir; diğer cihaz tarafından görülemez.
-- Önceki outbox işçisi yalnızca log yazıp olayı teslim edilmiş sayıyordu. Bu işçi kaldırıldı; gerçek teslimat kanalı kurulana kadar kayıtlar `PENDING` kalır.
-- Önceki ödeme için “last-write-wins” kuralı kaldırıldı. Para hareketi üstüne yazılamaz.
+- Tek cihazlı kurulum eşleştirme gerektirmez; cari işlemler yine de işlem günlüğünden geçer.
+- Eşitlenen işlemler: cari kart, borç açma ve banka/kart ödemesi. Küme üyeliği de aynı günlükten geçer.
+- Kod `backend/src/services/lan_sync` altındadır: işlem günlüğü (`op_log`), otorite ve çoğunluk (`engine`), şifreli kanal (`secure_channel`), eşleştirme (`pairing`), TCP çalışma döngüsü (`runtime`, `transport`).
+- Sipariş, ödeme, kasa, vardiya, gün sonu, personel bordrosu ve stok henüz günlüğe taşınmadı. Bu yüzden iki veya daha fazla cihaz eşleştirildiğinde bu yazmalar `SYNC_UNSUPPORTED` ile durur; nakit cari hareketi ve tedarikçi belgesi de vardiya ve stok eşitlenene kadar kapalıdır.
+- `outbox` harici sistem teslimatı içindir; cihazlar arası eşitlemede kullanılmaz.
 
 ## Güvenlik ve süreklilik kuralı
 
