@@ -27,6 +27,16 @@ pub struct StatementLineDto {
     pub balance_after_cents: i64,
     #[serde(rename = "balanceAfterLabel")]
     pub balance_after_label: String,
+    #[serde(rename = "debtId")]
+    pub debt_id: String,
+    #[serde(rename = "dueDate")]
+    pub due_date: Option<String>,
+    #[serde(rename = "orderId")]
+    pub order_id: Option<String>,
+    #[serde(rename = "documentNo")]
+    pub document_no: Option<String>,
+    #[serde(rename = "purchaseOrderId")]
+    pub purchase_order_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -67,6 +77,11 @@ impl From<StatementLine> for StatementLineDto {
             description: value.description,
             created_at: value.created_at,
             balance_after_cents: value.balance_after_cents,
+            debt_id: value.debt_id,
+            due_date: value.due_date,
+            order_id: value.order_id,
+            document_no: value.document_no,
+            purchase_order_id: value.purchase_order_id,
         }
     }
 }
@@ -135,7 +150,13 @@ pub async fn print_payment_receipt(
 
     let row = sqlx::query(
         "SELECT dp.id, dp.amount_cents, dp.payment_method, dp.created_at,
-                d.id AS debt_id, d.remaining_amount_cents, d.status, dir.name AS directory_name
+                d.id AS debt_id, d.status, dir.name AS directory_name,
+                -- Eski makbuz yeniden basılınca o anki kalan görünmelidir.
+                d.total_amount_cents - (
+                    SELECT SUM(prior.amount_cents) FROM debt_payments prior
+                    WHERE prior.debt_id = dp.debt_id AND prior.tenant_id = dp.tenant_id
+                      AND (prior.created_at, prior.id) <= (dp.created_at, dp.id)
+                ) AS remaining_after_cents
          FROM debt_payments dp
          JOIN debts d ON d.id = dp.debt_id AND d.tenant_id = dp.tenant_id
          JOIN directories dir ON dir.id = d.directory_id AND dir.tenant_id = d.tenant_id
@@ -152,7 +173,7 @@ pub async fn print_payment_receipt(
     let directory_name: String = row.try_get("directory_name").map_err(|e| e.to_string())?;
     let amount_cents: i64 = row.try_get("amount_cents").map_err(|e| e.to_string())?;
     let remaining_after_cents: i64 = row
-        .try_get("remaining_amount_cents")
+        .try_get("remaining_after_cents")
         .map_err(|e| e.to_string())?;
     let method: String = row.try_get("payment_method").map_err(|e| e.to_string())?;
     let status: String = row.try_get("status").map_err(|e| e.to_string())?;
@@ -182,10 +203,6 @@ pub async fn print_payment_receipt(
         status_label,
         &issued_at,
     );
-
-    for line in &lines {
-        println!("{}", line.text);
-    }
 
     Ok(PaymentReceiptDto {
         line_count: lines.len() as i64,

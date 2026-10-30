@@ -362,20 +362,63 @@ async fn broken_debt_column_returns_err_not_zero() {
     );
 }
 
+#[tokio::test]
+async fn eski_borcun_donem_ici_odemesi_acilista_ve_yuruyen_bakiyede_dogru_sayilir() {
+    let p = pool().await;
+    seed_directory(&p, "dir_cus", TENANT, "Müşteri Ayşe", "CUSTOMER").await;
+    seed_debt(
+        &p,
+        "dbt_old",
+        "dir_cus",
+        "GIVEN",
+        10_000,
+        "2026-09-10 10:00:00",
+    )
+    .await;
+    seed_debt(
+        &p,
+        "dbt_new",
+        "dir_cus",
+        "GIVEN",
+        2_000,
+        "2026-10-20 10:00:00",
+    )
+    .await;
+    seed_payment(&p, "pay_1", "dbt_old", 4_000, "2026-10-05 10:00:00").await;
+    // Eski borç bugün tamamen kapanmış olsa da açılış dönem başındaki gerçektir.
+    seed_payment(&p, "pay_2", "dbt_old", 6_000, "2026-10-25 10:00:00").await;
+    sqlx::query(
+        "UPDATE debts SET remaining_amount_cents = 0, status = 'PAID' WHERE id = 'dbt_old'",
+    )
+    .execute(&p)
+    .await
+    .expect("borç kapanır");
+
+    let s = directory_statement(&p, TENANT, "dir_cus", FROM, TO)
+        .await
+        .expect("ekstre");
+
+    assert_eq!(s.opening_balance_cents, 10_000);
+    let bakiyeler: Vec<i64> = s.lines.iter().map(|l| l.balance_after_cents).collect();
+    assert_eq!(bakiyeler, vec![6_000, 8_000, 2_000]);
+    assert_eq!(s.closing_balance_cents, 2_000);
+    assert_eq!(s.lines[0].debt_id, "dbt_old");
+}
+
 // ============================================================================
 // PARA BİÇİMLENDİRME
 // ============================================================================
 
 #[test]
 fn format_cents_uses_turkish_thousands_separator() {
-    assert_eq!(format_cents(0), "0.00 TL");
-    assert_eq!(format_cents(5), "0.05 TL");
-    assert_eq!(format_cents(87_500), "875.00 TL");
-    assert_eq!(format_cents(1_234_567), "12.345.67 TL");
-    assert_eq!(format_cents(100_000_000), "1.000.000.00 TL");
+    assert_eq!(format_cents(0), "0,00 TL");
+    assert_eq!(format_cents(5), "0,05 TL");
+    assert_eq!(format_cents(87_500), "875,00 TL");
+    assert_eq!(format_cents(1_234_567), "12.345,67 TL");
+    assert_eq!(format_cents(100_000_000), "1.000.000,00 TL");
     assert_eq!(
         format_cents(-30_000),
-        "-300.00 TL",
+        "-300,00 TL",
         "aşım negatif işaretlenmeli"
     );
 }
@@ -410,11 +453,11 @@ fn receipt_lines_fit_80mm_and_carry_totals() {
     assert!(joined.contains("TEDIYE MAKBUZU"));
     assert!(joined.contains("Müşteri Ayşe"));
     assert!(
-        joined.contains("375.00 TL"),
+        joined.contains("375,00 TL"),
         "tahsilat tutarı makbuzda görünmeli"
     );
     assert!(
-        joined.contains("500.00 TL"),
+        joined.contains("500,00 TL"),
         "kalan borç makbuzda görünmeli"
     );
     assert!(

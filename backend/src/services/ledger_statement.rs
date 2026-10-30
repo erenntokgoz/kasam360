@@ -29,6 +29,14 @@ pub struct StatementLine {
     pub created_at: String,
     /// Satır sonrası bakiye.
     pub balance_after_cents: i64,
+    /// Satırın ait olduğu borç; ödeme satırı da borcuna kimlikle bağlanır.
+    pub debt_id: String,
+    pub due_date: Option<String>,
+    /// Veresiye adisyonu.
+    pub order_id: Option<String>,
+    /// Tedarikçi belgesi.
+    pub document_no: Option<String>,
+    pub purchase_order_id: Option<String>,
 }
 
 /// Bir cari kartın dönem ekstresi.
@@ -77,16 +85,22 @@ pub async fn directory_statement(
     let directory_name: String = dir.try_get("name").map_err(|e| e.to_string())?;
     let directory_type: String = dir.try_get("type").map_err(|e| e.to_string())?;
 
-    // Açılış bakiyesi: dönem başlangıcından önce açılmış ve kapanmamış borçların
-    // işaretli toplamı.
+    // Açılış bakiyesi dönem öncesindeki bütün hareketlerin toplamıdır. Yalnız
+    // bugünkü kalanlara bakmak, dönem içinde ödenen eski borcu açılıştan düşer
+    // ve aynı ödemeyi satırda ikinci kez sayardı.
     let opening_balance_cents: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(
-                    CASE WHEN type = 'GIVEN' THEN remaining_amount_cents
-                         WHEN type = 'TAKEN' THEN -remaining_amount_cents
-                         ELSE 0 END), 0)
-         FROM debts
-         WHERE tenant_id = ? AND directory_id = ? AND status != 'PAID'
-           AND date(created_at) < date(?)",
+        "SELECT
+            COALESCE((SELECT SUM(CASE WHEN type = 'GIVEN' THEN total_amount_cents
+                                      ELSE -total_amount_cents END)
+                      FROM debts
+                      WHERE tenant_id = ?1 AND directory_id = ?2
+                        AND date(created_at) < date(?3)), 0)
+          + COALESCE((SELECT SUM(CASE WHEN d.type = 'GIVEN' THEN -dp.amount_cents
+                                      ELSE dp.amount_cents END)
+                      FROM debt_payments dp
+                      JOIN debts d ON d.id = dp.debt_id AND d.tenant_id = dp.tenant_id
+                      WHERE dp.tenant_id = ?1 AND d.directory_id = ?2
+                        AND date(dp.created_at) < date(?3)), 0)",
     )
     .bind(tenant_id)
     .bind(directory_id)
@@ -97,10 +111,14 @@ pub async fn directory_statement(
 
     // Dönem içi borç hareketleri
     let debt_rows = sqlx::query(
-        "SELECT id, type, total_amount_cents, description, created_at
-         FROM debts
-         WHERE tenant_id = ? AND directory_id = ? AND date(created_at) >= date(?) AND date(created_at) <= date(?)
-         ORDER BY created_at ASC, id ASC",
+        "SELECT deb.id, deb.type, deb.total_amount_cents, deb.description, deb.created_at,
+                deb.due_date, deb.order_id, sd.document_no, sd.purchase_order_id
+         FROM debts deb
+         LEFT JOIN supplier_documents sd
+                ON sd.debt_id = deb.id AND sd.tenant_id = deb.tenant_id
+         WHERE deb.tenant_id = ? AND deb.directory_id = ?
+           AND date(deb.created_at) >= date(?) AND date(deb.created_at) <= date(?)
+         ORDER BY deb.created_at ASC, deb.id ASC",
     )
     .bind(tenant_id)
     .bind(directory_id)
@@ -113,9 +131,12 @@ pub async fn directory_statement(
     // Dönem içi ödemeler
     let payment_rows = sqlx::query(
         "SELECT dp.id, dp.debt_id, d.type as debt_type, dp.amount_cents,
-                dp.payment_method, dp.notes, dp.created_at
+                dp.payment_method, dp.notes, dp.created_at, d.due_date, d.order_id,
+                sd.document_no, sd.purchase_order_id
          FROM debt_payments dp
          JOIN debts d ON d.id = dp.debt_id AND d.tenant_id = dp.tenant_id
+         LEFT JOIN supplier_documents sd
+                ON sd.debt_id = d.id AND sd.tenant_id = d.tenant_id
          WHERE dp.tenant_id = ? AND d.directory_id = ?
            AND date(dp.created_at) >= date(?) AND date(dp.created_at) <= date(?)
          ORDER BY dp.created_at ASC, dp.id ASC",
@@ -129,32 +150,28 @@ pub async fn directory_statement(
     .map_err(|e| format!("Dönem tahsilatları okunamadı: {}", e))?;
 
     let mut lines: Vec<StatementLine> = Vec::with_capacity(debt_rows.len() + payment_rows.len());
-    let mut running = opening_balance_cents;
-    let mut total_debit_cents = 0i64;
-    let mut total_credit_cents = 0i64;
 
     for r in &debt_rows {
         let debt_type: String = r.try_get("type").map_err(|e| e.to_string())?;
         let amount: i64 = r.try_get("total_amount_cents").map_err(|e| e.to_string())?;
+        let id: String = r.try_get("id").map_err(|e| e.to_string())?;
         // GIVEN (bize alacak) bakiyeyi artırır, TAKEN (bizim borcumuz) azaltır.
-        let signed = if debt_type == "GIVEN" {
-            amount
-        } else {
-            -amount
-        };
-        running += signed;
-        if signed > 0 {
-            total_debit_cents += signed;
-        } else {
-            total_credit_cents += -signed;
-        }
         lines.push(StatementLine {
-            id: r.try_get("id").map_err(|e| e.to_string())?,
+            debt_id: id.clone(),
+            id,
             kind: "BORC_ACILDI".to_string(),
-            signed_amount_cents: signed,
+            signed_amount_cents: if debt_type == "GIVEN" {
+                amount
+            } else {
+                -amount
+            },
             description: r.try_get("description").map_err(|e| e.to_string())?,
             created_at: r.try_get("created_at").map_err(|e| e.to_string())?,
-            balance_after_cents: running,
+            balance_after_cents: 0,
+            due_date: r.try_get("due_date").map_err(|e| e.to_string())?,
+            order_id: r.try_get("order_id").map_err(|e| e.to_string())?,
+            document_no: r.try_get("document_no").map_err(|e| e.to_string())?,
+            purchase_order_id: r.try_get("purchase_order_id").map_err(|e| e.to_string())?,
         });
     }
 
@@ -162,34 +179,32 @@ pub async fn directory_statement(
         let debt_type: String = r.try_get("debt_type").map_err(|e| e.to_string())?;
         let amount: i64 = r.try_get("amount_cents").map_err(|e| e.to_string())?;
         let method: String = r.try_get("payment_method").map_err(|e| e.to_string())?;
+        let notes: Option<String> = r.try_get("notes").map_err(|e| e.to_string())?;
         // GIVEN tahsilatı (müşteri bize ödüyor) bakiyeyi azaltır;
         // TAKEN tediyesi (biz toptancıya ödüyoruz) artırır.
-        let signed = if debt_type == "GIVEN" {
-            -amount
-        } else {
-            amount
-        };
-        running += signed;
-        if signed > 0 {
-            total_debit_cents += signed;
-        } else {
-            total_credit_cents += -signed;
-        }
-        let notes: Option<String> = r.try_get("notes").map_err(|e| e.to_string())?;
         lines.push(StatementLine {
             id: r.try_get("id").map_err(|e| e.to_string())?,
+            debt_id: r.try_get("debt_id").map_err(|e| e.to_string())?,
             kind: if debt_type == "GIVEN" {
                 "TAHSILAT".to_string()
             } else {
                 "TEDIYE".to_string()
             },
-            signed_amount_cents: signed,
+            signed_amount_cents: if debt_type == "GIVEN" {
+                -amount
+            } else {
+                amount
+            },
             description: Some(match (&notes, method.as_str()) {
                 (Some(n), _) if !n.is_empty() => format!("{} · {}", method, n),
                 _ => method.clone(),
             }),
             created_at: r.try_get("created_at").map_err(|e| e.to_string())?,
-            balance_after_cents: running,
+            balance_after_cents: 0,
+            due_date: r.try_get("due_date").map_err(|e| e.to_string())?,
+            order_id: r.try_get("order_id").map_err(|e| e.to_string())?,
+            document_no: r.try_get("document_no").map_err(|e| e.to_string())?,
+            purchase_order_id: r.try_get("purchase_order_id").map_err(|e| e.to_string())?,
         });
     }
 
@@ -198,6 +213,23 @@ pub async fn directory_statement(
             .cmp(&b.created_at)
             .then_with(|| a.id.cmp(&b.id))
     });
+
+    // Yürüyen bakiye sıralamadan sonra hesaplanır; önce hesaplanırsa satır
+    // sonrası bakiye ekrandaki hareket sırasıyla tutmaz.
+    let mut running = opening_balance_cents;
+    let mut total_debit_cents = 0i64;
+    let mut total_credit_cents = 0i64;
+    for line in &mut lines {
+        running = running
+            .checked_add(line.signed_amount_cents)
+            .ok_or_else(|| "OVERFLOW: ekstre bakiyesi taştı".to_string())?;
+        line.balance_after_cents = running;
+        if line.signed_amount_cents > 0 {
+            total_debit_cents += line.signed_amount_cents;
+        } else {
+            total_credit_cents -= line.signed_amount_cents;
+        }
+    }
 
     Ok(DirectoryStatement {
         directory_id: directory_id.to_string(),
@@ -249,7 +281,7 @@ pub fn payment_receipt_lines(
     };
 
     push("================================", false);
-    push("KASAM360 HESAP DEFLERI", false);
+    push("KASAM360 HESAP DEFTERI", false);
     push("TEDIYE MAKBUZU", false);
     push("================================", true);
     push(&format!("Cari      : {}", directory_name), false);
@@ -292,7 +324,7 @@ pub fn format_cents(cents: i64) -> String {
         grouped.push(c);
     }
     format!(
-        "{}{}.{:02} TL",
+        "{}{},{:02} TL",
         if negative { "-" } else { "" },
         grouped,
         kurus
