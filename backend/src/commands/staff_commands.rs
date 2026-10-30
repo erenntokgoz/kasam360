@@ -283,7 +283,9 @@ pub async fn run_payroll(
     actor_role: String,
     period: String,
     pool: State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<Vec<PayrollRun>, String> {
+    state.lan_sync.require_local_write()?;
     crate::rbac::require_staff_admin(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     payroll_service::run_payroll(&pool, &tenant, &period, can_see_amounts(&actor_role)).await
@@ -312,7 +314,9 @@ pub async fn distribute_tip_pool(
     period: String,
     allocations: Vec<TipAllocationInput>,
     pool: State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<Vec<TipAllocation>, String> {
+    state.lan_sync.require_local_write()?;
     // Dağıtım para hareketidir: müdür göremez, yalnız sahibi dağıtabilir.
     crate::rbac::require_payroll_amounts(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
