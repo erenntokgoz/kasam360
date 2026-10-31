@@ -76,7 +76,7 @@ async fn teslim_alinan_parti_recete_maliyetini_erisilebilir_yapar() {
     .await
     .unwrap();
     assert_eq!(
-        receive_purchase_order(&mut conn, "ten_a", &order.id)
+        receive_purchase_order(&mut conn, "ten_a", &order.id, "usr_1")
             .await
             .unwrap(),
         600

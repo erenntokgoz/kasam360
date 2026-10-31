@@ -34,6 +34,7 @@ pub mod security360;
 pub mod setup;
 pub mod staff360;
 pub mod staff_session;
+pub mod stock_trail;
 
 #[cfg(test)]
 mod inventory360_tests;

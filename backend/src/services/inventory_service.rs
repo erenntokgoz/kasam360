@@ -266,6 +266,15 @@ impl InventoryService {
                 }
             }
 
+            crate::services::stock_trail::record_allocations(
+                conn,
+                tenant_id,
+                transaction_id,
+                product_id,
+                &batch_allocations,
+            )
+            .await?;
+
             total_cogs_cents = total_cogs_cents
                 .checked_add(item_cogs_cents)
                 .ok_or_else(|| "OVERFLOW: toplam satış maliyeti taştı".to_string())?;

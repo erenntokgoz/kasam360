@@ -18,6 +18,7 @@ use crate::services::inventory360::quantity_cost::{
     line_cost_cents, unit_cost_cents as calculate_unit_cost_cents,
 };
 use crate::services::inventory360::{optional_i64, optional_text};
+use crate::services::stock_trail::{self, StockMove};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct WasteRecord {
@@ -178,6 +179,21 @@ pub async fn record_waste(
     .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
+
+    stock_trail::record(
+        conn,
+        tenant_id,
+        StockMove {
+            product_id: &input.product_id,
+            movement_type: "WASTE",
+            quantity: input.quantity,
+            actor_id,
+            reason: Some(&input.reason),
+            source_type: stock_trail::SOURCE_WASTE,
+            source_id: &id,
+        },
+    )
+    .await?;
 
     Ok(WasteRecord {
         id,

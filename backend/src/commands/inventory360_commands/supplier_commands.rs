@@ -223,7 +223,7 @@ pub async fn receive_purchase_order_command(
     let mut conn = pool.begin_write().await?;
     let result: Result<i64, String> = async {
         let alinan_maliyet =
-            suppliers::receive_purchase_order(&mut conn, &tenant_id, &order_id).await?;
+            suppliers::receive_purchase_order(&mut conn, &tenant_id, &order_id, &actor_id).await?;
 
         record_audit(
             &mut conn,

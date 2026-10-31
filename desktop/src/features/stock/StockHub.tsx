@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { StockCountPanel } from './StockCountPanel';
 import { StockModule } from './StockModule';
 import { StockOverview } from './StockOverview';
+import { StockTrailPanel } from './StockTrailPanel';
 
 const TABS = [
   { id: 'OVERVIEW', label: 'Mevcut Stok' },
   { id: 'PURCHASE', label: 'Satın Alma' },
   { id: 'COUNT', label: 'Sayım ve Fire' },
+  { id: 'TRAIL', label: 'Hareketler' },
 ] as const;
 
 /** Stok girişi, eldeki miktar, sayım ve fire tek yerde durur. */
@@ -34,6 +36,7 @@ export function StockHub() {
       {tab === 'OVERVIEW' ? <StockOverview /> : null}
       {tab === 'PURCHASE' ? <StockModule /> : null}
       {tab === 'COUNT' ? <StockCountPanel /> : null}
+      {tab === 'TRAIL' ? <StockTrailPanel /> : null}
     </div>
   );
 }

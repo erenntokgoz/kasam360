@@ -502,6 +502,9 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     quantity REAL NOT NULL,
     actor_id TEXT NOT NULL,
     reason TEXT,
+    -- Hareketi doğuran kayıt: mal kabulü, adisyon kalemi, fire veya sayım.
+    source_type TEXT,
+    source_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id)
 );

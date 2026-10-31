@@ -1,6 +1,7 @@
 use crate::id_generator::generate_id;
 use crate::management_commands::ensure_owned;
 use crate::services::inventory360::quantity_cost::line_cost_cents;
+use crate::services::stock_trail::{self, StockMove};
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqliteConnection};
 
@@ -177,6 +178,7 @@ pub async fn receive_purchase_order(
     conn: &mut SqliteConnection,
     tenant_id: &str,
     order_id: &str,
+    actor_id: &str,
 ) -> Result<i64, String> {
     // Her kalem bir parti açar, kalem alanını ve ürün stoğunu günceller. Çağıran
     // komut `BEGIN IMMEDIATE` ile sarar: ortada hata olursa yalnız ilk kalemler
@@ -254,6 +256,21 @@ pub async fn receive_purchase_order(
         .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
+
+        stock_trail::record(
+            conn,
+            tenant_id,
+            StockMove {
+                product_id: &product_id,
+                movement_type: "IN",
+                quantity: kalan,
+                actor_id,
+                reason: Some("Mal kabulü"),
+                source_type: stock_trail::SOURCE_PURCHASE,
+                source_id: order_id,
+            },
+        )
+        .await?;
 
         sqlx::query(
             "UPDATE purchase_order_items SET received_quantity = ? WHERE id = ? AND tenant_id = ?",

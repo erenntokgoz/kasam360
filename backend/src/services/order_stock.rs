@@ -10,6 +10,7 @@
 
 use crate::commands::CartItemDto;
 use crate::services::inventory_service::{FifoResult, InventoryService};
+use crate::services::stock_trail::{self, StockMove};
 use sqlx::{Row, SqliteConnection, SqlitePool};
 
 /// Mutfak zayi bildirdiyse malzeme hazırlıktan önce de kaybolmuştur.
@@ -152,6 +153,20 @@ pub async fn release_line(
         .execute(&mut *conn)
         .await
         .map_err(text_error)?;
+        stock_trail::record(
+            conn,
+            tenant_id,
+            StockMove {
+                product_id: &product_id,
+                movement_type: "WASTE",
+                quantity: quantity as f64,
+                actor_id,
+                reason: Some(reason),
+                source_type: stock_trail::SOURCE_ORDER_ITEM,
+                source_id: item_id,
+            },
+        )
+        .await?;
         return Ok(Some(cost));
     }
 
@@ -168,6 +183,20 @@ pub async fn release_line(
         .await
         .map_err(text_error)?;
     }
+    stock_trail::record(
+        conn,
+        tenant_id,
+        StockMove {
+            product_id: &product_id,
+            movement_type: "IN",
+            quantity: quantity as f64,
+            actor_id,
+            reason: Some(reason),
+            source_type: stock_trail::SOURCE_ORDER_VOID,
+            source_id: item_id,
+        },
+    )
+    .await?;
     Ok(None)
 }
 

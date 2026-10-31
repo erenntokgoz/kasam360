@@ -206,6 +206,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     sqlx::raw_sql(schema).execute(&pool).await?;
     crate::services::approval_grant::ensure_column(&pool).await?;
     crate::services::order_stock::ensure_column(&pool).await?;
+    crate::services::stock_trail::ensure_columns(&pool).await?;
     crate::services::expense_service::ensure_column(&pool).await?;
     crate::services::lan_sync::store::ensure_state_column(&pool).await?;
     // Karar yükseltme adımlarından önce verilir: temiz kurulumda işletme ve

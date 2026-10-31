@@ -262,24 +262,24 @@ pub async fn close_stock_count(
 
         if apply_adjustment {
             if let Some(fark) = variance.filter(|fark| fark.abs() > f64::EPSILON) {
-                sqlx::query(
-                    "INSERT INTO stock_movements
-                         (id, tenant_id, inventory_item_id, product_id, movement_type,
-                          quantity, actor_id, reason)
-                     VALUES (?, ?, NULL, ?, 'ADJUST', ?, ?, ?)",
-                )
-                .bind(generate_id("smv"))
-                .bind(tenant_id)
-                .bind(&product_id)
-                .bind(fark)
-                .bind(actor_id)
-                .bind(format!(
+                let reason = format!(
                     "kör sayım farkı: beklenen {beklenen_kaynak} {}, sayılan {counted}",
                     expected.ok_or_else(|| "STOCK: beklenen stok bilinmiyor".to_string())?
-                ))
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
+                );
+                crate::services::stock_trail::record(
+                    conn,
+                    tenant_id,
+                    crate::services::stock_trail::StockMove {
+                        product_id: &product_id,
+                        movement_type: "ADJUST",
+                        quantity: fark,
+                        actor_id,
+                        reason: Some(&reason),
+                        source_type: crate::services::stock_trail::SOURCE_COUNT,
+                        source_id: stock_count_id,
+                    },
+                )
+                .await?;
             }
         }
 

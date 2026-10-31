@@ -30,7 +30,7 @@ async fn siparisi_teslim_almak_fifo_partisi_acar_ve_stogu_gunceller() {
     assert_eq!(siparis.status, "TASI");
     assert_eq!(siparis.total_cents, 38_000);
 
-    let maliyet = receive_purchase_order(&mut conn, T, &siparis.id)
+    let maliyet = receive_purchase_order(&mut conn, T, &siparis.id, "usr_1")
         .await
         .expect("siparis alinmali");
     assert_eq!(maliyet, 38_000);
@@ -75,7 +75,7 @@ async fn siparisi_teslim_almak_fifo_partisi_acar_ve_stogu_gunceller() {
     assert_eq!(durum, "ALINDI");
 
     // Sipariş iki kez alınamaz: aynı mal iki kez stoğa giremezdi.
-    let ikinci = receive_purchase_order(&mut conn, T, &siparis.id)
+    let ikinci = receive_purchase_order(&mut conn, T, &siparis.id, "usr_1")
         .await
         .expect_err("alinmis siparis tekrar alinamamali");
     assert!(ikinci.contains("CONFLICT"), "neden belirtilmeli: {ikinci}");
@@ -106,7 +106,7 @@ async fn kesirli_alim_tutari_tamsayi_kurusla_hesaplanir() {
     .expect("sipariş");
     assert_eq!(order.total_cents, 500);
     assert_eq!(
-        receive_purchase_order(&mut conn, T, &order.id)
+        receive_purchase_order(&mut conn, T, &order.id, "usr_1")
             .await
             .unwrap(),
         500
@@ -251,7 +251,7 @@ async fn siparisi_teblig_eden_baska_kiraci_yazamaz() {
     assert_eq!(yabanci.cheapest_unit_cost_cents, Some(100));
 
     // Yabancı işletme bizim siparişimizi alamaz, bizim ürünümüze fiyat yazamaz.
-    let hirsizlik = receive_purchase_order(&mut conn, T2, &siparis.id)
+    let hirsizlik = receive_purchase_order(&mut conn, T2, &siparis.id, "usr_1")
         .await
         .expect_err("yabanci siparis teslim alamamamali");
     assert!(
