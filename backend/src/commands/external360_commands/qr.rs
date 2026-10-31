@@ -84,7 +84,7 @@ pub async fn qr_menu_build(
         &tenant,
         &actor.0,
         &actor.1,
-        "EXTERNAL",
+        crate::services::audit_service::category::SISTEM,
         "qr_menu:built",
         &cikti.key_id,
         serde_json::json!({ "urun_adedi": cikti.json.len() }),

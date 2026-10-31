@@ -20,7 +20,7 @@ pub async fn list_shift_plans(
         return Err(format!("tarih araligi ters: {from} > {to}"));
     }
     let rows = sqlx::query(
-        "SELECT sp.id, sp.user_id, sp.full_name, sp.plan_date, sp.start_time, sp.end_time,
+        "SELECT sp.id, sp.user_id, u.name AS full_name, sp.plan_date, sp.start_time, sp.end_time,
                 sp.planned_break_minutes, sp.role_required, sp.station, sp.status,
                 sp.realized_shift_id
            FROM shift_plans sp
