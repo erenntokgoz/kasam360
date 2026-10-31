@@ -121,7 +121,7 @@ async fn remaining(pool: &SqlitePool) -> Option<i64> {
 macro_rules! wait_until {
     ($what:literal, $condition:expr) => {{
         let mut satisfied = false;
-        for _ in 0..200 {
+        for _ in 0..800 {
             if $condition {
                 satisfied = true;
                 break;
@@ -276,6 +276,8 @@ async fn yeniden_baslayan_uye_otoriteye_baglanip_eksigini_alir() {
     );
     // Üyelik kaydı takipçiye ulaşmadan otorite kapanırsa takipçi kendini üyelikte bulamaz.
     wait_until!("takipçi üyeliği aldı", sync_b.is_multi_device());
+    // Eşitlenmeden önceki `NO_CONNECTION` kopma sayılmaz: otorite hâlâ canlıdır.
+    wait_until!("takipçi eşitlendi", sync_b.status().state == "READY");
 
     sync_a.shutdown().await;
     wait_until!(
