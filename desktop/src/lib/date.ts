@@ -22,6 +22,12 @@ export function formatDateTime(dateInput?: string | Date | number): string {
   return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
+/** Sunucunun `YYYY-AA-GG SS:DD:ss` saati UTC'dir; takvim bunu yerel sanar, saat kayardı. */
+export function formatServerDateTime(value: string): string {
+  const utc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(value) ? `${value.replace(' ', 'T')}Z` : value;
+  return formatDateTime(utc);
+}
+
 export function minutesElapsed(startTime?: string): number {
   if (!startTime) return 0;
   const start = new Date(startTime).getTime();

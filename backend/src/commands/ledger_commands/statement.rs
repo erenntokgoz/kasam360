@@ -117,6 +117,45 @@ pub async fn get_directory_statement(
     })
 }
 
+#[derive(Debug, Serialize, Clone)]
+pub struct StatementOrderLineDto {
+    pub name: String,
+    pub quantity: i64,
+    #[serde(rename = "totalCents")]
+    pub total_cents: i64,
+}
+
+/// Ekstredeki adisyon bağlantısı: borcun hangi satıştan doğduğunu gösterir.
+#[tauri::command]
+pub async fn get_statement_order(
+    order_id: String,
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<StatementOrderLineDto>, String> {
+    require_ledger_read(actor_role.as_deref())?;
+    let tid = require_ledger_tenant(tenant_id.as_deref())?;
+    let rows: Vec<(String, i64, i64)> = sqlx::query_as(
+        "SELECT COALESCE(p.name, i.product_id), i.quantity, i.total_cents
+         FROM order_items i
+         LEFT JOIN products p ON p.id = i.product_id AND p.tenant_id = i.tenant_id
+         WHERE i.tenant_id = ? AND i.order_id = ? AND i.status != 'CANCELLED'",
+    )
+    .bind(&tid)
+    .bind(&order_id)
+    .fetch_all(&*pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(rows
+        .into_iter()
+        .map(|(name, quantity, total_cents)| StatementOrderLineDto {
+            name,
+            quantity,
+            total_cents,
+        })
+        .collect())
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PaymentReceiptDto {
     #[serde(rename = "paymentId")]

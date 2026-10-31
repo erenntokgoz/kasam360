@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useCariStore } from '../../stores/cariStore';
-import { localDate } from '../../lib/cariInput';
-import { formatDateTime } from '../../lib/date';
+import { sessionArgs, useCariStore } from '../../stores/cariStore';
+import { errorText, localDate } from '../../lib/cariInput';
+import { invokeIPC } from '../../services/tauriClient';
+import { formatServerDateTime } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
@@ -10,17 +11,78 @@ import { CariOpenDebtModal } from './CariOpenDebtModal';
 import { CariPaymentModal } from './CariPaymentModal';
 import type { DirectoryContact, LedgerDebt, StatementLine } from '../../types/ledger';
 
+interface OrderLine {
+  name: string;
+  quantity: number;
+  totalCents: number;
+}
+
 const KIND_LABEL: Record<StatementLine['kind'], string> = {
   BORC_ACILDI: 'Kayıt',
   TAHSILAT: 'Tahsilat',
   TEDIYE: 'Tediye',
+  IADE: 'İade',
 };
 
 function linkLabel(item: { orderId?: string | null; documentNo?: string | null }): string | null {
   if (item.documentNo) return `Belge ${item.documentNo}`;
-  if (item.orderId) return `Adisyon ${item.orderId}`;
+  if (item.orderId) return `Adisyon …${item.orderId.slice(-6)}`;
   return null;
 }
+
+const StatementRow: React.FC<{ line: StatementLine }> = ({ line }) => {
+  const [items, setItems] = useState<OrderLine[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const label = linkLabel(line);
+  const debit = line.signedAmountCents > 0 ? line.signedAmountCents : 0;
+  const credit = line.signedAmountCents < 0 ? -line.signedAmountCents : 0;
+
+  const toggle = async () => {
+    if (items) {
+      setItems(null);
+      return;
+    }
+    const { actorRole, tenantId } = sessionArgs();
+    try {
+      setError(null);
+      setItems(await invokeIPC<OrderLine[]>('get_statement_order', { actorRole, tenantId, orderId: line.orderId }));
+    } catch (caught) {
+      setError(errorText(caught));
+    }
+  };
+
+  return (
+    <>
+      <tr className="border-b border-[var(--border)]">
+        <td className="px-3 py-2 whitespace-nowrap">{formatServerDateTime(line.createdAt)}</td>
+        <td className="px-3 py-2">
+          {KIND_LABEL[line.kind]}
+          {line.description ? ` · ${line.description}` : ''}
+        </td>
+        <td className="px-3 py-2 text-[var(--text-secondary)]">
+          {line.orderId && !line.documentNo ? (
+            <button type="button" className="min-h-12 underline cursor-pointer" onClick={() => void toggle()}>{label}</button>
+          ) : label ?? '-'}
+        </td>
+        <td className="px-3 py-2 text-right">{debit ? formatMoney(debit) : ''}</td>
+        <td className="px-3 py-2 text-right">{credit ? formatMoney(credit) : ''}</td>
+        <td className="px-3 py-2 text-right">{formatMoney(line.balanceAfterCents)}</td>
+      </tr>
+      {error ? (
+        <tr><td colSpan={6} role="alert" className="px-3 py-2 text-[var(--accent-red)]">{error}</td></tr>
+      ) : null}
+      {items ? (
+        <tr className="border-b border-[var(--border)] bg-[var(--bg-subtle)]">
+          <td colSpan={6} className="px-3 py-2">
+            {items.length === 0 ? 'Kalem kaydı yok.' : items.map((item) => (
+              <span key={item.name} className="block text-[var(--text-secondary)]">{item.quantity} × {item.name} · {formatMoney(item.totalCents)}</span>
+            ))}
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+};
 
 interface CariCardDetailProps {
   card: DirectoryContact;
@@ -146,33 +208,25 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
               <thead className="text-[var(--text-secondary)] text-left">
                 <tr className="border-b border-[var(--border)]">
                   <th className="px-3 py-2 font-semibold">Tarih</th>
-                  <th className="px-3 py-2 font-semibold">Hareket</th>
-                  <th className="px-3 py-2 font-semibold">Bağlantı</th>
-                  <th className="px-3 py-2 font-semibold text-right">Tutar</th>
-                  <th className="px-3 py-2 font-semibold text-right">Bakiye</th>
+                  <th className="px-3 py-2 font-semibold">İşlem</th>
+                  <th className="px-3 py-2 font-semibold">Belge</th>
+                  <th className="px-3 py-2 font-semibold text-right">Borç</th>
+                  <th className="px-3 py-2 font-semibold text-right">Alacak</th>
+                  <th className="px-3 py-2 font-semibold text-right">Yürüyen Bakiye</th>
                 </tr>
               </thead>
               <tbody className="tabular-nums text-[var(--text-primary)]">
                 <tr className="border-b border-[var(--border)]">
-                  <td colSpan={4} className="px-3 py-2 text-[var(--text-secondary)]">
+                  <td colSpan={5} className="px-3 py-2 text-[var(--text-secondary)]">
                     Açılış
                   </td>
                   <td className="px-3 py-2 text-right">{formatMoney(statement.openingBalanceCents)}</td>
                 </tr>
                 {statement.lines.map((line) => (
-                  <tr key={line.id} className="border-b border-[var(--border)]">
-                    <td className="px-3 py-2 whitespace-nowrap">{formatDateTime(line.createdAt)}</td>
-                    <td className="px-3 py-2">
-                      {KIND_LABEL[line.kind]}
-                      {line.description ? ` · ${line.description}` : ''}
-                    </td>
-                    <td className="px-3 py-2 text-[var(--text-secondary)]">{linkLabel(line) ?? '-'}</td>
-                    <td className="px-3 py-2 text-right">{formatMoney(line.signedAmountCents)}</td>
-                    <td className="px-3 py-2 text-right">{formatMoney(line.balanceAfterCents)}</td>
-                  </tr>
+                  <StatementRow key={line.id} line={line} />
                 ))}
                 <tr className="font-bold">
-                  <td colSpan={4} className="px-3 py-2">
+                  <td colSpan={5} className="px-3 py-2">
                     Kapanış
                   </td>
                   <td className="px-3 py-2 text-right">{formatMoney(statement.closingBalanceCents)}</td>

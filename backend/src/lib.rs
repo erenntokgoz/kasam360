@@ -366,6 +366,7 @@ pub fn run() {
             ledger_commands::save_recurring_expense,
             ledger_commands::deactivate_recurring_expense,
             ledger_commands::get_directory_statement,
+            ledger_commands::get_statement_order,
             ledger_commands::print_payment_receipt,
             ledger_commands::operations::get_operation_result,
             commands::sync_commands::get_sync_status,
