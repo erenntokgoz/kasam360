@@ -1,5 +1,6 @@
 use sqlx::{Row, SqliteConnection};
 
+use super::tariffs::{active_tariff, apply_percent};
 use super::windows::active_service_window;
 use super::{EffectivePrice, PriceSource};
 use crate::services::inventory360::optional_text;
@@ -121,7 +122,28 @@ pub async fn effective_price(
         });
     }
 
-    // 2) Dinamik kural (happy hour dahil). Öncelik yüksek olan kazanır.
+    // 2) Elle açılmış tarife: patronun o anki kararı saat kuralını geçer.
+    if let Some(tariff) = active_tariff(conn, tenant_id).await? {
+        let covers =
+            tariff.product_ids.is_empty() || tariff.product_ids.iter().any(|id| id == product_id);
+        if covers {
+            let final_price_cents = apply_percent(base_price_cents, tariff.percent)?;
+            return Ok(EffectivePrice {
+                product_id: product_id.to_string(),
+                base_price_cents,
+                final_price_cents,
+                source: PriceSource::Tariff,
+                discount_cents: base_price_cents.saturating_sub(final_price_cents).max(0),
+                rule_id: Some(tariff.id),
+                rule_name: Some(tariff.name),
+                is_86d,
+                stockout_reason,
+                service_window: active_service_window(conn, tenant_id, now_time.as_str()).await?,
+            });
+        }
+    }
+
+    // 3) Dinamik kural (happy hour dahil). Öncelik yüksek olan kazanır.
     let rule_rows = sqlx::query(
         "SELECT id, name, kind, discount_percent, start_time, end_time, days_of_week,
                 product_ids, category_ids, valid_from, valid_to, is_active, priority
@@ -190,7 +212,7 @@ pub async fn effective_price(
         });
     }
 
-    // 3) Aktif fiyat listesi
+    // 4) Aktif fiyat listesi
     let today = now_date.as_str();
     let liste_fiyat: Option<i64> = sqlx::query_scalar(
         "SELECT pli.price_cents

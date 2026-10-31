@@ -60,6 +60,7 @@ interface PosStore {
   isSending: boolean;
   lastSale: LastSale | null;
   remoteNotice: string | null;
+  activeTariffName: string | null;
   activeModifierProduct: Product | null;
   selectedTicketItemId: string | null;
 
@@ -161,16 +162,19 @@ export const usePosStore = create<PosStore>((set, get) => ({
   isSending: false,
   lastSale: null,
   remoteNotice: null,
+  activeTariffName: null,
   activeModifierProduct: null,
   selectedTicketItemId: null,
 
   loadCatalog: async () => {
     const { tenantId } = sessionArgs();
-    const [cats, prods] = await Promise.all([
+    const [cats, prods, tariff] = await Promise.all([
       invokeIPC<{ id: string; name: string; icon?: string }[]>('pos_get_categories', { tenantId }),
       invokeIPC<ProductWire[]>('pos_get_products', { tenantId }),
+      invokeIPC<{ name: string } | null>('get_active_price_tariff', { tenantId }),
     ]);
     set({
+      activeTariffName: tariff?.name ?? null,
       categories: cats.map((cat, orderIndex) => ({ ...cat, orderIndex })),
       products: prods.map(mapProduct),
     });

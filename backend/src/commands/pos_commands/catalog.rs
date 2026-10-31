@@ -4,6 +4,7 @@
 //! ürün ve kategori sorguları bu alt modüle ayrıldı.
 
 use crate::db::DbPool;
+use crate::services::inventory360::pricing;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -73,7 +74,21 @@ pub async fn pos_get_products(
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<PosProductDto>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    list_pos_products(&mut conn, &tenant_id).await
+    let mut products = list_pos_products(&mut conn, &tenant_id).await?;
+    // Kasada görünen fiyat siparişte yazılan fiyat olmalı. Sorgu yalnız tarife açıkken
+    // çoğalır; olağan açılışta katalog tek sorguyla gelir.
+    if pricing::active_tariff(&mut conn, &tenant_id)
+        .await?
+        .is_some()
+    {
+        for product in &mut products {
+            product.price_cents =
+                pricing::effective_price(&mut conn, &tenant_id, &product.id, None)
+                    .await?
+                    .final_price_cents;
+        }
+    }
+    Ok(products)
 }
 
 pub(crate) async fn list_pos_products(

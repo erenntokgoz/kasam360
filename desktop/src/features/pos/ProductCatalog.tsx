@@ -24,6 +24,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
     addItemToTicket,
     openModifierModal,
     loadModifierGroups,
+    activeTariffName,
   } = usePosStore();
 
   const { setActiveModule } = useUIStore();
@@ -76,6 +77,11 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
               </button>
             ) : null}
           </div>
+          {activeTariffName ? (
+            <span className="px-3 h-[38px] rounded-lg border border-[var(--accent-amber-border)] bg-[var(--accent-amber-soft)] flex items-center text-xs font-bold text-[var(--accent-amber)]">
+              Tarife: {activeTariffName}
+            </span>
+          ) : null}
         </div>
 
         {/* Arama Kutusu */}

@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useLedgerStore } from '../../stores/ledgerStore';
 import { Menu360Module } from '../menu360/Menu360Module';
+import { TariffPanel } from '../menu360/TariffPanel';
 import { StockHub } from '../stock/StockHub';
 import { QrMenuPanel } from './QrMenuPanel';
 import { SectionTabs, type SectionTab } from './SectionTabs';
 
-type CatalogSection = 'MENU' | 'STOCK' | 'QR';
+type CatalogSection = 'MENU' | 'TARIFF' | 'STOCK' | 'QR';
 
 /** Menü, stok ve menünün dışarı verilen dosyası tek bölümdedir. Stok yalnız patronda. */
 export const CatalogTab: React.FC = () => {
@@ -21,6 +22,7 @@ export const CatalogTab: React.FC = () => {
 
   const tabs: SectionTab<CatalogSection>[] = [
     { id: 'MENU', label: 'Menü' },
+    { id: 'TARIFF', label: 'Tarifeler' },
     ...(isOwner ? [{ id: 'STOCK' as const, label: 'Stok' }] : []),
     ...(hasQr ? [{ id: 'QR' as const, label: 'QR Menü Dosyası' }] : []),
   ];
@@ -31,6 +33,7 @@ export const CatalogTab: React.FC = () => {
         <SectionTabs label="Menü ve Stok" tabs={tabs} active={section} onChange={setSection} />
       </div>
       {section === 'MENU' ? <Menu360Module /> : null}
+      {section === 'TARIFF' ? <TariffPanel /> : null}
       {section === 'STOCK' ? <StockHub /> : null}
       {section === 'QR' ? <div className="p-5 max-w-3xl"><QrMenuPanel /></div> : null}
     </div>

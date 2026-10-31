@@ -21,6 +21,7 @@ pub mod eighty_six;
 pub mod price_freeze;
 pub mod price_lists;
 pub mod rules;
+pub mod tariffs;
 pub mod windows;
 
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,10 @@ pub use price_lists::{
     PriceListItem, PriceListItemInput,
 };
 pub use rules::{list_pricing_rules, upsert_pricing_rule, PricingRuleInput};
+pub use tariffs::{
+    active_tariff, delete_tariff, list_tariffs, save_tariff, set_active_tariff, PriceTariff,
+    TariffInput,
+};
 pub use windows::{
     list_service_windows, set_window_product, upsert_service_window, ServiceWindow,
     ServiceWindowInput,
@@ -83,6 +88,8 @@ pub struct EffectivePrice {
 pub enum PriceSource {
     /// Fiyat dondurma taahhüdü.
     Frozen,
+    /// Elle açılmış tarife.
+    Tariff,
     /// Happy hour veya zamanlı dinamik kural.
     DynamicRule,
     /// Fiyat listesi.

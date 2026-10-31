@@ -2,3 +2,4 @@
 
 pub mod bulk_86;
 pub mod rules;
+pub mod tariffs;

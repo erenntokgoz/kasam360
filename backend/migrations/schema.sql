@@ -1292,6 +1292,25 @@ CREATE INDEX IF NOT EXISTS idx_dpr_active
 
 -- Fiyat dondurma: zam geldiğinde "bu fiyat şu tarihe kadar değişmeyecek"
 -- taahhüdü. Zamdan etkilenen ürünlerde menü fiyatını sabit tutar.
+-- Elle açılan tarife. Saate bağlı değildir; `percent` eksi ise indirimdir.
+-- `product_ids` boşsa tüm ürünlere uygulanır.
+CREATE TABLE IF NOT EXISTS price_tariffs (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('GUNDUZ', 'GECE', 'CANLI_MUZIK', 'OZEL')),
+    percent INTEGER NOT NULL CHECK (percent BETWEEN -90 AND 200 AND percent != 0),
+    product_ids TEXT,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    activated_at TEXT,
+    activated_by TEXT,
+    created_by TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_price_tariffs_one_active
+    ON price_tariffs(tenant_id) WHERE is_active = 1;
+
 CREATE TABLE IF NOT EXISTS price_freezes (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,

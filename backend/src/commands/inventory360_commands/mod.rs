@@ -16,6 +16,7 @@ pub mod recipe_commands;
 pub mod shelf_life_commands;
 pub mod stock_commands;
 pub mod supplier_commands;
+pub mod tariff_commands;
 pub mod waste_commands;
 
 #[cfg(test)]
@@ -40,6 +41,10 @@ pub use stock_commands::{get_stock_trail, list_stock_batches_command};
 pub use supplier_commands::{
     compare_supplier_prices_command, create_purchase_order_command, get_inventory_suppliers,
     receive_purchase_order_command, set_supplier_product_command, upsert_supplier_command,
+};
+pub use tariff_commands::{
+    delete_price_tariff, get_active_price_tariff, get_price_tariffs, save_price_tariff,
+    set_active_price_tariff,
 };
 pub use waste_commands::{
     close_stock_count_command, get_stock_count_command, list_stock_counts_command,
