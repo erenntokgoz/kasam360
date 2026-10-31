@@ -90,7 +90,7 @@ pub async fn product_margins(
         let gross_profit_cents = unit_cost.map(|c| revenue - (c * units));
         let margin_percent = gross_profit_cents.and_then(|g| {
             if revenue > 0 {
-                Some((g as f64 / revenue as f64 * 100.0).round() as i64)
+                Some(crate::domain::money::rounded_percent(g, revenue))
             } else {
                 None
             }
@@ -328,7 +328,7 @@ pub async fn combinations(
         let support: i64 = r.try_get("support").map_err(|e| e.to_string())?;
         // Pay yüzdesi = bu çiftin göründüğü sipariş / toplam ciro siparişi.
         let confidence_percent = if total_orders > 0 {
-            (support as f64 / total_orders as f64 * 100.0).round() as i64
+            crate::domain::money::rounded_percent(support, total_orders)
         } else {
             0
         };

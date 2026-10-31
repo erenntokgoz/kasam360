@@ -1,6 +1,5 @@
 use crate::commands::{CartItemDto, PaymentPayloadDto};
 use sqlx::Row;
-use uuid::Uuid;
 
 pub struct PaymentRepository;
 
@@ -198,7 +197,7 @@ impl PaymentRepository {
         payload: &PaymentPayloadDto,
         tenant_id: &str,
     ) -> Result<(), String> {
-        let sale_event_id = format!("evt_sale_{}", Uuid::new_v4());
+        let sale_event_id = crate::id_generator::generate_id("evt_sale");
         let payload_json = serde_json::to_string(payload).map_err(|e| e.to_string())?;
 
         sqlx::query(
@@ -213,7 +212,7 @@ impl PaymentRepository {
         .await
         .map_err(|e| e.to_string())?;
 
-        let outbox_sale_id = format!("outbox_{}", Uuid::new_v4());
+        let outbox_sale_id = crate::id_generator::generate_id("outbox");
         sqlx::query(
             "INSERT INTO outbox (id, tenant_id, event_id, status, created_at) VALUES (?, ?, ?, 'PENDING', datetime('now'))",
         )

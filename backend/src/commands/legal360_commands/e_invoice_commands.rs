@@ -7,6 +7,7 @@
 //! görebiliyor" yanıtı savunma değil risktir. Fatura kaydı sahibin imzasıyla
 //! oluşur ve sahibin görebildiği şeydir.
 
+use crate::services::lan_sync::WritePool;
 use tauri::State;
 
 use super::{acquire, audit_actor, record_audit, require_tenant, KATEGORI_FINANS};
@@ -30,14 +31,10 @@ pub async fn generate_e_invoice_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<EInvoice, String> = async {
         let fatura = generate_e_invoice(&mut conn, &tenant_id, args).await?;
 
@@ -64,19 +61,9 @@ pub async fn generate_e_invoice_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -227,15 +214,11 @@ async fn durum_komutu(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let hedef_id = id.trim().to_string();
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<EInvoice, String> = async {
         let fatura = match islem {
             DurumIslem::Gonder => mark_e_invoice_sent(&mut conn, &tenant_id, &hedef_id).await?,
@@ -271,19 +254,9 @@ async fn durum_komutu(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 /// Durum komutlarının desteklediği geçişler.

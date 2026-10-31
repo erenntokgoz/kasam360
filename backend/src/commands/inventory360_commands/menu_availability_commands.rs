@@ -12,6 +12,7 @@
 //! Rol kapısı: menü penceresini `MANAGER` da açıp kapatabilir (vardiya kararı);
 //! dinamik kural yalnız `OWNER`'dır çünkü doğrudan gelir düşürür.
 
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -58,15 +59,11 @@ pub async fn upsert_pricing_rule_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let kural_adi = args.name.clone();
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<pricing::PricingRule, String> = async {
         let kural = pricing::upsert_pricing_rule(&mut conn, &tenant_id, &actor_id, args).await?;
 
@@ -90,19 +87,9 @@ pub async fn upsert_pricing_rule_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -129,15 +116,11 @@ pub async fn upsert_service_window_command(
     rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(None, &actor_role);
     let pencere_adi = args.name.clone();
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<pricing::ServiceWindow, String> = async {
         let pencere = pricing::upsert_service_window(&mut conn, &tenant_id, args).await?;
 
@@ -158,19 +141,9 @@ pub async fn upsert_service_window_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -184,16 +157,12 @@ pub async fn set_menu_window_product(
     rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(None, &actor_role);
     let urun_id = args.product_id.clone();
     let musait = args.is_available;
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<(), String> = async {
         pricing::set_window_product(&mut conn, &tenant_id, &args.window_id, &urun_id, musait)
             .await?;
@@ -215,19 +184,8 @@ pub async fn set_menu_window_product(
     }
     .await;
 
-    match result {
-        Ok(()) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    result?;
+    conn.commit().await
 }
 
 #[tauri::command]
@@ -239,13 +197,9 @@ pub async fn set_product_active_window(
     pool: State<'_, DbPool>,
 ) -> Result<(), String> {
     rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let sonuc: Result<(), String> = async {
         let hedef: Option<String> = match window_id.as_deref() {
             Some(bos) if !bos.trim().is_empty() => {
@@ -254,7 +208,7 @@ pub async fn set_product_active_window(
                 )
                 .bind(bos.trim())
                 .bind(&tenant_id)
-                .fetch_optional(&mut conn)
+                .fetch_optional(&mut *conn)
                 .await
                 .map_err(|e| e.to_string())?
             }
@@ -280,7 +234,7 @@ pub async fn set_product_active_window(
             .bind(&tenant_id)
             .bind(pencere)
             .bind(&product_id)
-            .execute(&mut conn)
+            .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
         }
@@ -292,24 +246,13 @@ pub async fn set_product_active_window(
         .bind(hedef)
         .bind(&product_id)
         .bind(&tenant_id)
-        .execute(&mut conn)
+        .execute(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;
         Ok(())
     }
     .await;
 
-    match sonuc {
-        Ok(()) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    sonuc?;
+    conn.commit().await
 }

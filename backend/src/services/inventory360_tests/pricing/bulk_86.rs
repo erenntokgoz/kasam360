@@ -13,7 +13,7 @@ fn toplu_girdisi(urunler: Option<Vec<String>>, yuzde: Option<f64>) -> BulkPriceI
     BulkPriceInput {
         category_id: None,
         product_ids: urunler,
-        percent: yuzde,
+        percent_bp: yuzde.map(|oran: f64| (oran * 100.0).round() as i64),
         by_cents: None,
         round_to_tens: Some(false),
     }
@@ -67,7 +67,7 @@ async fn toplu_zam_hedefsiz_cagrilamaz() {
         BulkPriceInput {
             category_id: None,
             product_ids: Some(vec!["prd_1".to_string()]),
-            percent: None,
+            percent_bp: None,
             by_cents: None,
             round_to_tens: None,
         },
@@ -85,7 +85,7 @@ async fn toplu_zam_hedefsiz_cagrilamaz() {
         BulkPriceInput {
             category_id: None,
             product_ids: Some(vec!["prd_1".to_string()]),
-            percent: None,
+            percent_bp: None,
             by_cents: Some(-500),
             round_to_tens: None,
         },
@@ -100,7 +100,7 @@ async fn toplu_zam_hedefsiz_cagrilamaz() {
         BulkPriceInput {
             category_id: None,
             product_ids: Some(Vec::new()),
-            percent: Some(10.0),
+            percent_bp: Some(1000),
             by_cents: None,
             round_to_tens: None,
         },

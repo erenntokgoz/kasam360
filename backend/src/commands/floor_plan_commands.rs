@@ -17,6 +17,7 @@ use crate::rbac::{self, Role};
 use crate::services::audit_service::{category, AuditLock};
 use crate::services::floor360::types::{CreateObjectInput, FloorLayout, SaveLayoutInput};
 use crate::services::floor360::{layout, objects};
+use crate::services::lan_sync::{WritePool, WriteTx};
 use crate::AppState;
 use serde::Deserialize;
 use sqlx::SqliteConnection;
@@ -86,41 +87,15 @@ async fn acquire(pool: &DbPool) -> Result<SqliteConnection, String> {
         .map_err(|e| e.to_string())
 }
 
-/// `BEGIN IMMEDIATE` açar.
-///
-/// Neden IMMEDIATE: iki kasiyer aynı salonu aynı anda kaydederse DEFERRED
-/// kilidi ikisi de alır ve ikincisi ilk yazmanın üzerine yazar. Kilidi
-/// baştan alıp yazma sırasına sokmak, "son yazan kazanır" sessiz veri
-/// kaybını "ikinci kullanıcı uyarı alır" biçimine çevirir.
-async fn baslat(conn: &mut SqliteConnection) -> Result<(), String> {
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 /// İşlemi kapatır: başarılıysa `COMMIT`, hatalıysa `ROLLBACK`.
 ///
 /// Neden ayrı fonksiyon: yedi yazma komutunun da aynı `match` blokunu
 /// kopyalaması, birinde `ROLLBACK` unutulduğunda sessizce kısmi yazı
 /// bırakması demektir. Kapatma kuralı tek yerde yaşar.
-async fn kapat<T>(conn: &mut SqliteConnection, sonuc: Result<T, String>) -> Result<T, String> {
-    match sonuc {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut *conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            // Geri alma hatası asıl hatayı gölgelemez; asıl hata kullanıcıya
-            // gider çünkü o, sorunun ne olduğunu bilen taraftır.
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            Err(hata)
-        }
-    }
+async fn kapat<T>(conn: WriteTx, sonuc: Result<T, String>) -> Result<T, String> {
+    let deger = sonuc?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 /// Denetim defteri kaydı. `SIPARIS_MASA` kategorisi kullanılır: kroki salonun
@@ -184,8 +159,7 @@ pub async fn save_floor_layout(
 
     let aktor = Aktör::coz(actor_id, &actor_role, tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
-    baslat(&mut conn).await?;
+    let mut conn = pool.begin_write().await?;
 
     let sonuc: Result<(), String> = async {
         layout::save_layout(&mut conn, aktor.tenant(), &args).await?;
@@ -204,7 +178,7 @@ pub async fn save_floor_layout(
     }
     .await;
 
-    kapat(&mut conn, sonuc).await
+    kapat(conn, sonuc).await
 }
 
 /// Yeni salon bölümü açar.
@@ -222,9 +196,8 @@ pub async fn create_floor_zone(
 
     let aktor = Aktör::coz(actor_id, &actor_role, tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let sira = sort_order.unwrap_or(0);
-    baslat(&mut conn).await?;
+    let mut conn = pool.begin_write().await?;
 
     let sonuc: Result<String, String> = async {
         let id = layout::create_zone(&mut conn, aktor.tenant(), &name, sira).await?;
@@ -241,7 +214,7 @@ pub async fn create_floor_zone(
     }
     .await;
 
-    kapat(&mut conn, sonuc).await
+    kapat(conn, sonuc).await
 }
 
 /// Salon bölümünü kaldırır. Bölüme bağlı masalar silinmez, yalnız
@@ -259,8 +232,7 @@ pub async fn delete_floor_zone(
 
     let aktor = Aktör::coz(actor_id, &actor_role, tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
-    baslat(&mut conn).await?;
+    let mut conn = pool.begin_write().await?;
 
     let sonuc: Result<(), String> = async {
         layout::delete_zone(&mut conn, aktor.tenant(), &zone_id).await?;
@@ -276,7 +248,7 @@ pub async fn delete_floor_zone(
     }
     .await;
 
-    kapat(&mut conn, sonuc).await
+    kapat(conn, sonuc).await
 }
 
 /// Yeni mimari obje ekler (kapı, bar, duvar, kolon).
@@ -297,8 +269,7 @@ pub async fn create_floor_object(
 
     let aktor = Aktör::coz(actor_id, &actor_role, tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
-    baslat(&mut conn).await?;
+    let mut conn = pool.begin_write().await?;
 
     let sonuc: Result<String, String> = async {
         let id = objects::create_object(&mut conn, aktor.tenant(), &args).await?;
@@ -315,7 +286,7 @@ pub async fn create_floor_object(
     }
     .await;
 
-    kapat(&mut conn, sonuc).await
+    kapat(conn, sonuc).await
 }
 
 /// Mimari objeyi kaldırır.
@@ -332,8 +303,7 @@ pub async fn delete_floor_object(
 
     let aktor = Aktör::coz(actor_id, &actor_role, tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
-    baslat(&mut conn).await?;
+    let mut conn = pool.begin_write().await?;
 
     let sonuc: Result<(), String> = async {
         objects::delete_object(&mut conn, aktor.tenant(), &object_id).await?;
@@ -349,7 +319,7 @@ pub async fn delete_floor_object(
     }
     .await;
 
-    kapat(&mut conn, sonuc).await
+    kapat(conn, sonuc).await
 }
 
 /// Hazır şablonu uygular ve uygulanan şablonun adını döner.
@@ -366,8 +336,7 @@ pub async fn apply_floor_template(
 
     let aktor = Aktör::coz(actor_id, &actor_role, tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
-    baslat(&mut conn).await?;
+    let mut conn = pool.begin_write().await?;
 
     let sonuc: Result<String, String> = async {
         let ad = objects::apply_template(&mut conn, aktor.tenant(), &template_id).await?;
@@ -384,7 +353,7 @@ pub async fn apply_floor_template(
     }
     .await;
 
-    kapat(&mut conn, sonuc).await
+    kapat(conn, sonuc).await
 }
 
 /// Hazır şablonların listesi. Frontend seçici bu listeyi tek kaynaktan alır.

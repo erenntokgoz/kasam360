@@ -9,7 +9,6 @@ use crate::db::DbPool;
 use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -66,7 +65,7 @@ pub async fn open_shift(
         return Err("Vardiya zaten açık (Shift already open)".into());
     }
 
-    let id = Uuid::new_v4().to_string();
+    let id = crate::id_generator::generate_id("shf");
     sqlx::query("INSERT INTO shifts (id, tenant_id, cashier_id, status, opened_at, expected_amount_cents) VALUES (?, ?, ?, 'OPEN', datetime('now'), ?)")
         .bind(&id)
         .bind(&tenant_id)

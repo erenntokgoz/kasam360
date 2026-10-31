@@ -109,7 +109,7 @@ pub async fn create_tenant(
 ) -> Result<TenantDto, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let tenant_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let tenant_id = id.unwrap_or_else(|| crate::id_generator::generate_id("tnt"));
     let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     // 1. Tenants tablosuna işletmeyi ekle
@@ -130,7 +130,7 @@ pub async fn create_tenant(
     .map_err(|e| format!("İşletme kaydı oluşturulamadı: {}", e))?;
 
     // 2. Varsayılan Merkez Şube oluştur
-    let branch_id = format!("br_{}", &Uuid::new_v4().to_string()[..8]);
+    let branch_id = crate::id_generator::generate_id("br");
     let branch_title = branch_name.unwrap_or_else(|| "Merkez Şube".to_string());
     sqlx::query(
         "INSERT INTO branches (id, tenant_id, name, address, status) VALUES (?, ?, ?, ?, 'ACTIVE')",
@@ -197,7 +197,7 @@ pub async fn create_tenant(
         let u = Uuid::new_v4().to_string().to_uppercase();
         format!("K360-{}-{}", &u[..4], &u[4..8])
     });
-    let lic_id = format!("lic_{}", &Uuid::new_v4().to_string()[..8]);
+    let lic_id = crate::id_generator::generate_id("lic");
     sqlx::query(
         "INSERT INTO licenses (id, tenant_id, license_key, status) VALUES (?, ?, ?, 'ACTIVE')",
     )

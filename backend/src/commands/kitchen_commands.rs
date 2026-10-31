@@ -3,7 +3,6 @@ use crate::rbac::{self, Role};
 use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use uuid::Uuid;
 
 /// Mutfak istasyonlarını okuyan roller.
 ///
@@ -174,7 +173,7 @@ pub async fn create_station(
 
     let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
-    let id = format!("st_{}", Uuid::new_v4());
+    let id = crate::id_generator::generate_id("st");
 
     sqlx::query(
         "INSERT INTO stations (id, tenant_id, name, description, created_at) \
@@ -293,7 +292,7 @@ pub async fn update_kds_item_status(
         }
 
         if all_ready_or_completed {
-            let event_id = format!("evt_kds_{}", Uuid::new_v4());
+            let event_id = crate::id_generator::generate_id("evt_kds");
             let ticket_event = serde_json::json!({
                 "orderId": order_id,
                 "fromStatus": "Preparing",

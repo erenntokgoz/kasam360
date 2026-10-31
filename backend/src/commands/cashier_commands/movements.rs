@@ -8,7 +8,6 @@ use super::dto::CashMovementDto;
 use crate::db::DbPool;
 use crate::services::lan_sync::WritePool;
 use sqlx::Row;
-use uuid::Uuid;
 
 /// Kasa hareketi yazan roller.
 pub const CASH_MOVEMENT_ROLES: [crate::rbac::Role; 2] =
@@ -86,7 +85,7 @@ pub async fn cash_in(
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
-    let id = format!("cmin_{}", Uuid::new_v4());
+    let id = crate::id_generator::generate_id("cmin");
 
     sqlx::query(
         "INSERT INTO cash_movements (id, tenant_id, shift_id, movement_type, amount_cents, reason, actor_id, created_at)
@@ -156,7 +155,7 @@ pub async fn cash_out(
     let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
     let session_token = session_token.or(sessionToken);
 
-    let id = format!("cmout_{}", Uuid::new_v4());
+    let id = crate::id_generator::generate_id("cmout");
     let bildirilen_rol = actor_role
         .as_deref()
         .map(str::trim)

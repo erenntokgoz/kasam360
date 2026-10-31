@@ -22,7 +22,7 @@ fn toplu_girdisi(urunler: Option<Vec<String>>, yuzde: Option<f64>) -> BulkPriceI
     BulkPriceInput {
         category_id: None,
         product_ids: urunler,
-        percent: yuzde,
+        percent_bp: yuzde.map(|oran: f64| (oran * 100.0).round() as i64),
         by_cents: None,
         round_to_tens: Some(false),
     }

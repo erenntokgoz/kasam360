@@ -11,6 +11,26 @@
 //! temsil yoktur. KDV oranları basis-point
 //! (binde) olarak `i64` üzerinden taşınır.
 
+/// Kuruşu ekran ve fiş metnine çevirir; ondalık gösterim için float'a geçilmez.
+pub fn cents_text(cents: i64) -> String {
+    let sign = if cents < 0 { "-" } else { "" };
+    let abs = cents.unsigned_abs();
+    format!("{sign}{}.{:02}", abs / 100, abs % 100)
+}
+
+/// `pay / bütün` oranını en yakın tam yüzdeye yuvarlar. `bütün` pozitif olmalıdır.
+pub fn rounded_percent(part: i64, whole: i64) -> i64 {
+    let scaled = i128::from(part) * 100;
+    let whole = i128::from(whole);
+    let half = whole / 2;
+    let adjusted = if scaled < 0 {
+        scaled - half
+    } else {
+        scaled + half
+    };
+    (adjusted / whole) as i64
+}
+
 /// Kuruş cinsinden para tutarı.
 ///
 /// İç alan `pub`dur: IPC sözleşmesi `i64`

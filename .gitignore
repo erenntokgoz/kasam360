@@ -61,3 +61,9 @@ playwright-report/
 blob-report/
 
 skills/
+
+# Otomatik yedekler musteri verisi tasir, depoya girmemeli
+backend/backups/
+backups/
+*.db
+*.db.sha256

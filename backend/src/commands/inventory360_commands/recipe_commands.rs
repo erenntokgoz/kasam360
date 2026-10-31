@@ -9,6 +9,7 @@
 //! Bilinmeyen maliyet `None`/`NULL` olarak döner; `0` yazılmaz. Bir ürünün
 //! maliyeti bilinmiyorsa kâr marjı hesaplanamaz ve rapor bunu açıkça belirtir.
 
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -60,15 +61,11 @@ pub async fn create_recipe_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let urun_id = args.product_id.clone();
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<recipes::Recipe, String> = async {
         let recete = recipes::create_recipe(&mut conn, &tenant_id, &actor_id, args).await?;
 
@@ -89,19 +86,9 @@ pub async fn create_recipe_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -118,14 +105,10 @@ pub async fn deactivate_recipe_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<(), String> = async {
         recipes::deactivate_recipe(&mut conn, &tenant_id, &args.recipe_id).await?;
 
@@ -146,19 +129,8 @@ pub async fn deactivate_recipe_command(
     }
     .await;
 
-    match result {
-        Ok(()) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    result?;
+    conn.commit().await
 }
 
 /// Bir ürünün reçete maliyet dökümünü çözer.

@@ -338,7 +338,7 @@ export const useMenu360Store = create<Menu360State>((set, get) => ({
       const args = {
         categoryId: input.categoryId || undefined,
         productIds: input.categoryId ? undefined : get().products.map((p) => p.id),
-        percent: input.updateType === 'PERCENTAGE' ? input.value : undefined,
+        percentBp: input.updateType === 'PERCENTAGE' ? Math.round(input.value * 100) : undefined,
         byCents: input.updateType === 'FIXED_AMOUNT' ? input.value : undefined,
         roundToTens: false,
       };

@@ -30,8 +30,9 @@ pub struct BulkPriceResult {
 pub struct BulkPriceInput {
     pub category_id: Option<String>,
     pub product_ids: Option<Vec<String>>,
-    /// Yüzde değişim. Negatif indirim, pozitif zam. `None` ise `by_cents`.
-    pub percent: Option<f64>,
+    /// Yüzde değişim, baz puan (%12,5 = 1250). Negatif indirim, pozitif zam.
+    /// `None` ise `by_cents`.
+    pub percent_bp: Option<i64>,
     /// Mutlak kuruş değişimi. Negatif olamaz; indirim `percent` ile yapılır.
     pub by_cents: Option<i64>,
     /// Yuvarlama: fiyatlar on kuruşa yuvarlanır (50 kuruş → 50, 55 → 60).
@@ -97,7 +98,7 @@ pub async fn bulk_update_prices(
         ),
     }
 
-    let percent = input.percent;
+    let percent = input.percent_bp;
     let by_cents = input.by_cents;
     if percent.is_none() && by_cents.is_none() {
         return Err("VALIDATION: yüzde ya da kuruş değişimi zorunlu".into());
@@ -116,7 +117,9 @@ pub async fn bulk_update_prices(
 
     for (id, name, eski) in urunler {
         let mut yeni = match (percent, by_cents) {
-            (Some(yuzde), _) => (eski as f64 * (1.0 + yuzde / 100.0)).round() as i64,
+            (Some(yuzde), _) => {
+                ((i128::from(eski) * i128::from(10_000 + yuzde) + 5_000) / 10_000) as i64
+            }
             (_, Some(mutlak)) => eski + mutlak,
             // Yukarıda her iki durumun da boş olduğu reddedildi.
             _ => eski,

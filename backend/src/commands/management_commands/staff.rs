@@ -6,7 +6,7 @@
 
 use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
-use sqlx::{Acquire, Row};
+use sqlx::Row;
 
 use super::{audit_actor, ensure_owned, record_audit, require_tenant};
 use crate::db::DbPool;
@@ -96,14 +96,13 @@ pub async fn create_staff_member(
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
     // Ön kontrol ve yazma aynı transaction içindedir: PIN benzersizliği veritabanı
     // indeksine değil uygulama katmanına yaslanıyor (hash'ler karşılaştırılamaz).
     crate::user_credentials::ensure_pin_available(&mut tx, &tenant_id, &pin, None).await?;
 
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = crate::id_generator::generate_id("usr");
     sqlx::query("INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active) VALUES (?, ?, ?, ?, ?, 1)")
         .bind(&id).bind(&tenant_id).bind(&role).bind(&name).bind(&hash)
         .execute(&mut *tx).await.map_err(|e| e.to_string())?;
@@ -156,8 +155,7 @@ pub async fn reset_staff_pin(
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
     crate::user_credentials::ensure_pin_available(&mut tx, &tenant_id, &new_pin, Some(&staff_id))
         .await?;
     let updated = sqlx::query(

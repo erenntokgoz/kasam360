@@ -8,7 +8,6 @@ use crate::services::lan_sync::WritePool;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use uuid::Uuid;
 
 /// KDS biletini okuyan ve yazan roller.
 ///
@@ -88,7 +87,7 @@ pub async fn kds_update_ticket_status(
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
-    let event_id = format!("evt_kds_{}", Uuid::new_v4());
+    let event_id = crate::id_generator::generate_id("evt_kds");
     let payload_json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
 
     // Kiracı, siparişin kendi satırından çözülür. Varsayılan
@@ -107,7 +106,7 @@ pub async fn kds_update_ticket_status(
     .await
     .map_err(|e| e.to_string())?;
 
-    let outbox_id = format!("outbox_{}", Uuid::new_v4());
+    let outbox_id = crate::id_generator::generate_id("outbox");
     sqlx::query(
         "INSERT INTO outbox (id, tenant_id, event_id, status, created_at) VALUES (?, ?, ?, 'PENDING', datetime('now'))"
     )
@@ -411,7 +410,7 @@ pub async fn recall_kds_ticket(
     .await
     .map_err(|e| e.to_string())?;
 
-    let event_id = format!("evt_kds_{}", Uuid::new_v4());
+    let event_id = crate::id_generator::generate_id("evt_kds");
     sqlx::query(
         "INSERT INTO events (event_id, tenant_id, aggregate_id, aggregate_type, event_type, payload, created_at) VALUES (?, ?, ?, 'KDS_TICKET', 'TICKET_RECALLED', ?, datetime('now'))"
     )

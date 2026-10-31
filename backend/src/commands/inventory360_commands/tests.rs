@@ -144,10 +144,10 @@ fn panelin_gonderdigi_en_kuru_sayim_satiri_govdesi_cozumlenir() {
 
 #[test]
 fn panelin_gonderdigi_en_kuru_toplu_fiyat_govdesi_cozumlenir() {
-    let govde = r#"{"percent":10.0,"roundToTens":true}"#;
+    let govde = r#"{"percentBp": 1000,"roundToTens":true}"#;
     let giris: crate::services::inventory360::pricing::BulkPriceInput =
         serde_json::from_str(govde).expect("toplu fiyat gövdesi çözümlenmeli");
-    assert_eq!(giris.percent, Some(10.0));
+    assert_eq!(giris.percent_bp, Some(1000));
     assert_eq!(giris.round_to_tens, Some(true));
 }
 

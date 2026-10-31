@@ -275,11 +275,11 @@ pub async fn print_receipt(
     for item in &receipt.items {
         let short_name: String = item.product_name.chars().take(22).collect();
         println!(
-            "{:<22} {:>4} {:>7.2}TL {:>7.2}TL",
+            "{:<22} {:>4} {:>7}TL {:>7}TL",
             short_name,
             item.quantity,
-            item.unit_price_cents as f64 / 100.0,
-            item.total_cents as f64 / 100.0
+            crate::domain::money::cents_text(item.unit_price_cents),
+            crate::domain::money::cents_text(item.total_cents)
         );
     }
 
@@ -291,24 +291,24 @@ pub async fn print_receipt(
     }
     if receipt.discount_cents > 0 {
         println!(
-            "İNDİRİM:                             -{:>7.2} TL",
-            receipt.discount_cents as f64 / 100.0
+            "İNDİRİM:                             -{:>7} TL",
+            crate::domain::money::cents_text(receipt.discount_cents)
         );
     }
     println!(
-        "GENEL TOPLAM:                         {:>7.2} TL",
-        receipt.total_cents as f64 / 100.0
+        "GENEL TOPLAM:                         {:>7} TL",
+        crate::domain::money::cents_text(receipt.total_cents)
     );
     if let Some(tendered) = receipt.tendered_cents {
         println!(
-            "Tahsil Edilen ({}):            {:>7.2} TL",
+            "Tahsil Edilen ({}):            {:>7} TL",
             receipt.payment_method,
-            tendered as f64 / 100.0
+            crate::domain::money::cents_text(tendered)
         );
         if let Some(change) = receipt.change_cents {
             println!(
-                "Para Üstü:                            {:>7.2} TL",
-                change as f64 / 100.0
+                "Para Üstü:                            {:>7} TL",
+                crate::domain::money::cents_text(change)
             );
         }
     }

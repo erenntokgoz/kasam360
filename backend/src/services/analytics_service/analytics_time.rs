@@ -103,7 +103,10 @@ pub async fn monthly_target_status(
         let actual_cents: i64 = r.try_get("actual_cents").map_err(|e| e.to_string())?;
         // Hedef 0 ise oran hesaplanamaz: "sınırsız aşıldı" değil, tanım eksik.
         let achieved_percent = if target_cents > 0 {
-            Some((actual_cents as f64 / target_cents as f64 * 100.0).round() as i64)
+            Some(crate::domain::money::rounded_percent(
+                actual_cents,
+                target_cents,
+            ))
         } else {
             None
         };
@@ -160,7 +163,7 @@ pub async fn competitor_price_gaps(
         let gap_cents = our_price_cents - competitor_price_cents;
         // Yüzde, rakip fiyatına göre normalize edilir; rakip 0 ise oran tanımsızdır.
         let gap_percent = if competitor_price_cents > 0 {
-            (gap_cents as f64 / competitor_price_cents as f64 * 100.0).round() as i64
+            crate::domain::money::rounded_percent(gap_cents, competitor_price_cents)
         } else {
             0
         };
@@ -213,7 +216,10 @@ pub async fn void_loss_rate(
     let voided_cents: i64 = r.try_get("voided_cents").map_err(|e| e.to_string())?;
     let total_cents: i64 = r.try_get("total_cents").map_err(|e| e.to_string())?;
     let void_rate_percent = if total_cents > 0 {
-        Some((voided_cents as f64 / total_cents as f64 * 100.0).round() as i64)
+        Some(crate::domain::money::rounded_percent(
+            voided_cents,
+            total_cents,
+        ))
     } else {
         None
     };

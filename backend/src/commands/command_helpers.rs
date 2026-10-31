@@ -78,8 +78,8 @@ pub fn parse_order_item_modifiers(modifiers_raw: Option<&str>) -> Vec<String> {
                             .and_then(|p| p.as_i64())
                             .unwrap_or(0);
                         if price_cents > 0 {
-                            let tl = price_cents as f64 / 100.0;
-                            Some(format!("{} (+{:.2} TL)", name, tl))
+                            let tl = crate::domain::money::cents_text(price_cents);
+                            Some(format!("{} (+{} TL)", name, tl))
                         } else {
                             Some(name)
                         }

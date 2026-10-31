@@ -9,6 +9,7 @@
 //! yaratır, kupon kullanımı yalnız mevcut bir indirimi kasa üzerinden geçirir.
 //! Bu yüzden yalnız `apply_campaign_command` MANAGER'a açıktır.
 
+use crate::services::lan_sync::WritePool;
 use tauri::State;
 
 use super::{acquire, audit_actor, record_audit, require_tenant, KATEGORI_FINANS, KATEGORI_MENU};
@@ -85,14 +86,10 @@ pub async fn save_campaign_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<Campaign, String> = async {
         let kampanya = save_campaign(&mut conn, &tenant_id, &actor_id, args).await?;
 
@@ -117,19 +114,9 @@ pub async fn save_campaign_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 /// Kuponu sepete uygular ve kullanım sayacını artırır.
@@ -150,14 +137,10 @@ pub async fn apply_campaign_command(
     rbac::require_any(&actor_role, &[Role::Owner, Role::Manager])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<AppliedCampaign, String> = async {
         let uygulanan = apply_campaign(
             &mut conn,
@@ -189,17 +172,7 @@ pub async fn apply_campaign_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }

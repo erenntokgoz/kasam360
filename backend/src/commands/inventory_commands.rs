@@ -1,7 +1,7 @@
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
-use sqlx::{Acquire, Row};
-use uuid::Uuid;
+use sqlx::Row;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct InventoryItemDto {
@@ -89,9 +89,9 @@ pub async fn adjust_stock(
     .map_err(|e| e.to_string())?
     .unwrap_or(0.0);
 
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
-    let movement_id = Uuid::new_v4().to_string();
+    let movement_id = crate::id_generator::generate_id("mvt");
 
     sqlx::query(
         "INSERT INTO stock_movements (id, tenant_id, inventory_item_id, movement_type, quantity, actor_id, reason)
@@ -168,11 +168,10 @@ pub async fn create_inventory_item(
 
     let audit_lock =
         crate::services::audit_service::AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let item_id = Uuid::new_v4().to_string();
+    let item_id = crate::id_generator::generate_id("inv");
     let actor_id = caller_role.clone().unwrap_or_default();
 
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
     sqlx::query(
         "INSERT INTO inventory_items (id, tenant_id, name, sku, current_stock, unit, min_stock_alert)

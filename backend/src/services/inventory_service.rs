@@ -7,7 +7,6 @@ use crate::commands::CartItemDto;
 use crate::services::inventory360::quantity_cost::line_cost_cents;
 use crate::services::inventory360::units::convert_stock_quantity;
 use sqlx::Row;
-use uuid::Uuid;
 
 pub struct InventoryService;
 
@@ -288,7 +287,7 @@ impl InventoryService {
             "timestamp": now_iso,
             "ruleSet": "FIFO_DETERMINISTIC_WAL"
         });
-        let fifo_event_id = format!("evt_fifo_{}", Uuid::new_v4());
+        let fifo_event_id = crate::id_generator::generate_id("evt_fifo");
         let fifo_json_str = serde_json::to_string(&fifo_payload).map_err(|e| e.to_string())?;
 
         // `events.tenant_id` NOT NULL DEFAULT'tur; kolon yazılmazsa olay
@@ -305,7 +304,7 @@ impl InventoryService {
         .await
         .map_err(|e| e.to_string())?;
 
-        let outbox_fifo_id = format!("outbox_{}", Uuid::new_v4());
+        let outbox_fifo_id = crate::id_generator::generate_id("outbox");
         sqlx::query(
             "INSERT INTO outbox (id, tenant_id, event_id, status, created_at) \
              VALUES (?, ?, ?, 'PENDING', datetime('now'))",

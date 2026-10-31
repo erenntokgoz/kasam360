@@ -192,7 +192,7 @@ pub async fn waiter_clock_in(
     if tenant.is_empty() {
         return Err("tenant_id gerekli".to_string());
     }
-    let event_id = format!("evt_clockin_{}", uuid::Uuid::new_v4());
+    let event_id = crate::id_generator::generate_id("evt_clockin");
     let payload = serde_json::json!({
         "waiterId": waiter_id,
         "clockedIn": true,

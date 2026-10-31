@@ -8,6 +8,7 @@ use crate::commands::command_helpers::{audit_actor, require_tenant_id};
 use crate::rbac::{require_any, Role};
 use crate::services::audit_service::AuditLock;
 use crate::services::external360::{accountant, queues, supplier, tickets};
+use crate::services::lan_sync::WritePool;
 use crate::DbPool;
 use tauri::State;
 
@@ -28,15 +29,17 @@ pub async fn supplier_request_create(
     require_any(&actor.1, &[Role::Owner, Role::Manager])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    supplier::talep_olustur(
+    let mut conn = pool.begin_write().await?;
+    let sonuc = supplier::talep_olustur(
         &mut conn,
         Some(&tenant),
         &supplier_id,
         &items,
         note.as_deref().unwrap_or(""),
     )
-    .await
+    .await?;
+    conn.commit().await?;
+    Ok(sonuc)
 }
 
 /// Talebi imzalı dosya olarak dışa aktarır (tedarikçiye verilecek dosya).
@@ -54,7 +57,7 @@ pub async fn supplier_request_export(
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 
     let kilit = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let belge = supplier::talep_disa_aktar(&mut conn, Some(&tenant), &request_id).await?;
 
     denetle(
@@ -70,6 +73,7 @@ pub async fn supplier_request_export(
     )
     .await?;
 
+    conn.commit().await?;
     serde_json::to_string(&belge).map_err(|e| e.to_string())
 }
 
@@ -88,7 +92,7 @@ pub async fn supplier_request_queue(
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 
     let kilit = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let kuyruk_id = supplier::talep_kuyruga_al(&mut conn, &tenant, &request_id).await?;
 
     denetle(
@@ -104,6 +108,7 @@ pub async fn supplier_request_queue(
     )
     .await?;
 
+    conn.commit().await?;
     Ok(kuyruk_id)
 }
 
@@ -125,7 +130,7 @@ pub async fn accountant_report_build(
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 
     let kilit = AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let rapor = accountant::rapor_uret(
         &mut conn,
         Some(&tenant),
@@ -152,6 +157,7 @@ pub async fn accountant_report_build(
     )
     .await?;
 
+    conn.commit().await?;
     serde_json::to_string(&rapor.govde).map_err(|e| e.to_string())
 }
 
@@ -168,8 +174,10 @@ pub async fn accountant_report_mark_sent(
     require_any(&actor.1, &[Role::Owner])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    accountant::rapor_gonderildi_isaretle(&mut conn, &tenant, &report_id).await
+    let mut conn = pool.begin_write().await?;
+    accountant::rapor_gonderildi_isaretle(&mut conn, &tenant, &report_id).await?;
+    conn.commit().await?;
+    Ok(())
 }
 
 // ---- teknik servis ----
@@ -192,8 +200,8 @@ pub async fn service_ticket_create(
     require_any(&actor.1, &[Role::Owner, Role::Manager])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    tickets::kayit_ac(
+    let mut conn = pool.begin_write().await?;
+    let sonuc = tickets::kayit_ac(
         &mut conn,
         Some(&tenant),
         &category,
@@ -202,7 +210,9 @@ pub async fn service_ticket_create(
         description.as_deref().unwrap_or(""),
         assigned_to.as_deref(),
     )
-    .await
+    .await?;
+    conn.commit().await?;
+    Ok(sonuc)
 }
 
 /// Servis kaydının durumunu ilerletir.
@@ -219,8 +229,10 @@ pub async fn service_ticket_update_status(
     require_any(&actor.1, &[Role::Owner, Role::Manager])?;
     let tenant = require_tenant_id(tenant_id.as_deref())?;
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    tickets::durum_guncelle(&mut conn, &tenant, &ticket_id, &status).await
+    let mut conn = pool.begin_write().await?;
+    tickets::durum_guncelle(&mut conn, &tenant, &ticket_id, &status).await?;
+    conn.commit().await?;
+    Ok(())
 }
 
 /// Açık servis kayıtlarını listeler.
@@ -241,22 +253,18 @@ pub async fn service_tickets_open(
 
 // ---- kuyruklar ----
 
-/// Bekleyen WhatsApp ve e-posta mesajlarını sahte sağlayıcıyla gönderir.
+/// Gerçek WhatsApp/SMTP sağlayıcısı bağlı değil. Sahte sağlayıcıyla gönderildi
+/// görünmesi müşteriye ulaşmamış mesajı ulaşmış saydırırdı; komut açıkça reddeder.
 #[tauri::command]
 pub async fn outbound_queues_flush(
     actor_id: Option<String>,
     actor_role: Option<String>,
     tenant_id: Option<String>,
-    pool: State<'_, DbPool>,
 ) -> Result<(i64, i64), String> {
     let actor = audit_actor(actor_id, actor_role);
     require_any(&actor.1, &[Role::Owner, Role::Manager])?;
-    let tenant = require_tenant_id(tenant_id.as_deref())?;
-
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let w = queues::whatsapp_kuyrugunu_isle(&mut conn, Some(&tenant)).await?;
-    let e = queues::email_kuyrugunu_isle(&mut conn, Some(&tenant)).await?;
-    Ok((w.gonderilen + w.basarisiz, e.gonderilen + e.basarisiz))
+    require_tenant_id(tenant_id.as_deref())?;
+    Err("UNAVAILABLE: mesaj sağlayıcısı bağlı değil; kuyruk gönderilmedi".to_string())
 }
 
 /// Kuyrukların bekleyen sayısını döndürür.

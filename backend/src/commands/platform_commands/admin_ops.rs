@@ -8,7 +8,7 @@ use crate::db::DbPool;
 use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
 use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
-use sqlx::{Acquire, Row};
+use sqlx::Row;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GlobalUserDto {
@@ -117,7 +117,7 @@ pub async fn create_remote_session(
 ) -> Result<serde_json::Value, String> {
     crate::rbac::require_master_present(caller_role.as_deref())?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
-    let session_id = format!("sess_{}", &uuid::Uuid::new_v4().to_string()[..8]);
+    let session_id = crate::id_generator::generate_id("sess");
     let ticket = format!(
         "TICKET_{}",
         uuid::Uuid::new_v4().to_string()[..12].to_uppercase()
@@ -284,10 +284,8 @@ pub async fn reset_user_password(
     crate::services::security360::policy::parola_dogrula(&new_password, None)?;
     let hash = crate::auth::hash_credential(&new_password)?;
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-
     // Yazma ve defter kaydı tek transaction içindedir.
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
     let tenant_id: String = sqlx::query_scalar("SELECT tenant_id FROM users WHERE id = ?")
         .bind(&user_id)
@@ -356,8 +354,7 @@ pub async fn change_user_pin(
     let hash = crate::user_credentials::hash_pin(&new_pin)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
 
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
     let tenant_id: String = sqlx::query_scalar("SELECT tenant_id FROM users WHERE id = ?")
         .bind(&user_id)
@@ -382,7 +379,6 @@ pub async fn change_user_pin(
 
     crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &new_pin, &user_id)
         .await?;
-    tx.commit().await.map_err(|e| e.to_string())?;
 
     let ctx = AuditContext::new(
         tenant_id,
@@ -394,7 +390,8 @@ pub async fn change_user_pin(
         serde_json::json!({ "targetUserId": user_id, "method": "master_override" }),
         chrono::Utc::now().to_rfc3339(),
     )?;
-    AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+    tx.commit().await?;
 
     Ok(serde_json::json!({
         "success": true,
@@ -427,7 +424,7 @@ pub async fn regenerate_license_key(
         "INSERT INTO licenses (id, tenant_id, license_key, status) VALUES (?, ?, ?, 'ACTIVE')
          ON CONFLICT(id) DO UPDATE SET license_key = excluded.license_key",
     )
-    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(crate::id_generator::generate_id("lic"))
     .bind(&tenant_id)
     .bind(&new_key)
     .execute(&mut *conn)

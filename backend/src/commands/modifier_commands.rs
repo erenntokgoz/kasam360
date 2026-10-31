@@ -10,7 +10,7 @@
 //! `delete_modifier_group` ise yalnız `id` üzerinden siliyordu — çapraz işletme
 //! veri sızıntısı ve veri kaybı mümkündü.
 
-use sqlx::Acquire;
+use crate::services::lan_sync::WritePool;
 
 use crate::db::DbPool;
 use crate::management_commands::{audit_actor, record_audit};
@@ -57,8 +57,7 @@ pub async fn create_modifier_group(
     let tid = require_tenant(tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
     let id = modifier_service::create_group(
         &mut tx,
@@ -109,8 +108,7 @@ pub async fn add_modifier_option(
     let tid = require_tenant(tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
     // Servis, grubun çağıranın tenant'ına ait olduğunu doğrular.
     let id = modifier_service::add_option(&mut tx, &tid, &group_id, &name, price_cents).await?;
@@ -149,8 +147,7 @@ pub async fn delete_modifier_group(
     let tid = require_tenant(tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
     // Servis silmeyi tenant'a göre filtreler; başka işletmenin grubu
     // bulunamadı sayılır ve silinmez.
@@ -192,8 +189,7 @@ pub async fn set_product_modifier_groups(
     let tid = require_tenant(tenant_id.as_deref())?;
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
     let previous = modifier_service::product_group_ids(&mut tx, &tid, &product_id).await?;
     modifier_service::set_product_groups(&mut tx, &tid, &product_id, &group_ids).await?;

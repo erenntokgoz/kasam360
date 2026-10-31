@@ -91,6 +91,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   logout: () => {
+    // Sunucu oturumu da kapanır; hata arayüz çıkışını engellemez.
+    void Promise.resolve().then(() => invokeIPC('auth_logout')).catch(() => undefined);
     useFeatureStore.getState().setModules([]);
     set({ user: null, isAuthenticated: false, isLocked: false,
       mustChangePin: false, loginError: null });

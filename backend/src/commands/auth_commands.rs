@@ -4,8 +4,9 @@
 //! olduğu gibi taşındı, davranış değiştirilmedi.
 
 use crate::db::DbPool;
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
-use sqlx::{Acquire, Row};
+use sqlx::Row;
 
 use crate::services::security360::login_lockout::{
     basari_sifirla, hata_kaydet, hesap_kapsami, kilit_kontrol, pin_kapsami, KilitDurumu,
@@ -329,11 +330,26 @@ pub async fn auth_login(
     tenant_id: Option<String>,
     #[allow(non_snake_case)] tenantId: Option<String>,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<UserDto, String> {
     crate::services::setup::require_complete(&pool).await?;
     crate::services::device_session::require_signed_in(&pool).await?;
     let effective_tenant = tenant_id.or(tenantId);
-    authenticate_by_pin(&pool, &pin, effective_tenant.as_deref()).await
+    let user = authenticate_by_pin(&pool, &pin, effective_tenant.as_deref()).await?;
+    state
+        .staff_session
+        .set(crate::services::staff_session::StaffSession {
+            user_id: user.id.clone(),
+            tenant_id: user.tenant_id.clone(),
+            role: user.role.clone(),
+        })?;
+    Ok(user)
+}
+
+/// Personel çıkışı: sunucu oturumu kapanır, sonraki komut yeniden PIN ister.
+#[tauri::command]
+pub async fn auth_logout(state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
+    state.staff_session.clear()
 }
 
 /// PIN değişiminin iş kurallarını tek transaction
@@ -452,8 +468,7 @@ pub async fn change_self_pin(
     let cur_pin = mevcut_pin_zorunlu(current_pin.as_deref())?;
 
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin_write().await?;
 
     // İş kuralları `pin_degisim_tx` içinde tek
     // transaction'da uygulanır; komut yalnızca

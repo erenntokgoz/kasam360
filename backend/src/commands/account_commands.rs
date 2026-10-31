@@ -124,6 +124,7 @@ pub async fn account_sign_out(
     AuditService::append(&mut tx, &audit_lock, &ctx).await?;
     let session = device_session::load(&mut tx).await?;
     tx.commit().await.map_err(|e| e.to_string())?;
+    state.staff_session.clear()?;
     Ok(session)
 }
 

@@ -48,6 +48,22 @@ pub struct AppState {
     pub lan_sync: services::lan_sync::LanSync,
     /// Dosya tabanlı veritabanının yolu; yedek klasörü buradan türer.
     pub db_path: Option<std::path::PathBuf>,
+    /// PIN ile açılmış personel oturumu; IPC kimlik kapısı buradan okur.
+    pub staff_session: services::staff_session::StaffSessions,
+}
+
+/// Kimlik kapısı: komutun bildirdiği rol, kiracı ve aktör oturumla aynı olmalı.
+fn authorize_invoke(invoke: &tauri::ipc::Invoke<tauri::Wry>) -> Result<(), String> {
+    let webview = invoke.message.webview();
+    let state = webview
+        .try_state::<AppState>()
+        .ok_or_else(|| "UNAUTHORIZED: uygulama durumu hazır değil".to_string())?;
+    let session = state.staff_session.current()?;
+    let body = match invoke.message.payload() {
+        tauri::ipc::InvokeBody::Json(value) => Some(value),
+        tauri::ipc::InvokeBody::Raw(_) => None,
+    };
+    services::staff_session::authorize(session.as_ref(), invoke.message.command(), body)
 }
 
 /// Komut gövdesine girmeden önce çalışır: eşitlenmeyen yazma cihazları ayrıştırır.
@@ -55,6 +71,10 @@ fn gated(
     handler: impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static,
 ) -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
     move |invoke| {
+        if let Err(reason) = authorize_invoke(&invoke) {
+            invoke.resolver.reject(reason);
+            return true;
+        }
         let gate = invoke
             .message
             .webview()
@@ -136,6 +156,7 @@ pub fn run() {
                     table_locks: tokio::sync::Mutex::new(std::collections::HashMap::new()),
                     lan_sync,
                     db_path,
+                    staff_session: Default::default(),
                 });
 
                 Ok::<(), Box<dyn std::error::Error>>(())
@@ -310,6 +331,7 @@ pub fn run() {
             commands::close_shift,
             commands::get_active_shift,
             commands::change_self_pin,
+            commands::auth_logout,
             platform_commands::devices::toggle_device_status,
             platform_commands::devices::delete_device,
             platform_commands::verify_audit_ledger_integrity,
@@ -329,6 +351,8 @@ pub fn run() {
             ledger_commands::pay_debt,
             ledger_commands::get_expenses,
             ledger_commands::create_expense,
+            ledger_commands::void_expense,
+            ledger_commands::record_staff_advance,
             ledger_commands::get_financial_report,
             ledger_commands::export_financial_report,
             ledger_commands::record_owner_personal,

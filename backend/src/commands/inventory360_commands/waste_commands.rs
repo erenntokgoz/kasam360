@@ -7,6 +7,7 @@
 //! Rol kapısı: yalnız `OWNER`. `MANAGER` vardiyayı kapatabilir ama fireyi
 //! `OWNER` onayı olmadan giremez; fire doğrudan zarar kalemi oluşturur.
 
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -50,14 +51,10 @@ pub async fn open_stock_count_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<waste::StockCount, String> = async {
         let sayim = waste::open_stock_count(
             &mut conn,
@@ -85,19 +82,9 @@ pub async fn open_stock_count_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -110,14 +97,10 @@ pub async fn record_count_line_command(
 ) -> Result<(), String> {
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, _) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<(), String> = waste::record_count_line(
         &mut conn,
         &tenant_id,
@@ -128,19 +111,8 @@ pub async fn record_count_line_command(
     )
     .await;
 
-    match result {
-        Ok(()) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    result?;
+    conn.commit().await
 }
 
 #[tauri::command]
@@ -155,14 +127,10 @@ pub async fn close_stock_count_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<waste::StockCount, String> = async {
         let sayim = waste::close_stock_count(
             &mut conn,
@@ -193,19 +161,9 @@ pub async fn close_stock_count_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -247,14 +205,10 @@ pub async fn record_waste_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<waste::WasteRecord, String> = async {
         let kayit = waste::record_waste(&mut conn, &tenant_id, &actor_id, args).await?;
 
@@ -280,19 +234,9 @@ pub async fn record_waste_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]

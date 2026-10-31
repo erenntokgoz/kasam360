@@ -6,6 +6,7 @@
 //! ciro etkisidir. Müdür kampanyanın günlük akışını görebilir, tarifeyi
 //! değiştiremez.
 
+use crate::services::lan_sync::WritePool;
 use tauri::State;
 
 use super::{acquire, audit_actor, record_audit, require_tenant, KATEGORI_MENU};
@@ -56,14 +57,10 @@ pub async fn save_special_day_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<SpecialDay, String> = async {
         let gun = save_special_day(&mut conn, &tenant_id, args).await?;
 
@@ -89,17 +86,7 @@ pub async fn save_special_day_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }

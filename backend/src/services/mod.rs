@@ -7,6 +7,7 @@ pub mod budget_service;
 pub mod cari;
 pub mod device_identity;
 pub mod device_session;
+pub mod expense_service;
 pub mod external360;
 pub mod floor360;
 pub mod inventory360;
@@ -32,6 +33,7 @@ pub mod reservation_service;
 pub mod security360;
 pub mod setup;
 pub mod staff360;
+pub mod staff_session;
 
 #[cfg(test)]
 mod inventory360_tests;

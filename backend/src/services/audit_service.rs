@@ -1,6 +1,5 @@
 use sha2::{Digest, Sha256};
 use sqlx::Row;
-use uuid::Uuid;
 
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -197,7 +196,7 @@ impl AuditService {
             &prev_hash,
         );
 
-        let entry_id = format!("ledger_{}", Uuid::new_v4());
+        let entry_id = crate::id_generator::generate_id("ledger");
 
         sqlx::query(
             "INSERT INTO audit_ledger \

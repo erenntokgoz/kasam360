@@ -174,7 +174,7 @@ pub async fn effective_price(
         // İndirim kuruş üzerinden hesaplanır ve aşağı yuvarlanır: 1 kuruş
         // kazanç müşteriye düşer, işletmeye değil.
         let discounted =
-            (base_price_cents as f64 * (100 - rule.discount_percent) as f64 / 100.0).floor() as i64;
+            (i128::from(base_price_cents) * i128::from(100 - rule.discount_percent) / 100) as i64;
 
         return Ok(EffectivePrice {
             product_id: product_id.to_string(),

@@ -394,7 +394,7 @@ export function handleManagementMockIPC<T>(
       const nestArgs = (args.args || args.input || {}) as {
         categoryId?: string;
         productIds?: string[];
-        percent?: number;
+        percentBp?: number;
         byCents?: number;
         updateType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
         value?: number;
@@ -402,7 +402,7 @@ export function handleManagementMockIPC<T>(
 
       const categoryId = nestArgs.categoryId;
       const productIds = nestArgs.productIds;
-      const percent = nestArgs.percent ?? (nestArgs.updateType === 'PERCENTAGE' ? nestArgs.value : undefined);
+      const percent = nestArgs.percentBp !== undefined ? nestArgs.percentBp / 100 : (nestArgs.updateType === 'PERCENTAGE' ? nestArgs.value : undefined);
       const byCents = nestArgs.byCents ?? (nestArgs.updateType === 'FIXED_AMOUNT' ? nestArgs.value : undefined);
 
       const changed: BulkPriceChange[] = [];

@@ -17,6 +17,7 @@
 //! korunur. Bu yüzden dondurma yazımı denetim defterine girer ve toplu
 //! güncelleme donmuş ürünü sessizce atlamaz, raporda listeler.
 
+use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -69,17 +70,13 @@ pub async fn set_product_86d_command(
     rbac::require_any(&actor_role, &[Role::Owner, Role::Manager, Role::Kitchen])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(None, &actor_role);
     let urun_id = args.product_id.clone();
     let is_86d = args.is_86d;
     let gerekce = args.reason.clone();
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<bool, String> = async {
         let deger = pricing::set_product_86d(
             &mut conn,
@@ -108,19 +105,9 @@ pub async fn set_product_86d_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -135,14 +122,10 @@ pub async fn bulk_update_product_prices(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<pricing::BulkPriceResult, String> = async {
         let sonuc = pricing::bulk_update_prices(&mut conn, &tenant_id, args).await?;
 
@@ -166,19 +149,9 @@ pub async fn bulk_update_product_prices(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -193,16 +166,12 @@ pub async fn create_price_freeze_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let urun_id = args.product_id.clone();
     let donmus_fiyat = args.frozen_price_cents;
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<String, String> = async {
         let id = pricing::create_price_freeze(&mut conn, &tenant_id, &actor_id, args).await?;
 
@@ -223,19 +192,9 @@ pub async fn create_price_freeze_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -263,15 +222,11 @@ pub async fn create_price_list_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let liste_adi = args.name.clone();
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<pricing::PriceList, String> = async {
         let liste = pricing::create_price_list(&mut conn, &tenant_id, &actor_id, args).await?;
 
@@ -292,19 +247,9 @@ pub async fn create_price_list_command(
     }
     .await;
 
-    match result {
-        Ok(deger) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(deger)
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
 }
 
 #[tauri::command]
@@ -319,14 +264,10 @@ pub async fn delete_price_list_command(
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let mut conn = acquire(&pool).await?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
 
-    sqlx::query("BEGIN IMMEDIATE")
-        .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = pool.begin_write().await?;
     let result: Result<(), String> = async {
         pricing::delete_price_list(&mut conn, &tenant_id, &id).await?;
 
@@ -347,17 +288,6 @@ pub async fn delete_price_list_command(
     }
     .await;
 
-    match result {
-        Ok(()) => {
-            sqlx::query("COMMIT")
-                .execute(&mut conn)
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        }
-        Err(hata) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut conn).await;
-            Err(hata)
-        }
-    }
+    result?;
+    conn.commit().await
 }
