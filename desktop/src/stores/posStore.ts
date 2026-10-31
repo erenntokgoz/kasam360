@@ -3,6 +3,7 @@ import type { ProductCategory, Product, OrderItem, OrderItemModifier, ModifierGr
 import type { LastSale } from '../types/payment';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
+import { syncErrorText } from '../lib/syncError';
 import {
   lineTotalCents,
   mapServerItem,
@@ -58,11 +59,14 @@ interface PosStore {
   orderError: string | null;
   isSending: boolean;
   lastSale: LastSale | null;
+  remoteNotice: string | null;
   activeModifierProduct: Product | null;
   selectedTicketItemId: string | null;
 
   loadCatalog: () => Promise<void>;
   loadActiveOrder: () => Promise<void>;
+  watchActiveOrder: () => Promise<void>;
+  dismissRemoteNotice: () => void;
   openOrderForTable: (tableId: string, tableName: string, guests?: number) => Promise<void>;
   openWalkinOrder: () => Promise<void>;
   bindWalkinToTable: (tableId: string, tableName: string) => Promise<void>;
@@ -106,6 +110,24 @@ function draftOf(state: PosStore): OrderItem[] {
   return state.ticketItems.filter((item) => !item.isSentToKitchen);
 }
 
+// Son okunan sunucu görünümü. Bu cihazın kendi yazması `loadActiveOrder` ile bunu
+// tazeler; izleme farkı görürse değişikliği başka cihaz yapmıştır.
+let serverSignature = '';
+let loadEpoch = 0;
+
+function signatureOf(orderId: string | null, balance: OrderBalance | null, wire: CartItemWire[]): string {
+  return JSON.stringify([orderId, balance, wire]);
+}
+
+async function readServerOrder(key: string, tenantId: string | undefined) {
+  const orderId = await invokeIPC<string | null>('get_active_order_id', { tableId: key, tenantId });
+  const wire = await invokeIPC<CartItemWire[]>('get_order_items', { tableId: key, tenantId });
+  const balance = orderId
+    ? await invokeIPC<OrderBalance>('get_order_balance', { orderId, tenantId })
+    : null;
+  return { orderId, wire, balance };
+}
+
 function mapProduct(wire: ProductWire): Product {
   const station = wire.station === 'BAR' || wire.station === 'TATLI' ? wire.station : 'MUTFAK';
   return {
@@ -138,6 +160,7 @@ export const usePosStore = create<PosStore>((set, get) => ({
   orderError: null,
   isSending: false,
   lastSale: null,
+  remoteNotice: null,
   activeModifierProduct: null,
   selectedTicketItemId: null,
 
@@ -160,12 +183,10 @@ export const usePosStore = create<PosStore>((set, get) => ({
       return;
     }
     const { tenantId } = sessionArgs();
+    loadEpoch += 1;
     try {
-      const orderId = await invokeIPC<string | null>('get_active_order_id', { tableId: key, tenantId });
-      const wire = await invokeIPC<CartItemWire[]>('get_order_items', { tableId: key, tenantId });
-      const balance = orderId
-        ? await invokeIPC<OrderBalance>('get_order_balance', { orderId, tenantId })
-        : null;
+      const { orderId, wire, balance } = await readServerOrder(key, tenantId);
+      serverSignature = signatureOf(orderId, balance, wire);
       const sent = wire.map(mapServerItem).filter((item): item is OrderItem => item !== null);
       set((state) => ({
         activeOrderId: orderId,
@@ -179,8 +200,38 @@ export const usePosStore = create<PosStore>((set, get) => ({
     }
   },
 
+  // Aynı masaya ikinci cihaz dokunduğunda ekran eski adisyonla kalmaz. Okuma
+  // hatası burada yutulur: geçici kopma açık adisyonu boş göstermemelidir.
+  watchActiveOrder: async () => {
+    const before = get();
+    const key = orderKey(before);
+    if (!key || before.isSending) return;
+    const epoch = loadEpoch;
+    try {
+      const { orderId, wire, balance } = await readServerOrder(key, sessionArgs().tenantId);
+      if (epoch !== loadEpoch || orderKey(get()) !== key) return;
+      const signature = signatureOf(orderId, balance, wire);
+      if (signature === serverSignature) return;
+      serverSignature = signature;
+      const sent = wire.map(mapServerItem).filter((item): item is OrderItem => item !== null);
+      set((state) => ({
+        activeOrderId: orderId,
+        balance,
+        ticketItems: [...sent, ...(state.drafts[key] ?? [])],
+        remoteNotice: before.activeOrderId && !orderId
+          ? 'Bu adisyon başka cihazda kapatıldı.'
+          : 'Bu adisyon başka cihazda değişti, güncel hali yüklendi.',
+      }));
+    } catch {
+      return;
+    }
+  },
+
+  dismissRemoteNotice: () => set({ remoteNotice: null }),
+
   openOrderForTable: async (tableId, tableName, guests = 2) => {
     set({
+      remoteNotice: null,
       activeTableId: tableId,
       activeTableName: tableName,
       isWalkin: false,
@@ -192,6 +243,7 @@ export const usePosStore = create<PosStore>((set, get) => ({
 
   openWalkinOrder: async () => {
     set({
+      remoteNotice: null,
       activeTableId: null,
       activeTableName: 'Tezgah Satışı (Al-Götür)',
       isWalkin: true,
@@ -344,9 +396,10 @@ export const usePosStore = create<PosStore>((set, get) => ({
       return true;
     } catch (error) {
       // Taslak durur; yeniden denemeden önce sunucu görünümü tazelenir ki
-      // sonucu belirsiz gönderim ikinci kez yazılmasın.
-      set({ orderError: String(error) });
+      // sonucu belirsiz gönderim ikinci kez yazılmasın. Başarılı okuma hatayı
+      // silmesin diye mesaj tazelemeden sonra yazılır.
       await get().loadActiveOrder();
+      set({ orderError: syncErrorText(error, 'sipariş gönderilmedi, taslak bu cihazda duruyor') });
       return false;
     } finally {
       set({ isSending: false });

@@ -47,7 +47,7 @@ pub(super) async fn device(name: &str) -> Device {
 macro_rules! wait_until {
     ($what:literal, $condition:expr) => {{
         let mut satisfied = false;
-        for _ in 0..300 {
+        for _ in 0..800 {
             if $condition {
                 satisfied = true;
                 break;

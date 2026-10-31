@@ -10,12 +10,14 @@ import { formatMoney } from '../../lib/formatMoney';
 import { parseMoneyToCents } from '../../lib/moneyParser';
 import { unitShareCents } from '../../lib/orderMath';
 import { errorText } from '../../lib/cariInput';
+import { syncErrorText } from '../../lib/syncError';
 import { invokeIPC } from '../../services/tauriClient';
 import { Modal } from '../../ui/Modal';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { PaymentItemSplitTab } from './PaymentItemSplitTab';
 import { PaymentChannelSection } from './PaymentChannelSection';
+import { OrderStatusBanner } from '../pos/OrderStatusBanner';
 import type { PaymentMethod, PaymentResultWire, PaymentSplitMode, PaymentStatusWire } from '../../types/payment';
 
 const SPLIT_TABS: { mode: PaymentSplitMode; label: string }[] = [
@@ -166,7 +168,7 @@ export const PaymentModal: React.FC = () => {
       if (message.startsWith('IDEMPOTENCY_CONFLICT')) {
         await checkOutcome();
       } else if (DEFINITE_REJECTION.test(message)) {
-        setErrorMsg(message);
+        setErrorMsg(syncErrorText(message, 'tahsilat yapılmadı, para alınmadı'));
         await loadActiveOrder();
       } else {
         setIsUnresolved(true);
@@ -225,6 +227,7 @@ export const PaymentModal: React.FC = () => {
       maxWidth="2xl"
     >
       <div className="space-y-4">
+        <OrderStatusBanner />
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3.5">
             <span className="text-xs text-[var(--text-secondary)] block">Adisyonun Kalan Bakiyesi</span>

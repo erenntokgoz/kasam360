@@ -4,10 +4,14 @@ import { useFloorStore } from '../../stores/floorStore';
 import { ProductCatalog } from './ProductCatalog';
 import { OrderTicket } from './OrderTicket';
 import { ModifierModal } from './ModifierModal';
+import { OrderStatusBanner } from './OrderStatusBanner';
 import { Modal } from '../../ui/Modal';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useSyncStore } from '../../stores/syncStore';
 import { Button } from '../../ui/Button';
+
+const WATCH_MS = 3000;
 
 export const PosModule: React.FC = () => {
   const {
@@ -16,11 +20,13 @@ export const PosModule: React.FC = () => {
     closeModifierModal,
     addItemToTicket,
     bindWalkinToTable,
+    watchActiveOrder,
   } = usePosStore();
 
   const { tables } = useFloorStore();
   const isOpen = useUIStore((state) => state.activeModule === 'POS');
   const userId = useAuthStore((state) => state.user?.userId);
+  const isCluster = useSyncStore((state) => state.status?.mode === 'CLUSTER');
   const [showBindModal, setShowBindModal] = useState(false);
   const [targetTableId, setTargetTableId] = useState('');
 
@@ -28,6 +34,15 @@ export const PosModule: React.FC = () => {
   useEffect(() => {
     if (isOpen && userId) void loadCatalog().catch(() => undefined);
   }, [loadCatalog, isOpen, userId]);
+
+  // Tek cihazda adisyonu değiştirecek başka biri yoktur, boşuna okunmaz.
+  useEffect(() => {
+    if (!isOpen || !isCluster) return undefined;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void watchActiveOrder();
+    }, WATCH_MS);
+    return () => clearInterval(timer);
+  }, [isOpen, isCluster, watchActiveOrder]);
 
   const handleBindConfirm = () => {
     const table = tables.find((t) => t.id === targetTableId);
@@ -37,12 +52,15 @@ export const PosModule: React.FC = () => {
   };
 
   return (
-    <section className="flex-1 flex min-w-0 h-full overflow-hidden select-none">
-      {/* Sol/Orta Katalog */}
-      <ProductCatalog onBindTableClick={() => setShowBindModal(true)} />
+    <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden select-none">
+      <OrderStatusBanner className="m-2 mb-0 shrink-0" />
+      <div className="flex-1 flex min-h-0">
+        {/* Sol/Orta Katalog */}
+        <ProductCatalog onBindTableClick={() => setShowBindModal(true)} />
 
-      {/* Sağ Adisyon Paneli */}
-      <OrderTicket />
+        {/* Sağ Adisyon Paneli */}
+        <OrderTicket />
+      </div>
 
       {/* Modifiyer Seçici Modalı */}
       <ModifierModal
