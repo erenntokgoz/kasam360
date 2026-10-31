@@ -381,6 +381,24 @@ pub async fn get_staff_kpi(
     kpi_service::kpi(&pool, &tenant, &from, &to, user_id.as_deref()).await
 }
 
+/// Kişi kartı: dönem avansları ve bahşişi. Tutar olduğu için yalnız maaş yetkisiyle.
+#[tauri::command]
+pub async fn get_staff_money_summary(
+    tenant_id: Option<String>,
+    actor_role: String,
+    user_id: String,
+    period: String,
+    pool: State<'_, DbPool>,
+) -> Result<crate::services::staff360::payroll_deductions::StaffMoneySummary, String> {
+    crate::rbac::require_payroll_amounts(&actor_role)?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    crate::services::staff360::payroll_deductions::money_summary(
+        &mut conn, &tenant, &user_id, &period,
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn get_suspicious_activity(
     tenant_id: Option<String>,

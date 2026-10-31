@@ -16,12 +16,8 @@
 //! erişemez ve bu kural sonradan gevşetilemez (rbac.rs'teki yetki kapılarıyla
 //! aynı gerekçe).
 
-pub mod attachment_commands;
 pub mod campaign_commands;
 pub mod e_invoice_commands;
-pub mod insurance_commands;
-pub mod legal_commands;
-pub mod music_license_commands;
 pub mod special_day_commands;
 
 #[cfg(test)]
@@ -35,16 +31,6 @@ pub use e_invoice_commands::{
     cancel_e_invoice_command, generate_e_invoice_command, get_e_invoice_command,
     list_e_invoices_command, mark_e_invoice_accepted_command, mark_e_invoice_rejected_command,
     mark_e_invoice_sent_command,
-};
-pub use insurance_commands::{
-    get_expiring_policies_command, list_policies_command, save_policy_command,
-};
-pub use legal_commands::{
-    get_expiring_documents_command, list_documents_command, list_upcoming_reminders_command,
-    save_legal_document_command,
-};
-pub use music_license_commands::{
-    get_expiring_licenses_command, list_music_licenses_command, save_music_license_command,
 };
 pub use special_day_commands::{
     list_special_days_command, list_upcoming_special_days_command, save_special_day_command,

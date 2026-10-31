@@ -32,6 +32,7 @@ pub async fn list_profiles(
     .await
     .map_err(|e| e.to_string())?;
 
+    let visible = |value: Option<String>| value.filter(|_| can_view_amounts);
     let mut out = Vec::with_capacity(rows.len());
     for r in rows {
         out.push(StaffProfile {
@@ -43,9 +44,10 @@ pub async fn list_profiles(
             birth_date: r.try_get("birth_date").map_err(|e| e.to_string())?,
             hire_date: r.try_get("hire_date").map_err(|e| e.to_string())?,
             phone: r.try_get("phone").map_err(|e| e.to_string())?,
-            national_id: r.try_get("national_id").map_err(|e| e.to_string())?,
-            address: r.try_get("address").map_err(|e| e.to_string())?,
-            emergency_contact: r.try_get("emergency_contact").map_err(|e| e.to_string())?,
+            // Kimlik ve iletişim ayrıntısı maaşla aynı gizlilikte: müdür görmez.
+            national_id: visible(r.try_get("national_id").map_err(|e| e.to_string())?),
+            address: visible(r.try_get("address").map_err(|e| e.to_string())?),
+            emergency_contact: visible(r.try_get("emergency_contact").map_err(|e| e.to_string())?),
             notes: r.try_get("notes").map_err(|e| e.to_string())?,
         });
     }

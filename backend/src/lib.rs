@@ -354,6 +354,8 @@ pub fn run() {
             ledger_commands::create_expense,
             ledger_commands::void_expense,
             ledger_commands::record_staff_advance,
+            commands::archive_commands::get_legacy_archive_status,
+            commands::archive_commands::export_legacy_archive,
             ledger_commands::get_financial_report,
             ledger_commands::export_financial_report,
             ledger_commands::record_owner_personal,
@@ -393,6 +395,7 @@ pub fn run() {
             commands::staff_commands::record_tip_entry,
             commands::staff_commands::distribute_tip_pool,
             commands::staff_commands::get_staff_kpi,
+            commands::staff_commands::get_staff_money_summary,
             commands::staff_commands::get_suspicious_activity,
             // Envanter 360°. Reçete ve raf ömrü komutları kendi feature
             // bayrağı kapalıyken 404 döner; bayrak kontrolü komutun ilk adımıdır.
@@ -453,20 +456,12 @@ pub fn run() {
             inventory360_commands::waste_commands::close_stock_count_command,
             inventory360_commands::waste_commands::get_stock_count_command,
             inventory360_commands::waste_commands::list_stock_counts_command,
-            // Yasal ve Özel Günler. İzin listelerinde MASTER yoktur:
-            // platform hesabı işletmenin ruhsat, poliçe veya vergi belgesine
-            // erişemez. Yazma yalnız OWNER'dır (prim, KDV ve indirim para
+            // Kampanya ve Özel Günler. İzin listelerinde MASTER yoktur:
+            // platform hesabı işletmenin vergi belgesine erişemez. Yazma yalnız OWNER'dır (prim, KDV ve indirim para
             // etkisidir); kupon uygulama komutu MANAGER'a açıktır çünkü
             // mevcut bir indirimi kasada geçirmek satış anı kararıdır.
             // Yollar alt modüle göre yazılır: `#[tauri::command]` gizli
             // `__cmd__` modülünü üretir ve bu modül `pub use` ile taşınamaz.
-            legal360_commands::legal_commands::list_documents_command,
-            legal360_commands::legal_commands::list_upcoming_reminders_command,
-            legal360_commands::legal_commands::get_expiring_documents_command,
-            legal360_commands::legal_commands::save_legal_document_command,
-            legal360_commands::attachment_commands::list_legal_attachments,
-            legal360_commands::attachment_commands::get_legal_attachment,
-            legal360_commands::attachment_commands::save_legal_attachment,
             legal360_commands::special_day_commands::list_special_days_command,
             legal360_commands::special_day_commands::list_upcoming_special_days_command,
             legal360_commands::special_day_commands::save_special_day_command,
@@ -475,12 +470,6 @@ pub fn run() {
             legal360_commands::campaign_commands::get_campaign_stats,
             legal360_commands::campaign_commands::save_campaign_command,
             legal360_commands::campaign_commands::apply_campaign_command,
-            legal360_commands::insurance_commands::list_policies_command,
-            legal360_commands::insurance_commands::get_expiring_policies_command,
-            legal360_commands::insurance_commands::save_policy_command,
-            legal360_commands::music_license_commands::list_music_licenses_command,
-            legal360_commands::music_license_commands::get_expiring_licenses_command,
-            legal360_commands::music_license_commands::save_music_license_command,
             legal360_commands::e_invoice_commands::generate_e_invoice_command,
             legal360_commands::e_invoice_commands::get_e_invoice_command,
             legal360_commands::e_invoice_commands::list_e_invoices_command,

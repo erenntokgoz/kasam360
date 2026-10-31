@@ -57,14 +57,6 @@ pub fn gun(offset: i64) -> String {
         .to_string()
 }
 
-/// Bugünün yılı.
-///
-/// `i64` döner, `i32` değil: `music_licenses.year` kolonu ve servis imzaları
-/// `i64` kullanır ve testte `i32` dönmesi her çağrıda `as i64` gerektirir.
-pub fn bu_yil() -> i64 {
-    chrono::Local::now().year() as i64
-}
-
 /// Kampanya kayıt girdisi kurar.
 ///
 /// `campaign_tests` ve `coupon_tests` aynı girdiyi kurar; burada
@@ -122,28 +114,4 @@ pub async fn siparis_ekle(
     .execute(&mut *conn)
     .await
     .expect("siparis eklenmeli");
-}
-
-/// Kolonun gerçekten NULL olduğunu kanıtlar.
-///
-/// Bu yardımcı, AGENTS.md §3.4'ün test tarafındaki karşılığıdır: bir kolon
-/// NULL iken `try_get` `None` verir. Servis `unwrap_or(0)` kullansaydı kolon
-/// "sıfır" okunurdu ve test kırmızıya dönerdi.
-pub async fn null_kolon_dogrula(
-    conn: &mut SqliteConnection,
-    tenant_id: &str,
-    tablo: &str,
-    kolon: &str,
-) {
-    let sql = format!("SELECT {kolon} FROM {tablo} WHERE tenant_id = ? LIMIT 1");
-    let satir = sqlx::query(&sql)
-        .bind(tenant_id)
-        .fetch_one(&mut *conn)
-        .await
-        .expect("satir okunmali");
-    let deger: Option<i64> = satir.try_get(kolon).expect("kolon okunmali");
-    assert_eq!(
-        deger, None,
-        "{tablo}.{kolon} NULL olmali (test sifiri degil bilinmezligi olusturuyor)"
-    );
 }

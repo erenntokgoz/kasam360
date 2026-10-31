@@ -11,7 +11,6 @@ import {
   TrendingUp,
   ArrowLeft,
   CalendarCheck,
-  FileCheck,
   Receipt,
   FileBarChart,
   Gauge,
@@ -33,7 +32,6 @@ import { CriticalLogTab } from './CriticalLogTab';
 import { PanoramaTab } from './panorama/PanoramaTab';
 import { ReportsTab } from './reports/ReportsTab';
 import { ExpensesTab } from './expenses/ExpensesTab';
-import { LegalTab } from './legal/LegalTab';
 import { LeavePanel } from './payroll/LeavePanel';
 import { ShiftPlanPanel } from './payroll/ShiftPlanPanel';
 import { PayrollPanel } from './payroll/PayrollPanel';
@@ -59,7 +57,6 @@ export const ErpModule: React.FC = () => {
     { id: 'REPORTS', label: 'Raporlar', icon: FileBarChart },
     { id: 'EXPENSES', label: 'Gider', icon: Receipt },
     { id: 'PAYROLL', label: 'Bordro', icon: CalendarCheck },
-    { id: 'LEGAL', label: 'Yasal', icon: FileCheck },
     { id: 'WIZARD', label: 'Hızlı İşlem', icon: Zap },
     { id: 'DEBTS', label: 'Cari', icon: BookOpen },
     { id: 'STAFF', label: 'Personel', icon: Users },
@@ -125,7 +122,6 @@ export const ErpModule: React.FC = () => {
                 <ShiftPlanPanel />
               </div>
             )}
-            {activeErpTab === 'LEGAL' && <LegalTab />}
             {activeErpTab === 'WIZARD' && <PatronWizardTab />}
             {activeErpTab === 'DEBTS' && <DebtsTab />}
             {activeErpTab === 'STAFF' && <StaffTab />}

@@ -26,13 +26,9 @@ pub async fn get_financial_report(
     end_date: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<FinancialReportDto, String> {
-    // SPEC §34 "Raporlar": işletme sahibi tam, müdür kısmi. Bu komut gelir, gider
-    // ve borç/alacak bilançosunu döndürdüğü için kasiyer, garson ve mutfak
-    // rolleri dışarıdadır.
-    crate::rbac::require_any_present(
-        actor_role.as_deref(),
-        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager],
-    )?;
+    // Kâr yalnız işletme sahibinindir: Panorama da müdüre kâr göstermez, iki kapı
+    // ayrışsaydı müdür aynı rakamı buradan okurdu.
+    crate::rbac::require_any_present(actor_role.as_deref(), &[crate::rbac::Role::Owner])?;
 
     let range = resolve_date_range(start_date.as_ref(), end_date.as_ref())?;
     let tid = require_ledger_tenant(tenant_id.as_deref())?;

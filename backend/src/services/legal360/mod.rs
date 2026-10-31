@@ -1,4 +1,4 @@
-//! Yasal takvim, kampanya, sigorta, telif ve e-Arşiv servisleri.
+//! Kampanya, özel gün ve e-Arşiv servisleri.
 //!
 //! Bu katman komutlardan bağımsızdır: iş mantığı burada yaşar, Tauri komutu
 //! yalnız yetki sınayıp buraya delegasyon yapar. Böylece her kural Tauri
@@ -13,9 +13,6 @@
 
 pub mod campaigns;
 pub mod e_invoice;
-pub mod insurance;
-pub mod legal;
-pub mod music_license;
 pub mod special_days;
 
 pub use campaigns::{
@@ -25,16 +22,6 @@ pub use campaigns::{
 pub use e_invoice::{
     cancel_e_invoice, generate_e_invoice, get_e_invoice, list_e_invoices, mark_e_invoice_accepted,
     mark_e_invoice_rejected, mark_e_invoice_sent, EInvoice, EInvoiceInput,
-};
-pub use insurance::{
-    get_expiring_policies, list_policies, save_policy, InsurancePolicy, PolicyInput,
-};
-pub use legal::{
-    get_expiring_documents, list_documents, list_upcoming_reminders, save_document, LegalDocument,
-    LegalDocumentInput,
-};
-pub use music_license::{
-    get_expiring_licenses, list_licenses, save_license, MusicLicense, MusicLicenseInput,
 };
 pub use special_days::{
     list_special_days, list_upcoming_special_days, save_special_day, SpecialDay, SpecialDayInput,
@@ -80,13 +67,6 @@ pub(crate) fn bugun() -> String {
     chrono::Local::now().format("%Y-%m-%d").to_string()
 }
 
-/// Bugünden `gun` gün sonrası/öncesi, `YYYY-AA-GG`.
-pub(crate) fn gun_kaydir(gun: i64) -> String {
-    (chrono::Local::now().date_naive() + chrono::Duration::days(gun))
-        .format("%Y-%m-%d")
-        .to_string()
-}
-
 /// Tarih metninin biçimini doğrular.
 ///
 /// Neden ayrı doğrulama: `expiry_date` sözlüksel karşılaştırılır. Geçersiz
@@ -109,17 +89,6 @@ pub(crate) fn saat_dogrula(etiket: &str, deger: &str) -> Result<(), String> {
         return Err(format!(
             "VALIDATION: {etiket} SS:DD biçiminde olmalı: {metin}"
         ));
-    }
-    Ok(())
-}
-
-/// Hatırlatma gün sayısını doğrular.
-///
-/// Üst sınır 365: iki yıllık hatırlatma "bu yıl" değildir ve filtreyi
-/// anlamsızlaştırır. Alt sınır 0: bugün dolan belge bugün uyarısı almalıdır.
-pub(crate) fn hatirlatma_dogrula(gun: i64) -> Result<(), String> {
-    if !(0..=365).contains(&gun) {
-        return Err("VALIDATION: hatırlatma süresi 0-365 gün arasında olmalı".into());
     }
     Ok(())
 }

@@ -10,8 +10,5 @@
 mod campaign_tests;
 mod coupon_tests;
 mod e_invoice_tests;
-mod insurance_tests;
-mod legal_tests;
-mod music_license_tests;
 mod special_day_tests;
 mod support;

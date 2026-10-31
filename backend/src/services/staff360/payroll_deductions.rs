@@ -47,6 +47,61 @@ async fn unpaid_days(
     .map_err(|e| format!("ücretsiz izin okunamadı: {e}"))
 }
 
+/// Kişi kartındaki dönem özeti: verilen avanslar ve dağıtılan bahşiş.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaffMoneySummary {
+    pub advances: Vec<StaffAdvance>,
+    pub tip_cents: i64,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaffAdvance {
+    pub id: String,
+    pub amount_cents: i64,
+    pub created_at: String,
+}
+
+pub async fn money_summary(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    user_id: &str,
+    period: &str,
+) -> Result<StaffMoneySummary, String> {
+    let rows: Vec<(String, i64, String)> = sqlx::query_as(
+        "SELECT id, amount_cents, created_at FROM staff_advances
+         WHERE tenant_id = ? AND user_id = ? AND period = ? ORDER BY created_at DESC",
+    )
+    .bind(tenant_id)
+    .bind(user_id)
+    .bind(period)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| format!("avans okunamadı: {e}"))?;
+    let tip_cents: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(amount_cents), 0) FROM tip_distributions
+         WHERE tenant_id = ? AND user_id = ? AND period = ?",
+    )
+    .bind(tenant_id)
+    .bind(user_id)
+    .bind(period)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| format!("bahşiş okunamadı: {e}"))?;
+    Ok(StaffMoneySummary {
+        advances: rows
+            .into_iter()
+            .map(|(id, amount_cents, created_at)| StaffAdvance {
+                id,
+                amount_cents,
+                created_at,
+            })
+            .collect(),
+        tip_cents,
+    })
+}
+
 pub async fn for_user(
     conn: &mut SqliteConnection,
     tenant_id: &str,

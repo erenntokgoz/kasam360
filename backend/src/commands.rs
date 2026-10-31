@@ -7,6 +7,7 @@
 pub mod account_commands;
 pub mod analytics_commands;
 pub mod approval_commands;
+pub mod archive_commands;
 pub mod audit_commands;
 pub mod auth_commands;
 pub mod backup_commands;
