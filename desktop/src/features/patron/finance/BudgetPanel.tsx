@@ -6,7 +6,7 @@ import { EXPENSE_CATEGORIES, useExpenseStore } from '../../../stores/expenseStor
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Panel } from '../panorama/Panel';
-import { CategorySelect } from './ExpensesTab';
+import { CategorySelect } from './FinanceTab';
 
 export const BudgetPanel: React.FC = () => {
   const { budgets, setBudget } = useExpenseStore();

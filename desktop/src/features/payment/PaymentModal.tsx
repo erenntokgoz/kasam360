@@ -44,7 +44,7 @@ function parseCents(text: string): number | null {
 export const PaymentModal: React.FC = () => {
   const { modals, closeModal, openModal } = useUIStore();
   const { activeTableName, activeTableId, activeOrderId, balance, ticketItems, loadActiveOrder, setLastSale } = usePosStore();
-  const { directories, createContact, loadLedgerData } = useLedgerStore();
+  const { directories, createContact, loadDirectories } = useLedgerStore();
   const { loadFloorPlan } = useFloorStore();
   const { loadShiftData } = useShiftStore();
 
@@ -65,8 +65,8 @@ export const PaymentModal: React.FC = () => {
   const transactionId = useRef(newTransactionId());
 
   useEffect(() => {
-    if (modals.payment) void loadLedgerData();
-  }, [modals.payment, loadLedgerData]);
+    if (modals.payment) void loadDirectories();
+  }, [modals.payment, loadDirectories]);
 
   if (!modals.payment) return null;
 

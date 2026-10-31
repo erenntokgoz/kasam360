@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import { errorText } from '../../lib/cariInput';
-import { useAuthStore } from '../../stores/authStore';
 import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
-import { ApprovalGrantsPanel } from './ApprovalGrantsPanel';
-import { BackupPanel } from './BackupPanel';
-import { QrMenuPanel } from './QrMenuPanel';
 import { Button } from '../../ui/Button';
 
 const STAFF_IDLE_OPTIONS = [
@@ -17,7 +13,6 @@ const STAFF_IDLE_OPTIONS = [
 /** Bu cihazın oturum ayarları. Diğer cihazları etkilemez. */
 export const SessionSettingsTab: React.FC = () => {
   const { session, setPolicy, signOut } = useDeviceSessionStore();
-  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const [error, setError] = useState<string | null>(null);
 
   if (!session) return <p role="alert" className="text-sm text-[var(--accent-red)]">Oturum ayarları okunamadı.</p>;
@@ -71,10 +66,6 @@ export const SessionSettingsTab: React.FC = () => {
           ))}
         </div>
       </section>
-
-      {isOwner ? <ApprovalGrantsPanel /> : null}
-      {isOwner ? <BackupPanel /> : null}
-      <QrMenuPanel />
 
       {error ? (
         <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">

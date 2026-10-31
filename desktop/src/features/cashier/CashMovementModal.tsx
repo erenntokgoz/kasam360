@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
+import { parseCents } from '../../lib/moneyInput';
 
 export interface CashMovementModalProps {
   isOpen: boolean;
@@ -24,8 +25,8 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const liras = parseFloat(cashAmountLiras) || 0;
-    const cents = Math.round(liras * 100);
+    const cents = parseCents(cashAmountLiras);
+    if (cents === null || cents <= 0) return;
 
     setIsSubmitting(true);
     try {
@@ -46,7 +47,7 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
       subtitle={
         type === 'IN'
           ? 'Kasaya eklenen nakit avansı veya para üstü desteğini kaydedin.'
-          : 'Masraf, kurye ödemesi veya bankaya yatırılan nakit çıkışını kaydedin.'
+          : 'Bankaya yatırma veya patron çekişi. Gider için Gider Öde kullanılır.'
       }
       maxWidth="sm"
     >
@@ -56,9 +57,7 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
             Tutar (₺)
           </label>
           <Input
-            type="number"
-            min="1"
-            step="1"
+            inputMode="decimal"
             value={cashAmountLiras}
             onChange={(e) => setCashAmountLiras(e.target.value)}
             placeholder="Örn: 250"
@@ -76,7 +75,7 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
             type="text"
             value={cashReason}
             onChange={(e) => setCashReason(e.target.value)}
-            placeholder={type === 'IN' ? 'Örn: Bozuk para desteği' : 'Örn: Pazar alışverişi / Manav'}
+            placeholder={type === 'IN' ? 'Örn: Bozuk para desteği' : 'Örn: Bankaya yatırıldı'}
             required
           />
         </div>

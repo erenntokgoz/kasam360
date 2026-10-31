@@ -10,6 +10,7 @@ import { formatMoney } from '../../lib/formatMoney';
 import { formatDateTime } from '../../lib/date';
 import { Button } from '../../ui/Button';
 import { BlindCloseModal } from './BlindCloseModal';
+import { CashExpenseModal } from './CashExpenseModal';
 import { CashMovementModal } from './CashMovementModal';
 import { ReceiptsTab } from './ReceiptsTab';
 
@@ -24,6 +25,7 @@ export const CashierModule: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'SHIFT' | 'RECEIPTS' | 'DAY_CLOSE'>('SHIFT');
   const [cashActionModal, setCashActionModal] = useState<'IN' | 'OUT' | null>(null);
+  const [expenseOpen, setExpenseOpen] = useState(false);
 
   useEffect(() => {
     loadShiftData();
@@ -109,6 +111,12 @@ export const CashierModule: React.FC = () => {
                 <ArrowUpRight className="w-4 h-4 mr-1" />
                 <span>− Nakit Çıkış</span>
               </Button>
+
+              {canCloseDay ? (
+                <Button variant="secondary" size="sm" onClick={() => setExpenseOpen(true)} className="min-h-12 text-xs font-bold">
+                  <span>Gider Öde</span>
+                </Button>
+              ) : null}
 
               <Button
                 variant="primary"
@@ -335,6 +343,15 @@ export const CashierModule: React.FC = () => {
         onClose={() => setCashActionModal(null)}
         onSubmit={handleCashMovementSubmit}
       />
+      {expenseOpen ? (
+        <CashExpenseModal
+          onClose={() => setExpenseOpen(false)}
+          onSaved={() => {
+            setExpenseOpen(false);
+            void loadShiftData();
+          }}
+        />
+      ) : null}
     </section>
   );
 };

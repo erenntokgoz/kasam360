@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
 import { parseCents } from '../../../lib/moneyInput';
+import { useAuthStore } from '../../../stores/authStore';
 import { EXPENSE_CATEGORIES, useExpenseStore } from '../../../stores/expenseStore';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Panel } from '../panorama/Panel';
 import { BudgetPanel } from './BudgetPanel';
+import { ProfitStatement } from './ProfitStatement';
 import { RecurringPanel } from './RecurringPanel';
 
 const METHODS = [
@@ -28,8 +30,10 @@ export const CategorySelect: React.FC<{ value: string; onChange: (value: string)
   </select>
 );
 
-export const ExpensesTab: React.FC = () => {
-  const { expenses, budgets, error, load, addExpense, voidExpense } = useExpenseStore();
+/** Gider, sabit gider, bütçe ve kâr aynı ayı gösterir; dönem tek yerden seçilir. */
+export const FinanceTab: React.FC = () => {
+  const { period, setPeriod, report, expenses, budgets, error, load, addExpense, voidExpense } = useExpenseStore();
+  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const [voiding, setVoiding] = useState<string | null>(null);
   const [voidReason, setVoidReason] = useState('');
   const [category, setCategory] = useState('OTHER');
@@ -76,9 +80,16 @@ export const ExpensesTab: React.FC = () => {
           Giderler okunamadı: {error}
         </p>
       ) : null}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
+          Dönem
+          <Input aria-label="Finans dönemi" type="month" className="min-h-12 !w-44 tabular-nums" value={period} onChange={(event) => setPeriod(event.target.value)} />
+        </label>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Bu Ay Harcanan', value: expenses ? formatMoney(total) : 'Okunamadı' },
+          { label: 'Dönem Gideri', value: expenses ? formatMoney(total) : 'Okunamadı' },
           { label: 'Toplam Bütçe', value: limit > 0 ? formatMoney(limit) : 'Tanımlı değil' },
           { label: 'Kalan', value: limit > 0 && expenses ? formatMoney(limit - budgets.reduce((sum, item) => sum + item.spentCents, 0)) : '-' },
         ].map((item) => (
@@ -89,12 +100,14 @@ export const ExpensesTab: React.FC = () => {
         ))}
       </div>
 
+      {isOwner && report ? <ProfitStatement report={report} /> : null}
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <BudgetPanel />
         <RecurringPanel />
       </div>
 
-      <Panel title="Gider Ekle ve Bu Ayın Giderleri">
+      <Panel title="Gider Ekle ve Dönem Giderleri">
         <div className="flex flex-wrap gap-2">
           <CategorySelect value={category} onChange={setCategory} />
           <Input aria-label="Tutar" inputMode="decimal" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-36" value={amount} onChange={(event) => setAmount(event.target.value)} />
@@ -112,7 +125,7 @@ export const ExpensesTab: React.FC = () => {
         </div>
         {method === 'CASH' ? <p className="text-xs text-[var(--text-muted)]">Nakit gider açık vardiyanın kasasından düşer.</p> : null}
         {formError ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{formError}</p> : null}
-        {expenses?.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Bu ay gider yok.</p> : null}
+        {expenses?.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Bu dönemde gider yok.</p> : null}
         <ul className="divide-y divide-[var(--border)]">
           {expenses?.map((item) => (
             <li key={item.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">

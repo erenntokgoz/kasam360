@@ -40,7 +40,7 @@ export interface LedgerDebt {
 
 export interface StatementLine {
   id: string;
-  kind: 'BORC_ACILDI' | 'TAHSILAT' | 'TEDIYE';
+  kind: 'BORC_ACILDI' | 'TAHSILAT' | 'TEDIYE' | 'IADE';
   signedAmountCents: number;
   description?: string | null;
   createdAt: string;

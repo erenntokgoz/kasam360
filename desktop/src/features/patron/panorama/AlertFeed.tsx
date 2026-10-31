@@ -14,7 +14,7 @@ const VISIBLE_LIMIT = 6;
 
 /** Her uyarı çözüleceği ekrana götürür; patron sorunu görüp aramak zorunda kalmaz. */
 export const AlertFeed: React.FC<{ alerts: PanoramaAlert[] }> = ({ alerts }) => {
-  const setActiveErpTab = useLedgerStore((state) => state.setActiveErpTab);
+  const openAlertTarget = useLedgerStore((state) => state.openAlertTarget);
   const shown = alerts.slice(0, VISIBLE_LIMIT);
   return (
     <Panel
@@ -39,7 +39,7 @@ export const AlertFeed: React.FC<{ alerts: PanoramaAlert[] }> = ({ alerts }) => 
                 <button
                   type="button"
                   disabled={!alert.target}
-                  onClick={() => setActiveErpTab(alert.target as Parameters<typeof setActiveErpTab>[0])}
+                  onClick={() => openAlertTarget(alert.target)}
                   className="w-full min-h-12 px-2 py-1.5 rounded-lg flex items-center gap-2.5 text-left enabled:cursor-pointer enabled:hover:bg-[var(--bg-subtle)]"
                 >
                   <Icon className={`w-5 h-5 shrink-0 ${tone}`} aria-label={label} />

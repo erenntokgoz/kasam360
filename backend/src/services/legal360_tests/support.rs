@@ -9,9 +9,8 @@
 //! yazılmış ikinci bir şema, migration'dan ayrışır ve testler yeşil kalırken
 //! üretim kırılır — tam olarak bu testlerin yakalaması gereken hata.
 
-use chrono::Datelike;
 use sqlx::sqlite::SqlitePoolOptions;
-use sqlx::{Row, SqliteConnection};
+use sqlx::SqliteConnection;
 
 const SEMA: &str = include_str!("../../../migrations/schema.sql");
 

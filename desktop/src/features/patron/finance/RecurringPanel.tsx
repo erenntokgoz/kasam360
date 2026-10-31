@@ -6,7 +6,7 @@ import { useExpenseStore, type RecurringRow } from '../../../stores/expenseStore
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Panel } from '../panorama/Panel';
-import { CategorySelect } from './ExpensesTab';
+import { CategorySelect } from './FinanceTab';
 
 /** Ödeme aynı başlıkla gider yazar; bu ay ödenip ödenmediği oradan anlaşılır. */
 export const RecurringPanel: React.FC = () => {
