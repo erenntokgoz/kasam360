@@ -11,6 +11,10 @@ import { FloorBlueprint } from './FloorBlueprint';
 import { TableSlideOver } from './TableSlideOver';
 import { ReservationModal } from './ReservationModal';
 import { Button } from '../../ui/Button';
+import { OrderStatusBanner } from '../pos/OrderStatusBanner';
+import { useSyncStore } from '../../stores/syncStore';
+
+const CLUSTER_REFRESH_MS = 3000;
 
 export const FloorModule: React.FC = () => {
   const {
@@ -40,17 +44,33 @@ export const FloorModule: React.FC = () => {
   const { openOrderForTable, openWalkinOrder } = usePosStore();
   const { setActiveModule, openModal } = useUIStore();
   const { user } = useAuthStore();
+  const isOpen = useUIStore((state) => state.activeModule === 'FLOOR');
+  const isCluster = useSyncStore((state) => state.status?.mode === 'CLUSTER');
 
   const [isResModalOpen, setIsResModalOpen] = useState(false);
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
 
   useEffect(() => {
-    loadFloorPlan();
     const interval = setInterval(() => {
       checkReservationLocks();
     }, 15000);
     return () => clearInterval(interval);
-  }, [loadFloorPlan, checkReservationLocks]);
+  }, [checkReservationLocks]);
+
+  // Modül gizli kalarak açık durur: salon her girişte sunucudan okunur.
+  useEffect(() => {
+    if (isOpen) void loadFloorPlan();
+  }, [isOpen, loadFloorPlan]);
+
+  // Başka cihazın açtığı masa beklemeden görünür. Kroki düzenlenirken tazelenmez:
+  // sürüklenen masa eski konumuna atlar.
+  useEffect(() => {
+    if (!isOpen || !isCluster || isKrokiEditMode) return undefined;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadFloorPlan();
+    }, CLUSTER_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [isOpen, isCluster, isKrokiEditMode, loadFloorPlan]);
 
   const isOwnerOrManager = user?.role === 'OWNER' || user?.role === 'MANAGER' || user?.role === 'MASTER';
 
@@ -88,6 +108,7 @@ export const FloorModule: React.FC = () => {
 
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden select-none">
+      <OrderStatusBanner className="m-2 mb-0 shrink-0" />
       {floorError ? (
         <p role="alert" className="m-3 p-3 rounded-lg text-xs font-medium break-words bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
           Salon planı okunamadı: {floorError}

@@ -1,3 +1,4 @@
+import { parseMoneyToCents } from '../../lib/moneyParser';
 import React, { useState } from 'react';
 import { Banknote, CreditCard, Utensils, BookOpen } from 'lucide-react';
 import type { PaymentMethod } from '../../types/payment';
@@ -19,6 +20,15 @@ export interface PaymentChannelSectionProps {
   onCreateContact: (name: string, phone: string) => Promise<void>;
 }
 
+/** Yazım sürerken bozuk tutar para üstü göstermez; kuruş hesabı kayan noktaya girmez. */
+function parseTenderedCents(text: string, fallback: number): number {
+  try {
+    return parseMoneyToCents(text);
+  } catch {
+    return fallback;
+  }
+}
+
 export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
   channel,
   onSelectChannel,
@@ -35,7 +45,7 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
   const [newCariPhone, setNewCariPhone] = useState('');
   const [cariError, setCariError] = useState<string | null>(null);
 
-  const tenderedCents = tenderedLiras ? Math.round(parseFloat(tenderedLiras) * 100) : payNowCents;
+  const tenderedCents = tenderedLiras ? parseTenderedCents(tenderedLiras, payNowCents) : payNowCents;
   const changeDueCents = Math.max(0, tenderedCents - payNowCents);
 
   const handleBanknotePreset = (liras: number) => {
