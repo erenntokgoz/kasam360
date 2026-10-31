@@ -30,6 +30,7 @@ pub mod modifier_commands;
 pub mod payment_commands;
 pub mod platform_commands;
 pub mod pos_commands;
+pub mod pos_gateway_commands;
 pub mod print_commands;
 pub mod receipt_commands;
 pub mod report_commands;

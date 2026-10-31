@@ -9,8 +9,9 @@ import { CriticalLogTab } from '../CriticalLogTab';
 import { SectionTabs, type SectionTab } from '../SectionTabs';
 import { SessionSettingsTab } from '../SessionSettingsTab';
 import { LegacyArchivePanel } from './LegacyArchivePanel';
+import { TestPosPanel } from './TestPosPanel';
 
-type SettingsSection = 'SESSION' | 'GRANTS' | 'DEVICES' | 'BACKUP' | 'AUDIT';
+type SettingsSection = 'SESSION' | 'GRANTS' | 'DEVICES' | 'BACKUP' | 'POS' | 'AUDIT';
 
 /** Oturum, yetki, cihaz, yedek ve kritik kayıtlar. Patrona özel sayfalar müdürde görünmez. */
 export const SettingsTab: React.FC = () => {
@@ -29,6 +30,7 @@ export const SettingsTab: React.FC = () => {
     ...(isOwner ? [{ id: 'GRANTS' as const, label: 'Yetki' }] : []),
     { id: 'DEVICES', label: 'Cihazlar' },
     ...(isOwner ? [{ id: 'BACKUP' as const, label: 'Yedek' }] : []),
+    ...(isOwner ? [{ id: 'POS' as const, label: 'Test POS' }] : []),
     { id: 'AUDIT', label: 'Kritik Kayıtlar' },
   ];
 
@@ -51,6 +53,7 @@ export const SettingsTab: React.FC = () => {
           <LegacyArchivePanel />
         </div>
       ) : null}
+      {section === 'POS' ? <TestPosPanel /> : null}
       {section === 'AUDIT' ? <CriticalLogTab /> : null}
     </div>
   );

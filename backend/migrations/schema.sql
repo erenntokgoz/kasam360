@@ -1292,6 +1292,44 @@ CREATE INDEX IF NOT EXISTS idx_dpr_active
 
 -- Fiyat dondurma: zam geldiğinde "bu fiyat şu tarihe kadar değişmeyecek"
 -- taahhüdü. Zamdan etkilenen ürünlerde menü fiyatını sabit tutar.
+-- Sanal POS ödeme niyeti. Aynı işlem kimliği ikinci çekim doğuramaz.
+CREATE TABLE IF NOT EXISTS pos_payment_intents (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    transaction_id TEXT NOT NULL,
+    order_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    status TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING', 'APPROVED', 'DECLINED', 'CANCELLED')),
+    provider_ref TEXT,
+    created_by TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, transaction_id)
+);
+
+-- Ödeme günlüğü yalnız eklenir. Kart bilgisi tutulmaz.
+CREATE TABLE IF NOT EXISTS pos_payment_log (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    intent_id TEXT NOT NULL,
+    event_id TEXT,
+    kind TEXT NOT NULL
+        CHECK (kind IN ('REQUEST', 'RESPONSE', 'DUPLICATE', 'IGNORED', 'REPLAY', 'VOID')),
+    status TEXT NOT NULL,
+    message TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (intent_id) REFERENCES pos_payment_intents(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_payment_log_event
+    ON pos_payment_log(tenant_id, event_id) WHERE event_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS pos_gateway_settings (
+    tenant_id TEXT PRIMARY KEY,
+    test_mode INTEGER NOT NULL DEFAULT 0
+);
+
 -- Elle açılan tarife. Saate bağlı değildir; `percent` eksi ise indirimdir.
 -- `product_ids` boşsa tüm ürünlere uygulanır.
 CREATE TABLE IF NOT EXISTS price_tariffs (

@@ -26,6 +26,7 @@ pub mod panorama_alerts;
 pub mod payment_approval;
 pub mod payment_service;
 pub mod pnl_service;
+pub mod pos_gateway;
 pub mod receipt_service;
 pub mod refund_service;
 pub mod report_service;

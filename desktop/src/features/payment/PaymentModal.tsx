@@ -35,6 +35,16 @@ function newTransactionId(): string {
   return `txn_${crypto.randomUUID()}`;
 }
 
+type TestScenario = 'APPROVE' | 'DECLINE' | 'CANCEL' | 'DUPLICATE_RESPONSE' | 'LATE_DECLINE';
+
+const TEST_SCENARIOS: { value: TestScenario; label: string }[] = [
+  { value: 'APPROVE', label: 'Başarılı' },
+  { value: 'DECLINE', label: 'Başarısız' },
+  { value: 'CANCEL', label: 'İptal' },
+  { value: 'DUPLICATE_RESPONSE', label: 'Tekrarlanan yanıt' },
+  { value: 'LATE_DECLINE', label: 'Geç gelen ret' },
+];
+
 function parseCents(text: string): number | null {
   try {
     return parseMoneyToCents(text);
@@ -62,12 +72,19 @@ export const PaymentModal: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isUnresolved, setIsUnresolved] = useState(false);
+  const [testMode, setTestMode] = useState(false);
+  const [testScenario, setTestScenario] = useState<TestScenario>('APPROVE');
 
   // Aynı niyet aynı kimlikle gider: yeniden deneme ikinci tahsilat olamaz.
   const transactionId = useRef(newTransactionId());
 
   useEffect(() => {
-    if (modals.payment) void loadDirectories();
+    if (!modals.payment) return;
+    void loadDirectories();
+    // Okunamayan mod kapalı sayılır: kart tahsilatı olağan yoldan sürer.
+    invokeIPC<boolean>('get_test_pos_mode', { tenantId: sessionArgs().tenantId })
+      .then(setTestMode)
+      .catch(() => setTestMode(false));
   }, [modals.payment, loadDirectories]);
 
   if (!modals.payment) return null;
@@ -132,11 +149,30 @@ export const PaymentModal: React.FC = () => {
     openModal('receiptPreview');
   };
 
+  // Çekim tahsilattan önce yapılır. Aynı işlem kimliğiyle yeniden deneme sağlayıcıya
+  // gitmez, önceki sonucu alır; reddedilen kimlik bir daha kullanılmaz.
+  const chargeTestPos = async (): Promise<boolean> => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    const result = await invokeIPC<{ status: string; message?: string | null }>('test_pos_charge', {
+      actorRole,
+      actorId,
+      tenantId,
+      input: { transactionId: transactionId.current, orderId: activeOrderId, amountCents: payNowCents, scenario: testScenario },
+    });
+    if (result.status === 'APPROVED') return true;
+    transactionId.current = newTransactionId();
+    setErrorMsg(`Kart tahsilatı alınmadı. ${result.message ?? ''}`.trim());
+    return false;
+  };
+
+  const usesTestPos = testMode && channel === 'CARD';
+
   const execute = async () => {
-    const { actorId, actorRole } = sessionArgs();
+    const { actorId, actorRole, tenantId } = sessionArgs();
     setIsProcessing(true);
     setErrorMsg(null);
     try {
+      if (usesTestPos && !(await chargeTestPos())) return;
       const reply = await invokeIPC<PaymentResultWire>('process_payment', {
         actorRole,
         payload: {
@@ -169,6 +205,11 @@ export const PaymentModal: React.FC = () => {
         await checkOutcome();
       } else if (DEFINITE_REJECTION.test(message)) {
         setErrorMsg(syncErrorText(message, 'tahsilat yapılmadı, para alınmadı'));
+        // Satış kaydedilmedi: onaylanan çekim açıkta kalmaz. Yeni deneme yeni kimlik alır.
+        if (usesTestPos) {
+          await invokeIPC('test_pos_void', { actorRole, tenantId, transactionId: transactionId.current }).catch(() => undefined);
+          transactionId.current = newTransactionId();
+        }
         await loadActiveOrder();
       } else {
         setIsUnresolved(true);
@@ -317,6 +358,22 @@ export const PaymentModal: React.FC = () => {
           onSelectDirectory={setSelectedDirectoryId}
           onCreateContact={handleCreateCari}
         />
+
+        {usesTestPos ? (
+          <label className="block space-y-1 rounded-lg border border-[var(--accent-amber-border)] bg-[var(--accent-amber-soft)] p-3 text-xs font-semibold text-[var(--text-primary)]">
+            <span>Test POS: gerçek para çekilmez</span>
+            <select
+              aria-label="Test POS yanıtı"
+              className="min-h-12 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] px-3 text-sm"
+              value={testScenario}
+              onChange={(event) => setTestScenario(event.target.value as TestScenario)}
+            >
+              {TEST_SCENARIOS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         {isUnresolved ? (
           <Button variant="primary" size="xl" onClick={() => void checkOutcome()} isLoading={isProcessing} className="w-full mt-2 text-base font-bold">
