@@ -127,9 +127,9 @@ pub async fn upsert_profile(
                        birth_date = excluded.birth_date,
                        hire_date = excluded.hire_date,
                        phone = excluded.phone,
-                       national_id = excluded.national_id,
-                       address = excluded.address,
-                       emergency_contact = excluded.emergency_contact,
+                       national_id = COALESCE(excluded.national_id, staff_profiles.national_id),
+                       address = COALESCE(excluded.address, staff_profiles.address),
+                       emergency_contact = COALESCE(excluded.emergency_contact, staff_profiles.emergency_contact),
                        notes = excluded.notes,
                        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')",
     )

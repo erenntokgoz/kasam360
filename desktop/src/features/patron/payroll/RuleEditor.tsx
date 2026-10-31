@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
 import { parseCents } from '../../../lib/moneyInput';
@@ -16,13 +16,6 @@ export interface PayrollRule {
   hourlyRateCents: number;
 }
 
-interface StaffRow {
-  id: string;
-  name: string;
-  is_active?: boolean;
-  isActive?: boolean;
-}
-
 const MODELS: Record<string, string> = {
   FIXED: 'Sabit Maaş',
   COMMISSION: 'Sabit + Komisyon',
@@ -34,27 +27,17 @@ const MODELS: Record<string, string> = {
 const fieldClass = 'min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]';
 
 /** Maaş kuralı yalnız patronda: rakam müdüre görünmez. */
-export const RuleEditor: React.FC<{ rules: PayrollRule[]; onSaved: () => Promise<void> }> = ({ rules, onSaved }) => {
-  const [staff, setStaff] = useState<StaffRow[]>([]);
-  const [userId, setUserId] = useState('');
+export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSaved: () => Promise<void> }> = ({ userId, rules, onSaved }) => {
   const [model, setModel] = useState('FIXED');
   const [salary, setSalary] = useState('');
   const [percent, setPercent] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const { actorRole, tenantId } = sessionArgs();
-    invokeIPC<StaffRow[]>('get_staff', { actorRole, tenantId, includeInactive: false })
-      .then((rows) => {
-        setStaff(rows);
-        setUserId((current) => current || rows[0]?.id || '');
-      })
-      .catch((caught) => setError(errorText(caught)));
-  }, []);
+  const rule = rules.find((item) => item.userId === userId);
 
   const cents = parseCents(salary);
   const rate = percent.trim() === '' ? 0 : Number(percent);
-  const ready = userId !== '' && cents !== null && Number.isInteger(rate) && rate >= 0 && rate <= 100;
+  const ready = cents !== null && Number.isInteger(rate) && rate >= 0 && rate <= 100;
 
   const save = async () => {
     const { actorRole, tenantId } = sessionArgs();
@@ -83,27 +66,15 @@ export const RuleEditor: React.FC<{ rules: PayrollRule[]; onSaved: () => Promise
 
   return (
     <div className="space-y-2">
-      {rules.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">
-          {rules.map((rule) => (
-            <li key={rule.userId} className="px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs">
-              <span className="font-semibold text-[var(--text-primary)]">{rule.fullName}</span>
-              <span className="text-[var(--text-secondary)] tabular-nums">
-                {' · '}{MODELS[rule.model] ?? rule.model}{' · '}
-                {formatMoney(rule.model === 'HOURLY' ? rule.hourlyRateCents : rule.baseSalaryCents)}
-              </span>
-            </li>
-          ))}
-        </ul>
+      {rule ? (
+        <p className="text-sm text-[var(--text-primary)] tabular-nums">
+          {MODELS[rule.model] ?? rule.model}{' · '}
+          {formatMoney(rule.model === 'HOURLY' ? rule.hourlyRateCents : rule.baseSalaryCents)}
+        </p>
       ) : (
-        <p className="text-sm text-[var(--text-secondary)]">Bordro için önce personele maaş kuralı tanımlayın.</p>
+        <p className="text-sm text-[var(--text-secondary)]">Bu kişi için maaş kuralı yok.</p>
       )}
       <div className="flex flex-wrap gap-2">
-        <select aria-label="Personel" className={fieldClass} value={userId} onChange={(event) => setUserId(event.target.value)}>
-          {staff.map((row) => (
-            <option key={row.id} value={row.id}>{row.name}</option>
-          ))}
-        </select>
         <select aria-label="Maaş modeli" className={fieldClass} value={model} onChange={(event) => setModel(event.target.value)}>
           {Object.entries(MODELS).map(([id, label]) => (
             <option key={id} value={id}>{label}</option>

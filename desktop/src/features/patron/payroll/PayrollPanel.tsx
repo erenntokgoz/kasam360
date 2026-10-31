@@ -6,8 +6,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { Panel } from '../panorama/Panel';
-import { AdvanceForm } from './AdvanceForm';
-import { RuleEditor, type PayrollRule } from './RuleEditor';
+import type { PayrollRule } from './RuleEditor';
 
 interface Amounts {
   baseCents: number;
@@ -86,7 +85,7 @@ export const PayrollPanel: React.FC = () => {
 
   return (
     <Panel title="Bordro">
-      {isOwner ? <RuleEditor rules={rules} onSaved={loadRules} /> : null}
+      {rules.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Maaş kuralı kişi kartından tanımlanır.</p> : null}
       <div className="flex flex-wrap items-center gap-2">
         {periods.map((item) => (
           <Button
@@ -110,7 +109,6 @@ export const PayrollPanel: React.FC = () => {
           </span>
         ) : null}
       </div>
-      {rules.length > 0 ? <AdvanceForm rules={rules} period={period} onSaved={() => setRuns(null)} /> : null}
       {runs && isOwner ? <p className="text-xs text-[var(--text-muted)]">SGK ve vergi kesintisi dahil değildir; yasal bordroyu mali müşavir hesaplar.</p> : null}
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
       {runs ? (

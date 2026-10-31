@@ -16,6 +16,7 @@ interface StaffRow {
 
 interface PlanRow {
   id: string;
+  userId: string;
   userName: string;
   planDate: string;
   startTime: string;
@@ -25,14 +26,12 @@ interface PlanRow {
 }
 
 const WINDOW_DAYS = 14;
-const fieldClass = 'min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]';
 const dayOffset = (days: number) => toLocalIso(new Date(Date.now() + days * 86_400_000)).slice(0, 10);
 
 /** Önümüzdeki iki hafta: plan kasadaki vardiyadan ayrıdır, kimin geleceğini gösterir. */
-export const ShiftPlanPanel: React.FC = () => {
+export const ShiftPlanPanel: React.FC<{ userId: string }> = ({ userId }) => {
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [plans, setPlans] = useState<PlanRow[]>([]);
-  const [userId, setUserId] = useState('');
   const [date, setDate] = useState(dayOffset(0));
   const [start, setStart] = useState('09:00');
   const [end, setEnd] = useState('17:00');
@@ -46,11 +45,11 @@ export const ShiftPlanPanel: React.FC = () => {
         invokeIPC<PlanRow[]>('list_shift_plans', { actorRole, tenantId, from: dayOffset(0), to: dayOffset(WINDOW_DAYS) }),
       ]);
       setStaff(rows);
-      setPlans(nextPlans);
+      setPlans(nextPlans.filter((plan) => plan.userId === userId));
     } catch (caught) {
       setError(errorText(caught));
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     void load();
@@ -85,14 +84,10 @@ export const ShiftPlanPanel: React.FC = () => {
         ))}
       </ul>
       <div className="flex flex-wrap gap-2">
-        <select aria-label="Plan personeli" className={fieldClass} value={userId} onChange={(event) => setUserId(event.target.value)}>
-          <option value="">Personel seçin</option>
-          {staff.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-        </select>
         <Input aria-label="Plan tarihi" type="date" className="min-h-12 !w-40" value={date} onChange={(event) => setDate(event.target.value)} />
         <Input aria-label="Başlangıç" type="time" className="min-h-12 !w-28" value={start} onChange={(event) => setStart(event.target.value)} />
         <Input aria-label="Bitiş saati" type="time" className="min-h-12 !w-28" value={end} onChange={(event) => setEnd(event.target.value)} />
-        <Button variant="primary" className="min-h-12 text-xs font-bold" disabled={userId === ''} onClick={() => void save()}>
+        <Button variant="primary" className="min-h-12 text-xs font-bold" onClick={() => void save()}>
           Plana Ekle
         </Button>
       </div>
