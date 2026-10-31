@@ -30,7 +30,7 @@ export const ProfitTab: React.FC = () => {
       <div>
         <h2 className="text-base font-bold text-[var(--text-primary)]">Net Kâr Özeti</h2>
         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-          Satılan ürünlerin gerçek parti maliyeti düşülerek hesaplanır.
+          KDV hariçtir; satılan ürünlerin gerçek parti maliyeti düşülür.
         </p>
       </div>
 
@@ -41,7 +41,8 @@ export const ProfitTab: React.FC = () => {
         <Metric label="Net Kâr" cents={summary.netProfitCents} tone="text-[var(--accent-emerald)]" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Metric label="KDV" cents={summary.totalVatCents} />
         <Metric label="İadeler" cents={summary.totalRefundsCents} />
         <Metric label="Açık Alacak" cents={summary.receivablesCents} />
         <Metric label="Açık Borç" cents={summary.payablesCents} />

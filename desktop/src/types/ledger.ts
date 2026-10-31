@@ -97,6 +97,7 @@ export interface StaffProfile {
 export interface FinancialProfitSummary {
   totalRevenueCents: number;
   totalCogsCents: number;
+  totalVatCents: number;
   totalRefundsCents: number;
   grossProfitCents: number;
   totalExpensesCents: number;

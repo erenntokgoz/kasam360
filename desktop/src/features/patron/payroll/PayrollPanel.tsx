@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { Panel } from '../panorama/Panel';
+import { AdvanceForm } from './AdvanceForm';
 import { RuleEditor, type PayrollRule } from './RuleEditor';
 
 interface Amounts {
@@ -14,6 +15,7 @@ interface Amounts {
   tipCents: number;
   hourlyCents: number;
   profitShareCents: number;
+  deductionCents: number;
   netCents: number;
 }
 
@@ -40,6 +42,7 @@ const COLUMNS: { label: string; key: keyof Amounts }[] = [
   { label: 'Bahşiş', key: 'tipCents' },
   { label: 'Saatlik', key: 'hourlyCents' },
   { label: 'Kâr Payı', key: 'profitShareCents' },
+  { label: 'Kesinti', key: 'deductionCents' },
   { label: 'Net', key: 'netCents' },
 ];
 
@@ -107,6 +110,8 @@ export const PayrollPanel: React.FC = () => {
           </span>
         ) : null}
       </div>
+      {rules.length > 0 ? <AdvanceForm rules={rules} period={period} onSaved={() => setRuns(null)} /> : null}
+      {runs && isOwner ? <p className="text-xs text-[var(--text-muted)]">SGK ve vergi kesintisi dahil değildir; yasal bordroyu mali müşavir hesaplar.</p> : null}
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
       {runs ? (
         <div className="overflow-x-auto">

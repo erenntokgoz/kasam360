@@ -719,6 +719,18 @@ CREATE TABLE IF NOT EXISTS voided_expenses (
     voided_at DATETIME NOT NULL
 );
 
+-- Yasal kayıt eki. İçerik satırdadır: yedekle ve diğer cihazlarla birlikte gider.
+CREATE TABLE IF NOT EXISTS legal_attachments (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    content_base64 TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE (tenant_id, owner_id)
+);
+
 -- Personel avansı: gider olarak yazılır, döneminin bordrosundan düşülür.
 CREATE TABLE IF NOT EXISTS staff_advances (
     id TEXT PRIMARY KEY,

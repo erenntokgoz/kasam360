@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { Panel } from '../panorama/Panel';
+import { AttachmentControl } from './AttachmentControl';
 import { LegalForm } from './LegalForm';
 import {
   DOC_TYPES,
@@ -32,6 +33,7 @@ export const LegalTab: React.FC = () => {
   const [documents, setDocuments] = useState<LegalDocumentRow[]>([]);
   const [policies, setPolicies] = useState<PolicyRow[]>([]);
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
+  const [files, setFiles] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<LegalSource | null>(null);
   const [preset, setPreset] = useState<{ kind: LegalKind; type: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,11 +41,13 @@ export const LegalTab: React.FC = () => {
   const load = useCallback(async () => {
     const { actorRole, tenantId } = sessionArgs();
     try {
-      const [nextDocuments, nextPolicies, nextLicenses] = await Promise.all([
+      const [nextDocuments, nextPolicies, nextLicenses, attachments] = await Promise.all([
         invokeIPC<LegalDocumentRow[]>('list_documents_command', { actorRole, tenantId, onlyActive: true }),
         invokeIPC<PolicyRow[]>('list_policies_command', { actorRole, tenantId }),
         invokeIPC<LicenseRow[]>('list_music_licenses_command', { actorRole, tenantId }),
+        invokeIPC<{ ownerId: string; fileName: string }[]>('list_legal_attachments', { actorRole, tenantId }),
       ]);
+      setFiles(Object.fromEntries(attachments.map((item) => [item.ownerId, item.fileName])));
       setDocuments(nextDocuments);
       setPolicies(nextPolicies);
       setLicenses(nextLicenses);
@@ -136,6 +140,13 @@ export const LegalTab: React.FC = () => {
                 <span className={`block text-xs font-bold tabular-nums ${STATUS[row.status].tone}`}>{daysText(row.daysLeft)}</span>
                 <span className="block text-xs tabular-nums text-[var(--text-secondary)]">{row.expiryDate}</span>
               </span>
+              <AttachmentControl
+                ownerId={row.source.record.id}
+                fileName={files[row.source.record.id] ?? null}
+                canEdit={isOwner}
+                onChanged={load}
+                onError={(caught) => setError(errorText(caught))}
+              />
               {isOwner ? (
                 <>
                   <Button variant="secondary" className="min-h-12 text-xs" onClick={() => { setPreset(null); setEditing(row.source); }}>Yenile</Button>

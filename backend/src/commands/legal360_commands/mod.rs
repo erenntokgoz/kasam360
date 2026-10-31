@@ -16,6 +16,7 @@
 //! erişemez ve bu kural sonradan gevşetilemez (rbac.rs'teki yetki kapılarıyla
 //! aynı gerekçe).
 
+pub mod attachment_commands;
 pub mod campaign_commands;
 pub mod e_invoice_commands;
 pub mod insurance_commands;

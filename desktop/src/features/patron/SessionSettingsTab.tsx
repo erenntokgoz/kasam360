@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
 import { ApprovalGrantsPanel } from './ApprovalGrantsPanel';
 import { BackupPanel } from './BackupPanel';
+import { QrMenuPanel } from './QrMenuPanel';
 import { Button } from '../../ui/Button';
 
 const STAFF_IDLE_OPTIONS = [
@@ -73,6 +74,7 @@ export const SessionSettingsTab: React.FC = () => {
 
       {isOwner ? <ApprovalGrantsPanel /> : null}
       {isOwner ? <BackupPanel /> : null}
+      <QrMenuPanel />
 
       {error ? (
         <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">

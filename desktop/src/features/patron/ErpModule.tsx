@@ -35,6 +35,7 @@ import { ReportsTab } from './reports/ReportsTab';
 import { ExpensesTab } from './expenses/ExpensesTab';
 import { LegalTab } from './legal/LegalTab';
 import { LeavePanel } from './payroll/LeavePanel';
+import { ShiftPlanPanel } from './payroll/ShiftPlanPanel';
 import { PayrollPanel } from './payroll/PayrollPanel';
 
 export const ErpModule: React.FC = () => {
@@ -121,6 +122,7 @@ export const ErpModule: React.FC = () => {
               <div className="space-y-4 max-w-[1500px] mx-auto">
                 <PayrollPanel />
                 <LeavePanel />
+                <ShiftPlanPanel />
               </div>
             )}
             {activeErpTab === 'LEGAL' && <LegalTab />}

@@ -4,6 +4,7 @@ import { errorText } from '../../../lib/cariInput';
 import { RANGE_LABELS, reportPeriod, type RangeKey } from '../../../lib/dateRange';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
+import { AccountantPanel } from './AccountantPanel';
 import { REPORTS, type ReportKey, type ReportTable } from './reportDefinitions';
 
 const RANGES: RangeKey[] = ['TODAY', 'YESTERDAY', 'WEEK', 'MONTH'];
@@ -48,6 +49,7 @@ export const ReportsTab: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-[1500px] mx-auto">
+      <AccountantPanel />
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Rapor">
         {(Object.keys(REPORTS) as ReportKey[]).map((key) => (
           <Button

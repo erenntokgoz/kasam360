@@ -21,6 +21,7 @@ export interface Expense {
   paymentMethod: string;
   description: string | null;
   expenseDate: string;
+  recurringId: string | null;
 }
 
 export interface BudgetRow {
@@ -49,7 +50,8 @@ interface ExpenseStore {
   recurring: RecurringRow[];
   error: string | null;
   load: () => Promise<void>;
-  addExpense: (category: string, amountCents: number, paymentMethod: string, description: string) => Promise<void>;
+  addExpense: (category: string, amountCents: number, paymentMethod: string, description: string, recurringId?: string) => Promise<void>;
+  voidExpense: (id: string, reason: string) => Promise<void>;
   setBudget: (category: string, monthlyLimitCents: number) => Promise<void>;
   addRecurring: (title: string, category: string, amountCents: number, dueDay: number) => Promise<void>;
   removeRecurring: (id: string) => Promise<void>;
@@ -82,12 +84,18 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
     }
   },
 
-  addExpense: async (category, amountCents, paymentMethod, description) => {
+  addExpense: async (category, amountCents, paymentMethod, description, recurringId) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
     await invokeIPC('create_expense', {
       actorRole,
-      payload: { tenantId, category, amountCents, paymentMethod, actorId, description, expenseDate: today() },
+      payload: { tenantId, category, amountCents, paymentMethod, actorId, description, expenseDate: today(), recurringId },
     });
+    await get().load();
+  },
+
+  voidExpense: async (id, reason) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('void_expense', { expenseId: id, reason, actorId, actorRole, tenantId });
     await get().load();
   },
 

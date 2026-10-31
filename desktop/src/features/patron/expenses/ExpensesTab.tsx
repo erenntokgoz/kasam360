@@ -29,7 +29,9 @@ export const CategorySelect: React.FC<{ value: string; onChange: (value: string)
 );
 
 export const ExpensesTab: React.FC = () => {
-  const { expenses, budgets, error, load, addExpense } = useExpenseStore();
+  const { expenses, budgets, error, load, addExpense, voidExpense } = useExpenseStore();
+  const [voiding, setVoiding] = useState<string | null>(null);
+  const [voidReason, setVoidReason] = useState('');
   const [category, setCategory] = useState('OTHER');
   const [method, setMethod] = useState('CASH');
   const [amount, setAmount] = useState('');
@@ -48,6 +50,17 @@ export const ExpensesTab: React.FC = () => {
       await addExpense(category, cents, method, note.trim());
       setAmount('');
       setNote('');
+    } catch (caught) {
+      setFormError(errorText(caught));
+    }
+  };
+
+  const confirmVoid = async (id: string) => {
+    try {
+      setFormError(null);
+      await voidExpense(id, voidReason.trim());
+      setVoiding(null);
+      setVoidReason('');
     } catch (caught) {
       setFormError(errorText(caught));
     }
@@ -102,11 +115,20 @@ export const ExpensesTab: React.FC = () => {
         {expenses?.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Bu ay gider yok.</p> : null}
         <ul className="divide-y divide-[var(--border)]">
           {expenses?.map((item) => (
-            <li key={item.id} className="flex items-center gap-3 py-2 text-sm">
+            <li key={item.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
               <span className="tabular-nums text-xs text-[var(--text-muted)] w-20">{item.expenseDate.slice(0, 10)}</span>
               <span className="font-semibold text-[var(--text-primary)] w-32 truncate">{EXPENSE_CATEGORIES[item.category] ?? item.category}</span>
               <span className="flex-1 min-w-0 truncate text-[var(--text-secondary)]">{item.description || '-'}</span>
               <span className="tabular-nums font-bold text-[var(--text-primary)]">{formatMoney(item.amountCents)}</span>
+              {voiding === item.id ? (
+                <>
+                  <Input aria-label="İptal nedeni" placeholder="İptal nedeni" className="min-h-12 !w-48" value={voidReason} onChange={(event) => setVoidReason(event.target.value)} />
+                  <Button variant="danger" className="min-h-12 text-xs" disabled={voidReason.trim() === ''} onClick={() => void confirmVoid(item.id)}>Onayla</Button>
+                  <Button variant="ghost" className="min-h-12 text-xs" onClick={() => setVoiding(null)}>Vazgeç</Button>
+                </>
+              ) : (
+                <Button variant="ghost" className="min-h-12 text-xs" onClick={() => { setVoiding(item.id); setVoidReason(''); }}>İptal</Button>
+              )}
             </li>
           ))}
         </ul>

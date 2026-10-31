@@ -15,6 +15,7 @@ export const RecurringPanel: React.FC = () => {
   const [category, setCategory] = useState('RENT');
   const [amount, setAmount] = useState('');
   const [day, setDay] = useState('1');
+  const [payMethod, setPayMethod] = useState('BANK_TRANSFER');
   const [error, setError] = useState<string | null>(null);
   const cents = parseCents(amount);
   const dueDay = Number(day);
@@ -29,11 +30,23 @@ export const RecurringPanel: React.FC = () => {
     }
   };
 
-  const isPaid = (row: RecurringRow) => expenses?.some((item) => item.description === row.title) ?? false;
+  const isPaid = (row: RecurringRow) => expenses?.some((item) => item.recurringId === row.id || (item.recurringId === null && item.description === row.title)) ?? false;
 
   return (
     <Panel title="Sabit Giderler">
       {recurring.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Kira, fatura gibi sabit gider yok.</p> : null}
+      {recurring.length > 0 ? (
+        <select
+          aria-label="Sabit gider ödeme şekli"
+          value={payMethod}
+          onChange={(event) => setPayMethod(event.target.value)}
+          className="min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)] self-start"
+        >
+          <option value="BANK_TRANSFER">Havale ile öde</option>
+          <option value="CREDIT_CARD">Kart ile öde</option>
+          <option value="CASH">Nakit öde</option>
+        </select>
+      ) : null}
       <ul className="flex flex-col gap-1">
         {recurring.map((row) => {
           const paid = isPaid(row);
@@ -50,7 +63,7 @@ export const RecurringPanel: React.FC = () => {
                 variant="secondary"
                 className="min-h-12 text-xs"
                 disabled={paid}
-                onClick={() => void run(() => addExpense(row.category, row.amountCents, 'BANK_TRANSFER', row.title))}
+                onClick={() => void run(() => addExpense(row.category, row.amountCents, payMethod, row.title, row.id))}
               >
                 Öde
               </Button>
