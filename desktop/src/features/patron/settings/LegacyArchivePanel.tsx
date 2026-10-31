@@ -29,8 +29,8 @@ export const LegacyArchivePanel: React.FC = () => {
 
   if (count === 0 && !error) return null;
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-2">
-      <h3 className="text-sm font-bold text-[var(--text-primary)]">Yasal Kayıt Arşivi</h3>
+    <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-2">
+      <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Yasal Kayıt Arşivi</h3>
       <p className="text-xs text-[var(--text-secondary)]">
         Yasal modül üründen kaldırıldı. Daha önce girilen {count} kayıt silinmedi ve yedeğe dahildir.
       </p>

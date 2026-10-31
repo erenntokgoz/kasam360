@@ -139,10 +139,10 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
   ];
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-3 min-w-0">
+    <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3 min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">{member.name}</h3>
+          <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">{member.name}</h3>
           <p className="text-xs text-[var(--text-secondary)]">{ROLE_LABEL[member.role] ?? member.role}{member.is_active ? '' : ' · Pasif'}</p>
         </div>
         {member.role !== 'OWNER' ? (

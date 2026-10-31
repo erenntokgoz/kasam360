@@ -116,9 +116,9 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
 
   return (
     <div className="space-y-4">
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+      <section className="paper border border-[var(--border)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-bold text-[var(--text-primary)] truncate">{card.name}</h3>
+          <h3 className="print-title text-sm font-bold text-[var(--text-primary)] truncate">{card.name}</h3>
           <p className="text-[11px] text-[var(--text-muted)]">
             {card.phone || 'Telefon yok'}
             {card.taxNo ? ` · VKN ${card.taxNo}` : ''} · Limit{' '}
@@ -140,7 +140,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
         </div>
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden">
+      <section className="paper border border-[var(--border)] rounded-xl overflow-hidden">
         <h4 className="px-4 py-3 border-b border-[var(--border)] text-xs font-bold text-[var(--text-primary)]">
           Açık Kayıtlar
         </h4>
@@ -182,7 +182,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
         )}
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden">
+      <section className="paper border border-[var(--border)] rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-xs font-bold text-[var(--text-primary)]">Ekstre</h4>
           <div className="flex items-center gap-2">

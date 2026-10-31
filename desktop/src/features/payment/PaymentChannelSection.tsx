@@ -195,7 +195,7 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
             <select
               value={selectedDirectoryId}
               onChange={(e) => onSelectDirectory(e.target.value)}
-              className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-panel)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+              className="w-full min-h-12 px-3 rounded-lg paper text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
             >
               <option value="">Cari müşteri seçin...</option>
               {directories

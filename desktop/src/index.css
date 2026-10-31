@@ -1,126 +1,206 @@
 @import "tailwindcss";
 
+/* Koyu masa üstü ve üzerindeki adisyon kâğıtları. Kâğıt `.paper` ile açılır ve renkleri
+   kendi içinde yeniden tanımlar; bileşenler aynı adları kullanır, yerleşim değişmez. */
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* ========================================================================
-     AGENTS.md Tactile Matte Palette — Canonical variable names (v3.0 spec)
-     ======================================================================== */
-  --bg-base: #090A0C;
-  --bg-surface: #111317;
-  --bg-elevated: #171A20;
-  --bg-interactive: #1E222A;
-  --border-subtle: #232730;
-  --border-strong: #323846;
-  --text-primary: #F3F4F6;
-  --text-secondary: #9CA3AF;
-  --text-tertiary: #6B7280;
+  --ink: #14161c;
+  --sheet: #f4f4f0;
+  --sheet-yellow: #f3df82;
+  --sheet-green: #bfdcc4;
+  --sheet-pink: #f2c6cf;
+  --sheet-rule: #c7ccd9;
+  --print: #27408b;
+  --serial: #b5121a;
+  --pen: #1a2ea8;
 
-  /* Semantic action colors (AGENTS.md §4.2) */
-  --brand: #2563EB;
-  --brand-hover: #3B82F6;
-  --success: #10B981;
-  --success-hover: #059669;
-  --warning: #F59E0B;
-  --warning-hover: #D97706;
-  --danger: #EF4444;
-  --danger-hover: #DC2626;
-  --info: #06B6D4;
+  --bg-canvas: #14161c;
+  --bg-panel: #1b1e26;
+  --bg-card: #262a35;
+  --bg-subtle: #2a2e3a;
+  --bg-hover: #353a48;
+  --bg-surface: var(--bg-panel);
+  --border: #3f4452;
+  --border-strong: #5a6072;
+  --text-primary: #f4f4f0;
+  --text-secondary: #c9cbd3;
+  --text-muted: #a0a3b0;
+  --text-tertiary: #a0a3b0;
 
-  /* Legacy aliases — kept for existing component references */
-  --bg-canvas: var(--bg-base);
-  --bg-panel: var(--bg-surface);
-  --bg-card: var(--bg-elevated);
-  --bg-subtle: var(--bg-interactive);
-  --bg-hover: #2A2F3A;
-  --border: var(--border-subtle);
-  --text-muted: var(--text-tertiary);
+  --brand: #3654b5;
+  --brand-hover: #2b4699;
+  --primary-bg: #f4f4f0;
+  --primary-hover: #ffffff;
+  --primary-fg: #14161c;
+  --success-bg: #bfdcc4;
+  --success-hover: #d2e8d6;
+  --success-fg: #14161c;
+  --danger-bg: #f2c6cf;
+  --danger-hover: #f8d9df;
+  --danger-fg: #14161c;
+  --warning: #f3df82;
 
-  /* Accent color aliases (map to semantic colors) */
-  --accent-amber: var(--warning);
-  --accent-amber-hover: var(--warning-hover);
-  --accent-amber-soft: rgba(245, 158, 11, 0.14);
-  --accent-amber-border: rgba(245, 158, 11, 0.40);
+  --accent-amber: #f3df82;
+  --accent-amber-hover: #f8ea9f;
+  --accent-amber-soft: #3a3519;
+  --accent-amber-border: #84762f;
+  --accent-emerald: #bfdcc4;
+  --accent-emerald-hover: #d2e8d6;
+  --accent-emerald-soft: #23352a;
+  --accent-emerald-border: #5d7f67;
+  --accent-red: #f7b4c0;
+  --accent-red-hover: #f8d9df;
+  --accent-red-soft: #41222b;
+  --accent-red-border: #99505f;
+  --accent-blue: #b4c6f7;
+  --accent-blue-soft: #252f4d;
+  --accent-blue-border: #5a6fa8;
+  --accent-violet: #cfc1f5;
+  --accent-violet-soft: #30294a;
+  --accent-violet-border: #6f60a0;
 
-  --accent-emerald: var(--success);
-  --accent-emerald-hover: var(--success-hover);
-  --accent-emerald-soft: rgba(16, 185, 129, 0.14);
-  --accent-emerald-border: rgba(16, 185, 129, 0.40);
-
-  --accent-red: var(--danger);
-  --accent-red-hover: var(--danger-hover);
-  --accent-red-soft: rgba(239, 68, 68, 0.14);
-  --accent-red-border: rgba(239, 68, 68, 0.40);
-
-  --accent-blue: var(--info);
-  --accent-blue-soft: rgba(6, 184, 212, 0.14);
-  --accent-blue-border: rgba(6, 184, 212, 0.40);
-
-  --accent-violet: #A78BFA;
-  --accent-violet-soft: rgba(167, 139, 250, 0.14);
-  --accent-violet-border: rgba(167, 139, 250, 0.40);
+  /* Eski bileşenlerin kullandığı adlar aynı kalır, yalnız değerleri değişir. */
+  --bg-base: var(--bg-canvas);
+  --bg-elevated: var(--bg-card);
+  --bg-interactive: var(--bg-subtle);
+  --border-subtle: var(--border);
+  --success: #2f8f5b;
+  --success-hover: #27784c;
+  --danger: #c23a47;
+  --danger-hover: #a52f3b;
+  --warning-hover: #e6cf6b;
+  --info: var(--accent-blue);
 }
 
+/* Açık tema düğmesi yerinde kalır: masa açılır, kâğıtlar aynı kalır. */
 [data-theme="light"] {
   color-scheme: light;
 
-  /* ========================================================================
-     AGENTS.md Tactile Matte Palette — Light theme (v3.0 spec)
-     ======================================================================== */
-  --bg-base: #F8FAFC;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #F1F5F9;
-  --bg-interactive: #E2E8F0;
-  --border-subtle: #CBD5E1;
-  --border-strong: #94A3B8;
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-tertiary: #64748B;
+  --bg-canvas: #d7d6cc;
+  --bg-panel: #e4e3da;
+  --bg-card: #fbfbf8;
+  --bg-subtle: #e9e8e0;
+  --bg-hover: #dddcd2;
+  --bg-surface: #f4f4f0;
+  --border: #c6c4ba;
+  --border-strong: #8b8a81;
+  --text-primary: #14161c;
+  --text-secondary: #3f434d;
+  --text-muted: #565a65;
+  --text-tertiary: #565a65;
 
-  /* Semantic action colors (light) */
-  --brand: #2563EB;
-  --brand-hover: #1D4ED8;
-  --success: #059669;
-  --success-hover: #047857;
-  --warning: #D97706;
-  --warning-hover: #B45309;
-  --danger: #DC2626;
-  --danger-hover: #B91C1C;
-  --info: #0284C7;
+  --brand: #27408b;
+  --brand-hover: #1f3370;
+  --primary-bg: #27408b;
+  --primary-hover: #1f3370;
+  --primary-fg: #ffffff;
+  --success-bg: #17683f;
+  --success-hover: #125433;
+  --success-fg: #ffffff;
+  --danger-bg: #b5121a;
+  --danger-hover: #930e15;
+  --danger-fg: #ffffff;
+  --warning: #7a5200;
 
-  /* Legacy aliases — kept for existing component references */
-  --bg-canvas: var(--bg-base);
-  --bg-panel: var(--bg-surface);
-  --bg-card: var(--bg-elevated);
-  --bg-subtle: var(--bg-interactive);
-  --bg-hover: #F1F5F9;
-  --border: var(--border-subtle);
-  --text-muted: var(--text-tertiary);
+  --accent-amber: #7a5200;
+  --accent-amber-hover: #5f4000;
+  --accent-amber-soft: #f3df82;
+  --accent-amber-border: #b79f3a;
+  --accent-emerald: #17683f;
+  --accent-emerald-hover: #125433;
+  --accent-emerald-soft: #bfdcc4;
+  --accent-emerald-border: #7dab89;
+  --accent-red: #b5121a;
+  --accent-red-hover: #930e15;
+  --accent-red-soft: #f2c6cf;
+  --accent-red-border: #d68a99;
+  --accent-blue: #27408b;
+  --accent-blue-soft: #d5def5;
+  --accent-blue-border: #8fa3d6;
+  --accent-violet: #54348f;
+  --accent-violet-soft: #e2d9f3;
+  --accent-violet-border: #a792cf;
 
-  /* Accent color aliases (light) */
-  --accent-amber: var(--warning);
-  --accent-amber-hover: var(--warning-hover);
-  --accent-amber-soft: rgba(217, 119, 6, 0.10);
-  --accent-amber-border: rgba(217, 119, 6, 0.32);
+  --bg-base: var(--bg-canvas);
+  --bg-elevated: var(--bg-card);
+  --bg-interactive: var(--bg-subtle);
+  --border-subtle: var(--border);
+  --success: #17683f;
+  --success-hover: #125433;
+  --danger: #b5121a;
+  --danger-hover: #930e15;
+  --warning-hover: #5f4000;
+  --info: #27408b;
+}
 
-  --accent-emerald: var(--success);
-  --accent-emerald-hover: var(--success-hover);
-  --accent-emerald-soft: rgba(5, 150, 105, 0.10);
-  --accent-emerald-border: rgba(5, 150, 105, 0.32);
+.paper {
+  color-scheme: light;
 
-  --accent-red: var(--danger);
-  --accent-red-hover: var(--danger-hover);
-  --accent-red-soft: rgba(220, 38, 38, 0.10);
-  --accent-red-border: rgba(220, 38, 38, 0.32);
+  --bg-canvas: #e8e7df;
+  --bg-panel: #f4f4f0;
+  --bg-card: #fbfbf8;
+  --bg-subtle: #e9e8e0;
+  --bg-hover: #dddcd2;
+  --bg-surface: #f4f4f0;
+  --border: #c6c4ba;
+  --border-strong: #8b8a81;
+  --text-primary: #14161c;
+  --text-secondary: #3f434d;
+  --text-muted: #565a65;
+  --text-tertiary: #565a65;
 
-  --accent-blue: var(--info);
-  --accent-blue-soft: rgba(2, 132, 199, 0.10);
-  --accent-blue-border: rgba(2, 132, 199, 0.32);
+  --brand: #27408b;
+  --brand-hover: #1f3370;
+  --primary-bg: #27408b;
+  --primary-hover: #1f3370;
+  --primary-fg: #ffffff;
+  --success-bg: #17683f;
+  --success-hover: #125433;
+  --success-fg: #ffffff;
+  --danger-bg: #b5121a;
+  --danger-hover: #930e15;
+  --danger-fg: #ffffff;
+  --warning: #7a5200;
 
-  --accent-violet: #7C3AED;
-  --accent-violet-soft: rgba(124, 58, 237, 0.10);
-  --accent-violet-border: rgba(124, 58, 237, 0.32);
+  --accent-amber: #7a5200;
+  --accent-amber-hover: #5f4000;
+  --accent-amber-soft: #f3df82;
+  --accent-amber-border: #b79f3a;
+  --accent-emerald: #17683f;
+  --accent-emerald-hover: #125433;
+  --accent-emerald-soft: #bfdcc4;
+  --accent-emerald-border: #7dab89;
+  --accent-red: #b5121a;
+  --accent-red-hover: #930e15;
+  --accent-red-soft: #f2c6cf;
+  --accent-red-border: #d68a99;
+  --accent-blue: #27408b;
+  --accent-blue-soft: #d5def5;
+  --accent-blue-border: #8fa3d6;
+  --accent-violet: #54348f;
+  --accent-violet-soft: #e2d9f3;
+  --accent-violet-border: #a792cf;
+
+  --bg-base: var(--bg-canvas);
+  --bg-elevated: var(--bg-card);
+  --bg-interactive: var(--bg-subtle);
+  --border-subtle: var(--border);
+  --success: #17683f;
+  --success-hover: #125433;
+  --danger: #b5121a;
+  --danger-hover: #930e15;
+  --warning-hover: #5f4000;
+  --info: #27408b;
+
+  background-color: var(--sheet);
+  color: var(--ink);
+  border-color: var(--border);
+  border-radius: 6px;
+}
+.paper .paper {
+  background-color: var(--bg-card);
 }
 
 * {
@@ -158,6 +238,43 @@ html, body {
 .tactile-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Adisyon yaprağı kutunun ölçüsünü değiştirmez: delikler ve yırtık kenar içeride çizilir. */
+.slip-edge {
+  --slip: var(--sheet);
+  position: relative;
+  background-color: var(--slip);
+  color: var(--ink);
+}
+.slip-edge::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 10px;
+  right: 10px;
+  height: 5px;
+  pointer-events: none;
+  background: radial-gradient(circle at 2.5px 2.5px, var(--slip-hole, #14161c) 2.5px, transparent 3px) 0 0 / 14px 5px repeat-x;
+}
+.slip-yellow { --slip: var(--sheet-yellow); }
+.slip-green { --slip: var(--sheet-green); }
+.slip-pink { --slip: var(--sheet-pink); }
+.slip-white { --slip: var(--sheet); }
+
+.hand {
+  font-family: "Kalam", "Segoe Print", cursive;
+  font-weight: 700;
+  color: var(--pen);
+}
+/* Gövde yazısı eskisi gibi kalır: yeni yazı genişliği butonları kaydırıyordu. */
+.print-title {
+  font-family: "Schibsted Grotesk Variable", "Segoe UI", sans-serif;
+  letter-spacing: -0.02em;
+  color: var(--print);
+}
+.serial {
+  color: var(--serial);
 }
 
 /* Termal Fiş Önizleme Stili */

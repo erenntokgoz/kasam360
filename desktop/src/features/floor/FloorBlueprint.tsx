@@ -53,7 +53,7 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
   return (
     <div className="flex-1 flex flex-col overflow-hidden p-4 gap-3 select-none">
       {isEditMode ? (
-        <div className="bg-[var(--bg-panel)] border border-[var(--accent-amber-border)] rounded-lg px-4 py-2.5 flex items-center justify-between shrink-0 shadow-sm">
+        <div className="paper border border-[var(--accent-amber-border)] rounded-lg px-4 py-2.5 flex items-center justify-between shrink-0 shadow-sm">
           <span className="text-xs font-semibold text-[var(--accent-amber)]">
             Düzenleme Modu Aktif: Masaları fare ile sürükleyerek salon yerleşimini güncelleyebilirsiniz.
           </span>
@@ -130,7 +130,7 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
           {/* Hızlı Kişi Sayısı Seçici Popover (Kroki Üzeri) */}
           {pickerTable ? (
             <div
-              className="absolute z-30 bg-[var(--bg-panel)] rounded-xl border border-[var(--accent-amber-border)] p-3 shadow-2xl flex flex-col gap-2 min-w-[200px]"
+              className="absolute z-30 paper rounded-xl border border-[var(--accent-amber-border)] p-3 shadow-2xl flex flex-col gap-2 min-w-[200px]"
               style={{
                 left: `${Math.min(pickerTable.posX + 10, 700)}px`,
                 top: `${Math.min(pickerTable.posY + 10, 420)}px`,

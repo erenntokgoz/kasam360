@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Sun, Moon, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { BrandMark } from '../../ui/BrandMark';
 import { Numpad } from '../../ui/Numpad';
 import { Button } from '../../ui/Button';
 import { formatDateTime } from '../../lib/date';
@@ -55,9 +56,7 @@ export const LoginOverlay: React.FC = () => {
       {/* Üst Satır */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs text-[var(--text-primary)] bg-[var(--accent-amber)] shadow-sm">
-            360
-          </div>
+          <BrandMark className="w-8 h-8" surface="desk" />
           <span className="font-bold text-base tracking-tight text-[var(--text-primary)]">KASAM360</span>
         </div>
 
@@ -76,12 +75,12 @@ export const LoginOverlay: React.FC = () => {
       {/* Merkez Terminal Kartı */}
       <div className="flex-1 flex items-center justify-center">
         <div
-          className={`w-full max-w-[360px] bg-[var(--bg-panel)] border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5 shadow-2xl ${
+          className={`w-full max-w-[360px] paper border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5 shadow-2xl ${
             shake ? 'animate-shake' : ''
           }`}
         >
           <div className="text-center">
-            <h1 className="text-base font-bold text-[var(--text-primary)]">Personel Girişi</h1>
+            <h1 className="print-title text-base font-bold text-[var(--text-primary)]">Personel Girişi</h1>
             <p className="text-xs mt-1 text-[var(--text-secondary)]">
               Devam etmek için 4-8 haneli PIN kodunuzu girin
             </p>

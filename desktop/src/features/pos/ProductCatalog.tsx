@@ -121,7 +121,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
           <div
             key={prod.id}
             onClick={() => void handleProductClick(prod)}
-            className="bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--accent-amber-border)] rounded-xl p-3.5 min-h-[96px] flex flex-col justify-between cursor-pointer active:translate-y-[1px] transition-all duration-75 shadow-sm group"
+            className="paper border border-[var(--border)] hover:border-[var(--accent-amber-border)] rounded-xl p-3.5 min-h-[96px] flex flex-col justify-between cursor-pointer active:translate-y-[1px] transition-all duration-75 shadow-sm group"
           >
             <div>
               <span className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--accent-amber)] block line-clamp-2">

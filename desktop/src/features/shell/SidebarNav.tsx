@@ -75,7 +75,7 @@ export const SidebarNav: React.FC = () => {
                 }`}
               >
                 {item.badge ? (
-                  <span className="absolute top-1 right-2 px-1.5 py-0.2 rounded-full text-[10px] font-bold text-white bg-[var(--accent-amber)] tabular-nums shadow-sm">
+                  <span className="absolute top-1 right-2 px-1.5 py-0.2 rounded-full text-[10px] font-bold text-[var(--ink)] bg-[var(--accent-amber)] tabular-nums shadow-sm">
                     {item.badge}
                   </span>
                 ) : null}

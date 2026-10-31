@@ -47,14 +47,14 @@ export const Drawer: React.FC<DrawerProps> = ({
     >
       <aside
         className={cn(
-          'w-full h-full bg-[var(--bg-panel)] border-l border-[var(--border)] flex flex-col justify-between shadow-2xl transition-transform duration-150',
+          'w-full h-full paper !rounded-none border-l border-[var(--border)] flex flex-col justify-between shadow-2xl transition-transform duration-150',
           widthClasses
         )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-base font-bold text-[var(--text-primary)]">{title}</h2>
+            <h2 className="print-title text-base font-bold text-[var(--text-primary)]">{title}</h2>
             {subtitle ? <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subtitle}</p> : null}
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Kapat">

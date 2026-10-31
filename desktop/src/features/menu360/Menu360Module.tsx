@@ -131,7 +131,7 @@ export const Menu360Module: React.FC = () => {
       )}
 
       {/* 3. Modül İçeriği */}
-      <div className="flex-1 flex min-h-0 overflow-hidden relative">
+      <div className="paper !rounded-none flex-1 flex min-h-0 overflow-hidden relative">
         {activeTab === 'KATALOG' ? <Menu360CatalogTab /> : <Menu360FiyatTab />}
       </div>
     </div>

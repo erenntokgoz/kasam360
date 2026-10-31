@@ -50,7 +50,7 @@ export const LivePanel: React.FC<{ live: PanoramaData['live']; current: Kpi }> =
         {syncState ? <Row label="Cihaz eşitleme" value={SYNC_STATE_LABEL[syncState]} alarm={syncState !== 'READY'} /> : null}
       </div>
       <div className="mt-auto">
-        <h3 className="text-xs font-bold text-[var(--text-secondary)] mb-1">Seçili dönemde kesintiler</h3>
+        <h3 className="print-title text-xs font-bold text-[var(--text-secondary)] mb-1">Seçili dönemde kesintiler</h3>
         <Row label="Ödenecek KDV" value={formatMoney(current.vatCents)} />
         <Row label="İndirim" value={formatMoney(current.discountCents)} />
         <Row label="İptal" value={formatMoney(current.voidCents)} alarm={current.voidCents > 0} />

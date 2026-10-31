@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useUIStore } from '../../stores/uiStore';
 import { formatTime } from '../../lib/date';
+import { BrandMark } from '../../ui/BrandMark';
 import { Button } from '../../ui/Button';
 import { SyncStatusChip } from './SyncStatusChip';
 
@@ -44,9 +45,7 @@ export const TopStatusBar: React.FC = () => {
       {/* Sol: Marka Rozeti ve Vardiya Durumu */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 pr-3 border-r border-[var(--border)]">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs text-white bg-[var(--accent-amber)] shadow-sm">
-            360
-          </div>
+          <BrandMark className="w-7 h-7" surface="desk" />
           <span className="font-bold text-sm tracking-tight text-[var(--text-primary)]">KASAM360</span>
         </div>
 
@@ -96,7 +95,7 @@ export const TopStatusBar: React.FC = () => {
           className="!min-h-12 !px-3"
           aria-label="Tema Değiştir"
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
+          {theme === 'dark' ? <Sun className="w-4 h-4 text-[var(--accent-amber)]" /> : <Moon className="w-4 h-4 text-slate-700" />}
           <span className="hidden sm:inline">{theme === 'dark' ? 'Açık Tema' : 'Koyu Tema'}</span>
         </Button>
 

@@ -147,7 +147,7 @@ export const CashierModule: React.FC = () => {
           <>
             {/* Üst Kartlar: Çekmece Nakiti ve Satış Dağılımı */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[var(--bg-panel)] border border-[var(--accent-emerald-border)] rounded-xl p-4 shadow-sm">
+              <div className="paper border border-[var(--accent-emerald-border)] rounded-xl p-4 shadow-sm">
                 <span className="text-xs text-[var(--text-secondary)] block">Kasa Çekmecesindeki Nakit</span>
                 <span className="text-2xl font-bold text-[var(--accent-emerald)] tabular-nums mt-1 block">
                   {money(summary?.expectedCashInDrawerCents)}
@@ -157,14 +157,14 @@ export const CashierModule: React.FC = () => {
                 </span>
               </div>
 
-              <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
+              <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm">
                 <span className="text-xs text-[var(--text-secondary)] block">Toplam Vardiya Cirosu</span>
                 <span className="text-2xl font-bold text-[var(--text-primary)] tabular-nums mt-1 block">
                   {summary ? formatMoney(summary.totalSalesCents) : 'Okunamadı'}
                 </span>
               </div>
 
-              <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
+              <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm">
                 <span className="text-xs text-[var(--text-secondary)] block">Vardiya Sorumlusu</span>
                 <span className="text-xl font-bold text-[var(--text-primary)] mt-1 block truncate">
                   {summary?.cashierName ?? 'Okunamadı'}
@@ -177,8 +177,8 @@ export const CashierModule: React.FC = () => {
             </div>
 
             {/* Tahsilat Kanalları Dökümü */}
-            <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-3">
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">
+            <div className="paper border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-3">
+              <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">
                 Ödeme Kanalları Dökümü
               </h3>
 
@@ -217,10 +217,10 @@ export const CashierModule: React.FC = () => {
           <ReceiptsTab onRefunded={() => void loadShiftData()} />
         ) : (
           /* Gün Sonu / Z Raporu Sekmesi */
-          <div className="max-w-2xl bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-6 shadow-sm space-y-5">
+          <div className="max-w-2xl paper border border-[var(--border)] rounded-xl p-6 shadow-sm space-y-5">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
               <div>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">Gün Sonu Kapanışı (Z Raporu)</h2>
+                <h2 className="print-title text-base font-bold text-[var(--text-primary)]">Gün Sonu Kapanışı (Z Raporu)</h2>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                   Tüm açık masalar kapatıldığında ve vardiya sayımı yapıldığında Z Raporu üretilir.
                 </p>

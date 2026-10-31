@@ -39,9 +39,9 @@ export const Menu360CategoryModal: React.FC<Menu360CategoryModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-      <div className="w-96 bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden select-none shadow-2xl">
+      <div className="w-96 paper border border-[var(--border)] rounded-xl overflow-hidden select-none shadow-2xl">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-panel)]">
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">+ Yeni Kategori Ekle</h3>
+          <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">+ Yeni Kategori Ekle</h3>
           <button
             type="button"
             onClick={onClose}

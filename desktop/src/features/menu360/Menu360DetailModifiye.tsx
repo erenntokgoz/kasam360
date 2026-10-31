@@ -111,7 +111,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
               {grp.options.map((opt) => (
                 <div
                   key={opt.id}
-                  className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)]"
+                  className="flex items-center justify-between text-xs py-1 px-2 rounded paper border border-[var(--border)] text-[var(--text-secondary)]"
                 >
                   <span>{opt.name}</span>
                   <span className="font-mono tabular-nums text-[var(--text-primary)]">
@@ -129,7 +129,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                   value={optName}
                   onChange={(e) => setOptName(e.target.value)}
                   placeholder="Seçenek adı (örn: Ekstra Sos)"
-                  className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+                  className="w-full paper border border-[var(--border)] rounded px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                   autoFocus
                 />
                 <div className="flex items-center gap-1.5">
@@ -138,7 +138,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                     value={optDeltaInput}
                     onChange={(e) => setOptDeltaInput(e.target.value)}
                     placeholder="Fiyat farkı (TL)"
-                    className="flex-1 bg-[var(--bg-card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+                    className="flex-1 paper border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                   />
                   <button
                     type="button"

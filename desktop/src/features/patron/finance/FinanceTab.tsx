@@ -93,7 +93,7 @@ export const FinanceTab: React.FC = () => {
           { label: 'Toplam Bütçe', value: limit > 0 ? formatMoney(limit) : 'Tanımlı değil' },
           { label: 'Kalan', value: limit > 0 && expenses ? formatMoney(limit - budgets.reduce((sum, item) => sum + item.spentCents, 0)) : '-' },
         ].map((item) => (
-          <div key={item.label} className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4">
+          <div key={item.label} className="paper border border-[var(--border)] rounded-xl p-4">
             <span className="text-xs font-semibold text-[var(--text-secondary)] block">{item.label}</span>
             <span className="text-3xl font-bold tabular-nums text-[var(--text-primary)] mt-1 block">{item.value}</span>
           </div>

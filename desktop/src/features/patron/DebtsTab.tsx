@@ -94,7 +94,7 @@ export const DebtsTab: React.FC = () => {
       ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 flex-1 min-h-0">
-        <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-y-auto divide-y divide-[var(--border)] max-h-[70vh]">
+        <ul className="paper border border-[var(--border)] rounded-xl overflow-y-auto divide-y divide-[var(--border)] max-h-[70vh]">
           {cards.length === 0 ? (
             <li className="p-6 text-center text-xs text-[var(--text-muted)]">
               {search.trim() ? 'Aramayla eşleşen kart yok.' : 'Henüz kart yok.'}
@@ -132,7 +132,7 @@ export const DebtsTab: React.FC = () => {
           {selected ? (
             <CariCardDetail key={selected.id} card={selected} onChanged={refresh} />
           ) : (
-            <div className="p-6 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl">
+            <div className="p-6 text-center text-xs text-[var(--text-muted)] paper border border-[var(--border)] rounded-xl">
               Hareketleri görmek için listeden bir kart seçin.
             </div>
           )}

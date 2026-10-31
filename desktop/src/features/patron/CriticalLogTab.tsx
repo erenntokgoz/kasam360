@@ -73,7 +73,7 @@ export const CriticalLogTab: React.FC = () => {
   const nameOf = (id: unknown) => (typeof id === 'string' ? names[id] ?? id : null);
 
   return (
-    <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
+    <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
       {rows.map((row) => {
         const amount = amountOf(row.payload);
         const approver = nameOf(row.payload.approverId);

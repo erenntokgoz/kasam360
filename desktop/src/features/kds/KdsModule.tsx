@@ -121,16 +121,16 @@ export const KdsModule: React.FC = () => {
             return (
               <div
                 key={ticket.id}
-                className={`bg-[var(--bg-panel)] rounded-xl border flex flex-col justify-between shadow-md overflow-hidden ${
-                  isUrgent ? 'border-[var(--accent-red)]' : 'border-[var(--border)]'
+                className={`paper slip-edge rounded-xl border flex flex-col justify-between shadow-md overflow-hidden ${
+                  isUrgent ? 'slip-pink' : 'slip-yellow'
                 }`}
               >
                 {/* Bilet Başlığı */}
                 <div
                   className={`p-3.5 border-b flex items-center justify-between ${
                     isUrgent
-                      ? 'bg-[var(--accent-red-soft)] border-[var(--accent-red-border)]'
-                      : 'bg-[var(--bg-subtle)] border-[var(--border)]'
+                      ? 'border-[var(--accent-red-border)]'
+                      : 'border-[var(--accent-amber-border)]'
                   }`}
                 >
                   <div>
@@ -176,7 +176,7 @@ export const KdsModule: React.FC = () => {
                             className={`text-sm font-bold block ${
                               item.status === 'READY' || item.status === 'SERVED'
                                 ? 'line-through text-[var(--text-muted)]'
-                                : 'text-[var(--text-primary)]'
+                                : 'hand'
                             }`}
                           >
                             {item.productName}

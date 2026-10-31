@@ -73,7 +73,7 @@ export const OrderTicket: React.FC = () => {
   };
 
   return (
-    <aside className="w-[390px] shrink-0 bg-[var(--bg-panel)] border-l border-[var(--border)] flex flex-col h-full select-none">
+    <aside className="w-[390px] shrink-0 paper !rounded-none border-l border-[var(--border)] flex flex-col h-full select-none">
       {/* Başlık Barı */}
       <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between shrink-0">
         <div>
@@ -147,7 +147,7 @@ export const OrderTicket: React.FC = () => {
         <div className="space-y-1 text-xs">
           <div className="flex justify-between items-baseline pt-1">
             <span className="text-xs font-semibold text-[var(--text-primary)]">Toplam Tutar</span>
-            <span className="text-2xl font-bold text-[var(--accent-amber)] tabular-nums">
+            <span className="hand text-2xl tabular-nums">
               {formatMoney(total)}
             </span>
           </div>

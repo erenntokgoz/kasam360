@@ -48,7 +48,7 @@ export const ReceiptsTab: React.FC<{ onRefunded: () => void }> = ({ onRefunded }
 
   return (
     <>
-      <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
+      <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
         {receipts.map((receipt) => {
           const remaining = receipt.total_cents - receipt.refunded_cents;
           return (

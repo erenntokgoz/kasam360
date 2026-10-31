@@ -131,7 +131,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
       {/* Üst Başlık & Sekmeler */}
       <div className="flex flex-col border-b border-[var(--border)]">
         <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-panel)] border-b border-[var(--border)]">
-          <h2 className="text-sm font-bold text-[var(--text-primary)] truncate">
+          <h2 className="print-title text-sm font-bold text-[var(--text-primary)] truncate">
             {detailMode === 'new' ? '+ Yeni Ürün' : selectedProduct?.name}
           </h2>
           <button
@@ -284,8 +284,8 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
       {/* Silme Onay Modalı */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-80 bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">Ürünü Sil?</h3>
+          <div className="w-80 paper border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-2xl">
+            <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Ürünü Sil?</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
               &quot;{selectedProduct?.name}&quot; menüden silinecek. Bu işlem denetim defterine kaydedilir.
             </p>

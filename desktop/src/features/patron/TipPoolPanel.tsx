@@ -76,8 +76,8 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
   const money = (cents?: number) => (cents === undefined ? 'Okunamadı' : formatMoney(cents));
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-3">
-      <h3 className="text-sm font-bold text-[var(--text-primary)]">Bahşiş havuzu · {period}</h3>
+    <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
+      <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Bahşiş havuzu · {period}</h3>
       <div className="grid grid-cols-3 gap-3 text-sm text-[var(--text-primary)]">
         <div>
           <span className="text-xs text-[var(--text-secondary)] block">Toplanan</span>

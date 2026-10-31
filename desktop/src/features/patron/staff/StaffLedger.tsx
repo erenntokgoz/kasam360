@@ -75,7 +75,7 @@ export const StaffLedger: React.FC = () => {
 
       {section === 'PEOPLE' ? (
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-          <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)] self-start">
+          <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)] self-start">
             {(staff ?? []).map((member) => (
               <li key={member.id}>
                 <button
@@ -102,7 +102,7 @@ export const StaffLedger: React.FC = () => {
               onChanged={load}
             />
           ) : (
-            <p className="p-6 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl">
+            <p className="p-6 text-center text-xs text-[var(--text-muted)] paper border border-[var(--border)] rounded-xl">
               Kartını görmek için listeden bir kişi seçin.
             </p>
           )}
@@ -114,7 +114,7 @@ export const StaffLedger: React.FC = () => {
       {section === 'TIPS' ? (
         <div className="space-y-4 max-w-3xl">
           {isOwner ? (
-            <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
+            <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
               {active.map((member) => (
                 <li key={member.id} className="flex items-center justify-between gap-3 px-4 py-2 min-h-14">
                   <span className="text-sm font-semibold text-[var(--text-primary)] truncate">{member.name}</span>

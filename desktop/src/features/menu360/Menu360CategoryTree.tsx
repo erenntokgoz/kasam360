@@ -144,8 +144,8 @@ export const Menu360CategoryTree: React.FC<Menu360CategoryTreeProps> = ({
       {/* Kategori Silme Onay Modalı */}
       {deletingCat && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-80 bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">Kategoriyi Sil?</h3>
+          <div className="w-80 paper border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-2xl">
+            <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Kategoriyi Sil?</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
               Boş &quot;{deletingCat.name}&quot; kategorisi silinecektir.
             </p>

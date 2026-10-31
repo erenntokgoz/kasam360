@@ -114,7 +114,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
       }
     >
       {/* Durum Özeti */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3.5 space-y-3">
+      <div className="paper border border-[var(--border)] rounded-xl p-3.5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-[var(--text-secondary)]">Masa Durumu:</span>
@@ -243,7 +243,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
 
           {/* Masa Taşı Kutusu */}
           {showMoveBox ? (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3 space-y-2.5">
+            <div className="paper border border-[var(--border)] rounded-xl p-3 space-y-2.5">
               <span className="text-xs font-semibold text-[var(--text-primary)] block">
                 Hedef Boş Masa Seçin
               </span>
@@ -273,7 +273,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
 
           {/* Masa Birleştir Kutusu */}
           {showMergeBox ? (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3 space-y-2.5">
+            <div className="paper border border-[var(--border)] rounded-xl p-3 space-y-2.5">
               <span className="text-xs font-semibold text-[var(--text-primary)] block">
                 Birleştirilecek Dolu Masayı Seçin
               </span>

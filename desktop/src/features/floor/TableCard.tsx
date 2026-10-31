@@ -43,10 +43,10 @@ export const TableCard: React.FC<TableCardProps> = ({ table, onOpenTable, onInsp
       onClick={handleClick}
       className={`relative min-h-[120px] rounded-xl border p-3 flex flex-col justify-between cursor-pointer select-none transition-all duration-100 ${
         isOccupied
-          ? 'bg-[var(--bg-card)] border-[var(--accent-amber-border)] shadow-md hover:border-[var(--accent-amber)]'
+          ? 'paper slip-edge slip-yellow shadow-md'
           : isReserved
-          ? 'bg-[var(--bg-card)] border-[var(--accent-blue-border)] shadow-sm hover:border-[var(--accent-blue)]'
-          : 'bg-[var(--bg-card)] border-[var(--border)] hover:border-[var(--accent-emerald-border)] hover:bg-[var(--bg-hover)]'
+          ? 'paper slip-edge slip-white shadow-sm'
+          : 'border-dashed border-[var(--border-strong)] hover:bg-[var(--bg-hover)]'
       }`}
     >
       {/* Üst Satır: Masa Adı ve Durum Rozeti */}
@@ -80,7 +80,7 @@ export const TableCard: React.FC<TableCardProps> = ({ table, onOpenTable, onInsp
               <Clock className="w-3 h-3 text-[var(--accent-amber)]" />
               <span>{elapsedMins} dk</span>
             </span>
-            <span className="text-sm font-bold text-[var(--accent-amber)] tabular-nums">
+            <span className="hand text-lg leading-5 tabular-nums">
               {formatMoney(table.totalCents)}
             </span>
           </div>
@@ -102,7 +102,7 @@ export const TableCard: React.FC<TableCardProps> = ({ table, onOpenTable, onInsp
       {/* Hızlı Kişi Sayısı Seçici Popover */}
       {showGuestPicker ? (
         <div
-          className="absolute inset-0 z-20 bg-[var(--bg-panel)] rounded-xl border border-[var(--accent-amber-border)] p-2.5 flex flex-col justify-between shadow-xl"
+          className="absolute inset-0 z-20 paper rounded-xl border border-[var(--accent-amber-border)] p-2.5 flex flex-col justify-between shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between pb-1 border-b border-[var(--border)]">

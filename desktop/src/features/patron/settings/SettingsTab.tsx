@@ -40,8 +40,8 @@ export const SettingsTab: React.FC = () => {
       {section === 'SESSION' ? <SessionSettingsTab /> : null}
       {section === 'GRANTS' ? <ApprovalGrantsPanel /> : null}
       {section === 'DEVICES' ? (
-        <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-2 max-w-xl">
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">Bağlı Cihazlar</h3>
+        <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-2 max-w-xl">
+          <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Bağlı Cihazlar</h3>
           <p className="text-xs text-[var(--text-secondary)]">Eşleştirme, pasife alma ve cihaz devralma buradan yapılır.</p>
           <Button variant="secondary" className="min-h-12 text-xs" onClick={() => setDevicesOpen(true)}>Cihazları Yönet</Button>
           <SyncDevicesModal isOpen={devicesOpen} onClose={() => setDevicesOpen(false)} />

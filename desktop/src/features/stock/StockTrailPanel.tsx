@@ -69,7 +69,7 @@ export function StockTrailPanel() {
         ))}
       </select>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
-      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] overflow-x-auto">
+      <section className="rounded-xl border border-[var(--border)] paper overflow-x-auto">
         {rows.length === 0 && !error ? <p className="p-4 text-xs text-[var(--text-secondary)]">Kayıtlı stok hareketi yok.</p> : null}
         {rows.length > 0 ? (
           <table className="w-full text-left text-xs">

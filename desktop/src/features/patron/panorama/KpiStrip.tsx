@@ -28,7 +28,7 @@ const Change: React.FC<{ change: number | null; compareLabel: string }> = ({ cha
 };
 
 const Tile: React.FC<TileProps> = ({ label, value, note, change, compareLabel }) => (
-  <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 flex flex-col gap-1.5 min-w-0">
+  <div className="paper border border-[var(--border)] rounded-xl p-4 flex flex-col gap-1.5 min-w-0">
     <span className="text-xs font-semibold text-[var(--text-secondary)]">{label}</span>
     <span className="text-3xl font-bold tabular-nums text-[var(--text-primary)] truncate">{value}</span>
     <Change change={change} compareLabel={compareLabel} />

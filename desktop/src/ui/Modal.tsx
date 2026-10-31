@@ -50,14 +50,14 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         className={cn(
-          'w-full bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
+          'w-full paper border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
           maxWidthClasses
         )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-base font-bold text-[var(--text-primary)]">{title}</h2>
+            <h2 className="print-title text-base font-bold text-[var(--text-primary)]">{title}</h2>
             {subtitle ? <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subtitle}</p> : null}
           </div>
           {showCloseButton ? (

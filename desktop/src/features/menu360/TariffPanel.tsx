@@ -129,8 +129,8 @@ export const TariffPanel: React.FC = () => {
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
 
       {isOwner ? (
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] p-4 space-y-3">
-          <h2 className="text-sm font-bold">Yeni tarife</h2>
+        <section className="rounded-xl border border-[var(--border)] paper p-4 space-y-3">
+          <h2 className="print-title text-sm font-bold">Yeni tarife</h2>
           <div className="grid gap-2 sm:grid-cols-4">
             <select aria-label="Tarife türü" className={field} value={kind} onChange={(event) => setKind(event.target.value as TariffKind)}>
               {Object.entries(KIND_LABEL).map(([value, label]) => (
@@ -170,8 +170,8 @@ export const TariffPanel: React.FC = () => {
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)]">
-        <h2 className="border-b border-[var(--border)] p-4 text-sm font-bold">Tarifeler</h2>
+      <section className="rounded-xl border border-[var(--border)] paper">
+        <h2 className="print-title border-b border-[var(--border)] p-4 text-sm font-bold">Tarifeler</h2>
         {tariffs.length === 0 ? <p className="p-4 text-xs text-[var(--text-secondary)]">Tanımlı tarife yok.</p> : null}
         <ul className="divide-y divide-[var(--border)]">
           {tariffs.map((tariff) => (

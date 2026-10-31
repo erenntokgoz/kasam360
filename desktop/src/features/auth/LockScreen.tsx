@@ -29,10 +29,10 @@ export const LockScreen: React.FC = () => {
       aria-label="Terminal kilitli"
       className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-6 bg-[var(--bg-canvas)] select-none"
     >
-      <div className="w-full max-w-[360px] bg-[var(--bg-panel)] border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5">
+      <div className="w-full max-w-[360px] paper border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5">
         <div className="text-center">
           <Lock className="w-6 h-6 mx-auto text-[var(--text-secondary)]" />
-          <h1 className="text-base font-bold mt-2 text-[var(--text-primary)]">Terminal Kilitli</h1>
+          <h1 className="print-title text-base font-bold mt-2 text-[var(--text-primary)]">Terminal Kilitli</h1>
           <p className="text-xs mt-1 text-[var(--text-secondary)]">
             {user.name} oturumu. Devam etmek için PIN kodunuzu girin.
           </p>

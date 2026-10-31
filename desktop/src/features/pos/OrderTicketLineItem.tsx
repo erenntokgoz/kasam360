@@ -44,7 +44,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
             {item.quantity}
           </span>
           <div>
-            <span className="text-xs font-bold text-[var(--text-primary)] block">
+            <span className="hand text-base leading-4 block">
               {item.name}
             </span>
             {item.cookingDegree ? (
@@ -61,7 +61,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
         </div>
 
         <div className="text-right">
-          <span className="text-xs font-bold text-[var(--text-primary)] tabular-nums block">
+          <span className="hand text-base leading-4 tabular-nums block">
             {formatMoney(item.totalCents)}
           </span>
           <Badge variant={item.course === 1 ? 'emerald' : item.course === 2 ? 'amber' : 'blue'}>
@@ -87,7 +87,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                   onClick={() => onSetCourse(c as 1 | 2 | 3)}
                   className={`px-2 py-1 rounded text-[11px] font-semibold border cursor-pointer ${
                     item.course === c
-                      ? 'bg-[var(--accent-amber)] text-white border-transparent'
+                      ? 'bg-[var(--accent-amber)] text-[var(--ink)] border-transparent'
                       : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]'
                   }`}
                 >

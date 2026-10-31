@@ -91,7 +91,7 @@ export const ReportsTab: React.FC = () => {
       {table?.summary.length ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {table.summary.map((item) => (
-            <div key={item.label} className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-3">
+            <div key={item.label} className="paper border border-[var(--border)] rounded-xl p-3">
               <span className="text-xs text-[var(--text-secondary)] block">{item.label}</span>
               <span className="text-xl font-bold tabular-nums text-[var(--text-primary)] mt-0.5 block">{item.value}</span>
             </div>
@@ -108,7 +108,7 @@ export const ReportsTab: React.FC = () => {
       ) : table.rows.length === 0 ? (
         <p className="text-sm text-[var(--text-secondary)]">{table.emptyText}</p>
       ) : (
-        <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-x-auto">
+        <div className="paper border border-[var(--border)] rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-[var(--text-muted)]">

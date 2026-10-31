@@ -28,8 +28,8 @@ export const SessionSettingsTab: React.FC = () => {
 
   return (
     <div className="max-w-xl space-y-5">
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-3">
-        <h2 className="text-sm font-bold text-[var(--text-primary)]">İşletme hesabı</h2>
+      <section className="paper border border-[var(--border)] rounded-xl p-5 space-y-3">
+        <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">İşletme hesabı</h2>
         <p className="text-xs text-[var(--text-secondary)]">{session.email}</p>
         <label className="flex items-center gap-3 min-h-12 text-sm text-[var(--text-primary)] cursor-pointer">
           <input
@@ -48,8 +48,8 @@ export const SessionSettingsTab: React.FC = () => {
         </Button>
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-3">
-        <h2 className="text-sm font-bold text-[var(--text-primary)]">Personel oturumu</h2>
+      <section className="paper border border-[var(--border)] rounded-xl p-5 space-y-3">
+        <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Personel oturumu</h2>
         <p className="text-xs text-[var(--text-secondary)]">
           Personel PIN ile girer. Hareketsiz kalınca ekran kilitlenir; kalıcı oturumda kilitlenmez.
         </p>

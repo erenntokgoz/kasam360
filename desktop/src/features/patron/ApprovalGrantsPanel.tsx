@@ -49,8 +49,8 @@ export const ApprovalGrantsPanel: React.FC = () => {
   const grantable = staff?.filter((member) => member.role !== 'OWNER' && member.role !== 'MANAGER') ?? [];
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-3">
-      <h2 className="text-sm font-bold text-[var(--text-primary)]">Onay yetkisi</h2>
+    <section className="paper border border-[var(--border)] rounded-xl p-5 space-y-3">
+      <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Onay yetkisi</h2>
       <p className="text-xs text-[var(--text-secondary)]">
         Patron ve müdür her zaman yetkilidir. Yetki verdiğiniz personel iptal, ikram ve iadeyi kendi PIN'iyle onaylar.
       </p>
