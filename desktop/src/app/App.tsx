@@ -92,7 +92,7 @@ export const App: React.FC = () => {
       } else if (e.key === 'F4') {
         e.preventDefault();
         setActiveModule('CASHIER');
-      } else if (e.key === 'F5' && (user?.role === 'OWNER' || user?.role === 'MASTER')) {
+      } else if (e.key === 'F5' && (user?.role === 'OWNER' || user?.role === 'MANAGER' || user?.role === 'MASTER')) {
         e.preventDefault();
         setActiveModule('ERP');
       }

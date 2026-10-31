@@ -5,6 +5,8 @@ import { ProductCatalog } from './ProductCatalog';
 import { OrderTicket } from './OrderTicket';
 import { ModifierModal } from './ModifierModal';
 import { Modal } from '../../ui/Modal';
+import { useAuthStore } from '../../stores/authStore';
+import { useUIStore } from '../../stores/uiStore';
 import { Button } from '../../ui/Button';
 
 export const PosModule: React.FC = () => {
@@ -17,12 +19,15 @@ export const PosModule: React.FC = () => {
   } = usePosStore();
 
   const { tables } = useFloorStore();
+  const isOpen = useUIStore((state) => state.activeModule === 'POS');
+  const userId = useAuthStore((state) => state.user?.userId);
   const [showBindModal, setShowBindModal] = useState(false);
   const [targetTableId, setTargetTableId] = useState('');
 
+  // Modül gizli kalarak açık durur: menüdeki değişiklik her girişte buraya yansır.
   useEffect(() => {
-    loadCatalog();
-  }, [loadCatalog]);
+    if (isOpen && userId) void loadCatalog().catch(() => undefined);
+  }, [loadCatalog, isOpen, userId]);
 
   const handleBindConfirm = () => {
     const table = tables.find((t) => t.id === targetTableId);

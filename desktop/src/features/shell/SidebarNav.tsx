@@ -11,7 +11,7 @@ export const SidebarNav: React.FC = () => {
   const { tickets } = useKdsStore();
   const { isEnabled } = useFeatureStore();
 
-  const isOwnerOrMaster = user?.role === 'OWNER' || user?.role === 'MASTER';
+  const canManage = user?.role === 'OWNER' || user?.role === 'MANAGER' || user?.role === 'MASTER';
   const activeKdsCount = tickets.filter((t) => !t.isCompleted).length;
 
   const navItems: Array<{
@@ -50,7 +50,7 @@ export const SidebarNav: React.FC = () => {
       id: 'ERP',
       label: 'Yönetim',
       icon: BarChart3,
-      visible: isOwnerOrMaster,
+      visible: canManage,
     },
   ];
 
