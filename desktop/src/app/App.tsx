@@ -1,3 +1,4 @@
+import { canOpenModule, homeModule } from '../lib/roleAccess';
 import React, { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
@@ -75,6 +76,12 @@ export const App: React.FC = () => {
       window.removeEventListener('touchstart', handleActivity);
     };
   }, [resetIdleTimer]);
+
+  // Rolün göremediği ekran açık kalmaz: önceki kullanıcıdan kalan seçim veya kısayol
+  // mutfak ya da garsonu kasaya götürmemelidir.
+  useEffect(() => {
+    if (user && !canOpenModule(user.role, activeModule)) setActiveModule(homeModule(user.role));
+  }, [user, activeModule, setActiveModule]);
 
   // Donanım Kısayolları (F1 - F5)
   useEffect(() => {

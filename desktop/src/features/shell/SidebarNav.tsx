@@ -4,6 +4,7 @@ import { useUIStore, type AppModule } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useKdsStore } from '../../stores/kdsStore';
 import { useFeatureStore } from '../../stores/featureStore';
+import { canOpenModule } from '../../lib/roleAccess';
 
 export const SidebarNav: React.FC = () => {
   const { activeModule, setActiveModule } = useUIStore();
@@ -11,7 +12,6 @@ export const SidebarNav: React.FC = () => {
   const { tickets } = useKdsStore();
   const { isEnabled } = useFeatureStore();
 
-  const canManage = user?.role === 'OWNER' || user?.role === 'MANAGER' || user?.role === 'MASTER';
   const activeKdsCount = tickets.filter((t) => !t.isCompleted).length;
 
   const navItems: Array<{
@@ -25,32 +25,32 @@ export const SidebarNav: React.FC = () => {
       id: 'FLOOR',
       label: 'Salon',
       icon: LayoutGrid,
-      visible: true,
+      visible: canOpenModule(user?.role, 'FLOOR'),
     },
     {
       id: 'POS',
       label: 'Sipariş',
       icon: ShoppingBag,
-      visible: true,
+      visible: canOpenModule(user?.role, 'POS'),
     },
     {
       id: 'KDS',
       label: 'Mutfak',
       icon: Tv,
       badge: activeKdsCount > 0 ? activeKdsCount : undefined,
-      visible: isEnabled('feat_kds'),
+      visible: isEnabled('feat_kds') && canOpenModule(user?.role, 'KDS'),
     },
     {
       id: 'CASHIER',
       label: 'Kasa',
       icon: Wallet,
-      visible: true,
+      visible: canOpenModule(user?.role, 'CASHIER'),
     },
     {
       id: 'ERP',
       label: 'Yönetim',
       icon: BarChart3,
-      visible: canManage,
+      visible: canOpenModule(user?.role, 'ERP'),
     },
   ];
 

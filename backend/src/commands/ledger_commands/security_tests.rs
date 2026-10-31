@@ -10,7 +10,7 @@
 
 use crate::ledger_commands::expenses::resolve_date_range;
 use crate::ledger_commands::guard::{
-    require_ledger_read, require_ledger_tenant, require_ledger_write,
+    require_directory_create, require_ledger_read, require_ledger_tenant, require_ledger_write,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::Row;
@@ -20,6 +20,15 @@ const SCHEMA: &str = include_str!("../../../migrations/schema.sql");
 
 const TENANT_A: &str = "tenant_a";
 const TENANT_B: &str = "tenant_b";
+
+#[test]
+fn kasiyer_yalniz_musteri_karti_acar_garson_hic_acamaz() {
+    assert!(require_directory_create(Some("CASHIER"), "CUSTOMER").is_ok());
+    assert!(require_directory_create(Some("CASHIER"), "SUPPLIER").is_err());
+    assert!(require_directory_create(Some("MANAGER"), "SUPPLIER").is_ok());
+    assert!(require_directory_create(Some("WAITER"), "CUSTOMER").is_err());
+    assert!(require_directory_create(None, "CUSTOMER").is_err());
+}
 
 async fn pool() -> sqlx::SqlitePool {
     let options = SqliteConnectOptions::from_str("sqlite::memory:")

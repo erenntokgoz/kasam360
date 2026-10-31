@@ -30,7 +30,9 @@ export function formatServerDateTime(value: string): string {
 
 export function minutesElapsed(startTime?: string): number {
   if (!startTime) return 0;
-  const start = new Date(startTime).getTime();
+  // SQLite saati dilim bilgisi taşımaz ve UTC'dir; yerel sanılırsa süre saatlerce şişer.
+  const plainServerTime = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(startTime);
+  const start = new Date(plainServerTime ? `${startTime.replace(' ', 'T')}Z` : startTime).getTime();
   if (isNaN(start)) return 0;
   const diffMs = Math.max(0, Date.now() - start);
   return Math.floor(diffMs / 60000);

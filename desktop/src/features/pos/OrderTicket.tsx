@@ -9,9 +9,12 @@ import { SmartAuthModal } from './SmartAuthModal';
 import { ItemTransferModal } from './ItemTransferModal';
 import { OrderTicketLineItem } from './OrderTicketLineItem';
 import { useFloorStore } from '../../stores/floorStore';
+import { useAuthStore } from '../../stores/authStore';
+import { canCollectPayment } from '../../lib/roleAccess';
 import type { OrderItem } from '../../types/pos';
 
 export const OrderTicket: React.FC = () => {
+  const canCollect = canCollectPayment(useAuthStore((state) => state.user?.role));
   const {
     activeTableName,
     activeTableId,
@@ -171,7 +174,7 @@ export const OrderTicket: React.FC = () => {
         </Button>
 
         {/* Hızlı Tahsilat Butonları */}
-        <div className="grid grid-cols-3 gap-2">
+        {canCollect ? <div className="grid grid-cols-3 gap-2">
           <Button
             variant="success"
             size="md"
@@ -202,7 +205,7 @@ export const OrderTicket: React.FC = () => {
           >
             Böl / Cari
           </Button>
-        </div>
+        </div> : null}
       </div>
 
       {/* Yetki Onay Modalı */}

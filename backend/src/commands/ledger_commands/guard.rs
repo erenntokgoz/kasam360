@@ -35,6 +35,21 @@ pub fn require_ledger_write(caller_role: Option<&str>) -> Result<Role, String> {
     rbac::require_any_present(caller_role, &WRITE_ROLES)
 }
 
+/// Yeni kart kapısı. Kasiyer veresiye satışında müşteriyi kasada açar; bu olmazsa
+/// müdür gelene kadar masa kapanamaz. Tedarikçi kartı parasal yetki taşır, açılmaz.
+pub fn require_directory_create(
+    caller_role: Option<&str>,
+    directory_type: &str,
+) -> Result<Role, String> {
+    if directory_type == "CUSTOMER" {
+        return rbac::require_any_present(
+            caller_role,
+            &[Role::Owner, Role::Manager, Role::Cashier],
+        );
+    }
+    require_ledger_write(caller_role)
+}
+
 /// Kiracı kimliğini fail-closed çözer.
 ///
 /// Neden: `tenant_id` gelmezse ya da boşsa önceki davranış varsayılan

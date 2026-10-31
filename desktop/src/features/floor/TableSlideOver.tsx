@@ -38,10 +38,25 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
   const [mergeTargetId, setMergeTargetId] = useState<string>('');
   const [showMoveBox, setShowMoveBox] = useState(false);
   const [showMergeBox, setShowMergeBox] = useState(false);
+  const [tableItems, setTableItems] = useState<OrderItem[]>([]);
+  const tableId = table?.id;
+  const isOccupied = table?.status === 'OCCUPIED';
+
+  // Kanca erken dönüşten önce durmalıdır: masa seçilince kanca sayısı değişir ve
+  // React tüm uygulamayı boş ekrana düşürür.
+  useEffect(() => {
+    if (!isOpen || !isOccupied || !tableId) {
+      setTableItems([]);
+      return;
+    }
+    const { tenantId } = sessionArgs();
+    void invokeIPC<CartItemWire[]>('get_order_items', { tableId, tenantId })
+      .then((wire) => setTableItems(wire.map(mapServerItem).filter((item): item is OrderItem => item !== null)))
+      .catch(() => setTableItems([]));
+  }, [isOpen, isOccupied, tableId]);
 
   if (!table) return null;
 
-  const isOccupied = table.status === 'OCCUPIED';
   const elapsed = isOccupied ? minutesElapsed(table.openedAt) : 0;
   const emptyTables = allTables.filter((t) => t.id !== table.id && t.status === 'EMPTY');
   const occupiedTables = allTables.filter((t) => t.id !== table.id && t.status === 'OCCUPIED');
@@ -57,18 +72,6 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
     onMergeTable(table.id, mergeTargetId);
     setShowMergeBox(false);
   };
-
-  const [tableItems, setTableItems] = useState<OrderItem[]>([]);
-  useEffect(() => {
-    if (!isOpen || !isOccupied) {
-      setTableItems([]);
-      return;
-    }
-    const { tenantId } = sessionArgs();
-    void invokeIPC<CartItemWire[]>('get_order_items', { tableId: table.id, tenantId })
-      .then((wire) => setTableItems(wire.map(mapServerItem).filter((item): item is OrderItem => item !== null)))
-      .catch(() => setTableItems([]));
-  }, [isOpen, isOccupied, table.id]);
 
   return (
     <Drawer

@@ -18,6 +18,7 @@ import { Input } from '../../ui/Input';
 import { PaymentItemSplitTab } from './PaymentItemSplitTab';
 import { PaymentChannelSection } from './PaymentChannelSection';
 import { OrderStatusBanner } from '../pos/OrderStatusBanner';
+import { ManagerPinPrompt } from './ManagerPinPrompt';
 import type { PaymentMethod, PaymentResultWire, PaymentSplitMode, PaymentStatusWire } from '../../types/payment';
 
 const SPLIT_TABS: { mode: PaymentSplitMode; label: string }[] = [
@@ -74,6 +75,9 @@ export const PaymentModal: React.FC = () => {
   const [isUnresolved, setIsUnresolved] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [testScenario, setTestScenario] = useState<TestScenario>('APPROVE');
+  const [discountText, setDiscountText] = useState('');
+  const [discountToken, setDiscountToken] = useState<string | null>(null);
+  const [askDiscountPin, setAskDiscountPin] = useState(false);
 
   // Aynı niyet aynı kimlikle gider: yeniden deneme ikinci tahsilat olamaz.
   const transactionId = useRef(newTransactionId());
@@ -89,9 +93,13 @@ export const PaymentModal: React.FC = () => {
 
   if (!modals.payment) return null;
 
+  // Sunucu indirimi yalnız kalanı kapatan tahsilatta kabul eder; bu yüzden tam hesapta durur.
+  const discountCents = splitMode === 'FULL' ? parseCents(discountText) ?? 0 : 0;
+  const approvedDiscountCents = discountToken ? discountCents : 0;
+
   let payNowCents = 0;
   if (splitMode === 'FULL') {
-    payNowCents = remainingCents;
+    payNowCents = remainingCents - approvedDiscountCents;
   } else if (splitMode === 'ITEMS') {
     payNowCents = payableItems.reduce(
       (sum, item) => sum + unitShareCents(item, selectedItemQuantities[item.id] || 0),
@@ -138,6 +146,8 @@ export const PaymentModal: React.FC = () => {
       remainingCents: remaining,
     });
     transactionId.current = newTransactionId();
+    setDiscountText('');
+    setDiscountToken(null);
     setSelectedItemQuantities({});
     setCustomPartial('');
     setTendered('');
@@ -160,7 +170,9 @@ export const PaymentModal: React.FC = () => {
       input: { transactionId: transactionId.current, orderId: activeOrderId, amountCents: payNowCents, scenario: testScenario },
     });
     if (result.status === 'APPROVED') return true;
+    // Onay jetonu işlem kimliğine bağlıdır; yeni kimlikle yeniden onay gerekir.
     transactionId.current = newTransactionId();
+    setDiscountToken(null);
     setErrorMsg(`Kart tahsilatı alınmadı. ${result.message ?? ''}`.trim());
     return false;
   };
@@ -196,6 +208,8 @@ export const PaymentModal: React.FC = () => {
           cashierId: actorId,
           actorId,
           debtDirectoryId: channel === 'VERESIYE' ? selectedDirectoryId : undefined,
+          globalDiscount: approvedDiscountCents > 0 ? { value: approvedDiscountCents } : undefined,
+          approvalToken: discountToken ?? undefined,
         },
       });
       await finishSale((tenderedCents ?? payNowCents) - payNowCents, reply.remainingCents ?? 0);
@@ -209,6 +223,7 @@ export const PaymentModal: React.FC = () => {
         if (usesTestPos) {
           await invokeIPC('test_pos_void', { actorRole, tenantId, transactionId: transactionId.current }).catch(() => undefined);
           transactionId.current = newTransactionId();
+          setDiscountToken(null);
         }
         await loadActiveOrder();
       } else {
@@ -347,6 +362,37 @@ export const PaymentModal: React.FC = () => {
           </div>
         ) : null}
 
+        {splitMode === 'FULL' ? (
+          <div className="flex items-end gap-2">
+            <div className="flex-1 space-y-1">
+              <label htmlFor="payment-discount" className="block text-xs font-medium text-[var(--text-secondary)]">
+                İndirim (₺)
+              </label>
+              <Input
+                id="payment-discount"
+                inputMode="decimal"
+                value={discountText}
+                disabled={isUnresolved}
+                onChange={(e) => {
+                  setDiscountText(e.target.value);
+                  setDiscountToken(null);
+                }}
+                placeholder="Yok"
+                className="min-h-12 tabular-nums"
+              />
+            </div>
+            <Button
+              variant="secondary"
+              size="md"
+              className="min-h-12"
+              disabled={discountToken !== null || discountCents <= 0 || discountCents >= remainingCents}
+              onClick={() => setAskDiscountPin(true)}
+            >
+              {discountToken ? 'İndirim Onaylandı' : 'Onaya Gönder'}
+            </Button>
+          </div>
+        ) : null}
+
         <PaymentChannelSection
           channel={channel}
           onSelectChannel={setChannel}
@@ -386,6 +432,22 @@ export const PaymentModal: React.FC = () => {
           </Button>
         )}
       </div>
+      {askDiscountPin ? (
+        <ManagerPinPrompt
+          title="İndirim Onayı"
+          scope={{
+            operation: 'DISCOUNT',
+            resourceId: transactionId.current,
+            amountCents: discountCents,
+            discountPercent: Math.floor((discountCents * 100 + Math.floor(remainingCents / 2)) / remainingCents),
+          }}
+          onApproved={(token) => {
+            setDiscountToken(token);
+            setAskDiscountPin(false);
+          }}
+          onClose={() => setAskDiscountPin(false)}
+        />
+      ) : null}
     </Modal>
   );
 };

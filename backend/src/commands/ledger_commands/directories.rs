@@ -9,7 +9,7 @@
 use crate::db::DbPool;
 use crate::id_generator::generate_id;
 use crate::ledger_commands::guard::{
-    require_ledger_read, require_ledger_tenant, require_ledger_write,
+    require_directory_create, require_ledger_read, require_ledger_tenant, require_ledger_write,
 };
 use crate::ledger_commands::operations::submit;
 use crate::services::cari::search::{is_similar_name, matches_card};
@@ -242,7 +242,7 @@ pub async fn create_directory(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<DirectoryDto, String> {
-    require_ledger_write(actor_role.as_deref())?;
+    require_directory_create(actor_role.as_deref(), &payload.directory_type)?;
     let tid = require_ledger_tenant(payload.tenant_id.as_deref())?;
 
     // Uyarı arayüzden atlanamaz; kart yine de yalnız bilinçli onayla açılır.
