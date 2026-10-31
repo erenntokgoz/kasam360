@@ -92,6 +92,16 @@ pub async fn create_compensation_refund(
     let refund_id = crate::id_generator::generate_id("ref");
     let now_iso = chrono::Utc::now().to_rfc3339();
 
+    if plan.method == "VERESIYE" {
+        crate::services::refund_service::reduce_veresiye_debt(
+            &mut tx,
+            &tenant_id,
+            plan.order_id.as_deref(),
+            payload.amount_cents,
+        )
+        .await?;
+    }
+
     // a) refunds tablosu
     sqlx::query(
         "INSERT INTO refunds (id, tenant_id, original_transaction_id, original_order_id, \

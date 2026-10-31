@@ -1,6 +1,7 @@
 //! Personel 360° servisleri.
 
 pub mod kpi_service;
+pub mod payroll_deductions;
 pub mod payroll_service;
 pub mod payroll_types;
 pub mod staff_service;

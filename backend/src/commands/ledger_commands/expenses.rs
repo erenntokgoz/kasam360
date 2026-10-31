@@ -8,11 +8,11 @@
 
 use crate::commands::command_helpers::audit_actor;
 use crate::db::DbPool;
-use crate::id_generator::generate_id;
 use crate::ledger_commands::guard::{
     require_ledger_read, require_ledger_tenant, require_ledger_write,
 };
 use crate::services::audit_service::{self, AuditContext, AuditService};
+use crate::services::expense_service::{self, insert_expense, NewExpense};
 use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -38,6 +38,8 @@ pub struct ExpenseDto {
     pub description: Option<String>,
     #[serde(rename = "expenseDate")]
     pub expense_date: String,
+    #[serde(rename = "recurringId")]
+    pub recurring_id: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: String,
 }
@@ -58,6 +60,9 @@ pub struct CreateExpensePayload {
     pub description: Option<String>,
     #[serde(rename = "expenseDate")]
     pub expense_date: Option<String>,
+    /// Sabit gider ödemesiyse kaynağı: "bu ay ödendi" başlığa değil buna bakar.
+    #[serde(rename = "recurringId", default)]
+    pub recurring_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -87,6 +92,8 @@ pub struct FinancialReportDto {
     pub total_cogs_cents: i64,
     #[serde(rename = "totalRefundsCents", default)]
     pub total_refunds_cents: i64,
+    #[serde(rename = "totalVatCents")]
+    pub total_vat_cents: i64,
     #[serde(rename = "grossProfitCents", default)]
     pub gross_profit_cents: i64,
     #[serde(rename = "totalExpensesCents")]
@@ -149,6 +156,7 @@ fn row_to_expense(r: &sqlx::sqlite::SqliteRow) -> Result<ExpenseDto, String> {
         actor_id: r.try_get("actor_id").map_err(|e| e.to_string())?,
         description: r.try_get("description").map_err(|e| e.to_string())?,
         expense_date: r.try_get("expense_date").map_err(|e| e.to_string())?,
+        recurring_id: r.try_get("recurring_id").map_err(|e| e.to_string())?,
         created_at: r.try_get("created_at").map_err(|e| e.to_string())?,
     })
 }
@@ -172,7 +180,7 @@ pub async fn get_expenses(
     let mut query_str = String::from(
         "SELECT e.id, e.tenant_id, e.category, e.amount_cents, e.payment_method,
                 e.directory_id, d.name as directory_name, e.shift_id, e.actor_id,
-                e.description, e.expense_date, e.created_at
+                e.description, e.expense_date, e.recurring_id, e.created_at
          FROM general_expenses e
          LEFT JOIN directories d ON e.directory_id = d.id AND d.tenant_id = e.tenant_id
          WHERE e.tenant_id = ?",
@@ -230,7 +238,6 @@ pub async fn create_expense(
     }
 
     let tid = require_ledger_tenant(payload.tenant_id.as_deref())?;
-    let id = generate_id("exp");
     let exp_date = payload
         .expense_date
         .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
@@ -238,60 +245,21 @@ pub async fn create_expense(
     let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
-    // Aktif vardiya kontrolü
-    let active_shift_id: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM shifts WHERE tenant_id = ? AND status = 'OPEN' ORDER BY opened_at DESC LIMIT 1"
+    let (id, active_shift_id) = insert_expense(
+        &mut tx,
+        &tid,
+        &NewExpense {
+            category: &payload.category,
+            amount_cents: payload.amount_cents,
+            payment_method: &payload.payment_method,
+            directory_id: payload.directory_id.as_deref(),
+            recurring_id: payload.recurring_id.as_deref(),
+            actor_id: &payload.actor_id,
+            description: payload.description.as_deref(),
+            expense_date: &exp_date,
+        },
     )
-    .bind(&tid)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    // Nakit ise kasa hareketine yaz
-    if payload.payment_method == "CASH" {
-        let cm_id = generate_id("csh");
-        let shift_id_for_cm = active_shift_id
-            .clone()
-            .unwrap_or_else(|| "NO_SHIFT".to_string());
-        let reason = format!(
-            "İşletme Gideri ({}): {}",
-            payload.category,
-            payload.description.as_deref().unwrap_or("-")
-        );
-
-        sqlx::query(
-            "INSERT INTO cash_movements (id, tenant_id, shift_id, movement_type, amount_cents, reason, actor_id, created_at)
-             VALUES (?, ?, ?, 'OUT', ?, ?, ?, datetime('now'))"
-        )
-        .bind(&cm_id)
-        .bind(&tid)
-        .bind(&shift_id_for_cm)
-        .bind(payload.amount_cents)
-        .bind(&reason)
-        .bind(&payload.actor_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("Kasa çıkış hareketi işlenemedi: {}", e))?;
-    }
-
-    // Gider tablosuna yaz
-    sqlx::query(
-        "INSERT INTO general_expenses (id, tenant_id, category, amount_cents, payment_method, directory_id, shift_id, actor_id, description, expense_date, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"
-    )
-    .bind(&id)
-    .bind(&tid)
-    .bind(&payload.category)
-    .bind(payload.amount_cents)
-    .bind(&payload.payment_method)
-    .bind(&payload.directory_id)
-    .bind(&active_shift_id)
-    .bind(&payload.actor_id)
-    .bind(&payload.description)
-    .bind(&exp_date)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| format!("Gider kaydı oluşturulamadı: {}", e))?;
+    .await?;
 
     // Cari adını sorgula
     let dir_name: Option<String> = if let Some(ref did) = payload.directory_id {
@@ -339,6 +307,83 @@ pub async fn create_expense(
         actor_id: payload.actor_id,
         description: payload.description,
         expense_date: exp_date,
+        recurring_id: payload.recurring_id,
         created_at: chrono::Utc::now().to_rfc3339(),
     })
+}
+
+/// Gideri iptal eder. Yanlış girilen gider silinmez, iz bırakarak geri alınır.
+#[tauri::command]
+pub async fn void_expense(
+    expense_id: String,
+    reason: String,
+    actor_id: String,
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    require_ledger_write(actor_role.as_deref())?;
+    let tid = require_ledger_tenant(tenant_id.as_deref())?;
+    let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin_write().await?;
+    let (amount_cents, category) =
+        expense_service::void_expense(&mut tx, &tid, &expense_id, &actor_id, &reason).await?;
+    let (audit_actor_id, audit_actor_role) = audit_actor(Some(actor_id), actor_role);
+    let ctx = AuditContext::new(
+        tid,
+        audit_actor_id,
+        audit_actor_role,
+        audit_service::category::FINANS,
+        "expense:voided",
+        expense_id,
+        serde_json::json!({ "category": category, "amountCents": amount_cents, "reason": reason }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+    tx.commit().await
+}
+
+/// Personel avansı verir; döneminin bordrosundan düşülür.
+#[tauri::command]
+pub async fn record_staff_advance(
+    user_id: String,
+    period: String,
+    amount_cents: i64,
+    payment_method: String,
+    actor_id: String,
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<String, String> {
+    require_ledger_write(actor_role.as_deref())?;
+    let tid = require_ledger_tenant(tenant_id.as_deref())?;
+    let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin_write().await?;
+    let id = expense_service::record_staff_advance(
+        &mut tx,
+        &tid,
+        &user_id,
+        &period,
+        amount_cents,
+        &payment_method,
+        &actor_id,
+        &chrono::Utc::now().to_rfc3339(),
+    )
+    .await?;
+    let (audit_actor_id, audit_actor_role) = audit_actor(Some(actor_id), actor_role);
+    let ctx = AuditContext::new(
+        tid,
+        audit_actor_id,
+        audit_actor_role,
+        audit_service::category::PERSONEL,
+        "staff:advance",
+        id.clone(),
+        serde_json::json!({ "userId": user_id, "period": period, "amountCents": amount_cents }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+    tx.commit().await?;
+    Ok(id)
 }

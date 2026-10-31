@@ -43,6 +43,7 @@ pub async fn get_financial_report(
     Ok(FinancialReportDto {
         total_revenue_cents: report.total_revenue_cents,
         total_cogs_cents: report.total_cogs_cents,
+        total_vat_cents: report.total_vat_cents,
         total_refunds_cents: report.total_refunds_cents,
         gross_profit_cents: report.gross_profit_cents,
         total_expenses_cents: report.total_expenses_cents,

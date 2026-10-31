@@ -99,12 +99,7 @@ async fn kanal_kayitli_tahsilattan_gelir() {
 }
 
 #[tokio::test]
-async fn veresiye_ve_bilinmeyen_yontem_reddedilir() {
-    let veresiye = pool("VERESIYE").await;
-    assert!(plan(&veresiye, TENANT, 100)
-        .await
-        .expect_err("veresiye")
-        .starts_with("REFUND_VERESIYE"));
+async fn bilinmeyen_yontem_reddedilir() {
     let unknown = pool("SPLIT").await;
     assert!(plan(&unknown, TENANT, 100)
         .await
@@ -170,4 +165,66 @@ async fn nakit_iade_beklenen_kasayi_dusurur_kart_iadesi_dusurmez() {
     assert_eq!(calc.cash_refunds, 300);
     assert_eq!(calc.total_refunds, 500);
     assert_eq!(calc.expected_balance, 200);
+}
+
+async fn veresiye_pool() -> SqlitePool {
+    let pool = pool("VERESIYE").await;
+    sqlx::raw_sql(
+        "INSERT INTO directories (id, tenant_id, type, name) VALUES ('dir_1', 'tnt_a', 'CUSTOMER', 'Ayşe');
+         INSERT INTO debts (id, tenant_id, directory_id, type, total_amount_cents,
+                            remaining_amount_cents, status, order_id)
+            VALUES ('dbt_1', 'tnt_a', 'dir_1', 'GIVEN', 1000, 1000, 'PENDING', 'ord_1');",
+    )
+    .execute(&pool)
+    .await
+    .expect("borç");
+    pool
+}
+
+async fn debt(pool: &SqlitePool) -> (i64, i64, String) {
+    sqlx::query_as("SELECT total_amount_cents, remaining_amount_cents, status FROM debts")
+        .fetch_one(pool)
+        .await
+        .expect("borç oku")
+}
+
+#[tokio::test]
+async fn veresiye_iadesi_acik_borcu_azaltir_kasaya_dokunmaz() {
+    let pool = veresiye_pool().await;
+    assert_eq!(
+        plan(&pool, TENANT, 400).await.expect("plan").method,
+        "VERESIYE"
+    );
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    reduce_veresiye_debt(&mut conn, TENANT, Some("ord_1"), 400)
+        .await
+        .expect("iade");
+    drop(conn);
+    assert_eq!(debt(&pool).await, (600, 600, "PENDING".to_string()));
+
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    reduce_veresiye_debt(&mut conn, TENANT, Some("ord_1"), 600)
+        .await
+        .expect("tam iade");
+    drop(conn);
+    assert_eq!(debt(&pool).await, (0, 0, "PAID".to_string()));
+}
+
+#[tokio::test]
+async fn tahsil_edilmis_veresiye_kismi_iade_edilemez() {
+    let pool = veresiye_pool().await;
+    sqlx::query("UPDATE debts SET remaining_amount_cents = 300, status = 'PARTIAL'")
+        .execute(&pool)
+        .await
+        .expect("kısmi tahsilat");
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let error = reduce_veresiye_debt(&mut conn, TENANT, Some("ord_1"), 400)
+        .await
+        .expect_err("açık borcu aşar");
+    assert!(error.starts_with("REFUND_EXCEEDS_DEBT"));
+    reduce_veresiye_debt(&mut conn, TENANT, Some("ord_1"), 300)
+        .await
+        .expect("açık kısım");
+    drop(conn);
+    assert_eq!(debt(&pool).await, (700, 0, "PAID".to_string()));
 }

@@ -697,11 +697,40 @@ CREATE TABLE IF NOT EXISTS general_expenses (
     actor_id TEXT NOT NULL,
     description TEXT,
     expense_date DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    recurring_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     FOREIGN KEY (directory_id) REFERENCES directories(id)
 );
 CREATE INDEX IF NOT EXISTS idx_general_expenses_tenant_cat ON general_expenses(tenant_id, category);
 CREATE INDEX IF NOT EXISTS idx_general_expenses_date ON general_expenses(expense_date);
+
+-- İptal edilen giderin izi. Toplamlar `general_expenses`ten okunur, iptal oradan çıkar.
+CREATE TABLE IF NOT EXISTS voided_expenses (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    payment_method TEXT NOT NULL,
+    description TEXT,
+    expense_date DATETIME NOT NULL,
+    shift_id TEXT,
+    void_reason TEXT NOT NULL,
+    voided_by TEXT NOT NULL,
+    voided_at DATETIME NOT NULL
+);
+
+-- Personel avansı: gider olarak yazılır, döneminin bordrosundan düşülür.
+CREATE TABLE IF NOT EXISTS staff_advances (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    period TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    expense_id TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_staff_advances_period ON staff_advances(tenant_id, user_id, period);
 
 -- ============================================================================
 -- 15. TEKRARLAYAN GİDERLER (RECURRING EXPENSES)

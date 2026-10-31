@@ -416,3 +416,25 @@ async fn empty_business_reports_zero_without_error() {
     assert!(r.expenses_by_category.is_empty());
     assert!(r.monthly_trend.is_empty());
 }
+
+#[tokio::test]
+async fn kdv_kardan_cikar_iptal_kalemin_kdvsi_sayilmaz() {
+    let p = pool().await;
+    seed_order(&p, "ord_1", TENANT, 120_000, "PAID", "2026-10-05 20:00:00").await;
+    sqlx::raw_sql(
+        "PRAGMA foreign_keys = OFF;
+         INSERT INTO order_items (id, tenant_id, order_id, product_id, quantity, unit_price_cents,
+                                  total_cents, tax_rate_bp, tax_amount_cents, status)
+            VALUES ('itm_1', 'tenant_a', 'ord_1', 'prd_1', 1, 120000, 120000, 2000, 20000, 'SERVED'),
+                   ('itm_2', 'tenant_a', 'ord_1', 'prd_1', 1, 60000, 60000, 2000, 10000, 'CANCELLED');
+         PRAGMA foreign_keys = ON;",
+    )
+    .execute(&p)
+    .await
+    .expect("kalem");
+
+    let r = report(&p).await;
+
+    assert_eq!(r.total_vat_cents, 20_000);
+    assert_eq!(r.net_profit_cents, 100_000);
+}

@@ -38,6 +38,8 @@ pub struct FinancialReport {
     pub total_debt_collected_cents: i64,
     pub total_cogs_cents: i64,
     pub total_refunds_cents: i64,
+    /// Satışların içindeki KDV. İşletmenin parası değildir, kârdan çıkar.
+    pub total_vat_cents: i64,
     pub gross_profit_cents: i64,
     pub total_expenses_cents: i64,
     pub net_profit_cents: i64,
@@ -173,7 +175,33 @@ pub async fn financial_report(
         .map_err(|err| format!("İadeler toplanamadı: {}", err))?,
     };
 
-    let gross_profit_cents = total_revenue_cents - total_refunds_cents - total_cogs_cents;
+    // Panorama ile aynı tanım: iki ekranda iki farklı kâr görünmemeli.
+    let total_vat_cents: i64 = match range {
+        Some((s, e)) => sqlx::query_scalar(
+            "SELECT COALESCE(SUM(i.tax_amount_cents), 0) FROM order_items i
+             JOIN orders o ON o.id = i.order_id AND o.tenant_id = i.tenant_id
+             WHERE i.tenant_id = ? AND i.status != 'CANCELLED' AND o.status = 'PAID'
+               AND o.created_at >= ? AND o.created_at <= ?",
+        )
+        .bind(tenant_id)
+        .bind(s)
+        .bind(e)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|err| format!("KDV toplanamadı: {}", err))?,
+        None => sqlx::query_scalar(
+            "SELECT COALESCE(SUM(i.tax_amount_cents), 0) FROM order_items i
+             JOIN orders o ON o.id = i.order_id AND o.tenant_id = i.tenant_id
+             WHERE i.tenant_id = ? AND i.status != 'CANCELLED' AND o.status = 'PAID'",
+        )
+        .bind(tenant_id)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|err| format!("KDV toplanamadı: {}", err))?,
+    };
+
+    let gross_profit_cents =
+        total_revenue_cents - total_refunds_cents - total_vat_cents - total_cogs_cents;
 
     // ------------------------------------------------------------------
     // 3. Gider
@@ -318,6 +346,7 @@ pub async fn financial_report(
         total_debt_collected_cents,
         total_cogs_cents,
         total_refunds_cents,
+        total_vat_cents,
         gross_profit_cents,
         total_expenses_cents,
         net_profit_cents,

@@ -19,18 +19,14 @@ fn text_error(error: sqlx::Error) -> String {
 
 /// Tahsilat yöntemini iade kanalına çevirir. Yemek kartında kasadan para çıkmaz.
 ///
-/// Veresiye reddedilir: müşteri para ödemediği için geri verilecek para yoktur,
-/// düzeltme cari hesapta yapılır. Bilinmeyen yöntem de reddedilir; sessizce
-/// nakit dışı sayılsaydı kasa farkı oluşurdu.
+/// Veresiyede kasadan para çıkmaz, müşterinin cari borcu azalır. Bilinmeyen yöntem
+/// reddedilir; sessizce nakit dışı sayılsaydı kasa farkı oluşurdu.
 fn refund_method(raw: &str) -> Result<&'static str, String> {
     match raw.trim().to_uppercase().as_str() {
         "CASH" | "NAKIT" => Ok("CASH"),
         "CARD" | "KREDI_KARTI" | "CREDIT_CARD" => Ok("CREDIT_CARD"),
         "MEAL_CARD" | "YEMEK_KARTI" => Ok("COMPENSATION"),
-        "VERESIYE" => Err(
-            "REFUND_VERESIYE: veresiye satış iade edilemez; düzeltme cari hesaptan yapılır."
-                .to_string(),
-        ),
+        "VERESIYE" => Ok("VERESIYE"),
         other => Err(format!(
             "INVALID_METHOD: bu tahsilat yöntemi iade edilemez: {other}"
         )),
@@ -123,6 +119,58 @@ pub async fn plan_refund(
     }
 
     Ok(RefundPlan { order_id, method })
+}
+
+/// Veresiye iadesi: açık borç azalır. Tahsil edilmiş kısım buradan geri ödenmez;
+/// o para kasaya girmiştir ve ayrı bir ödeme kararı gerektirir.
+pub async fn reduce_veresiye_debt(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    order_id: Option<&str>,
+    amount_cents: i64,
+) -> Result<(), String> {
+    let order_id =
+        order_id.ok_or_else(|| "NOT_FOUND: veresiye satışın adisyonu bulunamadı.".to_string())?;
+    let row = sqlx::query(
+        "SELECT id, remaining_amount_cents, total_amount_cents FROM debts
+         WHERE tenant_id = ? AND order_id = ? AND type = 'GIVEN' LIMIT 1",
+    )
+    .bind(tenant_id)
+    .bind(order_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(text_error)?
+    .ok_or_else(|| "NOT_FOUND: veresiye borcu bulunamadı.".to_string())?;
+    let debt_id: String = row.try_get("id").map_err(text_error)?;
+    let remaining: i64 = row.try_get("remaining_amount_cents").map_err(text_error)?;
+    let total: i64 = row.try_get("total_amount_cents").map_err(text_error)?;
+    if amount_cents > remaining {
+        return Err(format!(
+            "REFUND_EXCEEDS_DEBT: açık borç {remaining} kuruş; tahsil edilmiş kısım iade edilemez."
+        ));
+    }
+    let left = remaining - amount_cents;
+    let paid_before = total - remaining;
+    let status = if left == 0 {
+        "PAID"
+    } else if paid_before > 0 {
+        "PARTIAL"
+    } else {
+        "PENDING"
+    };
+    sqlx::query(
+        "UPDATE debts SET total_amount_cents = ?, remaining_amount_cents = ?, status = ?
+         WHERE tenant_id = ? AND id = ?",
+    )
+    .bind(total - amount_cents)
+    .bind(left)
+    .bind(status)
+    .bind(tenant_id)
+    .bind(&debt_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(text_error)?;
+    Ok(())
 }
 
 #[cfg(test)]
