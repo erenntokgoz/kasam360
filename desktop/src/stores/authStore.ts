@@ -75,7 +75,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
-  lock: () => set({ isLocked: true, loginError: null }),
+  lock: () => {
+    // Perdeden önce sunucu kilitlenir; hata olursa perde yine iner.
+    void Promise.resolve().then(() => invokeIPC('auth_lock')).catch(() => undefined);
+    set({ isLocked: true, loginError: null });
+  },
 
   unlock: async (pin) => {
     const user = get().user;

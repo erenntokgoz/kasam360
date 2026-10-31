@@ -74,7 +74,7 @@ pub async fn financial_report(
     let total_sales_revenue_cents: i64 = match range {
         Some((s, e)) => sqlx::query_scalar(
             "SELECT COALESCE(SUM(total_cents), 0) FROM orders
-             WHERE tenant_id = ? AND status = 'PAID' AND created_at >= ? AND created_at <= ?",
+             WHERE tenant_id = ? AND status = 'PAID' AND date(created_at) >= date(?) AND date(created_at) <= date(?)",
         )
         .bind(tenant_id)
         .bind(s)
@@ -136,7 +136,7 @@ pub async fn financial_report(
         Some((s, e)) => sqlx::query_scalar(
             "SELECT COALESCE(SUM(CAST(json_extract(payload, '$.cogsTotalCents') AS INTEGER)), 0)
              FROM audit_ledger
-             WHERE tenant_id = ? AND action = 'payment:settled_fifo' AND created_at >= ? AND created_at <= ?",
+             WHERE tenant_id = ? AND action = 'payment:settled_fifo' AND date(created_at) >= date(?) AND date(created_at) <= date(?)",
         )
         .bind(tenant_id)
         .bind(s)
@@ -158,7 +158,7 @@ pub async fn financial_report(
     let total_refunds_cents: i64 = match range {
         Some((s, e)) => sqlx::query_scalar(
             "SELECT COALESCE(SUM(amount_cents), 0) FROM refunds
-             WHERE tenant_id = ? AND created_at >= ? AND created_at <= ?",
+             WHERE tenant_id = ? AND date(created_at) >= date(?) AND date(created_at) <= date(?)",
         )
         .bind(tenant_id)
         .bind(s)
@@ -181,7 +181,7 @@ pub async fn financial_report(
             "SELECT COALESCE(SUM(i.tax_amount_cents), 0) FROM order_items i
              JOIN orders o ON o.id = i.order_id AND o.tenant_id = i.tenant_id
              WHERE i.tenant_id = ? AND i.status != 'CANCELLED' AND o.status = 'PAID'
-               AND o.created_at >= ? AND o.created_at <= ?",
+               AND date(o.created_at) >= date(?) AND date(o.created_at) <= date(?)",
         )
         .bind(tenant_id)
         .bind(s)
@@ -209,7 +209,7 @@ pub async fn financial_report(
     let total_expenses_cents: i64 = match range {
         Some((s, e)) => sqlx::query_scalar(
             "SELECT COALESCE(SUM(amount_cents), 0) FROM general_expenses
-             WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ?",
+             WHERE tenant_id = ? AND date(expense_date) >= date(?) AND date(expense_date) <= date(?)",
         )
         .bind(tenant_id)
         .bind(s)
@@ -257,7 +257,7 @@ pub async fn financial_report(
         Some((s, e)) => sqlx::query(
             "SELECT category, SUM(amount_cents) AS total_cents, COUNT(*) AS count
              FROM general_expenses
-             WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ?
+             WHERE tenant_id = ? AND date(expense_date) >= date(?) AND date(expense_date) <= date(?)
              GROUP BY category ORDER BY total_cents DESC",
         )
         .bind(tenant_id)

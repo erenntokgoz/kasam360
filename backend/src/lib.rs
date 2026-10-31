@@ -332,6 +332,7 @@ pub fn run() {
             commands::get_active_shift,
             commands::change_self_pin,
             commands::auth_logout,
+            commands::auth_lock,
             platform_commands::devices::toggle_device_status,
             platform_commands::devices::delete_device,
             platform_commands::verify_audit_ledger_integrity,

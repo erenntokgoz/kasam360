@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { formatTime } from '../../../lib/date';
 import { RANGE_LABELS, reportPeriod, type RangeKey } from '../../../lib/dateRange';
 import { buildInsights } from '../../../lib/panoramaInsights';
+import { useAuthStore } from '../../../stores/authStore';
 import { usePanoramaStore } from '../../../stores/panoramaStore';
 import { useUIStore } from '../../../stores/uiStore';
 import { Button } from '../../../ui/Button';
@@ -21,12 +22,17 @@ const RANGES: RangeKey[] = ['TODAY', 'YESTERDAY', 'WEEK', 'MONTH'];
 /** Patronun tek bakışta gördüğü pano. Her rakam kayıtlı hareketten gelir. */
 export const PanoramaTab: React.FC = () => {
   const { range, data, metrics, error, loadedAt, setRange, load } = usePanoramaStore();
-  const isVisible = useUIStore((state) => state.activeModule === 'ERP');
+  const isModuleOpen = useUIStore((state) => state.activeModule === 'ERP');
+  const isLocked = useAuthStore((state) => state.isLocked);
+  const isVisible = isModuleOpen && !isLocked;
 
   useEffect(() => {
     if (!isVisible) return undefined;
     void load();
-    const timer = setInterval(() => void load(), REFRESH_MS);
+    // Pencere arka plandayken ya da başka sekme açıkken veritabanı boşuna okunmaz.
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void load();
+    }, REFRESH_MS);
     return () => clearInterval(timer);
   }, [isVisible, load]);
 

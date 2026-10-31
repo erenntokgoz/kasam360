@@ -16,6 +16,8 @@ pub struct StaffSession {
     pub user_id: String,
     pub tenant_id: String,
     pub role: String,
+    /// Kilit ekranı arayüz perdesi değildir: kilitliyken sunucu komut çalıştırmaz.
+    pub locked: bool,
 }
 
 /// Bellekte kalır: uygulama kapanınca personel yeniden PIN girer.
@@ -33,6 +35,13 @@ impl StaffSessions {
         Ok(())
     }
 
+    pub fn set_locked(&self, locked: bool) -> Result<(), String> {
+        if let Some(session) = self.lock()?.as_mut() {
+            session.locked = locked;
+        }
+        Ok(())
+    }
+
     pub fn current(&self) -> Result<Option<StaffSession>, String> {
         Ok(self.lock()?.clone())
     }
@@ -46,7 +55,7 @@ impl StaffSessions {
 
 /// Oturum açılmadan çalışması gereken komutlar: kurulum, hesap girişi ve PIN ekranı.
 /// Liste kapalıdır: yeni komut buraya eklenmedikçe oturum ister.
-const NO_SESSION: [&str; 12] = [
+const NO_SESSION: [&str; 13] = [
     "get_setup_status",
     "save_setup_draft",
     "complete_business_setup",
@@ -57,6 +66,7 @@ const NO_SESSION: [&str; 12] = [
     "account_create",
     "auth_login",
     "auth_logout",
+    "auth_lock",
     "get_sync_status",
     "take_over_device",
 ];
@@ -120,6 +130,9 @@ pub fn authorize(
         return Ok(());
     }
     let session = session.ok_or_else(|| "UNAUTHORIZED: oturum açılmamış".to_string())?;
+    if session.locked && command != "auth_unlock" {
+        return Err("SESSION_LOCKED: oturum kilitli; PIN ile açın".to_string());
+    }
     let payload = payload.ok_or_else(|| "UNAUTHORIZED: komut gövdesi okunamıyor".to_string())?;
     check_value(session, SELF_ONLY.contains(&command), payload)
 }
@@ -134,6 +147,7 @@ mod tests {
             user_id: "usr_kasiyer".to_string(),
             tenant_id: "tnt_a".to_string(),
             role: "CASHIER".to_string(),
+            locked: false,
         }
     }
 
@@ -198,11 +212,37 @@ mod tests {
             user_id: "adm_1".to_string(),
             tenant_id: "PLATFORM".to_string(),
             role: "MASTER".to_string(),
+            locked: false,
         };
         let tenant = json!({ "tenantId": "tnt_b", "actorRole": "MASTER" });
         assert!(authorize(Some(&master), "update_tenant", Some(&tenant)).is_ok());
         let role = json!({ "actorRole": "OWNER" });
         assert!(authorize(Some(&master), "update_tenant", Some(&role)).is_err());
+    }
+
+    #[test]
+    fn kilitli_oturum_yalniz_kilit_acma_ve_oturumsuz_komutlari_gecirir() {
+        let locked = StaffSession {
+            locked: true,
+            ..cashier()
+        };
+        let body = json!({ "userId": "usr_kasiyer", "tenantId": "tnt_a" });
+        let error = authorize(Some(&locked), "create_expense", Some(&body));
+        assert!(error.is_err_and(|text| text.starts_with("SESSION_LOCKED")));
+        assert!(authorize(Some(&locked), "auth_unlock", Some(&body)).is_ok());
+        assert!(authorize(Some(&locked), "auth_logout", Some(&body)).is_ok());
+        let other = json!({ "userId": "usr_baska" });
+        assert!(authorize(Some(&locked), "auth_unlock", Some(&other)).is_err());
+    }
+
+    #[tokio::test]
+    async fn kilit_durumu_oturumda_tutulur() {
+        let sessions = StaffSessions::default();
+        sessions.set(cashier()).expect("oturum");
+        sessions.set_locked(true).expect("kilit");
+        assert!(sessions.current().expect("oku").is_some_and(|s| s.locked));
+        sessions.set_locked(false).expect("açma");
+        assert!(sessions.current().expect("oku").is_some_and(|s| !s.locked));
     }
 
     #[test]

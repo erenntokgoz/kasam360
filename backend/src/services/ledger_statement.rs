@@ -195,7 +195,9 @@ pub async fn directory_statement(
         lines.push(StatementLine {
             id: r.try_get("id").map_err(|e| e.to_string())?,
             debt_id: r.try_get("debt_id").map_err(|e| e.to_string())?,
-            kind: if debt_type == "GIVEN" {
+            kind: if amount < 0 {
+                "IADE".to_string()
+            } else if debt_type == "GIVEN" {
                 "TAHSILAT".to_string()
             } else {
                 "TEDIYE".to_string()
@@ -205,9 +207,9 @@ pub async fn directory_statement(
             } else {
                 amount
             },
-            description: Some(match (&notes, method.as_str()) {
-                (Some(n), _) if !n.is_empty() => format!("{} · {}", method, n),
-                _ => method.clone(),
+            description: Some(match notes.as_deref() {
+                Some(n) if !n.is_empty() => format!("{} · {}", method_label(&method), n),
+                _ => method_label(&method).to_string(),
             }),
             created_at: r.try_get("created_at").map_err(|e| e.to_string())?,
             balance_after_cents: 0,
@@ -218,9 +220,12 @@ pub async fn directory_statement(
         });
     }
 
+    // Borç satırı `2026-10-30 09:00`, ödeme `2026-10-30T09:00` biçimindedir; metin
+    // sıralaması aynı gündeki hareketleri yanlış dizer ve yürüyen bakiyeyi bozardı.
+    let moment = |at: &str| at.replace('T', " ").chars().take(19).collect::<String>();
     lines.sort_by(|a, b| {
-        a.created_at
-            .cmp(&b.created_at)
+        moment(&a.created_at)
+            .cmp(&moment(&b.created_at))
             .then_with(|| a.id.cmp(&b.id))
     });
 

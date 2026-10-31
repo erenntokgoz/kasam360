@@ -121,13 +121,86 @@ pub async fn plan_refund(
     Ok(RefundPlan { order_id, method })
 }
 
-/// Veresiye iadesi: açık borç azalır. Tahsil edilmiş kısım buradan geri ödenmez;
-/// o para kasaya girmiştir ve ayrı bir ödeme kararı gerektirir.
+/// Son tahsilatın kanalı ve vardiyası: geri ödeme aynı kanaldan yapılır.
+async fn collected_channel(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    debt_id: &str,
+) -> Result<String, String> {
+    sqlx::query_scalar(
+        "SELECT payment_method FROM debt_payments
+         WHERE tenant_id = ? AND debt_id = ? AND amount_cents > 0
+         ORDER BY created_at DESC, id DESC LIMIT 1",
+    )
+    .bind(tenant_id)
+    .bind(debt_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(text_error)?
+    .ok_or_else(|| "NOT_FOUND: veresiye tahsilatı bulunamadı.".to_string())
+}
+
+/// Tahsil edilmiş kısım müşteriye geri ödenir. Cari ekstresi ve kasa birlikte düzelir:
+/// negatif hareket ekstrede borç satırı olarak görünür, nakitse kasadan çıkar.
+async fn repay_collected(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    debt_id: &str,
+    amount_cents: i64,
+    actor_id: &str,
+) -> Result<(), String> {
+    let method = collected_channel(conn, tenant_id, debt_id).await?;
+    let shift_id: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM shifts WHERE tenant_id = ? AND status = 'OPEN'
+         ORDER BY opened_at DESC LIMIT 1",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(text_error)?;
+    if method == "CASH" {
+        let shift = shift_id
+            .as_deref()
+            .ok_or_else(|| "SHIFT_REQUIRED: nakit iade için açık vardiya gerekir.".to_string())?;
+        sqlx::query(
+            "INSERT INTO cash_movements
+                 (id, tenant_id, shift_id, movement_type, amount_cents, reason, actor_id, created_at)
+             VALUES (?, ?, ?, 'OUT', ?, 'Veresiye iadesi', ?, datetime('now'))",
+        )
+        .bind(crate::id_generator::generate_id("csh"))
+        .bind(tenant_id)
+        .bind(shift)
+        .bind(amount_cents)
+        .bind(actor_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(text_error)?;
+    }
+    sqlx::query(
+        "INSERT INTO debt_payments
+             (id, tenant_id, debt_id, amount_cents, payment_method, shift_id, actor_id, notes, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'Veresiye iadesi', datetime('now'))",
+    )
+    .bind(crate::id_generator::generate_id("pay"))
+    .bind(tenant_id)
+    .bind(debt_id)
+    .bind(-amount_cents)
+    .bind(&method)
+    .bind(&shift_id)
+    .bind(actor_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(text_error)?;
+    Ok(())
+}
+
+/// Veresiye iadesi: önce açık borç azalır, kalanı tahsil edilmiş kısımdan geri ödenir.
 pub async fn reduce_veresiye_debt(
     conn: &mut SqliteConnection,
     tenant_id: &str,
     order_id: Option<&str>,
     amount_cents: i64,
+    actor_id: &str,
 ) -> Result<(), String> {
     let order_id =
         order_id.ok_or_else(|| "NOT_FOUND: veresiye satışın adisyonu bulunamadı.".to_string())?;
@@ -144,16 +217,20 @@ pub async fn reduce_veresiye_debt(
     let debt_id: String = row.try_get("id").map_err(text_error)?;
     let remaining: i64 = row.try_get("remaining_amount_cents").map_err(text_error)?;
     let total: i64 = row.try_get("total_amount_cents").map_err(text_error)?;
-    if amount_cents > remaining {
+    if amount_cents > total {
         return Err(format!(
-            "REFUND_EXCEEDS_DEBT: açık borç {remaining} kuruş; tahsil edilmiş kısım iade edilemez."
+            "REFUND_EXCEEDS_DEBT: borç toplamı {total} kuruş; {amount_cents} kuruş iade edilemez."
         ));
     }
-    let left = remaining - amount_cents;
-    let paid_before = total - remaining;
+    let open_part = amount_cents.min(remaining);
+    let collected_part = amount_cents - open_part;
+    if collected_part > 0 {
+        repay_collected(conn, tenant_id, &debt_id, collected_part, actor_id).await?;
+    }
+    let left = remaining - open_part;
     let status = if left == 0 {
         "PAID"
-    } else if paid_before > 0 {
+    } else if total > remaining {
         "PARTIAL"
     } else {
         "PENDING"

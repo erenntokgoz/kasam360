@@ -98,6 +98,7 @@ pub async fn create_compensation_refund(
             &tenant_id,
             plan.order_id.as_deref(),
             payload.amount_cents,
+            &payload.actor_id,
         )
         .await?;
     }

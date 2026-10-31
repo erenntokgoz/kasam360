@@ -58,8 +58,10 @@ pub async fn auth_unlock(
     user_id: String,
     pin: String,
     pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     crate::services::setup::require_complete(&pool).await?;
     crate::services::device_session::require_signed_in(&pool).await?;
-    unlock_session(&pool, &tenant_id, &user_id, &pin).await
+    unlock_session(&pool, &tenant_id, &user_id, &pin).await?;
+    state.staff_session.set_locked(false)
 }

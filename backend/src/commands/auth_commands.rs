@@ -342,8 +342,15 @@ pub async fn auth_login(
             user_id: user.id.clone(),
             tenant_id: user.tenant_id.clone(),
             role: user.role.clone(),
+            locked: false,
         })?;
     Ok(user)
+}
+
+/// Kilit ekranı: oturum sahibi PIN girene kadar sunucu komut çalıştırmaz.
+#[tauri::command]
+pub async fn auth_lock(state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
+    state.staff_session.set_locked(true)
 }
 
 /// Personel çıkışı: sunucu oturumu kapanır, sonraki komut yeniden PIN ister.
