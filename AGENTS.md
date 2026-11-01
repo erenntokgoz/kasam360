@@ -9,8 +9,8 @@
 - **Tanım:** Restoran, Kafe, Bar ve Benzeri İşletmeler İçin Yerel Öncelikli (Local-First) Yeni Nesil POS & İşletme Yönetim Sistemi (ERP).
 - **Temel Prensip:** İnternet kopsa dahi kesintisiz satış, yerel SQLite üzerinde tam veri bütünlüğü, sıfır veri kaybı, milisaniyelik tepki süresi.
 - **Dizin Yapısı:**
-  - `backend/`: Rust + Tauri 2 + SQLite (sqlx) + Argon2id. Yüksek güvenlikli çekirdek motor ve 247 doğrulanmış IPC komutu.
-  - `desktop/`: React 18 + Vite + TypeScript + Tailwind CSS v4 + Zustand + Lucide Icons. Endüstriyel dokunsal mat donanım (Tactile Matte Hardware) tasarım sistemi.
+  - `backend/`: Rust + Tauri 2 + SQLite (sqlx) + Argon2id. Yüksek güvenlikli çekirdek motor.
+  - `desktop/`: React 18 + Vite + TypeScript + Tailwind CSS v4 + Zustand + Lucide Icons. Defter dili tasarım sistemi (bölüm 4).
   - `docs/`: Mimari ve güvenlik şartnameleri (`security-audit.md`, `offline-conflict-policy.md`).
 
 ---
@@ -62,57 +62,19 @@
 - Prodüksiyon backend kodunda `panic!`, `unwrap()`, `expect()`, `todo!()` YASAKTIR.
 - Frontend TypeScript kodunda `any` tipi kullanımı YASAKTIR.
 - Dosya boyutu limiti 500 satırdır; aşan dosyalar mantıksal alt modüllere bölünür.
-- Tüm IPC çağrıları Tauri `generate_handler!` sözleşmesine ve 247 komutluk backend arayüzüne birebir uymak zorundadır.
+- Tüm IPC çağrıları Tauri `generate_handler!` sözleşmesine ve backend arayüzüne birebir uymak zorundadır.
 
 ---
 
-## 4. FRONTEND TASARIM STRATEJİSİ (ENDÜSTRİYEL DOKUNSAL MAT TASARIM SİSTEMİ)
+## 4. FRONTEND TASARIM STRATEJİSİ (DEFTER DİLİ)
 
-KASAM360 arayüzü; restoran, kafe ve barların yoğun, tempolu ve düşük ışıklı ortamlarında en düşük donanımlı dokunmatik POS terminallerinde dahi 60 FPS çalışan, sıfır gecikmeli, "AI slop" veya cam yansıması içermeyen, Square Register ve Toast POS sağlamlığında Endüstriyel Dokunsal Mat Donanım (Tactile Matte Hardware) estetiğine sahiptir.
+Arayüz not kâğıdından türer: yüzey kâğıt, yazı mavi tükenmez kalem, seçim pembe fosforlu kalem, düğme kalemle çizilmiş kutudur. Koyu tema yeşil kesim matı, açık tema kareli yapraktır; kâğıt iki temada aynıdır ve kullanıcı temayı seçer.
 
-### 4.1. Tasarım Felsefesi ve Sıfır Tolerans
-- **Sıfır Cam & Sıfır Bulanıklık (No Glassmorphism):** `backdrop-filter`, `backdrop-blur`, yarı saydam cam paneller KESİNLİKLE YASAKTIR. Tüm yüzeyler donanım kasası gibi opaktır.
-- **Sıfır AI Slop:** Rastgele parıltı emojileri (✨🚀🔥), anlamsız dalga SVG'leri, süslü karşılama metinleri ("Hoş geldiniz!", "Yapay zeka destekli") KESİNLİKLE YASAKTIR. Ekranlar pazarlama sayfası değil, hassas işletme terminalleridir.
-- **Fiziksel Tuş ve Dokunsal Ergonomi:** Kasa ve servis ekranlarında tüm dokunmatik hedefler minimum 48px (`min-h-12`) boyutundadır. Butonlar fiziksel tuş gibi mikro 1px iç ışık ve gölge taşır, tıklandığında `active:translate-y-[1px]` ile mekanik basma hissi verir.
-- **Tipografik ve Finansal Netlik:** Tüm tutar, saat, sayaç, stok ve oran değerleri daima `font-variant-numeric: tabular-nums` ile hizalı gösterilir.
-- **Donanım Kısayolları (Keyboard Shortcuts):** Hızlı kasiyer ve garson operasyonları için kritik butonlar donanım kısayol rozeti (`<kbd className="kbd-badge">F2</kbd>`) taşır ve global klavye dinleyicisi ile çalışır.
-
-### 4.2. Endüstriyel Renk Paleti (Tactile Matte Palette)
-- **Zemin Tabanı (`--bg-base`):** `#090A0C` (Koyu mat şasi)
-- **Birincil Yüzey (`--bg-surface`):** `#111317` (Ana ekran kartları ve paneller)
-- **Yükseltilmiş Kart / Modal (`--bg-elevated`):** `#171A20` (Yükseltilmiş kontrol yüzeyleri)
-- **Etkileşimli / Hover Yüzey (`--bg-interactive`):** `#1E222A` (Aktif/Hover alanları)
-- **İnce Sınır (`--border-subtle`):** `#232730` (Ayrım çizgileri)
-- **Belirgin Sınır (`--border-strong`):** `#323846` (Vurgulu kenarlıklar)
-- **Birincil Metin (`--text-primary`):** `#F3F4F6` (Yüksek kontrast okunabilirlik)
-- **İkincil Metin (`--text-secondary`):** `#9CA3AF` (Etiketler ve meta veriler)
-- **Üçüncül Metin (`--text-tertiary`):** `#6B7280` (Pasif durumlar)
-- **Birincil Aksiyon (`--brand`):** `#2563EB` (Hover: `#3B82F6`)
-- **Başarı / Müsait / Hazır (`--success`):** `#10B981`
-- **Uyarı / Hazırlanıyor / Rezerve (`--warning`):** `#F59E0B`
-- **Tehlike / İptal / 86'd / RUSH (`--danger`):** `#EF4444`
-- **Bilgi (`--info`):** `#06B6D4`
-
-### 4.3. Fiziksel Tuş ve Kart Stilleri
-```css
-/* Fiziksel donanım tuşu standardı */
-.tactile-btn {
-  border: 1px solid #262A34;
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  transition: background-color 100ms ease, border-color 100ms ease, transform 60ms ease;
-}
-.tactile-btn:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.6);
-}
-```
-
-### 4.4. Arayüz Düzeni ve Kabuk (App Shell)
-- **İlk Kurulum:** Temiz veritabanında giriş veya kilit ekranı açılmaz; önce `Yeni işletme kur` / `Mevcut işletmeye cihaz bağla` seçimi gelir.
-- **Giriş ve PIN Ekranı:** Tam ekran odaklı, 48px+ dokunmatik Numpad tuş takımlı endüstriyel terminal. Yalnız oturum yokken görünür.
-- **Kilit Ekranı:** Hareketsizlikte açılır; mevcut oturumu korur ve yalnız oturum sahibinin PIN'iyle kapanır.
-- **Operasyon Ekranları:** Solda 72px donanım menü çubuğu (`SidebarNav`), üstte canlı durum çubuğu (`TopStatusBar`), merkezde dinamik modül alanı (`ContentArea`).
-- **Modal ve İletişim Pencereleri:** Opak, net kenarlıklı, yüksek kontrastlı yükseltilmiş paneller (`bg-[#171A20]`, `border-[#323846]`).
+- Renk ve yüzeyler `desktop/src/index.css` sözlüğünden gelir: `.paper`, `.sheet`, `.bar`, `.btn-*`. Yeni renk eklenmez.
+- Sayı girişi `ui/NumberInput`, tuş takımı `ui/PinpadModal`, silme onayı `ui/ConfirmDialog`, üst menü `ui/Bar` ile yapılır.
+- Dokunmatik hedefler en az 48px'tir (`min-h-12`); tutar ve saatler `tabular-nums` kullanır. Cam, bulanıklık, emoji ve süslü karşılama metni yoktur.
+- Kabuk: solda ayraç menü (`SidebarNav`), merkezde modül alanı. Üst durum çubuğu ve alt yazı yoktur; Ayarlar sol menüde ayrı bayraktır.
+- İlk kurulum, giriş ve PIN ekranı oturum yokken; kilit ekranı hareketsizlikte açılır ve yalnız oturum sahibinin PIN'iyle kapanır.
 
 ---
 
@@ -170,7 +132,7 @@ Her kod değişikliğinden sonra aşağıdaki doğrulama adımları eksiksiz ge�
 1. **Backend Doğrulaması:**
    ```powershell
    cargo clippy --lib --tests -- -D warnings   # Sıfır hata, sıfır uyarı
-   cargo test --lib                          # 964 testin tamamı başarılı (100% pass)
+   cargo test --lib                          # Testlerin tamamı başarılı (100% pass)
    cargo fmt --check                         # Standart Rust formatı
    ```
 

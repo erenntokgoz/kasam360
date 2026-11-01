@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Send, CreditCard, Trash2, FileText } from 'lucide-react';
+import { Send, Trash2, FileText } from 'lucide-react';
 import { usePosStore } from '../../stores/posStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useKdsStore } from '../../stores/kdsStore';
 import { formatMoney } from '../../lib/formatMoney';
 import { Button } from '../../ui/Button';
+import { Modal } from '../../ui/Modal';
 import { SmartAuthModal } from './SmartAuthModal';
 import { ItemTransferModal } from './ItemTransferModal';
 import { OrderTicketLineItem } from './OrderTicketLineItem';
@@ -23,7 +24,6 @@ export const OrderTicket: React.FC = () => {
     selectTicketItem,
     updateItemQty,
     removeItem,
-    setItemCourse,
     setItemNote,
     clearTicket,
     loadActiveOrder,
@@ -33,13 +33,14 @@ export const OrderTicket: React.FC = () => {
     calculateTotalCents,
   } = usePosStore();
 
-  const { openModal } = useUIStore();
+  const openModal = useUIStore((state) => state.openModal);
   const { playOrderBell } = useKdsStore();
   const { tables, loadFloorPlan } = useFloorStore();
 
   const [authModalItem, setAuthModalItem] = useState<OrderItem | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'VOID' | 'COMP'>('VOID');
   const [transferModalItem, setTransferModalItem] = useState<OrderItem | null>(null);
+  const [askClear, setAskClear] = useState(false);
 
   const total = calculateTotalCents();
   const unsentCount = ticketItems.filter((i) => !i.isSentToKitchen).length;
@@ -51,8 +52,8 @@ export const OrderTicket: React.FC = () => {
     }
   };
 
-  // Tahsilat sunucudaki adisyona yapılır: taslak önce adisyona yazılır.
-  const handleOpenPayment = async () => {
+  // Tahsilat sunucudaki adisyona yapılır; bekleyen kalemler düğme yazısıyla belli olarak gider.
+  const handlePay = async () => {
     if (unsentCount > 0) {
       if (!(await sendToKitchen())) return;
       await loadFloorPlan();
@@ -77,7 +78,7 @@ export const OrderTicket: React.FC = () => {
       {/* Başlık Barı */}
       <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between shrink-0">
         <div>
-          <div className="text-sm font-bold text-[var(--text-primary)]">{activeTableName}</div>
+          <div className="text-lg font-bold text-[var(--text-primary)]">{activeTableName}</div>
           <div className="text-xs text-[var(--text-secondary)]">Adisyon</div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -85,21 +86,22 @@ export const OrderTicket: React.FC = () => {
             variant="ghost"
             size="sm"
             onClick={() => openModal('receiptPreview')}
-            className="!min-h-12 !px-2.5 text-xs"
+            className="!min-h-12 !px-2.5 text-sm"
             title="Fiş Önizleme"
           >
             <FileText className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Önizle</span>
           </Button>
-          {ticketItems.length > 0 ? (
+          {unsentCount > 0 ? (
             <Button
               variant="ghost"
               size="sm"
-              onClick={clearTicket}
-              className="!min-h-12 !px-2 text-xs text-[var(--accent-red)] hover:bg-[var(--accent-red-soft)]"
-              title="Adisyonu Temizle"
+              onClick={() => setAskClear(true)}
+              className="!min-h-12 !w-12 !px-0 text-[var(--accent-red)] hover:bg-[var(--accent-red-soft)]"
+              aria-label="Gönderilmemiş kalemleri sil"
+              title="Gönderilmemiş kalemleri sil"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </Button>
           ) : null}
         </div>
@@ -110,7 +112,7 @@ export const OrderTicket: React.FC = () => {
         {ticketItems.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--text-muted)]">
             <span className="text-xs">Adisyonda henüz ürün bulunmuyor.</span>
-            <span className="text-[11px] mt-1">Katalogdan ürün seçerek ekleyebilirsiniz.</span>
+            <span className="text-xs mt-1">Katalogdan ürün seçerek ekleyebilirsiniz.</span>
           </div>
         ) : (
           ticketItems.map((item) => (
@@ -120,7 +122,6 @@ export const OrderTicket: React.FC = () => {
               isSelected={selectedTicketItemId === item.id}
               onSelect={() => selectTicketItem(selectedTicketItemId === item.id ? null : item.id)}
               onUpdateQty={(delta) => updateItemQty(item.id, delta)}
-              onSetCourse={(c) => setItemCourse(item.id, c)}
               onSetNote={(n) => setItemNote(item.id, n)}
               onOpenTransfer={() => setTransferModalItem(item)}
               onOpenComp={() => {
@@ -128,6 +129,11 @@ export const OrderTicket: React.FC = () => {
                 setAuthModalMode('COMP');
               }}
               onOpenVoid={() => {
+                // Mutfağa gitmemiş kalem onaysız silinir: ortada iptal edilecek sipariş yok.
+                if (!item.isSentToKitchen) {
+                  removeItem(item.id);
+                  return;
+                }
                 setAuthModalItem(item);
                 setAuthModalMode('VOID');
               }}
@@ -146,8 +152,8 @@ export const OrderTicket: React.FC = () => {
       <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-subtle)] space-y-3 shrink-0">
         <div className="space-y-1 text-xs">
           <div className="flex justify-between items-baseline pt-1">
-            <span className="text-xs font-semibold text-[var(--text-primary)]">Toplam Tutar</span>
-            <span className="hand text-2xl tabular-nums">
+            <span className="text-sm font-semibold text-[var(--text-primary)]">Toplam Tutar</span>
+            <span className="hand text-4xl tabular-nums">
               {formatMoney(total)}
             </span>
           </div>
@@ -173,40 +179,28 @@ export const OrderTicket: React.FC = () => {
           ) : null}
         </Button>
 
-        {/* Hızlı Tahsilat Butonları */}
-        {canCollect ? <div className="grid grid-cols-3 gap-2">
-          <Button
-            variant="success"
-            size="md"
-            onClick={handleOpenPayment}
-            disabled={total <= 0}
-            className="!min-h-12 text-xs font-bold"
-          >
-            Nakit
+        {canCollect ? (
+          <Button variant="success" size="lg" onClick={() => void handlePay()} disabled={total <= 0 || isSending} className="w-full">
+            {unsentCount > 0 ? 'Gönder ve Ödeme Al' : 'Ödeme Al'}
           </Button>
-
-          <Button
-            variant="outline-emerald"
-            size="md"
-            onClick={handleOpenPayment}
-            disabled={total <= 0}
-            className="!min-h-12 text-xs font-bold"
-          >
-            <CreditCard className="w-3.5 h-3.5 mr-1" />
-            Kart
-          </Button>
-
-          <Button
-            variant="outline-amber"
-            size="md"
-            onClick={handleOpenPayment}
-            disabled={total <= 0}
-            className="!min-h-12 text-xs font-bold"
-          >
-            Böl / Cari
-          </Button>
-        </div> : null}
+        ) : null}
       </div>
+
+      <Modal isOpen={askClear} onClose={() => setAskClear(false)} title="Kalemler silinsin mi?" subtitle={`${unsentCount} kalem henüz mutfağa gitmedi.`} maxWidth="sm">
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="secondary" size="lg" onClick={() => setAskClear(false)}>Vazgeç</Button>
+          <Button
+            variant="danger"
+            size="lg"
+            onClick={() => {
+              clearTicket();
+              setAskClear(false);
+            }}
+          >
+            Sil
+          </Button>
+        </div>
+      </Modal>
 
       {/* Yetki Onay Modalı */}
       <SmartAuthModal

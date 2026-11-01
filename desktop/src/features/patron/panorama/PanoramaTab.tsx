@@ -40,14 +40,14 @@ export const PanoramaTab: React.FC = () => {
   const insights = data ? buildInsights(data, compareLabel) : [];
 
   return (
-    <div className="space-y-4 max-w-[1500px] mx-auto">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5" role="group" aria-label="Dönem">
           {RANGES.map((key) => (
             <Button
               key={key}
-              variant={range === key ? 'primary' : 'secondary'}
-              className="min-h-12 text-xs font-bold"
+              variant={range === key ? 'selected' : 'secondary'}
+              className="min-h-12 text-sm font-bold"
               aria-pressed={range === key}
               onClick={() => setRange(key)}
             >
@@ -55,7 +55,7 @@ export const PanoramaTab: React.FC = () => {
             </Button>
           ))}
         </div>
-        <Button variant="secondary" className="min-h-12 text-xs" onClick={() => void load()}>
+        <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void load()}>
           <RefreshCw className="w-4 h-4 mr-1.5" />
           <span className="tabular-nums">{loadedAt ? `Güncel: ${formatTime(loadedAt)}` : 'Yükleniyor'}</span>
         </Button>

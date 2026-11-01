@@ -37,6 +37,11 @@ pub struct FloorPlanData {
     pub reservation_customer_name: Option<String>,
     #[serde(rename = "reservationTime")]
     pub reservation_time: Option<String>,
+    #[serde(rename = "activeOrderId")]
+    pub active_order_id: Option<String>,
+    /// Masanın ödenmemiş tutarı; parça ödeme sonrası adisyon toplamından küçüktür.
+    #[serde(rename = "remainingCents")]
+    pub remaining_cents: Option<i64>,
 }
 
 #[tauri::command]
@@ -99,14 +104,53 @@ pub async fn get_floor_plan(
         .await
         .map_err(|e| e.to_string())?;
 
+    let lead_minutes =
+        crate::services::reservation_service::lead::lead_minutes(&mut conn, &tenant_id).await?;
+    let now = chrono::Utc::now();
+    let open_orders: Vec<(String, String, Option<String>)> = sqlx::query_as(
+        "SELECT table_id, id, bill_requested_at FROM orders
+         WHERE tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS') AND table_id IS NOT NULL
+         ORDER BY created_at ASC",
+    )
+    .bind(&tenant_id)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    let mut open_by_table: std::collections::HashMap<String, (String, i64, bool)> =
+        std::collections::HashMap::new();
+    for (table_id, order_id, bill_requested_at) in open_orders {
+        let balance =
+            crate::services::order_settlement::order_balance(&mut conn, &tenant_id, &order_id)
+                .await?;
+        let entry = open_by_table
+            .entry(table_id)
+            .or_insert((String::new(), 0, false));
+        entry.0 = order_id;
+        entry.1 += balance.remaining_cents;
+        entry.2 |= bill_requested_at.is_some();
+    }
     let mut res = Vec::with_capacity(rows.len());
     for row in rows {
+        let stored_status: String = row
+            .try_get("status")
+            .unwrap_or_else(|_| "AVAILABLE".to_string());
+        let reservation_time: Option<String> = row.try_get("reservation_time").ok();
+        let table_id: String = row.try_get("id").unwrap_or_default();
+        let open_order = open_by_table.remove(&table_id);
+        let bill_asked = open_order.as_ref().is_some_and(|order| order.2);
         res.push(FloorPlanData {
-            id: row.try_get("id").unwrap_or_default(),
+            id: table_id,
             name: row.try_get("name").unwrap_or_default(),
-            status: row
-                .try_get("status")
-                .unwrap_or_else(|_| "AVAILABLE".to_string()),
+            status: if stored_status == "OCCUPIED" && bill_asked {
+                "BILL_REQUESTED".to_string()
+            } else {
+                crate::services::reservation_service::lead::displayed_status(
+                    &stored_status,
+                    reservation_time.as_deref(),
+                    now,
+                    lead_minutes,
+                )
+            },
             opened_at: row.try_get("opened_at").ok(),
             waiter_id: row.try_get("waiter_id").ok(),
             current_total: row
@@ -122,7 +166,9 @@ pub async fn get_floor_plan(
             ready_item_count: row.try_get::<i64, _>("ready_item_count").unwrap_or(0),
             idle_minutes: row.try_get::<Option<i64>, _>("idle_minutes").ok().flatten(),
             reservation_customer_name: row.try_get("reservation_customer_name").ok(),
-            reservation_time: row.try_get("reservation_time").ok(),
+            reservation_time,
+            active_order_id: open_order.as_ref().map(|order| order.0.clone()),
+            remaining_cents: open_order.map(|order| order.1),
         });
     }
     Ok(res)

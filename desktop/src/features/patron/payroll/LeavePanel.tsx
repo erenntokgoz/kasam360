@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
+import { ConfirmDialog } from '../../../ui/ConfirmDialog';
 import { Input } from '../../../ui/Input';
 import { Panel } from '../panorama/Panel';
 
@@ -30,6 +32,7 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
   const [kind, setKind] = useState('YILLIK');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [deleting, setDeleting] = useState<LeaveRow | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -73,14 +76,17 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
             <span className={`text-xs font-bold ${tone(row.status)}`}>{statusLabel(row.status)}</span>
             {row.status === 'Bekliyor' ? (
               <>
-                <Button variant="primary" className="min-h-12 text-xs" onClick={() => void run(() => invokeIPC('decide_leave', { tenantId, approverId: actorId, actorRole, leaveId: row.id, approve: true }))}>
+                <Button variant="primary" className="min-h-12 text-sm" onClick={() => void run(() => invokeIPC('decide_leave', { tenantId, approverId: actorId, actorRole, leaveId: row.id, approve: true }))}>
                   Onayla
                 </Button>
-                <Button variant="secondary" className="min-h-12 text-xs" onClick={() => void run(() => invokeIPC('decide_leave', { tenantId, approverId: actorId, actorRole, leaveId: row.id, approve: false }))}>
+                <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void run(() => invokeIPC('decide_leave', { tenantId, approverId: actorId, actorRole, leaveId: row.id, approve: false }))}>
                   Reddet
                 </Button>
               </>
             ) : null}
+            <Button variant="ghost" aria-label="İzni sil" onClick={() => setDeleting(row)}>
+              <Trash2 className="w-5 h-5" />
+            </Button>
           </li>
         ))}
       </ul>
@@ -94,7 +100,7 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
         <Input aria-label="Bitiş" type="date" className="min-h-12 !w-40" value={end} onChange={(event) => setEnd(event.target.value)} />
         <Button
           variant="secondary"
-          className="min-h-12 text-xs font-bold"
+          className="min-h-12 text-sm font-bold"
           disabled={!start || !end}
           onClick={() => void run(async () => {
             await invokeIPC('request_leave', { tenantId, actorRole, input: { userId, kind, startDate: start, endDate: end, reason: null } });
@@ -106,6 +112,17 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
         </Button>
       </div>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {deleting ? (
+        <ConfirmDialog
+          title="İzin silinsin mi?"
+          message={`${deleting.startDate} → ${deleting.endDate}`}
+          onConfirm={async () => {
+            await invokeIPC('delete_leave', { tenantId, actorRole, leaveId: deleting.id });
+            await load();
+          }}
+          onClose={() => setDeleting(null)}
+        />
+      ) : null}
     </Panel>
   );
 };

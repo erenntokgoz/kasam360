@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import type { DirectoryContact } from '../types/ledger';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
+import { useUIStore } from './uiStore';
 import { newOperationId } from '../lib/cariInput';
 
-export type ErpTab = 'PANORAMA' | 'FINANCE' | 'DEBTS' | 'STAFF' | 'CATALOG' | 'REPORTS' | 'SETTINGS';
+export type ErpTab = 'PANORAMA' | 'FINANCE' | 'DEBTS' | 'STAFF' | 'CATALOG' | 'REPORTS';
 
 /** Panorama uyarısının hedefi: bölüm ve varsa içindeki alt sayfa. */
-const ALERT_TARGETS: Record<string, [ErpTab, string | null]> = {
+const ALERT_TARGETS: Record<string, [ErpTab | 'SETTINGS', string | null]> = {
   EXPENSES: ['FINANCE', null],
   PAYROLL: ['STAFF', 'PAYROLL'],
   STOCK: ['CATALOG', 'STOCK'],
@@ -42,7 +43,15 @@ export const useLedgerStore = create<LedgerStore>((set) => ({
 
   openAlertTarget: (target) => {
     const destination = ALERT_TARGETS[target];
-    if (destination) set({ activeErpTab: destination[0], erpSection: destination[1] });
+    if (!destination) return;
+    const [tab, erpSection] = destination;
+    // Ayarlar kendi modülüdür; uyarı oraya geçer, Yönetim sekmesi yerinde kalır.
+    if (tab === 'SETTINGS') {
+      set({ erpSection });
+      useUIStore.getState().setActiveModule('SETTINGS');
+    } else {
+      set({ activeErpTab: tab, erpSection });
+    }
   },
 
   createContact: async (name, phone, type) => {

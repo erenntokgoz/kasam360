@@ -1,18 +1,25 @@
 import React from 'react';
-import { LayoutGrid, ShoppingBag, Tv, Wallet, BarChart3 } from 'lucide-react';
+import { LayoutGrid, Lock, Moon, Settings, ShoppingBag, Sun, Tv, Wallet, BarChart3 } from 'lucide-react';
 import { useUIStore, type AppModule } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useKdsStore } from '../../stores/kdsStore';
 import { useFeatureStore } from '../../stores/featureStore';
+import { useShiftStore } from '../../stores/shiftStore';
 import { canOpenModule } from '../../lib/roleAccess';
+import { BrandMark } from '../../ui/BrandMark';
+import { SyncStatusChip } from './SyncStatusChip';
 
 export const SidebarNav: React.FC = () => {
-  const { activeModule, setActiveModule } = useUIStore();
-  const { user } = useAuthStore();
-  const { tickets } = useKdsStore();
-  const { isEnabled } = useFeatureStore();
-
-  const activeKdsCount = tickets.filter((t) => !t.isCompleted).length;
+  const activeModule = useUIStore((state) => state.activeModule);
+  const setActiveModule = useUIStore((state) => state.setActiveModule);
+  const theme = useUIStore((state) => state.theme);
+  const setTheme = useUIStore((state) => state.setTheme);
+  const openModal = useUIStore((state) => state.openModal);
+  const user = useAuthStore((state) => state.user);
+  const lock = useAuthStore((state) => state.lock);
+  const isShiftOpen = useShiftStore((state) => state.activeShift?.isOpen ?? false);
+  const activeKdsCount = useKdsStore((state) => state.tickets.length);
+  const isEnabled = useFeatureStore((state) => state.isEnabled);
 
   const navItems: Array<{
     id: AppModule;
@@ -21,18 +28,8 @@ export const SidebarNav: React.FC = () => {
     badge?: number;
     visible: boolean;
   }> = [
-    {
-      id: 'FLOOR',
-      label: 'Salon',
-      icon: LayoutGrid,
-      visible: canOpenModule(user?.role, 'FLOOR'),
-    },
-    {
-      id: 'POS',
-      label: 'Sipariş',
-      icon: ShoppingBag,
-      visible: canOpenModule(user?.role, 'POS'),
-    },
+    { id: 'FLOOR', label: 'Salon', icon: LayoutGrid, visible: canOpenModule(user?.role, 'FLOOR') },
+    { id: 'POS', label: 'Sipariş', icon: ShoppingBag, visible: canOpenModule(user?.role, 'POS') },
     {
       id: 'KDS',
       label: 'Mutfak',
@@ -40,55 +37,57 @@ export const SidebarNav: React.FC = () => {
       badge: activeKdsCount > 0 ? activeKdsCount : undefined,
       visible: isEnabled('feat_kds') && canOpenModule(user?.role, 'KDS'),
     },
-    {
-      id: 'CASHIER',
-      label: 'Kasa',
-      icon: Wallet,
-      visible: canOpenModule(user?.role, 'CASHIER'),
-    },
-    {
-      id: 'ERP',
-      label: 'Yönetim',
-      icon: BarChart3,
-      visible: canOpenModule(user?.role, 'ERP'),
-    },
+    { id: 'CASHIER', label: 'Kasa', icon: Wallet, visible: canOpenModule(user?.role, 'CASHIER') },
+    { id: 'ERP', label: 'Yönetim', icon: BarChart3, visible: canOpenModule(user?.role, 'ERP') },
+    { id: 'SETTINGS', label: 'Ayarlar', icon: Settings, visible: canOpenModule(user?.role, 'SETTINGS') },
   ];
 
+  const ThemeIcon = theme === 'dark' ? Sun : Moon;
+
   return (
-    <aside className="w-[72px] shrink-0 bg-[var(--bg-panel)] border-r border-[var(--border)] flex flex-col justify-between py-3 px-2 z-10 select-none">
-      <nav className="flex flex-col gap-1.5" aria-label="Ana Menü">
+    <aside className="side-rail">
+      <div className="min-h-14 w-[72px] flex items-center justify-center shrink-0">
+        <BrandMark className="w-8 h-8" surface="desk" />
+      </div>
+
+      <nav className="flex flex-col" aria-label="Ana Menü">
         {navItems
           .filter((item) => item.visible)
           .map((item) => {
             const Icon = item.icon;
-            const isActive = activeModule === item.id;
-
             return (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setActiveModule(item.id)}
-                className={`w-full py-2.5 px-1 rounded-xl flex flex-col items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer relative transition-colors ${
-                  isActive
-                    ? 'bg-[var(--accent-amber-soft)] text-[var(--accent-amber)] border border-[var(--accent-amber-border)]'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-                }`}
+                aria-current={activeModule === item.id ? 'page' : undefined}
+                className="side-flag"
               >
                 {item.badge ? (
-                  <span className="absolute top-1 right-2 px-1.5 py-0.2 rounded-full text-[10px] font-bold text-[var(--ink)] bg-[var(--accent-amber)] tabular-nums shadow-sm">
-                    {item.badge}
-                  </span>
+                  <span className="absolute top-1 right-1.5 text-xs font-bold tabular-nums text-[var(--pen-red)]">{item.badge}</span>
                 ) : null}
                 <Icon className="w-5 h-5 shrink-0" />
-                <span className="text-[11px] tracking-tight">{item.label}</span>
+                <span>{item.label}</span>
               </button>
             );
           })}
       </nav>
 
-      {/* Alt bilgi / Sürüm */}
-      <div className="text-center pt-2 border-t border-[var(--border)]">
-        <span className="text-[10px] font-mono text-[var(--text-muted)]">v3.0</span>
+      <div className="mt-auto flex flex-col">
+        {isShiftOpen ? null : (
+          <button type="button" onClick={() => openModal('shiftGate')} className="side-tool !text-[var(--accent-amber)]">
+            <span className="text-center">Vardiya kapalı</span>
+          </button>
+        )}
+        <SyncStatusChip />
+        <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="side-tool">
+          <ThemeIcon className="w-5 h-5" />
+          <span>{theme === 'dark' ? 'Açık' : 'Koyu'}</span>
+        </button>
+        <button type="button" onClick={lock} className="side-tool" title={user?.name}>
+          <Lock className="w-5 h-5" />
+          <span>Kilitle</span>
+        </button>
       </div>
     </aside>
   );

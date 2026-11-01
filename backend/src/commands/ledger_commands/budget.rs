@@ -192,6 +192,61 @@ pub async fn set_budget_limit(
     tx.commit().await
 }
 
+/// Sabit giderin başlığını, tutarını ve gününü değiştirir. Ödenmiş aylar etkilenmez.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn update_recurring_expense(
+    id: String,
+    title: String,
+    category: String,
+    amount_cents: i64,
+    due_day: i64,
+    actor_id: String,
+    actor_role: String,
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    require_ledger_write(Some(&actor_role))?;
+    let tid = require_ledger_tenant(Some(&tenant_id))?;
+    require_category(&category)?;
+    let title = title.trim();
+    if title.is_empty() || amount_cents <= 0 || !(1..=31).contains(&due_day) {
+        return Err("VALIDATION: başlık, tutar ve ayın günü zorunludur".to_string());
+    }
+    let lock = AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin_write().await?;
+    let changed = sqlx::query(
+        "UPDATE recurring_expenses SET title = ?, category = ?, amount_cents = ?, due_day = ?
+         WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(title)
+    .bind(&category)
+    .bind(amount_cents)
+    .bind(due_day)
+    .bind(&id)
+    .bind(&tid)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?
+    .rows_affected();
+    if changed == 0 {
+        return Err("NOT_FOUND: sabit gider bulunamadı".to_string());
+    }
+    audit(
+        &mut tx,
+        &lock,
+        &tid,
+        (&actor_id, &actor_role),
+        "recurring:updated",
+        &id,
+        serde_json::json!({ "title": title, "amountCents": amount_cents }),
+    )
+    .await?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Kira gibi her ay tekrar eden gideri tanımlar.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]

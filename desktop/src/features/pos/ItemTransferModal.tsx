@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import type { OrderItem } from '../../types/pos';
 import type { FloorTable } from '../../types/floor';
 import { Modal } from '../../ui/Modal';
-import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
 
 export interface ItemTransferModalProps {
@@ -49,12 +49,9 @@ export const ItemTransferModal: React.FC<ItemTransferModalProps> = ({
           <label className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
             Taşınacak Adet (Mevcut: {item.quantity})
           </label>
-          <Input
-            type="number"
-            min="1"
-            max={item.quantity}
+          <NumberInput kind="integer"
             value={quantity}
-            onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+            onValueChange={(text) => setQuantity(Number.parseInt(text, 10) || 0)}
             className="text-center font-bold text-base"
             required
             autoFocus

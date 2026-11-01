@@ -16,7 +16,7 @@ pub async fn list_leaves(
         Some(u) => {
             sqlx::query(
                 "SELECT id, user_id, kind, start_date, end_date, reason, status, approver_id, decided_at
-                   FROM leave_requests WHERE tenant_id = ?1 AND user_id = ?2
+                   FROM leave_requests WHERE tenant_id = ?1 AND user_id = ?2 AND status != 'Iptal'
                   ORDER BY start_date DESC",
             )
             .bind(tenant_id)
@@ -28,7 +28,7 @@ pub async fn list_leaves(
         None => {
             sqlx::query(
                 "SELECT id, user_id, kind, start_date, end_date, reason, status, approver_id, decided_at
-                   FROM leave_requests WHERE tenant_id = ?1 ORDER BY start_date DESC",
+                   FROM leave_requests WHERE tenant_id = ?1 AND status != 'Iptal' ORDER BY start_date DESC",
             )
             .bind(tenant_id)
             .fetch_all(pool)
@@ -103,6 +103,28 @@ pub async fn request_leave(
     .map_err(|e| e.to_string())?;
     tx.commit().await?;
     Ok(id)
+}
+
+/// İzni iptal eder. Satır silinmez: onaylanmış iznin geçmişi kaybolmasın.
+pub async fn cancel_leave(
+    pool: &SqlitePool,
+    tenant_id: &str,
+    leave_id: &str,
+) -> Result<(), String> {
+    let mut tx = pool.begin_write().await?;
+    let changed =
+        sqlx::query("UPDATE leave_requests SET status = 'Iptal' WHERE tenant_id = ?1 AND id = ?2")
+            .bind(tenant_id)
+            .bind(leave_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?
+            .rows_affected();
+    if changed == 0 {
+        return Err("NOT_FOUND: izin kaydı bulunamadı".to_string());
+    }
+    tx.commit().await?;
+    Ok(())
 }
 
 /// İzin kararı. Karar veren kişi talebi oluşturan olamaz (self-approval yasağı).

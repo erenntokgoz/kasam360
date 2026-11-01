@@ -207,7 +207,6 @@ fn cash_payment(id: &str) -> PaymentPayloadDto {
         cashier_id: Some("usr_1".to_string()),
         terminal_id: None,
         idempotency_key: None,
-        global_discount: None,
         approval_token: None,
         actor_id: Some("usr_1".to_string()),
         debt_directory_id: None,

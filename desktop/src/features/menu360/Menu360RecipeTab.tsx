@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { formatMoney } from '../../lib/formatMoney';
 import type { ProductDto, RecipeCostDto, RecipeInputDto } from '../../types/menu360';
 
@@ -85,8 +86,8 @@ export function Menu360RecipeTab({ product, products, cost, busy, createRecipe, 
     return (
       <div className="space-y-3 text-xs">
         <div className="p-3 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
-          <span className="text-[10px] font-bold text-[var(--text-muted)] block">BİRİM MALİYET · FIFO PARTİLERİ</span>
-          <span className="text-lg font-bold font-mono tabular-nums text-[var(--text-primary)]">
+          <span className="text-xs font-bold text-[var(--text-muted)] block">BİRİM MALİYET · FIFO PARTİLERİ</span>
+          <span className="text-lg font-bold tabular-nums tabular-nums text-[var(--text-primary)]">
             {cost.totalCostCents === null ? 'Bilinmiyor' : formatMoney(cost.totalCostCents)}
           </span>
         </div>
@@ -130,10 +131,10 @@ export function Menu360RecipeTab({ product, products, cost, busy, createRecipe, 
       </label>
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1"><span>Üretim Miktarı (adet)</span>
-          <input inputMode="decimal" className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded px-3 min-h-12" value={outputQuantity} onChange={(event) => setOutputQuantity(event.target.value)} />
+          <NumberInput kind="quantity" className="w-full" value={outputQuantity} onValueChange={setOutputQuantity} />
         </label>
         <label className="space-y-1"><span>Randıman (%)</span>
-          <input inputMode="decimal" className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded px-3 min-h-12" value={yieldPercent} onChange={(event) => setYieldPercent(event.target.value)} />
+          <NumberInput kind="quantity" className="w-full" value={yieldPercent} onValueChange={setYieldPercent} />
         </label>
       </div>
       <span className="block font-bold text-[var(--text-secondary)]">Malzemeler</span>
@@ -144,7 +145,7 @@ export function Menu360RecipeTab({ product, products, cost, busy, createRecipe, 
             {ingredients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
           <div className="flex gap-2">
-            <input aria-label="Malzeme miktarı" inputMode="decimal" placeholder="Miktar" className="min-w-0 flex-1 min-h-12 paper border border-[var(--border)] rounded px-2" value={row.quantity} onChange={(event) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, quantity: event.target.value } : item))} />
+            <NumberInput kind="quantity" aria-label="Malzeme miktarı" placeholder="Miktar" className="min-w-0 flex-1" value={row.quantity} onValueChange={(text) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, quantity: text } : item))} />
             <select aria-label="Birim" className="w-20 min-h-12 paper border border-[var(--border)] rounded px-1" value={row.unit} onChange={(event) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, unit: event.target.value } : item))}>
               {units.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
             </select>

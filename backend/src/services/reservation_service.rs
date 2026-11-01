@@ -31,6 +31,7 @@ use sqlx::Row;
 
 use crate::id_generator::generate_id;
 
+pub mod lead;
 pub mod types;
 pub use types::*;
 
@@ -54,6 +55,21 @@ pub async fn open_for_table(
         .await
         .map_err(|e| e.to_string())?;
     Ok(row.as_ref().map(row_to_dto))
+}
+
+/// Masada şu an geçerli rezervasyon: müşteri gelmiş veya kapanma süresi başlamıştır.
+/// Akşama yazılmış rezervasyon öğlenki masanın satışını ve tahsilatını etkilemez.
+async fn in_effect_for_table(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+    table_id: &str,
+) -> Result<Option<ReservationDto>, String> {
+    let Some(reservation) = open_for_table(conn, tenant_id, table_id).await? else {
+        return Ok(None);
+    };
+    let minutes = lead::lead_minutes(conn, tenant_id).await?;
+    let is_due = lead::is_due(&reservation.reserved_at, chrono::Utc::now(), minutes);
+    Ok((reservation.status == "ARRIVED" || is_due).then_some(reservation))
 }
 
 /// Kiracının masasının belirli bir rezervasyonunu getirir.
@@ -126,7 +142,7 @@ pub async fn list_day(
     Ok(rows.iter().map(row_to_dto).collect())
 }
 
-/// Yeni rezervasyon yazar ve masayı `RESERVED` yapar.
+/// Yeni rezervasyon yazar. Masa yalnız kapanma süresi başladıysa `RESERVED` olur.
 ///
 /// Neden ön koşul: eski `reserve_table` yalnız tenant filtresiyle UPDATE ediyordu;
 /// `OCCUPIED` bir masa rezerve edilebiliyor ve açık adisyon kayboluyordu. Artık
@@ -178,14 +194,48 @@ pub async fn create(
     .await
     .map_err(|error| classify_insert_error(&error.to_string()))?;
 
-    sqlx::query("UPDATE tables SET status = 'RESERVED' WHERE id = ? AND tenant_id = ?")
-        .bind(table_id)
-        .bind(tenant_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
+    let minutes = lead::lead_minutes(conn, tenant_id).await?;
+    if lead::is_due(&input.reserved_at, chrono::Utc::now(), minutes) {
+        sqlx::query("UPDATE tables SET status = 'RESERVED' WHERE id = ? AND tenant_id = ?")
+            .bind(table_id)
+            .bind(tenant_id)
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
 
     find(conn, tenant_id, &id).await
+}
+
+/// Bekleyen rezervasyonun bilgilerini değiştirir. Masa değişimi iptal ve yeni kayıttır:
+/// eski masanın durumu burada sessizce değişmesin.
+pub async fn update(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+    reservation_id: &str,
+    input: NewReservation,
+) -> Result<ReservationDto, String> {
+    let input = normalize_new(input)?;
+    let changed = sqlx::query(
+        "UPDATE reservations
+         SET customer_name = ?, customer_phone = ?, party_size = ?, reserved_at = ?, note = ?
+         WHERE id = ? AND tenant_id = ? AND status = 'ACTIVE'",
+    )
+    .bind(&input.customer_name)
+    .bind(&input.customer_phone)
+    .bind(input.party_size)
+    .bind(&input.reserved_at)
+    .bind(&input.note)
+    .bind(reservation_id)
+    .bind(tenant_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?
+    .rows_affected();
+    if changed == 0 {
+        return Err("CONFLICT: yalnız bekleyen rezervasyon düzenlenebilir".to_string());
+    }
+    find(conn, tenant_id, reservation_id).await
 }
 
 /// Kısmi tekil indeks ihlalini anlaşılır bir hataya çevirir.
@@ -336,7 +386,7 @@ pub async fn seat_for_order(
     table_id: &str,
     actor_id: &str,
 ) -> Result<Option<ReservationDto>, String> {
-    let reservation = open_for_table(conn, tenant_id, table_id).await?;
+    let reservation = in_effect_for_table(conn, tenant_id, table_id).await?;
     let Some(reservation) = reservation else {
         return Ok(None);
     };
@@ -374,7 +424,7 @@ pub async fn close_open_for_table(
     actor_id: &str,
     reason: &str,
 ) -> Result<Option<ReservationDto>, String> {
-    let Some(reservation) = open_for_table(conn, tenant_id, table_id).await? else {
+    let Some(reservation) = in_effect_for_table(conn, tenant_id, table_id).await? else {
         return Ok(None);
     };
     set_status(
@@ -404,7 +454,10 @@ pub async fn assert_no_open_reservation(
     tenant_id: &str,
     table_id: &str,
 ) -> Result<(), String> {
-    if open_for_table(conn, tenant_id, table_id).await?.is_some() {
+    if in_effect_for_table(conn, tenant_id, table_id)
+        .await?
+        .is_some()
+    {
         return Err(
             "CONFLICT: açık rezervasyonu olan masa taşınamaz/birleştirilemez; önce rezervasyonu kaldırın"
                 .to_string(),

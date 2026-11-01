@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { useCariStore, type OpenDebtInput } from '../../stores/cariStore';
 import { newOperationId, parseCents } from '../../lib/cariInput';
 import { Button } from '../../ui/Button';
@@ -65,7 +66,7 @@ export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({
         <div className="grid grid-cols-2 gap-2">
           <Button
             type="button"
-            variant={type === 'GIVEN' ? 'primary' : 'secondary'}
+            variant={type === 'GIVEN' ? 'selected' : 'secondary'}
             aria-pressed={type === 'GIVEN'}
             onClick={() => setType('GIVEN')}
             className="min-h-12"
@@ -74,7 +75,7 @@ export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({
           </Button>
           <Button
             type="button"
-            variant={type === 'TAKEN' ? 'primary' : 'secondary'}
+            variant={type === 'TAKEN' ? 'selected' : 'secondary'}
             aria-pressed={type === 'TAKEN'}
             onClick={() => setType('TAKEN')}
             className="min-h-12"
@@ -87,11 +88,10 @@ export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({
             <label htmlFor="debt-amount" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
               Tutar (₺)
             </label>
-            <Input
+            <NumberInput
               id="debt-amount"
-              inputMode="decimal"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onValueChange={setAmount}
               className="tabular-nums min-h-12"
               required
               autoFocus

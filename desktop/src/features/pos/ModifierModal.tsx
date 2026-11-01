@@ -11,7 +11,6 @@ export interface ModifierModalProps {
   onConfirm: (data: {
     selectedModifiers: OrderItemModifier[];
     cookingDegree?: string;
-    course: 1 | 2 | 3;
     notes?: string;
   }) => void;
 }
@@ -23,7 +22,6 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
   onConfirm,
 }) => {
   const [cookingDegree, setCookingDegree] = useState('Orta Pişmiş');
-  const [course, setCourse] = useState<1 | 2 | 3>(1);
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
   const [selectedMods, setSelectedMods] = useState<OrderItemModifier[]>([]);
 
@@ -32,7 +30,6 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
   useEffect(() => {
     setSelectedMods([]);
     setSelectedNotes([]);
-    setCourse(1);
   }, [productId]);
 
   if (!product) return null;
@@ -73,7 +70,6 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
     onConfirm({
       selectedModifiers: selectedMods,
       cookingDegree: product.station === 'MUTFAK' ? cookingDegree : undefined,
-      course,
       notes: selectedNotes.length > 0 ? selectedNotes.join(', ') : undefined,
     });
     onClose();
@@ -99,10 +95,10 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                 <Button
                   key={deg}
                   type="button"
-                  variant={cookingDegree === deg ? 'primary' : 'secondary'}
+                  variant={cookingDegree === deg ? 'selected' : 'secondary'}
                   size="sm"
                   onClick={() => setCookingDegree(deg)}
-                  className="min-h-12 text-xs font-semibold"
+                  className="min-h-12 text-sm font-semibold"
                 >
                   {deg}
                 </Button>
@@ -120,7 +116,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                   <label className="text-xs font-semibold text-[var(--text-secondary)]">
                     {group.name}
                   </label>
-                  <span className="text-[10px] text-[var(--text-muted)]">
+                  <span className="text-xs text-[var(--text-muted)]">
                     {group.maxSelections === 1 ? 'Tek Seçim' : `Maksimum ${group.maxSelections}`}
                   </span>
                 </div>
@@ -131,7 +127,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                       <Button
                         key={opt.id}
                         type="button"
-                        variant={isSelected ? 'outline-amber' : 'secondary'}
+                        variant={isSelected ? 'selected' : 'secondary'}
                         size="sm"
                         onClick={() =>
                           toggleModifier(group.id, group.maxSelections, {
@@ -140,11 +136,11 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                             priceDeltaCents: opt.priceDeltaCents,
                           })
                         }
-                        className="min-h-12 justify-between text-xs font-semibold !px-2.5"
+                        className="min-h-12 justify-between text-sm font-semibold !px-2.5"
                       >
                         <span className="truncate">{opt.name}</span>
                         {opt.priceDeltaCents > 0 ? (
-                          <span className="tabular-nums font-bold text-[var(--accent-amber)] shrink-0 ml-1">
+                          <span className="tabular-nums font-bold text-[var(--text-secondary)] shrink-0 ml-1">
                             +{formatMoney(opt.priceDeltaCents)}
                           </span>
                         ) : null}
@@ -156,31 +152,6 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
             ))}
           </div>
         ) : null}
-
-        {/* Servis Sırası (Kurs 1/2/3) */}
-        <div className="space-y-1.5 pt-1 border-t border-[var(--border)]">
-          <label className="block text-xs font-semibold text-[var(--text-secondary)]">
-            Servis Sırası (Kurs)
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { val: 1 as const, label: '1. Başlangıç' },
-              { val: 2 as const, label: '2. Ana Yemek' },
-              { val: 3 as const, label: '3. Tatlı / Çay' },
-            ].map((c) => (
-              <Button
-                key={c.val}
-                type="button"
-                variant={course === c.val ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setCourse(c.val)}
-                className="min-h-12 text-xs font-semibold"
-              >
-                {c.label}
-              </Button>
-            ))}
-          </div>
-        </div>
 
         {/* Mutfak Notları */}
         <div className="space-y-1.5">
@@ -194,10 +165,10 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                 <Button
                   key={note}
                   type="button"
-                  variant={active ? 'outline-amber' : 'secondary'}
+                  variant={active ? 'selected' : 'secondary'}
                   size="sm"
                   onClick={() => toggleNote(note)}
-                  className="!min-h-12 !px-3 text-xs"
+                  className="!min-h-12 !px-3 text-sm"
                 >
                   {note}
                 </Button>

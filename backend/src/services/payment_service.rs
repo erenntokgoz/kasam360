@@ -153,13 +153,8 @@ impl PaymentService {
         ),
         String,
     > {
-        let server_truth = PaymentRepository::calculate_server_truth(
-            conn,
-            tenant_id,
-            &payload.items,
-            payload.global_discount.as_ref(),
-        )
-        .await?;
+        let server_truth =
+            PaymentRepository::calculate_server_truth(conn, tenant_id, &payload.items).await?;
 
         let server_total_cents = server_truth.total_cents;
         let client_total_cents = payload.total_amount;

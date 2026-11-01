@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
 import { parseCents } from '../../../lib/moneyInput';
 import { EXPENSE_CATEGORIES, useExpenseStore } from '../../../stores/expenseStore';
 import { Button } from '../../../ui/Button';
-import { Input } from '../../../ui/Input';
 import { Panel } from '../panorama/Panel';
 import { CategorySelect } from './FinanceTab';
 
@@ -51,7 +51,7 @@ export const BudgetPanel: React.FC = () => {
       </ul>
       <div className="flex flex-wrap gap-2 mt-auto">
         <CategorySelect value={category} onChange={setCategory} />
-        <Input aria-label="Aylık sınır" inputMode="decimal" placeholder="Aylık sınır (₺)" className="min-h-12 tabular-nums !w-40" value={limit} onChange={(event) => setLimit(event.target.value)} />
+        <NumberInput aria-label="Aylık sınır" placeholder="Aylık sınır (₺)" className="min-h-12 tabular-nums !w-40" value={limit} onValueChange={setLimit} />
         <Button variant="primary" className="min-h-12" disabled={cents === null || cents <= 0} onClick={() => cents !== null && void save(category, cents)}>
           Bütçe Koy
         </Button>

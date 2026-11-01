@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { formatNumber } from '../../lib/numberText';
+import { NumberInput } from '../../ui/NumberInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { parseMoneyToCents } from '../../lib/moneyParser';
 import { useStockStore } from '../../stores/stockStore';
@@ -65,7 +67,7 @@ export function StockModule() {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--bg-canvas)] p-5 text-[var(--text-primary)]">
-      <div className="mx-auto max-w-6xl space-y-5">
+      <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="print-title text-lg font-bold">Stok ve Satın Alma</h1>
@@ -76,7 +78,7 @@ export function StockModule() {
         {error && <p role="alert" className="rounded-lg border border-[var(--accent-red-border)] bg-[var(--accent-red-soft)] p-3 text-sm text-[var(--accent-red)]">{error}</p>}
         {formError && <p role="alert" className="rounded-lg border border-[var(--accent-red-border)] bg-[var(--accent-red-soft)] p-3 text-sm text-[var(--accent-red)]">{formError}</p>}
 
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <section className="rounded-xl border border-[var(--border)] paper p-4 space-y-3">
             <h2 className="print-title text-sm font-bold">Tedarikçi</h2>
             <label className="block text-xs space-y-1"><span>Yeni Tedarikçi Adı</span>
@@ -108,8 +110,8 @@ export function StockModule() {
                   <option value="">Ürün seçin</option>
                   {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
                 </select>
-                <input aria-label={`Alım miktarı (${products.find((product) => product.id === row.productId)?.stockUnit ?? 'birim'})`} inputMode="decimal" className={field} placeholder={products.find((product) => product.id === row.productId)?.stockUnit ?? 'Miktar'} value={row.quantity} onChange={(event) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, quantity: event.target.value } : item))} />
-                <input aria-label="Birim alış fiyatı" inputMode="decimal" className={field} placeholder="Birim TL" value={row.unitCost} onChange={(event) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, unitCost: event.target.value } : item))} />
+                <NumberInput kind="quantity" aria-label={`Alım miktarı (${products.find((product) => product.id === row.productId)?.stockUnit ?? 'birim'})`} placeholder={products.find((product) => product.id === row.productId)?.stockUnit ?? 'Miktar'} value={row.quantity} onValueChange={(text) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, quantity: text } : item))} />
+                <NumberInput aria-label="Birim alış fiyatı" placeholder="Birim TL" value={row.unitCost} onValueChange={(text) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, unitCost: text } : item))} />
                 <button type="button" aria-label="Kalemi çıkar" className={`${button} border border-[var(--border)] px-2`} onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}>×</button>
               </div>
             ))}
@@ -145,7 +147,7 @@ export function StockModule() {
               {batches.map((batch) => (
                 <div key={batch.id} className="grid gap-2 p-4 text-sm sm:grid-cols-[1fr_110px_130px_140px]">
                   <strong>{batch.productName}</strong>
-                  <span className="font-mono tabular-nums">{batch.remainingQuantity} {batch.stockUnit}</span>
+                  <span className="font-mono tabular-nums">{formatNumber(batch.remainingQuantity)} {batch.stockUnit}</span>
                   <span className="font-mono tabular-nums">{formatMoney(batch.unitCostCents)} / {batch.stockUnit}</span>
                   <span className="text-xs text-[var(--text-secondary)]">{batch.receivedAt.slice(0, 10)}</span>
                 </div>

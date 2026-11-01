@@ -22,6 +22,7 @@ export interface LastSale {
   items: import('./pos').OrderItem[];
   amountCents: number;
   method: PaymentMethod;
+  receivedCents: number;
   changeCents: number;
   remainingCents: number;
 }

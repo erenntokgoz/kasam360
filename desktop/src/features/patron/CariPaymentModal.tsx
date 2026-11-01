@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { useCariStore, type PaymentInput } from '../../stores/cariStore';
 import { newOperationId, parseCents } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { Button } from '../../ui/Button';
-import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
 import { OperationFeedback, useOperationSubmit } from './CariOperationForm';
 import type { LedgerDebt } from '../../types/ledger';
@@ -76,11 +76,10 @@ export const CariPaymentModal: React.FC<CariPaymentModalProps> = ({ debt, onClos
           <label htmlFor="pay-amount" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
             Tutar (₺)
           </label>
-          <Input
+          <NumberInput
             id="pay-amount"
-            inputMode="decimal"
             value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+            onValueChange={setAmount}
             disabled={isLocked}
             className="text-base font-bold tabular-nums min-h-12"
             autoFocus
@@ -92,7 +91,7 @@ export const CariPaymentModal: React.FC<CariPaymentModalProps> = ({ debt, onClos
             <Button
               key={item.id}
               type="button"
-              variant={method === item.id ? 'primary' : 'secondary'}
+              variant={method === item.id ? 'selected' : 'secondary'}
               aria-pressed={method === item.id}
               disabled={isLocked}
               onClick={() => setMethod(item.id)}

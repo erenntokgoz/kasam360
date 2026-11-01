@@ -23,6 +23,7 @@ const TENANT_A: &str = "tenant_a";
 const TENANT_B: &str = "tenant_b";
 
 const RESERVED_AT: &str = "2026-10-02T20:30:00+03:00";
+const FAR_FUTURE: &str = "2099-10-02T20:30:00+03:00";
 
 async fn pool() -> sqlx::SqlitePool {
     let options = SqliteConnectOptions::from_str("sqlite::memory:")
@@ -489,4 +490,120 @@ async fn salon_listesi_yalniz_acik_kayitlari_gosterir() {
     assert_eq!(open.len(), 1, "yalnız açık kayıt görünür");
     assert_eq!(open[0].id, first.id);
     assert_eq!(open[0].customer_name, "Ayşe");
+}
+
+#[tokio::test]
+async fn ileri_saatli_rezervasyon_masayi_erken_kapatmaz() {
+    let pool = pool().await;
+    seed_table(&pool, TENANT_A, "tbl_ileri", "AVAILABLE").await;
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let mut later = input("Akşam Müşterisi");
+    later.reserved_at = FAR_FUTURE.to_string();
+
+    let reservation = create(&mut conn, TENANT_A, "tbl_ileri", "usr", "OWNER", later)
+        .await
+        .expect("rezervasyon");
+    let status: String = sqlx::query_scalar("SELECT status FROM tables WHERE id = 'tbl_ileri'")
+        .fetch_one(&mut *conn)
+        .await
+        .expect("masa");
+    assert_eq!(status, "AVAILABLE");
+
+    // Sipariş veya tahsilat, ileri saatli rezervasyonu kapatmaz.
+    assert!(seat_for_order(&mut conn, TENANT_A, "tbl_ileri", "usr")
+        .await
+        .expect("oturma")
+        .is_none());
+    assert!(
+        close_open_for_table(&mut conn, TENANT_A, "tbl_ileri", "usr", "TAHSILAT")
+            .await
+            .expect("kapatma")
+            .is_none()
+    );
+    let kept = find(&mut conn, TENANT_A, &reservation.id)
+        .await
+        .expect("kayıt");
+    assert_eq!(kept.status, "ACTIVE");
+}
+
+#[test]
+fn salon_durumu_kapanma_suresine_gore_turetilir() {
+    let now = chrono::DateTime::parse_from_rfc3339("2026-10-02T17:00:00Z")
+        .expect("saat")
+        .with_timezone(&chrono::Utc);
+    let at = "2026-10-02T18:00:00Z";
+    assert_eq!(
+        lead::displayed_status("AVAILABLE", Some(at), now, 60),
+        "RESERVED"
+    );
+    assert_eq!(
+        lead::displayed_status("AVAILABLE", Some(at), now, 45),
+        "AVAILABLE"
+    );
+    assert_eq!(
+        lead::displayed_status("RESERVED", Some(at), now, 45),
+        "AVAILABLE"
+    );
+    assert_eq!(
+        lead::displayed_status("OCCUPIED", Some(at), now, 60),
+        "OCCUPIED"
+    );
+    assert_eq!(
+        lead::displayed_status("AVAILABLE", Some("bozuk"), now, 60),
+        "RESERVED"
+    );
+}
+
+#[tokio::test]
+async fn kapanma_suresi_yalniz_on_bes_dakikalik_olabilir() {
+    let pool = pool().await;
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    assert_eq!(
+        lead::lead_minutes(&mut conn, TENANT_A).await.expect("süre"),
+        60
+    );
+    assert!(lead::set_lead_minutes(&mut conn, TENANT_A, 20)
+        .await
+        .is_err());
+    assert!(lead::set_lead_minutes(&mut conn, TENANT_A, 50)
+        .await
+        .is_err());
+    lead::set_lead_minutes(&mut conn, TENANT_A, 105)
+        .await
+        .expect("kayıt");
+    assert_eq!(
+        lead::lead_minutes(&mut conn, TENANT_A).await.expect("süre"),
+        105
+    );
+}
+
+#[tokio::test]
+async fn bekleyen_rezervasyon_duzenlenir_kapanan_duzenlenemez() {
+    let pool = pool().await;
+    seed_table(&pool, TENANT_A, "tbl_duzen", "AVAILABLE").await;
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let reservation = create(
+        &mut conn,
+        TENANT_A,
+        "tbl_duzen",
+        "usr",
+        "OWNER",
+        input("Eski Ad"),
+    )
+    .await
+    .expect("rezervasyon");
+    let updated = update(&mut conn, TENANT_A, &reservation.id, input("Yeni Ad"))
+        .await
+        .expect("düzenleme");
+    assert_eq!(updated.customer_name, "Yeni Ad");
+    assert!(update(&mut conn, TENANT_B, &reservation.id, input("X"))
+        .await
+        .is_err());
+
+    cancel(&mut conn, TENANT_A, &reservation.id, "usr", None)
+        .await
+        .expect("iptal");
+    assert!(update(&mut conn, TENANT_A, &reservation.id, input("Z"))
+        .await
+        .is_err());
 }

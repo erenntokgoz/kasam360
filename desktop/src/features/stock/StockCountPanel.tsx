@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { useStockStore } from '../../stores/stockStore';
 import { Button } from '../../ui/Button';
-import { Input } from '../../ui/Input';
 
 interface CountLine {
   product_id: string;
@@ -135,7 +135,7 @@ export function StockCountPanel() {
   ));
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 space-y-5 max-w-3xl">
+    <div className="flex-1 overflow-y-auto p-4 space-y-4">
       {error ? (
         <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
           {error}
@@ -158,7 +158,7 @@ export function StockCountPanel() {
               <option value="">Ürün seçin</option>
               {productOptions}
             </select>
-            <Input aria-label="Sayılan miktar" inputMode="decimal" placeholder="Sayılan" className="min-h-12" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+            <NumberInput kind="quantity" aria-label="Sayılan miktar" placeholder="Sayılan" className="min-h-12" value={quantity} onValueChange={setQuantity} />
             <Button variant="secondary" className="min-h-12" onClick={addLine}>
               Satırı Kaydet
             </Button>
@@ -212,7 +212,7 @@ export function StockCountPanel() {
               </option>
             ))}
           </select>
-          <Input aria-label="Fire miktarı" inputMode="decimal" placeholder="Miktar" className="min-h-12" value={wasteQuantity} onChange={(event) => setWasteQuantity(event.target.value)} />
+          <NumberInput kind="quantity" aria-label="Fire miktarı" placeholder="Miktar" className="min-h-12" value={wasteQuantity} onValueChange={setWasteQuantity} />
           <Button variant="secondary" className="min-h-12" onClick={addWaste}>
             Fire Yaz
           </Button>

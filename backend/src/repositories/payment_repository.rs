@@ -49,7 +49,6 @@ impl PaymentRepository {
         conn: &mut sqlx::SqliteConnection,
         tenant_id: &str,
         items: &[CartItemDto],
-        global_discount: Option<&serde_json::Value>,
     ) -> Result<ServerTruth, String> {
         let mut subtotal_all_cents: i64 = 0;
         let mut tax_all_cents: i64 = 0;
@@ -151,33 +150,12 @@ impl PaymentRepository {
             item_discount_all_cents += discount_amount_cents;
         }
 
-        let mut grand_total_cents = subtotal_all_cents + tax_all_cents;
-        let mut global_discount_cents: i64 = 0;
-
-        // Sepet geneli (global) indirim tutarını uygula - tam sayı kuruş aritmetiği (i128)
-        if let Some(g_disc) = global_discount {
-            let disc_type = g_disc.get("type").and_then(|v| v.as_str()).unwrap_or("");
-            let disc_val: i64 = g_disc
-                .get("value")
-                .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f.round() as i64)))
-                .unwrap_or(0);
-            if disc_val > 0 {
-                global_discount_cents = if disc_type == "PERCENTAGE" {
-                    let pct = disc_val.clamp(0, 100) as i128;
-                    (((grand_total_cents as i128) * pct + 50) / 100) as i64
-                } else {
-                    (disc_val as i128).min(grand_total_cents as i128) as i64
-                };
-                grand_total_cents = (grand_total_cents - global_discount_cents).max(0);
-            }
-        }
-
         Ok(ServerTruth {
             subtotal_cents: subtotal_all_cents,
             tax_cents: tax_all_cents,
-            discount_cents: item_discount_all_cents + global_discount_cents,
+            discount_cents: item_discount_all_cents,
             gross_cents: gross_all_cents,
-            total_cents: grand_total_cents,
+            total_cents: subtotal_all_cents + tax_all_cents,
         })
     }
 
@@ -186,9 +164,8 @@ impl PaymentRepository {
         conn: &mut sqlx::SqliteConnection,
         tenant_id: &str,
         items: &[CartItemDto],
-        global_discount: Option<&serde_json::Value>,
     ) -> Result<i64, String> {
-        let truth = Self::calculate_server_truth(conn, tenant_id, items, global_discount).await?;
+        let truth = Self::calculate_server_truth(conn, tenant_id, items).await?;
         Ok(truth.total_cents)
     }
 
@@ -331,7 +308,7 @@ mod tests {
             2,
             Some(serde_json::json!({ "type": "PERCENTAGE", "value": 10.0 })),
         )];
-        let truth = PaymentRepository::calculate_server_truth(&mut conn, TEST_TENANT, &items, None)
+        let truth = PaymentRepository::calculate_server_truth(&mut conn, TEST_TENANT, &items)
             .await
             .expect("hesaplanır");
 
@@ -354,29 +331,18 @@ mod tests {
             1,
             Some(serde_json::json!({ "type": "FIXED_AMOUNT", "value": 2000.0 })),
         )];
-        let global = serde_json::json!({ "type": "PERCENTAGE", "value": 10.0 });
-        let truth = PaymentRepository::calculate_server_truth(
-            &mut conn,
-            TEST_TENANT,
-            &items,
-            Some(&global),
-        )
-        .await
-        .expect("hesaplanır");
+        let truth = PaymentRepository::calculate_server_truth(&mut conn, TEST_TENANT, &items)
+            .await
+            .expect("hesaplanır");
 
-        // 10000 brüt - 2000 kalem = 8000 (KDV dahil), -%10 sepet geneli = 7200.
-        assert_eq!(truth.discount_cents, 2000 + 800);
-        assert_eq!(truth.total_cents, 7200);
+        // 10000 brüt - 2000 kalem = 8000 (KDV dahil).
+        assert_eq!(truth.discount_cents, 2000);
+        assert_eq!(truth.total_cents, 8000);
 
         // Eski tek alanlı yardımcı da aynı sonucu vermeli (ikinci gerçek yok).
-        let total = PaymentRepository::calculate_server_truth_total(
-            &mut conn,
-            TEST_TENANT,
-            &items,
-            Some(&global),
-        )
-        .await
-        .expect("hesaplanır");
+        let total = PaymentRepository::calculate_server_truth_total(&mut conn, TEST_TENANT, &items)
+            .await
+            .expect("hesaplanır");
         assert_eq!(total, truth.total_cents);
     }
 
@@ -387,7 +353,7 @@ mod tests {
         let mut conn = pool.acquire().await.expect("bağlantı");
 
         let items = vec![item(1, None)];
-        let truth = PaymentRepository::calculate_server_truth(&mut conn, TEST_TENANT, &items, None)
+        let truth = PaymentRepository::calculate_server_truth(&mut conn, TEST_TENANT, &items)
             .await
             .expect("hesaplanır");
         assert_eq!(truth.discount_cents, 0);

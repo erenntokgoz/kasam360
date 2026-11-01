@@ -59,6 +59,7 @@ pub struct StaffMoneySummary {
 #[serde(rename_all = "camelCase")]
 pub struct StaffAdvance {
     pub id: String,
+    pub expense_id: String,
     pub amount_cents: i64,
     pub created_at: String,
 }
@@ -69,8 +70,8 @@ pub async fn money_summary(
     user_id: &str,
     period: &str,
 ) -> Result<StaffMoneySummary, String> {
-    let rows: Vec<(String, i64, String)> = sqlx::query_as(
-        "SELECT id, amount_cents, created_at FROM staff_advances
+    let rows: Vec<(String, String, i64, String)> = sqlx::query_as(
+        "SELECT id, expense_id, amount_cents, created_at FROM staff_advances
          WHERE tenant_id = ? AND user_id = ? AND period = ? ORDER BY created_at DESC",
     )
     .bind(tenant_id)
@@ -92,8 +93,9 @@ pub async fn money_summary(
     Ok(StaffMoneySummary {
         advances: rows
             .into_iter()
-            .map(|(id, amount_cents, created_at)| StaffAdvance {
+            .map(|(id, expense_id, amount_cents, created_at)| StaffAdvance {
                 id,
+                expense_id,
                 amount_cents,
                 created_at,
             })

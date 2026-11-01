@@ -25,14 +25,12 @@ export const SyncStatusChip: React.FC = () => {
     return () => clearInterval(timer);
   }, [refresh]);
 
-  if (!isTauri()) return null;
+  // Sorun yokken ekranda yer kaplamaz; cihaz durumu Ayarlar'dan görülür.
+  if (!isTauri() || status?.mode === 'SINGLE' || status?.state === 'READY') return null;
 
   let label = 'Eşitleme durumu okunamadı';
   let tone: 'emerald' | 'amber' | 'red' | 'blue' | 'neutral' = 'red';
-  if (status?.mode === 'SINGLE') {
-    label = 'Tek cihaz';
-    tone = 'neutral';
-  } else if (status) {
+  if (status) {
     label = SYNC_STATE_LABEL[status.state];
     tone = TONE[status.state];
   }
@@ -43,7 +41,7 @@ export const SyncStatusChip: React.FC = () => {
         type="button"
         onClick={() => setIsOpen(true)}
         title={statusError ?? status?.detail ?? undefined}
-        className="cursor-pointer min-h-12"
+        className="cursor-pointer min-h-12 w-full px-1 flex items-center justify-center"
       >
         <Badge variant={tone}>{label}</Badge>
       </button>

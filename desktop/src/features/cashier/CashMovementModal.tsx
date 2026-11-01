@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
@@ -56,10 +57,9 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
           <label className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
             Tutar (₺)
           </label>
-          <Input
-            inputMode="decimal"
+          <NumberInput
             value={cashAmountLiras}
-            onChange={(e) => setCashAmountLiras(e.target.value)}
+            onValueChange={setCashAmountLiras}
             placeholder="Örn: 250"
             className="text-base font-bold tabular-nums"
             required

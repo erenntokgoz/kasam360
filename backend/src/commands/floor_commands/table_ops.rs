@@ -4,6 +4,73 @@ use crate::commands::command_helpers::{audit_actor, require_tenant_id, table_ten
 use crate::db::DbPool;
 use crate::services::lan_sync::WritePool;
 
+/// Masanın açık adisyonuna hesap isteğini yazar veya kaldırır.
+pub(crate) async fn write_bill_request(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+    table_id: &str,
+    requested_at: Option<&str>,
+) -> Result<(), String> {
+    let changed = sqlx::query(
+        "UPDATE orders SET bill_requested_at = ?
+         WHERE tenant_id = ? AND table_id = ? AND status IN ('OPEN', 'IN_PROGRESS')",
+    )
+    .bind(requested_at)
+    .bind(tenant_id)
+    .bind(table_id)
+    .execute(conn)
+    .await
+    .map_err(|e| e.to_string())?
+    .rows_affected();
+    if changed == 0 {
+        return Err("NOT_FOUND: masada açık adisyon yok".to_string());
+    }
+    Ok(())
+}
+
+/// Garsonun "hesap istendi" işareti. Adisyon kapanınca kendiliğinden biter.
+#[tauri::command]
+pub async fn set_bill_requested(
+    table_id: String,
+    requested: bool,
+    tenant_id: String,
+    actor_id: Option<String>,
+    actor_role: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    use crate::rbac::Role;
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[Role::Owner, Role::Manager, Role::Cashier, Role::Waiter],
+    )?;
+    let tenant = require_tenant_id(Some(tenant_id.as_str()))?;
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().to_rfc3339();
+    write_bill_request(
+        &mut tx,
+        &tenant,
+        &table_id,
+        requested.then_some(now.as_str()),
+    )
+    .await?;
+    let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::SIPARIS_MASA,
+        "table:bill_requested",
+        table_id,
+        serde_json::json!({ "requested": requested }),
+        now,
+    )?;
+    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn add_table(
     id: String,
@@ -351,3 +418,7 @@ pub async fn merge_tables(
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "table_ops_tests.rs"]
+mod tests;

@@ -109,7 +109,7 @@ describe('Menu Store Actions & Bulk Pricing', () => {
 
   it('calculates percentage bulk price preview correctly', () => {
     const store = useMenu360Store.getState();
-    store.calculateBulkPreview('PERCENTAGE', 10); // %10 zam
+    store.calculateBulkPreview('PERCENTAGE', 1000); // %10 zam, baz puan
 
     const preview = useMenu360Store.getState().bulkPreview;
     expect(preview).toHaveLength(3);
@@ -134,7 +134,7 @@ describe('Menu Store Actions & Bulk Pricing', () => {
 
   it('filters bulk price by category correctly', () => {
     const store = useMenu360Store.getState();
-    store.calculateBulkPreview('PERCENTAGE', 20, 'cat_coffee');
+    store.calculateBulkPreview('PERCENTAGE', 2000, 'cat_coffee');
 
     const preview = useMenu360Store.getState().bulkPreview;
     expect(preview).toHaveLength(2);
@@ -142,12 +142,12 @@ describe('Menu Store Actions & Bulk Pricing', () => {
   });
 
   it('kategori önizlemesinde satış dışı ürünü saymaz', () => {
-    useMenu360Store.getState().calculateBulkPreview('PERCENTAGE', 10, 'cat_food');
+    useMenu360Store.getState().calculateBulkPreview('PERCENTAGE', 1000, 'cat_food');
     expect(useMenu360Store.getState().bulkPreview).toEqual([]);
   });
 
   it('girdi değiştiğinde eski fiyat önizlemesini temizler', () => {
-    useMenu360Store.getState().calculateBulkPreview('PERCENTAGE', 10);
+    useMenu360Store.getState().calculateBulkPreview('PERCENTAGE', 1000);
     expect(useMenu360Store.getState().bulkPreview.length).toBeGreaterThan(0);
     useMenu360Store.getState().clearBulkPreview();
     expect(useMenu360Store.getState().bulkPreview).toEqual([]);
@@ -155,12 +155,12 @@ describe('Menu Store Actions & Bulk Pricing', () => {
 
   it('applies bulk price update and refreshes catalog', async () => {
     const store = useMenu360Store.getState();
-    store.calculateBulkPreview('PERCENTAGE', 15);
+    store.calculateBulkPreview('PERCENTAGE', 1500);
     expect(useMenu360Store.getState().bulkPreview.length).toBeGreaterThan(0);
 
     const res = await store.applyBulkPrice({
       updateType: 'PERCENTAGE',
-      value: 15,
+      value: 1500,
     });
     expect(res).toBeDefined();
     // Bulk preview should be cleared after apply

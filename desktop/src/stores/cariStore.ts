@@ -61,6 +61,8 @@ interface CariStore {
   loadAwaiting: () => Promise<void>;
   findSimilar: (type: DirectoryType, name: string, phone?: string) => Promise<DirectoryContact[]>;
   createCard: (input: CardInput, operationId: string, allowSimilar: boolean) => Promise<DirectoryContact>;
+  updateCard: (card: DirectoryContact, input: Pick<CardInput, 'name' | 'phone' | 'taxNo' | 'creditLimitCents'>, operationId: string) => Promise<DirectoryContact>;
+  deleteCard: (cardId: string, operationId: string) => Promise<void>;
   openDebt: (input: OpenDebtInput) => Promise<void>;
   payDebt: (input: PaymentInput) => Promise<void>;
   approveDocument: (input: DocumentInput) => Promise<void>;
@@ -146,6 +148,32 @@ export const useCariStore = create<CariStore>((set) => ({
       actorId,
       payload: { ...input, operationId, allowSimilar, tenantId },
     });
+  },
+
+  updateCard: async (card, input, operationId) => {
+    const { actorRole, actorId, tenantId } = sessionArgs();
+    return invokeIPC<DirectoryContact>('update_directory', {
+      actorRole,
+      actorId,
+      payload: {
+        operationId,
+        id: card.id,
+        tenantId,
+        name: input.name,
+        phone: input.phone ?? null,
+        email: card.email ?? null,
+        taxNo: input.taxNo ?? null,
+        taxOffice: card.taxOffice ?? null,
+        address: card.address ?? null,
+        creditLimitCents: input.creditLimitCents ?? card.creditLimitCents,
+        notes: card.notes ?? null,
+      },
+    });
+  },
+
+  deleteCard: async (cardId, operationId) => {
+    const { actorRole, actorId, tenantId } = sessionArgs();
+    await invokeIPC('delete_directory', { id: cardId, operationId, tenantId, actorRole, actorId });
   },
 
   openDebt: async (input) => {

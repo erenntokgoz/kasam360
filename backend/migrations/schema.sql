@@ -318,6 +318,7 @@ CREATE TABLE IF NOT EXISTS orders (
     table_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'OPEN'
         CHECK (status IN ('OPEN', 'IN_PROGRESS', 'PAID', 'CANCELLED', 'VOID', 'COMPENSATED')),
+    bill_requested_at TEXT,
     total_cents INTEGER NOT NULL DEFAULT 0 CHECK (total_cents >= 0),
     guest_count INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -906,6 +907,7 @@ CREATE TABLE IF NOT EXISTS tip_pool_entries (
     period TEXT NOT NULL,
     order_id TEXT,
     amount_cents INTEGER NOT NULL DEFAULT 0,
+    payment_method TEXT NOT NULL DEFAULT 'CASH',
     -- H_avuz = SUM(amount_cents); her calisan icin pay = katsayi * taban
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -1324,6 +1326,11 @@ CREATE TABLE IF NOT EXISTS pos_payment_log (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_payment_log_event
     ON pos_payment_log(tenant_id, event_id) WHERE event_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS reservation_settings (
+    tenant_id TEXT PRIMARY KEY,
+    lead_minutes INTEGER NOT NULL DEFAULT 60 CHECK (lead_minutes BETWEEN 30 AND 120 AND lead_minutes % 15 = 0)
+);
 
 CREATE TABLE IF NOT EXISTS pos_gateway_settings (
     tenant_id TEXT PRIMARY KEY,
@@ -2248,3 +2255,21 @@ CREATE TABLE IF NOT EXISTS sync_pairing_codes (
     expires_at TEXT NOT NULL,
     used_at TEXT
 );
+
+-- Kapanmış adisyon değişiklik talepleri: adisyon değişmez, karar burada tutulur.
+CREATE TABLE IF NOT EXISTS order_change_requests (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    order_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    requested_by TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    decided_by TEXT,
+    decided_at TEXT,
+    decision_note TEXT,
+    resolved_by TEXT,
+    resolved_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_change_requests_tenant_status ON order_change_requests(tenant_id, status);

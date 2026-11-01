@@ -218,6 +218,31 @@ pub async fn delete_group(
     Ok(previous_name)
 }
 
+/// Seçeneği siler. Geçmiş siparişler seçeneğin adını kendi satırında tuttuğu için bozulmaz.
+pub async fn delete_option(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    option_id: &str,
+) -> Result<String, String> {
+    let name: Option<String> = sqlx::query_scalar(
+        "SELECT o.name FROM modifier_options o
+         JOIN modifier_groups g ON g.id = o.group_id
+         WHERE o.id = ? AND g.tenant_id = ?",
+    )
+    .bind(option_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    let name = name.ok_or_else(|| "NOT_FOUND: seçenek bulunamadı.".to_string())?;
+    sqlx::query("DELETE FROM modifier_options WHERE id = ?")
+        .bind(option_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(name)
+}
+
 /// Ürünün bağlı olduğu grupları **değiştirir** (küme semantiği).
 ///
 /// Neden `set` ve `append`: seçim kutusu "bu gruplar seçili" bilgisinin tamamını

@@ -1,10 +1,11 @@
 //! Yedek listesi, elle yedek, ikinci klasör ve geri yükleme.
 
-use crate::commands::auth_commands::authenticate_by_identifier;
+use crate::commands::auth_commands::unlock_session;
+use crate::commands::receipt_commands::require_tenant_scope;
 use crate::db::DbPool;
 use crate::rbac::Role;
 use crate::services::backup::{self, schedule, BackupFile};
-use crate::services::{device_session, setup};
+use crate::services::setup;
 use std::path::{Path, PathBuf};
 
 const READ_ROLES: [Role; 2] = [Role::Owner, Role::Manager];
@@ -65,28 +66,39 @@ pub async fn set_backup_mirror(
     schedule::set_mirror(&pool, dir).await
 }
 
-/// Yedeğe döner. Veri kaybettiren işlem olduğu için patron şifresi ister; dönüşten
-/// önce mevcut durum ayrıca yedeklenir ve uygulama yeniden açılır.
+/// Eski yedeği siler. Yalnız patron silebilir; liste dışı yol reddedilir.
+#[tauri::command]
+pub async fn delete_backup(
+    file_path: String,
+    actor_role: String,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    crate::rbac::require_any(&actor_role, &[Role::Owner])?;
+    let db_path = require_db_path(&state)?;
+    let status = schedule::load_status(&pool, db_path).await?;
+    let mut dirs = vec![backup::backup_dir_for(db_path)];
+    dirs.extend(status.mirror_dir.map(PathBuf::from));
+    backup::delete_listed(&dirs, Path::new(&file_path)).map_err(|e| e.to_string())
+}
+
+/// Yedeğe döner. Veri kaybettiren işlem olduğu için açık oturumdaki patronun PIN'ini
+/// ister; dönüşten önce mevcut durum ayrıca yedeklenir ve uygulama yeniden açılır.
 #[tauri::command]
 pub async fn restore_backup(
     file_path: String,
-    password: String,
+    pin: String,
+    actor_id: String,
     actor_role: String,
+    tenant_id: Option<String>,
     app: tauri::AppHandle,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     crate::rbac::require_any(&actor_role, &[Role::Owner])?;
     let db_path = require_db_path(&state)?.clone();
-    let email = {
-        let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-        device_session::load(&mut conn)
-            .await?
-            .email
-            .ok_or_else(|| "ACCOUNT_REQUIRED: hesap oturumu yok.".to_string())?
-    };
-    let account = authenticate_by_identifier(&pool, &email, &password).await?;
-    crate::rbac::require_any(&account.role, &[Role::Owner])?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    unlock_session(&pool, &tenant, &actor_id, &pin).await?;
 
     backup::verify_file(Path::new(&file_path))
         .await

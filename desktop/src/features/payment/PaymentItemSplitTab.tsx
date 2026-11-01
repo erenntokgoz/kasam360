@@ -1,4 +1,5 @@
 import React from 'react';
+import { activateOnKey } from '../../lib/activateOnKey';
 import type { OrderItem } from '../../types/pos';
 import { formatMoney } from '../../lib/formatMoney';
 import { unitShareCents } from '../../lib/orderMath';
@@ -25,7 +26,7 @@ export const PaymentItemSplitTab: React.FC<PaymentItemSplitTabProps> = ({
         <button
           type="button"
           onClick={onSelectAll}
-          className="min-h-12 px-2 font-semibold text-[var(--accent-amber)] hover:underline cursor-pointer"
+          className="min-h-12 px-2 font-semibold text-[var(--text-secondary)] hover:underline cursor-pointer"
         >
           Tümünü Seç
         </button>
@@ -37,10 +38,13 @@ export const PaymentItemSplitTab: React.FC<PaymentItemSplitTabProps> = ({
           return (
             <div
               key={item.id}
+              role="button"
+              tabIndex={0}
               onClick={() => onToggleItem(item.id, item.quantity)}
+              onKeyDown={activateOnKey(() => onToggleItem(item.id, item.quantity))}
               className={`min-h-12 p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-colors ${
                 selected > 0
-                  ? 'bg-[var(--accent-amber-soft)] border-[var(--accent-amber-border)] text-[var(--text-primary)]'
+                  ? 'bg-[var(--bg-hover)] border-[var(--border-strong)] text-[var(--text-primary)]'
                   : 'bg-[var(--bg-subtle)] border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
               }`}
             >
@@ -48,14 +52,14 @@ export const PaymentItemSplitTab: React.FC<PaymentItemSplitTabProps> = ({
                 <div
                   className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${
                     selected > 0
-                      ? 'bg-[var(--accent-amber)] text-[var(--ink)]'
+                      ? 'bg-[var(--brand)] text-white'
                       : 'border border-[var(--border)]'
                   }`}
                 >
                   {selected > 0 ? selected : ''}
                 </div>
                 <span className="text-xs font-bold">{item.name}</span>
-                <span className="text-[11px] text-[var(--text-muted)]">
+                <span className="text-xs text-[var(--text-muted)]">
                   (Mevcut: {item.quantity})
                 </span>
               </div>

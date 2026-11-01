@@ -66,7 +66,7 @@ export interface PriceListDto {
 
 export interface BulkPriceInput {
   updateType: 'PERCENTAGE' | 'FIXED_AMOUNT';
-  value: number; // Yüzde için oran (örn: 10 = %10), TL için kuruş
+  value: number; // Yüzde için baz puan (1250 = %12,5), TL için kuruş
   categoryId?: string;
 }
 
@@ -163,6 +163,7 @@ export interface Menu360State {
   deleteProduct: (productId: string) => Promise<boolean>;
 
   createCategory: (name: string, defaultStation?: string) => Promise<boolean>;
+  updateCategory: (category: CategoryDto, name: string, defaultStation: string) => Promise<boolean>;
   deleteCategory: (categoryId: string) => Promise<boolean>;
 
   calculateBulkPreview: (
@@ -188,6 +189,7 @@ export interface Menu360State {
     isRequired: boolean
   ) => Promise<boolean>;
   deleteModifierGroup: (groupId: string) => Promise<boolean>;
+  deleteModifierOption: (optionId: string) => Promise<boolean>;
   addModifierOption: (
     groupId: string,
     name: string,

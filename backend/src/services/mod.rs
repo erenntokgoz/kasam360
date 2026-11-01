@@ -18,6 +18,7 @@ pub mod ledger_statement;
 pub mod legal360;
 pub mod master_vault;
 pub mod modifier_service;
+pub mod order_change;
 pub mod order_settlement;
 pub mod order_stock;
 pub mod outbox_dispatcher;

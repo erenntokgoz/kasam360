@@ -56,7 +56,7 @@ export function StockTrailPanel() {
   }, [productId]);
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 space-y-4 text-[var(--text-primary)]">
+    <div className="flex-1 overflow-y-auto p-4 space-y-4 text-[var(--text-primary)]">
       <select
         aria-label="Hareket ürünü"
         className="min-h-12 w-full max-w-sm rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] px-3 text-sm"
@@ -94,7 +94,7 @@ export function StockTrailPanel() {
                     {row.quantity > 0 ? '+' : ''}{row.quantity.toLocaleString('tr-TR')}
                   </td>
                   <td className="p-3 text-[var(--text-secondary)]">{row.reason ?? '-'}</td>
-                  <td className="p-3 font-mono text-[var(--text-secondary)]">
+                  <td className="p-3 tabular-nums text-[var(--text-secondary)]">
                     {SOURCE_LABEL[row.kind]} {(row.orderId ?? row.sourceId ?? '-').slice(-8)}
                   </td>
                   <td className="p-3">{row.actorName}</td>

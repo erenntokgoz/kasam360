@@ -2,13 +2,13 @@ import { canOpenModule, homeModule } from '../lib/roleAccess';
 import React, { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
-import { TopStatusBar } from '../features/shell/TopStatusBar';
 import { SidebarNav } from '../features/shell/SidebarNav';
 import { FloorModule } from '../features/floor/FloorModule';
 import { PosModule } from '../features/pos/PosModule';
 import { KdsModule } from '../features/kds/KdsModule';
 import { CashierModule } from '../features/cashier/CashierModule';
 import { ErpModule } from '../features/patron/ErpModule';
+import { SettingsTab } from '../features/patron/settings/SettingsTab';
 import { LoginOverlay } from '../features/auth/LoginOverlay';
 import { LockScreen } from '../features/auth/LockScreen';
 import { AccountGate } from '../features/auth/AccountGate';
@@ -23,14 +23,12 @@ import { canUseOperations } from './access';
 
 export const App: React.FC = () => {
   const { isAuthenticated, isLocked, mustChangePin, lock, logout, user } = useAuthStore();
-  const {
-    activeModule,
-    setActiveModule,
-    idleSecondsLeft,
-    idleLimitSeconds,
-    decrementIdleTimer,
-    resetIdleTimer,
-  } = useUIStore();
+  const activeModule = useUIStore((state) => state.activeModule);
+  const setActiveModule = useUIStore((state) => state.setActiveModule);
+  const idleSecondsLeft = useUIStore((state) => state.idleSecondsLeft);
+  const idleLimitSeconds = useUIStore((state) => state.idleLimitSeconds);
+  const decrementIdleTimer = useUIStore((state) => state.decrementIdleTimer);
+  const resetIdleTimer = useUIStore((state) => state.resetIdleTimer);
   const { phase: setupPhase, error: setupError, load: loadSetup } = useSetupStore();
   const { session: deviceSession, error: deviceError, load: loadDeviceSession } = useDeviceSessionStore();
 
@@ -83,7 +81,7 @@ export const App: React.FC = () => {
     if (user && !canOpenModule(user.role, activeModule)) setActiveModule(homeModule(user.role));
   }, [user, activeModule, setActiveModule]);
 
-  // Donanım Kısayolları (F1 - F5)
+  // Donanım Kısayolları (F1 - F6)
   useEffect(() => {
     const handleGlobalKeys = (e: KeyboardEvent) => {
       if (!isAuthenticated || isLocked || mustChangePin || !canUseOperations(user?.role)) return;
@@ -102,6 +100,9 @@ export const App: React.FC = () => {
       } else if (e.key === 'F5' && (user?.role === 'OWNER' || user?.role === 'MANAGER' || user?.role === 'MASTER')) {
         e.preventDefault();
         setActiveModule('ERP');
+      } else if (e.key === 'F6' && user && canOpenModule(user.role, 'SETTINGS')) {
+        e.preventDefault();
+        setActiveModule('SETTINGS');
       }
     };
 
@@ -150,10 +151,7 @@ export const App: React.FC = () => {
     <div className="h-screen w-screen overflow-hidden bg-[var(--bg-canvas)]">
     {/* Kilit oturumu kapatmaz: açık ekranlar ve sepet korunur, ama erişilemez olur. */}
     <div {...lockedProps} className="flex flex-col h-full w-full overflow-hidden text-[var(--text-primary)] select-none">
-      {/* 1. Üst Durum Çubuğu */}
-      <TopStatusBar />
-
-      {/* 2. Ana Çalışma Alanı: Sol 72px Donanım Menüsü + Merkez Modül */}
+      {/* Ana Çalışma Alanı: Sol Menü + Merkez Modül */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
         <SidebarNav />
 
@@ -177,6 +175,10 @@ export const App: React.FC = () => {
 
           <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'ERP' ? '' : 'hidden'}`}>
             <ErpModule />
+          </div>
+
+          <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'SETTINGS' ? '' : 'hidden'}`}>
+            {canOpenModule(user?.role, 'SETTINGS') ? <SettingsTab /> : null}
           </div>
         </main>
       </div>

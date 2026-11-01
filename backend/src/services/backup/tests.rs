@@ -4,7 +4,8 @@
 //! sessiz sıfır dönüş yok (AGENTS.md §3.4).
 
 use crate::services::backup::{
-    backup_dir_for, check_integrity, create_backup, db_path_from_url, list_backups, prune,
+    backup_dir_for, check_integrity, create_backup, db_path_from_url, delete_listed, list_backups,
+    prune,
     restore::{apply_pending_restore, schedule_restore},
     verify_backup, verify_file,
 };
@@ -266,4 +267,22 @@ fn adresten_dosya_yolu_cikar() {
         backup_dir_for(Path::new("kasam360.db")),
         PathBuf::from("./backups")
     );
+}
+
+#[tokio::test]
+async fn silme_yalniz_listedeki_yedege_ulasir() {
+    let (db, pool) = live_db().await;
+    let dir = backup_dir_for(&db);
+    let backup = create_backup(&pool, &dir.display().to_string(), "elle")
+        .await
+        .expect("yedek");
+    let outsider = dir.join("disarida.db");
+    fs::write(&outsider, b"x").expect("dosya");
+    let dirs = [dir];
+
+    assert!(delete_listed(&dirs, &outsider).is_err());
+    assert!(outsider.exists());
+
+    delete_listed(&dirs, &backup.path).expect("silinir");
+    assert!(list_backups(&dirs).is_empty());
 }

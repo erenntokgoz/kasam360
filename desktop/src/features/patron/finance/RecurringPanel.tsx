@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
-import { parseCents } from '../../../lib/moneyInput';
+import { centsToText, parseCents } from '../../../lib/moneyInput';
 import { useExpenseStore, type RecurringRow } from '../../../stores/expenseStore';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
@@ -10,7 +11,8 @@ import { CategorySelect } from './FinanceTab';
 
 /** Ödeme aynı başlıkla gider yazar; bu ay ödenip ödenmediği oradan anlaşılır. */
 export const RecurringPanel: React.FC = () => {
-  const { recurring, expenses, addRecurring, removeRecurring, addExpense } = useExpenseStore();
+  const { recurring, expenses, addRecurring, removeRecurring, updateRecurring, addExpense } = useExpenseStore();
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('RENT');
   const [amount, setAmount] = useState('');
@@ -61,13 +63,26 @@ export const RecurringPanel: React.FC = () => {
               <span className="tabular-nums text-sm font-bold text-[var(--text-primary)]">{formatMoney(row.amountCents)}</span>
               <Button
                 variant="secondary"
-                className="min-h-12 text-xs"
+                className="min-h-12 text-sm"
                 disabled={paid}
                 onClick={() => void run(() => addExpense(row.category, row.amountCents, payMethod, row.title, row.id))}
               >
                 Öde
               </Button>
-              <Button variant="ghost" className="min-h-12 text-xs" onClick={() => void run(() => removeRecurring(row.id))}>
+              <Button
+                variant="ghost"
+                className="min-h-12 text-sm"
+                onClick={() => {
+                  setEditingId(row.id);
+                  setTitle(row.title);
+                  setCategory(row.category);
+                  setAmount(centsToText(row.amountCents));
+                  setDay(String(row.dueDay));
+                }}
+              >
+                Düzenle
+              </Button>
+              <Button variant="ghost" className="min-h-12 text-sm" onClick={() => void run(() => removeRecurring(row.id))}>
                 Kaldır
               </Button>
             </li>
@@ -77,19 +92,21 @@ export const RecurringPanel: React.FC = () => {
       <div className="flex flex-wrap gap-2 mt-auto">
         <Input aria-label="Başlık" placeholder="Başlık (Kira)" className="min-h-12 !w-auto flex-1 min-w-32" value={title} onChange={(event) => setTitle(event.target.value)} />
         <CategorySelect value={category} onChange={setCategory} />
-        <Input aria-label="Tutar" inputMode="decimal" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-28" value={amount} onChange={(event) => setAmount(event.target.value)} />
-        <Input aria-label="Ayın günü" inputMode="numeric" placeholder="Gün" className="min-h-12 tabular-nums !w-20" value={day} onChange={(event) => setDay(event.target.value)} />
+        <NumberInput aria-label="Tutar" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-28" value={amount} onValueChange={setAmount} />
+        <NumberInput kind="integer" aria-label="Ayın günü" placeholder="Gün" className="min-h-12 tabular-nums !w-20" value={day} onValueChange={setDay} />
         <Button
           variant="primary"
           className="min-h-12"
           disabled={!ready}
           onClick={() => void run(async () => {
-            await addRecurring(title.trim(), category, cents ?? 0, dueDay);
+            if (editingId) await updateRecurring(editingId, title.trim(), category, cents ?? 0, dueDay);
+            else await addRecurring(title.trim(), category, cents ?? 0, dueDay);
+            setEditingId(null);
             setTitle('');
             setAmount('');
           })}
         >
-          Ekle
+          {editingId ? 'Kaydet' : 'Ekle'}
         </Button>
       </div>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}

@@ -1,30 +1,35 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { parseMoneyToCents } from '../../lib/moneyParser';
 import { Modal } from '../../ui/Modal';
-import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
+import { Numpad } from '../../ui/Numpad';
 
 export const ShiftGateModal: React.FC = () => {
   const { user } = useAuthStore();
   const { openShift, activeShift, shiftError } = useShiftStore();
-  const { modals, closeModal } = useUIStore();
+  const modals = useUIStore((state) => state.modals);
+  const closeModal = useUIStore((state) => state.closeModal);
 
   const [openingLira, setOpeningLira] = useState('0');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inputError, setInputError] = useState<string | null>(null);
 
   const isOpen = modals.shiftGate || (!activeShift?.isOpen && modals.payment);
 
-  const handlePreset = (val: number) => {
-    setOpeningLira(val.toString());
-  };
-
   const handleStartShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cents = parseMoneyToCents(openingLira);
-
+    let cents: number;
+    try {
+      cents = parseMoneyToCents(openingLira);
+    } catch (error) {
+      setInputError(error instanceof Error ? error.message : String(error));
+      return;
+    }
+    setInputError(null);
     setIsSubmitting(true);
     const success = await openShift(cents, user?.userId || 'usr_cashier', user?.name || 'Kasiyer');
     setIsSubmitting(false);
@@ -37,55 +42,52 @@ export const ShiftGateModal: React.FC = () => {
   return (
     <Modal
       isOpen={isOpen}
-      onClose={() => closeModal('shiftGate')}
+      onClose={() => {
+        closeModal('shiftGate');
+        closeModal('payment');
+      }}
       title="Vardiya Açılışı"
-      subtitle="Satış yapabilmek için kasa çekmecesindeki nakit tutarını girerek vardiyayı başlatın."
+      subtitle="Satış almak için çekmecedeki nakdi sayıp girin."
       maxWidth="md"
     >
       <form onSubmit={handleStartShift} className="space-y-4">
         <div>
-          <label className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
-            Başlangıç Kasa Nakiti (₺)
+          <label htmlFor="opening-cash" className="block text-sm font-semibold mb-1 text-[var(--text-secondary)]">
+            Çekmecedeki Nakit (₺)
           </label>
-          <Input
-            type="number"
-            min="0"
-            step="10"
+          <NumberInput
+            id="opening-cash"
             value={openingLira}
-            onChange={(e) => setOpeningLira(e.target.value)}
-            className="text-lg font-bold tabular-nums"
+            onValueChange={setOpeningLira}
+            className="!min-h-14 text-xl font-bold tabular-nums"
             required
-            autoFocus
           />
-
-          <div className="grid grid-cols-4 gap-2 pt-2">
-            {[0, 1000, 1500, 2500].map((preset) => (
-              <Button
-                key={preset}
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => handlePreset(preset)}
-                className="tabular-nums"
-              >
-                {preset.toLocaleString('tr-TR')} ₺
-              </Button>
-            ))}
-          </div>
         </div>
 
+        <Numpad
+          buttonHeightClass="!min-h-14"
+          onDigit={(digit) => {
+            if (openingLira.length < 7) setOpeningLira(openingLira === '0' ? digit : openingLira + digit);
+          }}
+          onClear={() => setOpeningLira('0')}
+          onBackspace={() => setOpeningLira(openingLira.slice(0, -1) || '0')}
+        />
+
+        {inputError ? (
+          <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{inputError}</p>
+        ) : null}
         {shiftError ? (
           <p role="alert" className="text-xs font-semibold text-[var(--accent-red)] break-words">{shiftError}</p>
         ) : null}
 
         <Button
           type="submit"
-          variant="success"
+          variant="primary"
           size="lg"
-          className="w-full mt-2"
+          className="w-full"
           isLoading={isSubmitting}
         >
-          Vardiyayı Başlat
+          Vardiyayı Aç
         </Button>
       </form>
     </Modal>

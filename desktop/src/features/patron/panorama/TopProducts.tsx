@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatNumber } from '../../../lib/numberText';
 import { formatMoney } from '../../../lib/formatMoney';
 import { marginPercent } from '../../../lib/panoramaInsights';
 import type { PanoramaProduct } from '../../../stores/panoramaStore';
@@ -36,7 +37,7 @@ export const TopProducts: React.FC<TopProductsProps> = ({ products, showProfit }
                       <span className="block h-full rounded bg-[var(--accent-blue)]" style={{ width: `${(item.revenueCents / peak) * 100}%` }} />
                     </span>
                   </td>
-                  <td className="py-2 pl-3 text-right tabular-nums text-[var(--text-secondary)]">{item.units}</td>
+                  <td className="py-2 pl-3 text-right tabular-nums text-[var(--text-secondary)]">{formatNumber(item.units)}</td>
                   <td className="py-2 pl-3 text-right tabular-nums whitespace-nowrap text-[var(--text-primary)]">{formatMoney(item.revenueCents)}</td>
                   {showProfit ? (
                     <td className="py-2 pl-3 text-right tabular-nums whitespace-nowrap text-[var(--text-primary)]">

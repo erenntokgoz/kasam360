@@ -375,7 +375,7 @@ async fn sunucu_hesabindaki_indirim_kapiyi_acitir() {
         ..Default::default()
     }];
 
-    let truth = PaymentRepository::calculate_server_truth(&mut conn, TENANT, &items, None)
+    let truth = PaymentRepository::calculate_server_truth(&mut conn, TENANT, &items)
         .await
         .expect("sunucu hesabı çalışır");
     assert!(truth.discount_cents > 0, "indirim hesaplanmalı");

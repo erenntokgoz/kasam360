@@ -1,20 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { ShoppingBag, Calendar, MapPin, Grid } from 'lucide-react';
 import { useFloorStore } from '../../stores/floorStore';
 import { usePosStore } from '../../stores/posStore';
+import { useKdsStore } from '../../stores/kdsStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
-import { AddTableModal } from './AddTableModal';
+import { TableManagerModal } from './TableManagerModal';
 import type { FloorTable } from '../../types/floor';
 import { TableCardGrid } from './TableCardGrid';
 import { FloorBlueprint } from './FloorBlueprint';
 import { TableSlideOver } from './TableSlideOver';
 import { ReservationModal } from './ReservationModal';
-import { Button } from '../../ui/Button';
+import { Bar, BarAction, BarTab } from '../../ui/Bar';
 import { OrderStatusBanner } from '../pos/OrderStatusBanner';
 import { useSyncStore } from '../../stores/syncStore';
 
 const CLUSTER_REFRESH_MS = 3000;
+
+const KITCHEN_POLL_MS = 15_000;
+// Rezervasyon kapanma saati sunucuda hesaplanır; salon bu aralıkla yeniden okur.
+const RESERVATION_REFRESH_MS = 30_000;
 
 export const FloorModule: React.FC = () => {
   const {
@@ -37,25 +41,20 @@ export const FloorModule: React.FC = () => {
     mergeTables,
     addReservation,
     closeReservation,
-    checkReservationLocks,
+    updateReservation,
+    setBillRequested,
     floorError,
   } = useFloorStore();
 
   const { openOrderForTable, openWalkinOrder } = usePosStore();
-  const { setActiveModule, openModal } = useUIStore();
+  const setActiveModule = useUIStore((state) => state.setActiveModule);
+  const openModal = useUIStore((state) => state.openModal);
   const { user } = useAuthStore();
   const isOpen = useUIStore((state) => state.activeModule === 'FLOOR');
   const isCluster = useSyncStore((state) => state.status?.mode === 'CLUSTER');
 
   const [isResModalOpen, setIsResModalOpen] = useState(false);
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      checkReservationLocks();
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [checkReservationLocks]);
 
   // Modül gizli kalarak açık durur: salon her girişte sunucudan okunur.
   useEffect(() => {
@@ -65,14 +64,25 @@ export const FloorModule: React.FC = () => {
   // Başka cihazın açtığı masa beklemeden görünür. Kroki düzenlenirken tazelenmez:
   // sürüklenen masa eski konumuna atlar.
   useEffect(() => {
-    if (!isOpen || !isCluster || isKrokiEditMode) return undefined;
+    if (!isOpen || isKrokiEditMode) return undefined;
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') void loadFloorPlan();
-    }, CLUSTER_REFRESH_MS);
+    }, isCluster ? CLUSTER_REFRESH_MS : RESERVATION_REFRESH_MS);
     return () => clearInterval(timer);
   }, [isOpen, isCluster, isKrokiEditMode, loadFloorPlan]);
 
   const isOwnerOrManager = user?.role === 'OWNER' || user?.role === 'MANAGER' || user?.role === 'MASTER';
+  const loadKitchen = useKdsStore((state) => state.loadTickets);
+  const isSalonOpen = useUIStore((state) => state.activeModule === 'FLOOR');
+
+  useEffect(() => {
+    if (!isSalonOpen) return undefined;
+    void loadKitchen().catch(() => undefined);
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadKitchen().catch(() => undefined);
+    }, KITCHEN_POLL_MS);
+    return () => clearInterval(timer);
+  }, [isSalonOpen, loadKitchen]);
 
   // Seçili bölgeye göre masaları filtrele
   const filteredTables = selectedZoneId
@@ -114,108 +124,44 @@ export const FloorModule: React.FC = () => {
           Salon planı okunamadı: {floorError}
         </p>
       ) : null}
-      <AddTableModal isOpen={isAddTableOpen} onClose={() => setIsAddTableOpen(false)} />
-      {/* Üst Operasyon Barı */}
-      <div className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        {/* Sol: Bölge Filtreleri */}
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          <Button
-            variant={selectedZoneId === null ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => setSelectedZoneId(null)}
-            className="!min-h-12 tabular-nums"
-          >
-            Tümü ({tables.length})
-          </Button>
-          {zones.map((zone) => {
-            const count = tables.filter((t) => t.zoneId === zone.id).length;
-            const isSelected = selectedZoneId === zone.id;
-            return (
-              <Button
-                key={zone.id}
-                variant={isSelected ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setSelectedZoneId(zone.id)}
-                className="!min-h-12 tabular-nums"
-              >
-                {zone.name} ({count})
-              </Button>
-            );
-          })}
-        </div>
-
-        {/* Sağ: Görünüm Şalteri, Tezgah Satışı ve Rezervasyon */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {isOwnerOrManager ? (
-            <Button variant="secondary" size="sm" onClick={() => setIsAddTableOpen(true)} className="min-h-12 text-xs font-bold">
-              Masa Ekle
-            </Button>
-          ) : null}
-          <div className="p-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center gap-1">
-            <button
-              type="button"
+      <TableManagerModal isOpen={isAddTableOpen} onClose={() => setIsAddTableOpen(false)} />
+      <Bar
+        label="Bölgeler"
+        actions={
+          <>
+            {isOwnerOrManager ? <BarAction onClick={() => setIsAddTableOpen(true)}>Masalar</BarAction> : null}
+            <BarAction
               onClick={() => {
-                setViewMode('CARDS');
+                setViewMode(viewMode === 'CARDS' ? 'KROKI' : 'CARDS');
                 setKrokiEditMode(false);
               }}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
-                viewMode === 'CARDS'
-                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
             >
-              <Grid className="w-3.5 h-3.5" />
-              <span>Kart Görünümü</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('KROKI')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
-                viewMode === 'KROKI'
-                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <MapPin className="w-3.5 h-3.5" />
-              <span>Salon Krokisi</span>
-            </button>
-          </div>
-
-          {/* Kroki Düzenleme Butonu (Yalnızca kroki görünümünde ve yetkili kullanıcıda) */}
-          {viewMode === 'KROKI' && isOwnerOrManager ? (
-            <Button
-              variant={isKrokiEditMode ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setKrokiEditMode(!isKrokiEditMode)}
-              className="!min-h-12"
-            >
-              {isKrokiEditMode ? 'Düzenlemeyi Bitir' : 'Krokiyi Düzenle'}
-            </Button>
-          ) : null}
-
-          {/* Hızlı Tezgah Satışı */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleWalkin}
-            className="!min-h-12"
-          >
-            <ShoppingBag className="w-4 h-4 text-[var(--accent-amber)]" />
-            <span>Tezgah Satışı</span>
-          </Button>
-
-          {/* Yeni Rezervasyon */}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setIsResModalOpen(true)}
-            className="!min-h-12"
-          >
-            <Calendar className="w-4 h-4" />
-            <span>+ Rezervasyon</span>
-          </Button>
-        </div>
-      </div>
+              {viewMode === 'CARDS' ? 'Kroki' : 'Kartlar'}
+            </BarAction>
+            {viewMode === 'KROKI' && isOwnerOrManager ? (
+              <BarAction
+                aria-pressed={isKrokiEditMode}
+                onClick={() => {
+                  // Yerleşim Bitir ile kaydedilir; kaydedilemezse düzenleme açık kalır, emek gitmez.
+                  if (!isKrokiEditMode) setKrokiEditMode(true);
+                  else void saveFloorLayout().then((saved) => saved && setKrokiEditMode(false));
+                }}
+              >
+                {isKrokiEditMode ? 'Bitir' : 'Düzenle'}
+              </BarAction>
+            ) : null}
+            <BarAction onClick={() => setIsResModalOpen(true)}>Rezervasyon</BarAction>
+            <BarAction tone="primary" onClick={handleWalkin}>Tezgah Satışı</BarAction>
+          </>
+        }
+      >
+        <BarTab active={selectedZoneId === null} onClick={() => setSelectedZoneId(null)}>Tümü</BarTab>
+        {zones.map((zone) => (
+          <BarTab key={zone.id} active={selectedZoneId === zone.id} onClick={() => setSelectedZoneId(zone.id)}>
+            {zone.name}
+          </BarTab>
+        ))}
+      </Bar>
 
       {/* Görünüm Alanı: Kart Izgarası veya 2D Kroki */}
       {viewMode === 'CARDS' ? (
@@ -229,7 +175,6 @@ export const FloorModule: React.FC = () => {
           tables={filteredTables}
           isEditMode={isKrokiEditMode}
           onTablePositionChange={updateTablePosition}
-          onSaveLayout={saveFloorLayout}
           onOpenTable={handleOpenTable}
           onInspectTable={handleInspectTable}
         />
@@ -246,6 +191,7 @@ export const FloorModule: React.FC = () => {
         onMoveTable={moveTable}
         onMergeTable={mergeTables}
         onCloseReservation={closeReservation}
+        onToggleBill={setBillRequested}
       />
 
       {/* Rezervasyon Ekleme Modalı */}
@@ -254,6 +200,8 @@ export const FloorModule: React.FC = () => {
         onClose={() => setIsResModalOpen(false)}
         tables={tables}
         onSaveReservation={addReservation}
+        onUpdateReservation={updateReservation}
+        onCloseReservation={closeReservation}
       />
     </section>
   );

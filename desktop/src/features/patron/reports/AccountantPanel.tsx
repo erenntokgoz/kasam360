@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatNumber } from '../../../lib/numberText';
 import { errorText } from '../../../lib/cariInput';
 import { downloadFile } from '../../../lib/downloadFile';
 import { formatMoney } from '../../../lib/formatMoney';
@@ -46,7 +47,7 @@ export const AccountantPanel: React.FC = () => {
       <div className="flex flex-wrap items-center gap-2">
         <Input aria-label="Rapor başlangıcı" type="date" className="min-h-12 !w-40" value={from} onChange={(event) => setFrom(event.target.value)} />
         <Input aria-label="Rapor bitişi" type="date" className="min-h-12 !w-40" value={to} onChange={(event) => setTo(event.target.value)} />
-        <Button variant="primary" className="min-h-12 text-xs font-bold" disabled={from === '' || to === ''} onClick={() => void build()}>
+        <Button variant="primary" className="min-h-12 text-sm font-bold" disabled={from === '' || to === ''} onClick={() => void build()}>
           İmzalı Rapor İndir
         </Button>
       </div>
@@ -54,7 +55,7 @@ export const AccountantPanel: React.FC = () => {
         <dl className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
           <div><dt className="text-xs text-[var(--text-secondary)]">Tahsilat</dt><dd className="font-bold tabular-nums">{formatMoney(body.tahsilat_cents)}</dd></div>
           <div><dt className="text-xs text-[var(--text-secondary)]">İptal</dt><dd className="font-bold tabular-nums">{formatMoney(body.iptal_cents)}</dd></div>
-          <div><dt className="text-xs text-[var(--text-secondary)]">Adisyon</dt><dd className="font-bold tabular-nums">{body.siparis_adedi}</dd></div>
+          <div><dt className="text-xs text-[var(--text-secondary)]">Adisyon</dt><dd className="font-bold tabular-nums">{formatNumber(body.siparis_adedi)}</dd></div>
           <div><dt className="text-xs text-[var(--text-secondary)]">Kalan Cari</dt><dd className="font-bold tabular-nums">{formatMoney(body.kalan_borc_cents)}</dd></div>
         </dl>
       ) : null}

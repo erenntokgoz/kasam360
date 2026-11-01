@@ -36,7 +36,7 @@ export const QrMenuPanel: React.FC = () => {
       <p className="text-xs text-[var(--text-secondary)]">
         Güncel menüyü imzalı dosya olarak verir. Adres tanımlanana kadar karekod üretilmez, müşteriden sipariş alınmaz.
       </p>
-      <Button variant="secondary" className="min-h-12 text-xs" onClick={() => void build()}>Menü Dosyasını İndir</Button>
+      <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void build()}>Menü Dosyasını İndir</Button>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
     </section>
   );

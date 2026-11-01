@@ -50,6 +50,9 @@ pub enum CariOp {
         #[serde(flatten)]
         card: CardFields,
     },
+    DeleteCard {
+        directory_id: String,
+    },
     OpenDebt(OpenDebtInput),
     RecordPayment(RecordPaymentInput),
     ApproveDocument(ApproveDocumentInput),
@@ -60,6 +63,7 @@ impl CariOp {
         match self {
             Self::CreateCard { .. } => "CREATE_CARD",
             Self::UpdateCard { .. } => "UPDATE_CARD",
+            Self::DeleteCard { .. } => "DELETE_CARD",
             Self::OpenDebt(_) => "OPEN_DEBT",
             Self::RecordPayment(_) => "RECORD_PAYMENT",
             Self::ApproveDocument(_) => "APPROVE_DOCUMENT",
@@ -69,6 +73,7 @@ impl CariOp {
     pub fn target_id(&self) -> &str {
         match self {
             Self::CreateCard { card, .. } | Self::UpdateCard { card } => &card.directory_id,
+            Self::DeleteCard { directory_id } => directory_id,
             Self::OpenDebt(input) => &input.directory_id,
             Self::RecordPayment(input) => &input.debt_id,
             Self::ApproveDocument(input) => &input.purchase_order_id,
@@ -138,6 +143,38 @@ async fn create_card(
         "type": directory_type,
         "creditLimitCents": limit,
     }))
+}
+
+/// Yalnız hareket görmemiş kart silinir: borç geçmişi olan kart defterin parçasıdır.
+async fn delete_card(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    directory_id: &str,
+) -> Result<Value, ApplyError> {
+    let debts: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM debts WHERE tenant_id = ? AND directory_id = ?")
+            .bind(tenant_id)
+            .bind(directory_id)
+            .fetch_one(&mut *conn)
+            .await?;
+    if debts > 0 {
+        return Err(rejected("CONFLICT: hareket gören cari kart silinemez."));
+    }
+    let deleted = sqlx::query("DELETE FROM directories WHERE id = ? AND tenant_id = ?")
+        .bind(directory_id)
+        .bind(tenant_id)
+        .execute(&mut *conn)
+        .await;
+    match deleted {
+        Ok(result) if result.rows_affected() == 0 => {
+            Err(rejected("NOT_FOUND: cari kart bulunamadı"))
+        }
+        Ok(_) => Ok(json!({ "directoryId": directory_id })),
+        Err(error) if error.to_string().contains("FOREIGN KEY") => {
+            Err(rejected("CONFLICT: hareket gören cari kart silinemez."))
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn update_card(
@@ -243,6 +280,10 @@ pub async fn apply(
         CariOp::UpdateCard { card } => (
             "directory:updated",
             update_card(conn, tenant_id, card).await?,
+        ),
+        CariOp::DeleteCard { directory_id } => (
+            "directory:deleted",
+            delete_card(conn, tenant_id, directory_id).await?,
         ),
         CariOp::OpenDebt(input) => ("debt:created", open_debt(conn, tenant_id, input).await?),
         CariOp::RecordPayment(input) => ("debt:paid", apply_payment(conn, tenant_id, input).await?),

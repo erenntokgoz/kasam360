@@ -34,7 +34,7 @@ export const LegacyArchivePanel: React.FC = () => {
       <p className="text-xs text-[var(--text-secondary)]">
         Yasal modül üründen kaldırıldı. Daha önce girilen {count} kayıt silinmedi ve yedeğe dahildir.
       </p>
-      <Button variant="secondary" className="min-h-12 text-xs" onClick={() => void download()}>Arşivi İndir</Button>
+      <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void download()}>Arşivi İndir</Button>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
     </section>
   );

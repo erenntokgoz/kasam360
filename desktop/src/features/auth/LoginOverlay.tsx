@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sun, Moon, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { BrandMark } from '../../ui/BrandMark';
@@ -9,7 +9,7 @@ import { formatDateTime } from '../../lib/date';
 
 export const LoginOverlay: React.FC = () => {
   const { isAuthenticated, loginWithPin, loginError } = useAuthStore();
-  const { theme, toggleTheme, resetIdleTimer } = useUIStore();
+  const resetIdleTimer = useUIStore((state) => state.resetIdleTimer);
 
   const [pinDigits, setPinDigits] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,28 +59,17 @@ export const LoginOverlay: React.FC = () => {
           <BrandMark className="w-8 h-8" surface="desk" />
           <span className="font-bold text-base tracking-tight text-[var(--text-primary)]">KASAM360</span>
         </div>
-
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={toggleTheme}
-          className="!min-h-12 !px-3"
-          aria-label="Tema Değiştir"
-        >
-          {theme === 'dark' ? <Sun className="w-4 h-4 text-[var(--accent-amber)]" /> : <Moon className="w-4 h-4 text-[var(--text-tertiary)]" />}
-          <span>{theme === 'dark' ? 'Açık Tema' : 'Koyu Tema'}</span>
-        </Button>
       </div>
 
       {/* Merkez Terminal Kartı */}
       <div className="flex-1 flex items-center justify-center">
         <div
-          className={`w-full max-w-[360px] paper border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5 shadow-2xl ${
+          className={`w-full max-w-[360px] paper border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-4 shadow-2xl ${
             shake ? 'animate-shake' : ''
           }`}
         >
           <div className="text-center">
-            <h1 className="print-title text-base font-bold text-[var(--text-primary)]">Personel Girişi</h1>
+            <h1 className="print-title text-sm font-bold text-[var(--text-primary)]">Personel Girişi</h1>
             <p className="text-xs mt-1 text-[var(--text-secondary)]">
               Devam etmek için 4-8 haneli PIN kodunuzu girin
             </p>
@@ -126,7 +115,7 @@ export const LoginOverlay: React.FC = () => {
       {/* Alt Bilgi Satırı */}
       <div className="flex flex-wrap items-center justify-between text-xs text-[var(--text-muted)] gap-2">
         <span>İşletme PIN kodunuzu kullanın.</span>
-        <span className="tabular-nums font-mono">{clockStr}</span>
+        <span className="tabular-nums tabular-nums">{clockStr}</span>
       </div>
     </div>
   );

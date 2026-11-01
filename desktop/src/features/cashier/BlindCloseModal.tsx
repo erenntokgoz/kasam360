@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FileText } from 'lucide-react';
+import { NumberInput } from '../../ui/NumberInput';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useUIStore } from '../../stores/uiStore';
 import { errorText } from '../../lib/cariInput';
@@ -8,10 +9,13 @@ import { parseCents } from '../../lib/moneyInput';
 import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
+import { Numpad } from '../../ui/Numpad';
 import type { ZReportData } from '../../types/shift';
 
 export const BlindCloseModal: React.FC = () => {
-  const { modals, closeModal, openModal } = useUIStore();
+  const modals = useUIStore((state) => state.modals);
+  const closeModal = useUIStore((state) => state.closeModal);
+  const openModal = useUIStore((state) => state.openModal);
   const { closeShift, explainDifference } = useShiftStore();
 
   const [countedLiras, setCountedLiras] = useState('');
@@ -81,16 +85,23 @@ export const BlindCloseModal: React.FC = () => {
             <label className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
               Sayılan Fiziksel Kasa Nakiti (₺)
             </label>
-            <Input
-              inputMode="decimal"
+            <NumberInput
               value={countedLiras}
-              onChange={(e) => setCountedLiras(e.target.value)}
+              onValueChange={setCountedLiras}
               placeholder="Örn: 6350"
               className="text-lg font-bold tabular-nums"
               required
-              autoFocus
             />
           </div>
+
+          <Numpad
+            buttonHeightClass="!min-h-14"
+            onDigit={(digit) => {
+              if (countedLiras.length < 7) setCountedLiras(countedLiras + digit);
+            }}
+            onClear={() => setCountedLiras('')}
+            onBackspace={() => setCountedLiras(countedLiras.slice(0, -1))}
+          />
 
           {error ? (
             <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
@@ -123,7 +134,7 @@ export const BlindCloseModal: React.FC = () => {
           <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-4 divide-y divide-[var(--border)] text-xs">
             <div className="pb-2 flex justify-between">
               <span className="text-[var(--text-secondary)]">Rapor No:</span>
-              <span className="font-bold text-[var(--text-primary)] font-mono">{completedReport.reportNumber}</span>
+              <span className="font-bold text-[var(--text-primary)] tabular-nums">{completedReport.reportNumber}</span>
             </div>
             <div className="py-2 flex justify-between">
               <span className="text-[var(--text-secondary)]">Sayılan Nakit:</span>

@@ -18,6 +18,7 @@
 use crate::services::lan_sync::WritePool;
 use serde::Deserialize;
 
+use crate::commands::receipt_commands::require_tenant_scope;
 use crate::db::DbPool;
 use crate::management_commands::{audit_actor, record_audit};
 use crate::rbac::{self, Role};
@@ -58,6 +59,21 @@ fn require_text(value: &str, field: &str) -> Result<String, String> {
 pub struct ReserveTableRequest {
     #[serde(alias = "tableId")]
     pub table_id: String,
+    #[serde(alias = "customerName")]
+    pub customer_name: String,
+    #[serde(alias = "customerPhone", default)]
+    pub customer_phone: Option<String>,
+    #[serde(alias = "partySize", default = "default_party_size")]
+    pub party_size: i64,
+    #[serde(alias = "reservedAt")]
+    pub reserved_at: String,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// Rezervasyon düzenleme gövdesi. Masa burada değişmez.
+#[derive(Debug, Deserialize)]
+pub struct UpdateReservationRequest {
     #[serde(alias = "customerName")]
     pub customer_name: String,
     #[serde(alias = "customerPhone", default)]
@@ -168,6 +184,90 @@ pub async fn reserve_table(
 
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(reservation)
+}
+
+/// Bekleyen rezervasyonun müşteri, kişi, saat ve notunu değiştirir.
+#[tauri::command]
+pub async fn update_reservation(
+    reservation_id: String,
+    request: UpdateReservationRequest,
+    caller_role: Option<String>,
+    caller_id: Option<String>,
+    caller_tenant_id: Option<String>,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    app_state: tauri::State<'_, crate::AppState>,
+) -> Result<ReservationDto, String> {
+    require_reservation_manager(caller_role.as_deref())?;
+    let tenant = resolve_tenant(caller_tenant_id.as_deref(), tenant_id.as_deref())?;
+    let id = require_text(&reservation_id, "reservationId")?;
+
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    let (actor_id, actor_role) = audit_actor(caller_id, caller_role.as_deref().unwrap_or("WAITER"));
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
+    let reservation = reservation_service::update(
+        &mut tx,
+        &tenant,
+        &id,
+        NewReservation {
+            customer_name: request.customer_name,
+            customer_phone: request.customer_phone,
+            party_size: request.party_size,
+            reserved_at: request.reserved_at,
+            note: request.note,
+        },
+    )
+    .await?;
+    record_audit(
+        &mut tx,
+        &lock,
+        &tenant,
+        &actor_id,
+        &actor_role,
+        category::SIPARIS_MASA,
+        "table:reservation_updated",
+        &reservation.table_id,
+        serde_json::json!({
+            "reservationId": reservation.id,
+            "customerName": reservation.customer_name,
+            "partySize": reservation.party_size,
+            "reservedAt": reservation.reserved_at,
+        }),
+    )
+    .await?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(reservation)
+}
+
+/// Rezervasyonlu masanın kaç dakika önce kapanacağı.
+#[tauri::command]
+pub async fn get_reservation_lead(
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<i64, String> {
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    reservation_service::lead::lead_minutes(&mut conn, &tenant).await
+}
+
+#[tauri::command]
+pub async fn set_reservation_lead(
+    minutes: i64,
+    actor_role: String,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    app_state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    app_state.lan_sync.require_local_write()?;
+    crate::rbac::require_any(
+        &actor_role,
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager],
+    )?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
+    reservation_service::lead::set_lead_minutes(&mut tx, &tenant, minutes).await?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 async fn close_with_reason(

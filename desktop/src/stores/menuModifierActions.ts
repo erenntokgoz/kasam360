@@ -3,7 +3,7 @@ import { invokeIPC } from '../services/tauriClient';
 import type { Menu360State, ModifierGroupDto, ModifierOptionDto } from '../types/menu360';
 
 type AuthContext = { actorRole: string; actorId: string; tenantId: string };
-type ModifierActions = Pick<Menu360State, 'createModifierGroup' | 'deleteModifierGroup' | 'addModifierOption'>;
+type ModifierActions = Pick<Menu360State, 'createModifierGroup' | 'deleteModifierGroup' | 'addModifierOption' | 'deleteModifierOption'>;
 
 export function createMenuModifierActions(
   set: StoreApi<Menu360State>['setState'],
@@ -40,6 +40,26 @@ export function createMenuModifierActions(
         set((state) => ({
           modifierGroups: state.modifierGroups.filter((group) => group.id !== groupId),
           productModifierGroupIds: state.productModifierGroupIds.filter((id) => id !== groupId),
+        }));
+        return true;
+      } catch (err: unknown) {
+        set({ error: err instanceof Error ? err.message : String(err) });
+        return false;
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    deleteModifierOption: async (optionId) => {
+      try {
+        const { actorRole, actorId, tenantId } = getAuthContext();
+        set({ busy: true, error: null });
+        await invokeIPC('delete_modifier_option', { actorRole, actorId, tenantId, optionId });
+        set((state) => ({
+          modifierGroups: state.modifierGroups.map((group) => ({
+            ...group,
+            options: group.options.filter((option) => option.id !== optionId),
+          })),
         }));
         return true;
       } catch (err: unknown) {

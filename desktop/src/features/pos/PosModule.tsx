@@ -21,6 +21,8 @@ export const PosModule: React.FC = () => {
     addItemToTicket,
     bindWalkinToTable,
     watchActiveOrder,
+    activeTableId,
+    isWalkin,
   } = usePosStore();
 
   const { tables } = useFloorStore();
@@ -59,7 +61,7 @@ export const PosModule: React.FC = () => {
         <ProductCatalog onBindTableClick={() => setShowBindModal(true)} />
 
         {/* Sağ Adisyon Paneli */}
-        <OrderTicket />
+        {activeTableId || isWalkin ? <OrderTicket /> : null}
       </div>
 
       {/* Modifiyer Seçici Modalı */}
@@ -73,7 +75,6 @@ export const PosModule: React.FC = () => {
             activeModifierProduct,
             modData.selectedModifiers,
             modData.cookingDegree,
-            modData.course,
             modData.notes
           );
         }}

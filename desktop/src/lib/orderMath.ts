@@ -15,7 +15,6 @@ export interface CartItemWire {
   note?: string | null;
   paidQuantity?: number | null;
   isComp?: boolean | null;
-  courseNumber?: number | null;
   status?: string | null;
 }
 
@@ -52,7 +51,6 @@ export function mapServerItem(wire: CartItemWire): OrderItem | null {
     vatRate: (wire.taxRate ?? 0) / 100,
     taxRateBp: wire.taxRate ?? 0,
     station: 'MUTFAK',
-    course: ((wire.courseNumber ?? 1) as 1 | 2 | 3),
     notes: wire.note ?? undefined,
     selectedModifiers: mapModifiers(wire.modifiers),
     totalCents: 0,
@@ -81,6 +79,5 @@ export function toSubmitItem(item: OrderItem) {
     quantity: item.quantity,
     modifiers: item.selectedModifiers.map((m) => ({ id: m.optionId })),
     note: note || null,
-    courseNumber: item.course,
   };
 }

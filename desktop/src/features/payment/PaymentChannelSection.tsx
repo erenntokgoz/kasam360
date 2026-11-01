@@ -1,40 +1,43 @@
-import { parseMoneyToCents } from '../../lib/moneyParser';
 import React, { useState } from 'react';
 import { Banknote, CreditCard, Utensils, BookOpen } from 'lucide-react';
 import type { PaymentMethod } from '../../types/payment';
 import type { DirectoryContact } from '../../types/ledger';
 import { formatMoney } from '../../lib/formatMoney';
 import { errorText } from '../../lib/cariInput';
+import type { PaymentPlan } from '../../lib/paymentMath';
+import { parseCents } from '../../lib/moneyInput';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
+import { NumberInput } from '../../ui/NumberInput';
+import type { PinpadInfo } from '../../ui/PinpadModal';
+
+const CHANNELS = [
+  { id: 'CASH' as const, label: 'Nakit', icon: Banknote },
+  { id: 'CARD' as const, label: 'Kart', icon: CreditCard },
+  { id: 'MEAL_CARD' as const, label: 'Yemek Kartı', icon: Utensils },
+  { id: 'VERESIYE' as const, label: 'Cari', icon: BookOpen },
+];
 
 export interface PaymentChannelSectionProps {
   channel: PaymentMethod;
   onSelectChannel: (channel: PaymentMethod) => void;
-  payNowCents: number;
-  tenderedLiras: string;
-  onChangeTendered: (liras: string) => void;
+  plan: PaymentPlan;
+  receivedText: string;
+  onChangeReceived: (text: string) => void;
+  pinpadInfo: PinpadInfo[];
   directories: DirectoryContact[];
   selectedDirectoryId: string;
   onSelectDirectory: (id: string) => void;
   onCreateContact: (name: string, phone: string) => Promise<void>;
 }
 
-/** Yazım sürerken bozuk tutar para üstü göstermez; kuruş hesabı kayan noktaya girmez. */
-function parseTenderedCents(text: string, fallback: number): number {
-  try {
-    return parseMoneyToCents(text);
-  } catch {
-    return fallback;
-  }
-}
-
 export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
   channel,
   onSelectChannel,
-  payNowCents,
-  tenderedLiras,
-  onChangeTendered,
+  plan,
+  receivedText,
+  onChangeReceived,
+  pinpadInfo,
   directories,
   selectedDirectoryId,
   onSelectDirectory,
@@ -44,13 +47,6 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
   const [newCariName, setNewCariName] = useState('');
   const [newCariPhone, setNewCariPhone] = useState('');
   const [cariError, setCariError] = useState<string | null>(null);
-
-  const tenderedCents = tenderedLiras ? parseTenderedCents(tenderedLiras, payNowCents) : payNowCents;
-  const changeDueCents = Math.max(0, tenderedCents - payNowCents);
-
-  const handleBanknotePreset = (liras: number) => {
-    onChangeTendered(liras.toString());
-  };
 
   const handleCreateCariSubmit = async () => {
     if (!newCariName) return;
@@ -66,143 +62,99 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
     }
   };
 
+  // Yazılan tutar yazıldığı anda görünür: para üstü pencere kapanmadan okunur.
+  const changeRow = (raw: string): PinpadInfo[] => {
+    const received = parseCents(raw);
+    if (received === null) return [];
+    return received >= plan.dueCents
+      ? [{ label: 'Para Üstü', value: formatMoney(received - plan.dueCents) }]
+      : [{ label: 'Eksik', value: formatMoney(plan.dueCents - received) }];
+  };
+
   return (
-    <div className="space-y-3">
-      {/* Ödeme Kanalları */}
-      <div className="space-y-1.5">
-        <label className="block text-xs font-semibold text-[var(--text-secondary)]">
-          Ödeme Kanalı
-        </label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {[
-            { id: 'CASH' as const, label: 'Nakit', icon: Banknote },
-            { id: 'CARD' as const, label: 'Kredi Kartı', icon: CreditCard },
-            { id: 'MEAL_CARD' as const, label: 'Yemek Kartı', icon: Utensils },
-            { id: 'VERESIYE' as const, label: 'Veresiye (Cari)', icon: BookOpen },
-          ].map((ch) => {
-            const Icon = ch.icon;
-            const isSelected = channel === ch.id;
-            return (
-              <Button
-                key={ch.id}
-                type="button"
-                variant={isSelected ? 'success' : 'secondary'}
-                size="md"
-                onClick={() => onSelectChannel(ch.id)}
-                className="!min-h-12 text-xs font-bold"
-              >
-                <Icon className="w-4 h-4 mr-1.5 shrink-0" />
-                <span>{ch.label}</span>
-              </Button>
-            );
-          })}
-        </div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2">
+        {CHANNELS.map(({ id, label, icon: Icon }) => (
+          <Button key={id} type="button" variant={channel === id ? 'selected' : 'secondary'} size="lg" onClick={() => onSelectChannel(id)}>
+            <Icon className="w-5 h-5 shrink-0" />
+            <span>{label}</span>
+          </Button>
+        ))}
       </div>
 
-      {/* Nakit Ödemede Banknotlar ve Para Üstü */}
       {channel === 'CASH' ? (
-        <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3.5 space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-[var(--text-secondary)]">
-              Müşteriden Alınan Nakit (₺)
+        <div className="space-y-3">
+          <div>
+            <label htmlFor="payment-received" className="block text-sm font-semibold mb-1.5 text-[var(--text-secondary)]">
+              Alınan Nakit (₺)
             </label>
-            {changeDueCents > 0 ? (
-              <span className="text-xs font-bold text-[var(--accent-emerald)] tabular-nums">
-                Para Üstü: {formatMoney(changeDueCents)}
-              </span>
-            ) : null}
-          </div>
-
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              min="0"
-              step="10"
-              value={tenderedLiras}
-              onChange={(e) => onChangeTendered(e.target.value)}
-              placeholder={Math.round(payNowCents / 100).toString()}
-              className="text-base font-bold tabular-nums flex-1"
+            <NumberInput
+              id="payment-received"
+              aria-label="Alınan Nakit"
+              value={receivedText}
+              onValueChange={onChangeReceived}
+              placeholder={formatMoney(plan.dueCents).replace(' ₺', '')}
+              pinpadTitle="Alınan Nakit"
+              pinpadInfo={pinpadInfo}
+              pinpadLiveInfo={changeRow}
             />
           </div>
-
-          <div className="grid grid-cols-4 gap-2">
-            {[200, 500, 1000, 2000].map((banknote) => (
-              <Button
-                key={banknote}
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => handleBanknotePreset(banknote)}
-                className="tabular-nums text-xs"
-              >
-                {banknote} ₺
+          <div className="grid grid-cols-4 gap-1.5">
+            {[100, 200, 500, 1000].map((banknote) => (
+              <Button key={banknote} variant="secondary" className="tabular-nums whitespace-nowrap !px-1" onClick={() => onChangeReceived(String(banknote))}>
+                {banknote.toLocaleString('tr-TR')} ₺
               </Button>
             ))}
           </div>
+          {plan.shortCents > 0 ? (
+            <div className="rounded-lg bg-[var(--accent-red-soft)] p-3">
+              <span className="block text-sm text-[var(--text-secondary)]">Eksik</span>
+              <span className="block text-2xl font-extrabold tabular-nums text-[var(--accent-red)]">{formatMoney(plan.shortCents)}</span>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-[var(--accent-emerald-soft)] p-3">
+              <span className="block text-sm text-[var(--text-secondary)]">Para Üstü</span>
+              <span className="block text-2xl font-extrabold tabular-nums">{formatMoney(plan.changeCents)}</span>
+            </div>
+          )}
         </div>
       ) : null}
 
-      {/* Veresiye / Cari Seçimi */}
       {channel === 'VERESIYE' ? (
-        <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3.5 space-y-2.5">
+        <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-[var(--text-secondary)]">
-              Cari Müşteri Seçin
-            </label>
+            <span className="text-sm font-semibold text-[var(--text-secondary)]">Cari Müşteri</span>
             <button
               type="button"
               onClick={() => setShowQuickAddCari(!showQuickAddCari)}
-              className="text-xs font-semibold text-[var(--accent-amber)] hover:underline cursor-pointer"
+              className="min-h-12 px-2 text-sm font-semibold text-[var(--text-secondary)] hover:underline cursor-pointer"
             >
-              {showQuickAddCari ? 'Listeye Dön' : '+ Yeni Cari Ekle'}
+              {showQuickAddCari ? 'Listeye Dön' : 'Yeni Cari Ekle'}
             </button>
           </div>
 
           {showQuickAddCari ? (
-            <div className="space-y-2 pt-1 border-t border-[var(--border)]">
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  value={newCariName}
-                  onChange={(e) => setNewCariName(e.target.value)}
-                  placeholder="Müşteri Adı / Ünvan"
-                  className="flex-1 text-xs"
-                />
-                <Input
-                  type="text"
-                  value={newCariPhone}
-                  onChange={(e) => setNewCariPhone(e.target.value)}
-                  placeholder="0532..."
-                  className="w-32 text-xs"
-                />
-              </div>
-              {cariError ? (
-                <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
-                  {cariError}
-                </p>
-              ) : null}
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleCreateCariSubmit}
-                disabled={!newCariName}
-                className="w-full text-xs"
-              >
+            <div className="space-y-3">
+              <Input aria-label="Müşteri adı" value={newCariName} onChange={(e) => setNewCariName(e.target.value)} placeholder="Müşteri Adı" />
+              <NumberInput aria-label="Telefon" kind="digits" value={newCariPhone} onValueChange={setNewCariPhone} placeholder="Telefon" maxLength={15} />
+              {cariError ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{cariError}</p> : null}
+              <Button variant="primary" onClick={() => void handleCreateCariSubmit()} disabled={!newCariName} className="w-full">
                 Kaydet ve Seç
               </Button>
             </div>
           ) : (
             <select
+              aria-label="Cari müşteri"
               value={selectedDirectoryId}
               onChange={(e) => onSelectDirectory(e.target.value)}
-              className="w-full min-h-12 px-3 rounded-lg paper text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+              className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none"
             >
-              <option value="">Cari müşteri seçin...</option>
+              <option value="">Cari müşteri seçin</option>
               {directories
                 .filter((d) => d.type === 'CUSTOMER')
                 .map((dir) => (
                   <option key={dir.id} value={dir.id}>
-                    {dir.name} ({dir.phone || 'Tel Yok'}) · Bakiye: {formatMoney(dir.balanceCents)}
+                    {dir.name} · Bakiye: {formatMoney(dir.balanceCents)}
                   </option>
                 ))}
             </select>

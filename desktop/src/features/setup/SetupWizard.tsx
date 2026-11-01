@@ -13,7 +13,7 @@ export const SetupWizard: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg-canvas)] p-6 select-none">
       <div className="min-h-full flex flex-col items-center justify-center">
-        <div className="w-full max-w-[560px] paper border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5">
+        <div className="w-full max-w-[560px] paper border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-4">
           <div className="flex items-center gap-2.5">
             <BrandMark className="w-8 h-8" surface="paper" />
             <h1 className="print-title font-bold text-base tracking-tight text-[var(--text-primary)]">

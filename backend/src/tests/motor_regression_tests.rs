@@ -197,7 +197,7 @@ fn kds_modifiers_ve_rush_sayaci_testi() {
         vec!["Sossuz".to_string(), "Buzlu".to_string()]
     );
 
-    // 2. parse_kds_created_at ve 20 dk öncesi RUSH testi
+    // 2. parse_kds_created_at ve 20 dk öncesi süre testi
     let twenty_mins_ago = chrono::Utc::now() - chrono::Duration::minutes(20);
     let sqlite_date_str = twenty_mins_ago.format("%Y-%m-%d %H:%M:%S").to_string();
 
@@ -208,15 +208,6 @@ fn kds_modifiers_ve_rush_sayaci_testi() {
         (1190..=1220).contains(&elapsed),
         "Geçen süre yaklaşık 1200 saniye olmalı: {elapsed}"
     );
-
-    let priority = if elapsed >= 900 {
-        "RUSH"
-    } else if elapsed >= 600 {
-        "WARNING"
-    } else {
-        "NORMAL"
-    };
-    assert_eq!(priority, "RUSH", "15 dakikayı aşan sipariş RUSH olmalı");
 }
 
 #[tokio::test]

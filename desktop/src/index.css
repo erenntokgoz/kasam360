@@ -1,207 +1,230 @@
 @import "tailwindcss";
 
-/* Koyu masa üstü ve üzerindeki adisyon kâğıtları. Kâğıt `.paper` ile açılır ve renkleri
-   kendi içinde yeniden tanımlar; bileşenler aynı adları kullanır, yerleşim değişmez. */
+@theme {
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.375rem;
+}
+
+/* Defter dili: masa üstü, kâğıt ve kalem. Yeni renk eklenmez; bütün yüzeyler bunlardan türer.
+   Koyu temada masa yeşil kesim matı, açık temada kareli defter yaprağıdır; kâğıt ikisinde aynı. */
+:root {
+  --ink: #1e2a66;
+  --ink-soft: #3b4679;
+  --ink-faint: #565f8c;
+  --pen-red: #b3261e;
+  --pen-green: #1c6b45;
+  --sheet: #fbf0b2;
+  --sheet-yellow: #fbf0b2;
+  --sheet-cream: #fffdf1;
+  --sheet-green: #cbe6c4;
+  --sheet-pink: #f9cbc6;
+  --sheet-blue: #cddff5;
+  --sheet-orange: #fbd8a4;
+  --sheet-rule: rgba(30, 42, 102, 0.14);
+  --marker: #ffb4d0;
+  --sketch: 255px 16px 225px 16px / 16px 225px 16px 255px;
+  --font-hand: "Kalam", "Segoe Print", cursive;
+  --lift: 0 1px 1px rgba(0, 0, 0, 0.14), 0 6px 14px -6px rgba(0, 0, 0, 0.32);
+
+  --print: var(--ink);
+  --serial: var(--pen-red);
+  --pen: var(--ink);
+  --brand: var(--ink);
+  --brand-hover: #2a3880;
+  --primary-bg: var(--ink);
+  --primary-hover: var(--brand-hover);
+  --primary-fg: var(--sheet);
+  --success: var(--pen-green);
+  --success-hover: #17593a;
+  --success-bg: var(--success);
+  --success-fg: #ffffff;
+  --danger: var(--pen-red);
+  --danger-hover: #961f18;
+  --danger-bg: var(--danger);
+  --danger-fg: #ffffff;
+}
+
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
+  --desk: #1c2f2b;
+  --desk-line: rgba(255, 255, 255, 0.05);
 
-  --ink: #14161c;
-  --sheet: #f4f4f0;
-  --sheet-yellow: #f3df82;
-  --sheet-green: #bfdcc4;
-  --sheet-pink: #f2c6cf;
-  --sheet-rule: #c7ccd9;
-  --print: #27408b;
-  --serial: #b5121a;
-  --pen: #1a2ea8;
-
-  --bg-canvas: #14161c;
-  --bg-panel: #1b1e26;
-  --bg-card: #262a35;
-  --bg-subtle: #2a2e3a;
-  --bg-hover: #353a48;
+  --bg-canvas: var(--desk);
+  --bg-panel: #223733;
+  --bg-card: #2a423d;
+  --bg-subtle: #2a423d;
+  --bg-hover: #355049;
   --bg-surface: var(--bg-panel);
-  --border: #3f4452;
-  --border-strong: #5a6072;
-  --text-primary: #f4f4f0;
-  --text-secondary: #c9cbd3;
-  --text-muted: #a0a3b0;
-  --text-tertiary: #a0a3b0;
-
-  --brand: #3654b5;
-  --brand-hover: #2b4699;
-  --primary-bg: #f4f4f0;
-  --primary-hover: #ffffff;
-  --primary-fg: #14161c;
-  --success-bg: #bfdcc4;
-  --success-hover: #d2e8d6;
-  --success-fg: #14161c;
-  --danger-bg: #f2c6cf;
-  --danger-hover: #f8d9df;
-  --danger-fg: #14161c;
-  --warning: #f3df82;
-
-  --accent-amber: #f3df82;
-  --accent-amber-hover: #f8ea9f;
-  --accent-amber-soft: #3a3519;
-  --accent-amber-border: #84762f;
-  --accent-emerald: #bfdcc4;
-  --accent-emerald-hover: #d2e8d6;
-  --accent-emerald-soft: #23352a;
-  --accent-emerald-border: #5d7f67;
-  --accent-red: #f7b4c0;
-  --accent-red-hover: #f8d9df;
-  --accent-red-soft: #41222b;
-  --accent-red-border: #99505f;
-  --accent-blue: #b4c6f7;
-  --accent-blue-soft: #252f4d;
-  --accent-blue-border: #5a6fa8;
-  --accent-violet: #cfc1f5;
-  --accent-violet-soft: #30294a;
-  --accent-violet-border: #6f60a0;
-
-  /* Eski bileşenlerin kullandığı adlar aynı kalır, yalnız değerleri değişir. */
   --bg-base: var(--bg-canvas);
   --bg-elevated: var(--bg-card);
   --bg-interactive: var(--bg-subtle);
+  --border: #456460;
   --border-subtle: var(--border);
-  --success: #2f8f5b;
-  --success-hover: #27784c;
-  --danger: #c23a47;
-  --danger-hover: #a52f3b;
-  --warning-hover: #e6cf6b;
-  --info: var(--accent-blue);
+  --border-strong: #6c8c86;
+  --text-primary: #fbf6dc;
+  --text-secondary: #d7dcc4;
+  --text-muted: #adbaa8;
+  --text-tertiary: var(--text-muted);
+  --warning: #fbd8a4;
+  --warning-hover: #fde6c4;
+  --info: var(--sheet-blue);
+
+  --accent-amber: #fbd8a4;
+  --accent-amber-hover: #fde6c4;
+  --accent-amber-soft: #3d4326;
+  --accent-amber-border: #8c7f45;
+  --accent-emerald: #cbe6c4;
+  --accent-emerald-hover: #dcefd6;
+  --accent-emerald-soft: #24463a;
+  --accent-emerald-border: #5d8a74;
+  --accent-red: #f9cbc6;
+  --accent-red-hover: #fbdcd8;
+  --accent-red-soft: #5a2a38;
+  --accent-red-border: #a65a6e;
+  --accent-blue: #cddff5;
+  --accent-blue-soft: #29434f;
+  --accent-blue-border: #6d8ba0;
+  --accent-violet: #e0d4f5;
+  --accent-violet-soft: #33384f;
+  --accent-violet-border: #7a7aa0;
 }
 
-/* Açık tema düğmesi yerinde kalır: masa açılır, kâğıtlar aynı kalır. */
 [data-theme="light"] {
   color-scheme: light;
+  --desk: #eeebdf;
+  --desk-line: rgba(30, 42, 102, 0.08);
 
-  --bg-canvas: #d7d6cc;
-  --bg-panel: #e4e3da;
-  --bg-card: #fbfbf8;
-  --bg-subtle: #e9e8e0;
-  --bg-hover: #dddcd2;
-  --bg-surface: #f4f4f0;
-  --border: #c6c4ba;
-  --border-strong: #8b8a81;
-  --text-primary: #14161c;
-  --text-secondary: #3f434d;
-  --text-muted: #565a65;
-  --text-tertiary: #565a65;
-
-  --brand: #27408b;
-  --brand-hover: #1f3370;
-  --primary-bg: #27408b;
-  --primary-hover: #1f3370;
-  --primary-fg: #ffffff;
-  --success-bg: #17683f;
-  --success-hover: #125433;
-  --success-fg: #ffffff;
-  --danger-bg: #b5121a;
-  --danger-hover: #930e15;
-  --danger-fg: #ffffff;
+  --bg-canvas: var(--desk);
+  --bg-panel: #f6f3e8;
+  --bg-card: #fffdf1;
+  --bg-subtle: #e7e3d3;
+  --bg-hover: #dfdac7;
+  --bg-surface: var(--bg-panel);
+  --bg-base: var(--bg-canvas);
+  --bg-elevated: var(--bg-card);
+  --bg-interactive: var(--bg-subtle);
+  --border: #c4bfa8;
+  --border-subtle: var(--border);
+  --border-strong: #8a8672;
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  --text-muted: var(--ink-faint);
+  --text-tertiary: var(--text-muted);
   --warning: #7a5200;
+  --warning-hover: #5f4000;
+  --info: var(--ink);
 
   --accent-amber: #7a5200;
   --accent-amber-hover: #5f4000;
-  --accent-amber-soft: #f3df82;
+  --accent-amber-soft: #f7dfa6;
   --accent-amber-border: #b79f3a;
-  --accent-emerald: #17683f;
-  --accent-emerald-hover: #125433;
-  --accent-emerald-soft: #bfdcc4;
+  --accent-emerald: var(--pen-green);
+  --accent-emerald-hover: #17593a;
+  --accent-emerald-soft: var(--sheet-green);
   --accent-emerald-border: #7dab89;
-  --accent-red: #b5121a;
-  --accent-red-hover: #930e15;
-  --accent-red-soft: #f2c6cf;
-  --accent-red-border: #d68a99;
-  --accent-blue: #27408b;
-  --accent-blue-soft: #d5def5;
+  --accent-red: var(--pen-red);
+  --accent-red-hover: #961f18;
+  --accent-red-soft: var(--sheet-pink);
+  --accent-red-border: #d68a7f;
+  --accent-blue: var(--ink);
+  --accent-blue-soft: var(--sheet-blue);
   --accent-blue-border: #8fa3d6;
   --accent-violet: #54348f;
   --accent-violet-soft: #e2d9f3;
   --accent-violet-border: #a792cf;
-
-  --bg-base: var(--bg-canvas);
-  --bg-elevated: var(--bg-card);
-  --bg-interactive: var(--bg-subtle);
-  --border-subtle: var(--border);
-  --success: #17683f;
-  --success-hover: #125433;
-  --danger: #b5121a;
-  --danger-hover: #930e15;
-  --warning-hover: #5f4000;
-  --info: #27408b;
 }
 
-.paper {
+/* Kâğıt üstünde yazı kalemle, kenar çizgi kurşun renginde olur. */
+.paper,
+.sheet,
+.bar {
   color-scheme: light;
-
-  --bg-canvas: #e8e7df;
-  --bg-panel: #f4f4f0;
-  --bg-card: #fbfbf8;
-  --bg-subtle: #e9e8e0;
-  --bg-hover: #dddcd2;
-  --bg-surface: #f4f4f0;
-  --border: #c6c4ba;
-  --border-strong: #8b8a81;
-  --text-primary: #14161c;
-  --text-secondary: #3f434d;
-  --text-muted: #565a65;
-  --text-tertiary: #565a65;
-
-  --brand: #27408b;
-  --brand-hover: #1f3370;
-  --primary-bg: #27408b;
-  --primary-hover: #1f3370;
-  --primary-fg: #ffffff;
-  --success-bg: #17683f;
-  --success-hover: #125433;
-  --success-fg: #ffffff;
-  --danger-bg: #b5121a;
-  --danger-hover: #930e15;
-  --danger-fg: #ffffff;
+  --bg-canvas: #f8edaa;
+  --bg-panel: var(--slip);
+  --bg-card: var(--sheet-cream);
+  --bg-subtle: rgba(255, 255, 255, 0.5);
+  --bg-hover: rgba(30, 42, 102, 0.08);
+  --bg-surface: var(--bg-panel);
+  --bg-base: var(--bg-canvas);
+  --bg-elevated: var(--bg-card);
+  --bg-interactive: var(--bg-subtle);
+  --border: rgba(30, 42, 102, 0.26);
+  --border-subtle: var(--border);
+  --border-strong: rgba(30, 42, 102, 0.55);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  --text-muted: var(--ink-faint);
+  --text-tertiary: var(--text-muted);
   --warning: #7a5200;
+  --warning-hover: #5f4000;
+  --info: var(--ink);
 
   --accent-amber: #7a5200;
   --accent-amber-hover: #5f4000;
-  --accent-amber-soft: #f3df82;
+  --accent-amber-soft: var(--sheet-orange);
   --accent-amber-border: #b79f3a;
-  --accent-emerald: #17683f;
-  --accent-emerald-hover: #125433;
-  --accent-emerald-soft: #bfdcc4;
+  --accent-emerald: var(--pen-green);
+  --accent-emerald-hover: #17593a;
+  --accent-emerald-soft: var(--sheet-green);
   --accent-emerald-border: #7dab89;
-  --accent-red: #b5121a;
-  --accent-red-hover: #930e15;
-  --accent-red-soft: #f2c6cf;
-  --accent-red-border: #d68a99;
-  --accent-blue: #27408b;
-  --accent-blue-soft: #d5def5;
+  --accent-red: var(--pen-red);
+  --accent-red-hover: #961f18;
+  --accent-red-soft: var(--sheet-pink);
+  --accent-red-border: #d68a7f;
+  --accent-blue: var(--ink);
+  --accent-blue-soft: var(--sheet-blue);
   --accent-blue-border: #8fa3d6;
   --accent-violet: #54348f;
   --accent-violet-soft: #e2d9f3;
   --accent-violet-border: #a792cf;
 
-  --bg-base: var(--bg-canvas);
-  --bg-elevated: var(--bg-card);
-  --bg-interactive: var(--bg-subtle);
-  --border-subtle: var(--border);
-  --success: #17683f;
-  --success-hover: #125433;
-  --danger: #b5121a;
-  --danger-hover: #930e15;
-  --warning-hover: #5f4000;
-  --info: #27408b;
-
-  background-color: var(--sheet);
+  background-color: var(--slip);
   color: var(--ink);
+}
+
+/* Not kâğıdı: üstte delikler, zeminde çizgiler. */
+.paper {
+  --slip: var(--sheet);
+  background-image: repeating-linear-gradient(transparent 0 25px, var(--sheet-rule) 25px 26px);
+  background-position: 0 16px;
+  background-attachment: local;
   border-color: var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
+  box-shadow: var(--lift);
 }
-.paper .paper {
-  background-color: var(--bg-card);
+.paper:not(.absolute):not(.fixed) {
+  position: relative;
 }
+.paper::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 12px;
+  right: 12px;
+  height: 6px;
+  pointer-events: none;
+  background: radial-gradient(circle at 3px 3px, var(--desk) 3px, transparent 3.5px) 0 0 / 16px 6px repeat-x;
+}
+.paper .paper:not(.fixed > .paper) {
+  --slip: var(--sheet-cream);
+  background-image: none;
+  box-shadow: none;
+}
+.paper .paper:not(.fixed > .paper)::before {
+  content: none;
+}
+
+/* Düz kart: çizgisiz, deliksiz. Masa ve ürün kartları not kâğıdı değildir. */
+.sheet {
+  --slip: var(--sheet-cream);
+  border-radius: 3px;
+  box-shadow: var(--lift);
+}
+.sheet.slip-orange { --slip: var(--sheet-orange); }
+.sheet.slip-blue { --slip: var(--sheet-blue); }
 
 * {
   box-sizing: border-box;
@@ -209,72 +232,456 @@
   -webkit-user-select: none;
 }
 
+/* Hata metni ve işlem kimliği destek için kopyalanabilmelidir. */
+[role="alert"],
+[role="alert"] *,
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 html, body {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  background-color: var(--bg-canvas);
+  background-color: var(--desk);
+  background-image:
+    linear-gradient(var(--desk-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--desk-line) 1px, transparent 1px);
+  background-size: 24px 24px;
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 16px;
+  line-height: 1.4;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
 }
 
-/* Dokunsal Donanım Tuşları (Tactile Matte Hardware) */
+:focus-visible {
+  outline: 3px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+/* Pencere paneli odağı kod ile alır; panelin çevresinde çizgi görünmesin. */
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+/* Boş masa: mata kalemle çizilmiş masa. Sandalye çizgileri kişi sayısını gösterir. */
+.table-spot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.table-spot:hover {
+  color: var(--text-primary);
+}
+.table-spot svg {
+  position: absolute;
+  inset: 4px;
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  pointer-events: none;
+}
+.table-spot-name {
+  position: relative;
+  font-family: var(--font-hand);
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.table-spot-note {
+  position: relative;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+/* Dolu masa: masanın üstüne bırakılmış, alt kenarı yırtık adisyon fişi. */
+.check-card {
+  display: block;
+  width: 100%;
+  height: 100%;
+  text-align: left;
+  cursor: pointer;
+  transform: rotate(var(--tilt, 0deg));
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+  transition: transform 80ms ease;
+}
+.check-card:hover {
+  transform: rotate(0deg) translateY(-1px);
+}
+.check-card:active {
+  transform: rotate(0deg) translateY(1px);
+}
+.sheet.check {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  padding: 10px 12px 16px;
+  border-radius: 2px 2px 0 0;
+  box-shadow: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - 6px) no-repeat,
+    conic-gradient(from 135deg at top, #000 90deg, transparent 0) bottom / 12px 6px repeat-x;
+  mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - 6px) no-repeat,
+    conic-gradient(from 135deg at top, #000 90deg, transparent 0) bottom / 12px 6px repeat-x;
+}
+.ready-mark {
+  padding: 0 4px;
+  font-weight: 700;
+  color: var(--ink);
+  background-color: #b9ecab;
+}
+.zone-title {
+  font-family: var(--font-hand);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+/* Düğme kâğıda kalemle çizilmiş kutudur: köşeler düzensiz, gölge yok. */
 .tactile-btn {
-  border: 1px solid var(--border);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08), 0 1px 2px 0 rgba(0, 0, 0, 0.35);
-  transition: background-color 100ms ease, border-color 100ms ease, transform 60ms ease, opacity 100ms ease;
+  font-family: var(--font-hand);
+  font-weight: 700;
+  border: 2px solid var(--ink);
+  border-radius: var(--sketch);
+  box-shadow: none;
+  transition: background-color 80ms ease, transform 60ms ease;
 }
 .tactile-btn:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  transform: translateY(1px) rotate(-0.3deg);
 }
 .tactile-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: not-allowed;
 }
+.btn-secondary {
+  color: var(--ink);
+  background-color: var(--sheet-cream);
+}
+.btn-secondary:hover {
+  background-color: var(--sheet);
+}
+.paper .btn-secondary,
+.bar .btn-secondary {
+  background-color: rgba(255, 255, 255, 0.55);
+}
+.paper .btn-secondary:hover,
+.bar .btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+.btn-primary {
+  color: var(--sheet);
+  background-color: var(--ink);
+}
+.btn-primary:hover {
+  background-color: var(--brand-hover);
+}
+.btn-selected {
+  color: var(--ink);
+  background-color: var(--marker);
+}
+.btn-ghost {
+  color: inherit;
+  background-color: transparent;
+  border-color: transparent;
+}
+.btn-ghost:hover {
+  background-color: var(--bg-hover);
+}
+.btn-success {
+  color: #ffffff;
+  background-color: var(--pen-green);
+  border-color: var(--pen-green);
+}
+.btn-danger {
+  color: #ffffff;
+  background-color: var(--pen-red);
+  border-color: var(--pen-red);
+}
 
-/* Adisyon yaprağı kutunun ölçüsünü değiştirmez: delikler ve yırtık kenar içeride çizilir. */
-.slip-edge {
-  --slip: var(--sheet);
-  position: relative;
-  background-color: var(--slip);
+.rounded-md,
+.rounded-lg,
+.rounded-xl,
+.rounded-2xl {
+  border-radius: 4px;
+}
+
+/* Form alanı kâğıttaki yazı satırıdır. */
+.paper input:not([type="checkbox"]):not([type="radio"]),
+.paper select,
+.paper textarea,
+.bar select {
+  background-color: rgba(255, 255, 255, 0.6);
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  border-radius: 2px 2px 0 0;
   color: var(--ink);
 }
-.slip-edge::before {
+.paper input:focus,
+.paper select:focus,
+.paper textarea:focus {
+  border-bottom-color: var(--pen-red);
+  background-color: rgba(255, 255, 255, 0.85);
+}
+
+/* Sol menü: sayfa kenarına yapışmış ayraç bayrakları. */
+.side-rail {
+  position: relative;
+  z-index: 10;
+  width: 84px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0 10px;
+  user-select: none;
+}
+.side-flag {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 72px;
+  min-height: 58px;
+  margin-bottom: 8px;
+  padding: 6px 4px 6px 2px;
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 0.875rem;
+  line-height: 1rem;
+  color: var(--ink);
+  background-color: var(--flag);
+  border-radius: 0 7px 7px 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  transition: width 90ms ease;
+}
+.side-flag:nth-child(5n + 1) { --flag: var(--sheet-yellow); }
+.side-flag:nth-child(5n + 2) { --flag: var(--sheet-pink); }
+.side-flag:nth-child(5n + 3) { --flag: var(--sheet-green); }
+.side-flag:nth-child(5n + 4) { --flag: var(--sheet-blue); }
+.side-flag:nth-child(5n + 5) { --flag: var(--sheet-orange); }
+.side-flag:nth-child(6) { --flag: var(--sheet-cream); }
+.side-flag:hover {
+  width: 78px;
+}
+.side-flag[aria-current="page"] {
+  width: 84px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+.side-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 72px;
+  min-height: 48px;
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  line-height: 1rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.side-tool:hover {
+  color: var(--text-primary);
+}
+
+/* Üst menü: bloknotun üst kenarı. Sekmeler fosforlu kalemle işaretlenir. */
+.bar {
+  --slip: var(--sheet);
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: stretch;
+  min-height: 58px;
+  padding-top: 10px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+}
+.bar::before {
   content: "";
   position: absolute;
   top: 3px;
-  left: 10px;
-  right: 10px;
-  height: 5px;
+  left: 12px;
+  right: 12px;
+  height: 6px;
   pointer-events: none;
-  background: radial-gradient(circle at 2.5px 2.5px, var(--slip-hole, #14161c) 2.5px, transparent 3px) 0 0 / 14px 5px repeat-x;
+  background: radial-gradient(circle at 3px 3px, var(--desk) 3px, transparent 3.5px) 0 0 / 16px 6px repeat-x;
 }
+.bar-plain {
+  --slip: var(--sheet-cream);
+  min-height: 48px;
+  padding-top: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+.bar-plain::before {
+  content: none;
+}
+.paper .bar {
+  background-color: transparent;
+  box-shadow: none;
+  border-bottom: 1px solid var(--border);
+}
+.bar-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 0 12px;
+}
+.bar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 12px;
+  font-family: var(--font-hand);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.bar-item:hover {
+  color: var(--ink);
+}
+.bar-item[aria-selected="true"],
+.bar-item[aria-pressed="true"] {
+  color: var(--ink);
+  background-image: linear-gradient(transparent 22%, var(--marker) 22%, var(--marker) 80%, transparent 80%);
+  background-repeat: no-repeat;
+  background-size: calc(100% - 12px) 100%;
+  background-position: center;
+}
+.bar-actions > .bar-item {
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: var(--sketch);
+  background-color: rgba(255, 255, 255, 0.5);
+}
+.bar-actions > .bar-item:hover {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+.bar-actions > .bar-primary,
+.bar-actions > .bar-primary:hover {
+  color: var(--sheet);
+  background-color: var(--ink);
+}
+.bar-actions > .bar-danger {
+  color: var(--pen-red);
+  border-color: var(--pen-red);
+}
+.bar-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  font-family: var(--font-hand);
+  font-size: 1.125rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.bar-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 200px;
+  height: 44px;
+  padding: 0 4px;
+  color: var(--ink-soft);
+  border-bottom: 2px solid var(--ink);
+}
+.bar-search input {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  outline: none;
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+.bar-search input::placeholder {
+  color: var(--ink-faint);
+}
+
 .slip-yellow { --slip: var(--sheet-yellow); }
 .slip-green { --slip: var(--sheet-green); }
 .slip-pink { --slip: var(--sheet-pink); }
-.slip-white { --slip: var(--sheet); }
+.slip-white { --slip: var(--sheet-cream); }
 
 .hand {
-  font-family: "Kalam", "Segoe Print", cursive;
+  font-family: var(--font-hand);
   font-weight: 700;
   color: var(--pen);
 }
-/* Gövde yazısı eskisi gibi kalır: yeni yazı genişliği butonları kaydırıyordu. */
+/* Başlıklar el yazısıdır; tutar ve liste okunaklı kalsın diye gövde baskı yazısıdır. */
 .print-title {
-  font-family: "Schibsted Grotesk Variable", "Segoe UI", sans-serif;
-  letter-spacing: -0.02em;
+  font-family: var(--font-hand);
+  font-weight: 700;
+  font-size: 1.125rem;
   color: var(--print);
 }
 .serial {
   color: var(--serial);
+}
+
+.auth-title {
+  font-family: var(--font-hand);
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ruled {
+  background-image: repeating-linear-gradient(transparent 0 47px, var(--sheet-rule) 47px 48px);
+  background-attachment: local;
+}
+
+.receipt-paper {
+  --slip: var(--sheet-cream);
+}
+
+.kbd-badge {
+  font: 700 0.6875rem/1 "Segoe UI", sans-serif;
+  padding: 3px 5px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px currentColor;
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Termal Fiş Önizleme Stili */
@@ -296,6 +703,10 @@ html, body {
   .receipt-paper,
   .receipt-paper * {
     visibility: visible;
+  }
+  .receipt-scroll {
+    max-height: none;
+    overflow: visible;
   }
   .receipt-paper {
     position: fixed;

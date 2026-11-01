@@ -66,7 +66,6 @@ fn payment(id: &str, method: &str, amount: i64, items: &[(&str, i64)]) -> Paymen
         cashier_id: Some("usr_1".to_string()),
         terminal_id: None,
         idempotency_key: None,
-        global_discount: None,
         approval_token: None,
         actor_id: Some("usr_1".to_string()),
         debt_directory_id: None,
@@ -317,26 +316,6 @@ async fn parcali_veresiye_borc_acar_kartsiz_veresiye_hic_yazmaz() {
         .await
         .expect("kalan kart");
     assert_eq!(scalar(&p, "SELECT COUNT(*) FROM debts").await, 1);
-}
-
-#[tokio::test]
-async fn indirim_onaysiz_gecmez_ve_yalniz_kapanista_uygulanir() {
-    let p = pool().await;
-    let mut partial = payment("txn_1", "CARD", 1000, &[]);
-    partial.global_discount = Some(serde_json::json!({ "type": "FIXED_AMOUNT", "value": 300 }));
-    assert!(pay(&p, &partial).await.is_err());
-
-    let mut closing = payment("txn_2", "CARD", 3000, &[]);
-    closing.global_discount = Some(serde_json::json!({ "type": "FIXED_AMOUNT", "value": 300 }));
-    let error = pay(&p, &closing).await.err().expect("jetonsuz red");
-    assert!(
-        error.contains("TOKEN") || error.contains("token") || error.contains("onay"),
-        "{error}"
-    );
-    assert_eq!(
-        scalar(&p, "SELECT COUNT(*) FROM orders WHERE status = 'PAID'").await,
-        0
-    );
 }
 
 #[tokio::test]

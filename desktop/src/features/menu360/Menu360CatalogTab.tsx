@@ -70,7 +70,7 @@ export const Menu360CatalogTab: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
             {filteredProducts.map((prod) => (
               <Menu360ProductCard
                 key={prod.id}

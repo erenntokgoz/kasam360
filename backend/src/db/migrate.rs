@@ -5,7 +5,7 @@
 //! Mevcut `init_db()` içindeki `ALTER TABLE ... ADD COLUMN` blokları
 //! idempotent ama version takibi yok — hangi migration'ların çalıştırıldığını
 //! bilmiyoruz. Bu modül:
-//! 1. `migrations/` klasöründeki numbered `.sql` dosyalarını okur.
+//! 1. Uygulamaya gömülü numbered `.sql` dosyalarını sırayla uygular.
 //! 2. `_migrations` tablosunda version takibi yapar.
 //! 3. Idempotent: çalıştırılmış migration'ları tekrar çalıştırmez.
 //!
@@ -15,9 +15,6 @@ use sqlx::{Pool, Sqlite};
 
 /// Migration tablosu — hangi version'ların uygulandığını takip eder.
 pub const MIGRATIONS_TABLE: &str = "_migrations";
-
-/// Migration dosyalarının saklandığı klasör (crate manifest dizini altı).
-pub const MIGRATIONS_DIR: &str = "migrations";
 
 /// Migration'ları çalıştırır. Idempotent: calistirilmis bir migration tekrar calistirilmez.
 ///
@@ -37,10 +34,7 @@ pub async fn run_migrations(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
     .await?;
 
     // 2. Migration dosyalarını listele (0001_*.sql, 0002_*.sql, ...).
-    let migration_files = list_migration_files()?;
-    if migration_files.is_empty() {
-        return Ok(());
-    }
+    let migration_files = list_migration_files();
 
     // 3. Her migration'ı sırayla uygula.
     for (version, name, sql) in &migration_files {
@@ -96,44 +90,52 @@ pub async fn run_migrations(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-/// Migration dosyalarını version numarasına göre sıralı listeler.
-///
-/// Format: `{version:04}_{name}.sql` — örn: `0001_tax_rate_bp.sql`.
-/// Döndürür: `(version, name, sql_content)` üçlülüğü.
-fn list_migration_files() -> Result<Vec<(i64, String, String)>, sqlx::Error> {
-    let dir_path = if std::path::Path::new("migrations").exists() {
-        std::path::Path::new("migrations")
-    } else if std::path::Path::new("backend/migrations").exists() {
-        std::path::Path::new("backend/migrations")
-    } else {
-        std::path::Path::new(MIGRATIONS_DIR)
-    };
-    let mut files: Vec<(i64, String, String)> = Vec::new();
+/// Güncellemeler uygulamaya gömülür: kurulu cihazda `migrations` klasörü yoktur, klasörden
+/// okunsaydı yükseltilen işletmenin şeması sessizce eski kalırdı.
+const MIGRATIONS: [(i64, &str, &str); 7] = [
+    (
+        1,
+        "tax_rate_bp",
+        include_str!("../../migrations/0001_tax_rate_bp.sql"),
+    ),
+    (
+        2,
+        "schema_enhancements",
+        include_str!("../../migrations/0002_schema_enhancements.sql"),
+    ),
+    (
+        3,
+        "sync_inbox_sequence",
+        include_str!("../../migrations/0003_sync_inbox_sequence.sql"),
+    ),
+    (
+        4,
+        "order_change_requests",
+        include_str!("../../migrations/0004_order_change_requests.sql"),
+    ),
+    (
+        5,
+        "reservation_lead_and_tip_method",
+        include_str!("../../migrations/0005_reservation_lead_and_tip_method.sql"),
+    ),
+    (
+        6,
+        "bill_requested",
+        include_str!("../../migrations/0006_bill_requested.sql"),
+    ),
+    (
+        7,
+        "order_change_resolution",
+        include_str!("../../migrations/0007_order_change_resolution.sql"),
+    ),
+];
 
-    if !dir_path.exists() {
-        return Ok(files);
-    }
-
-    let entries = std::fs::read_dir(dir_path).map_err(sqlx::Error::Io)?;
-    for entry in entries {
-        let entry = entry.map_err(sqlx::Error::Io)?;
-        let path = entry.path();
-        if path.extension().map(|e| e == "sql").unwrap_or(false) {
-            let filename = entry.file_name().to_string_lossy().to_string();
-            // "0001_tax_rate_bp.sql" → version=1, name="tax_rate_bp"
-            let parts: Vec<&str> = filename.splitn(2, '_').collect();
-            if parts.len() == 2 {
-                if let Ok(version) = parts[0].parse::<i64>() {
-                    let name = parts[1].trim_end_matches(".sql").to_string();
-                    let sql = std::fs::read_to_string(&path).map_err(sqlx::Error::Io)?;
-                    files.push((version, name, sql));
-                }
-            }
-        }
-    }
-
-    files.sort_by_key(|(v, _, _)| *v);
-    Ok(files)
+/// Version numarasına göre sıralı `(version, name, sql_content)` listesi.
+fn list_migration_files() -> Vec<(i64, String, String)> {
+    MIGRATIONS
+        .iter()
+        .map(|(version, name, sql)| (*version, name.to_string(), sql.to_string()))
+        .collect()
 }
 
 #[cfg(test)]
@@ -142,8 +144,8 @@ mod tests {
 
     #[test]
     fn list_migration_files_test() {
-        // Bu test migrations/ klasörününonda olduğu için sadece format doğrulaması yapar.
-        let files = list_migration_files().unwrap();
+        let files = list_migration_files();
+        assert_eq!(files.len(), 7);
         for (version, name, sql) in &files {
             assert!(*version > 0, "version must be positive: {}", version);
             assert!(!name.is_empty(), "name must not be empty");

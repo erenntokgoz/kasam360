@@ -48,14 +48,14 @@ export const ReportsTab: React.FC = () => {
   }, [report, range]);
 
   return (
-    <div className="space-y-4 max-w-[1500px] mx-auto">
+    <div className="space-y-4">
       <AccountantPanel />
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Rapor">
         {(Object.keys(REPORTS) as ReportKey[]).map((key) => (
           <Button
             key={key}
-            variant={report === key ? 'primary' : 'secondary'}
-            className="min-h-12 text-xs font-bold"
+            variant={report === key ? 'selected' : 'secondary'}
+            className="min-h-12 text-sm font-bold"
             aria-pressed={report === key}
             onClick={() => setReport(key)}
           >
@@ -68,8 +68,8 @@ export const ReportsTab: React.FC = () => {
           {RANGES.map((key) => (
             <Button
               key={key}
-              variant={range === key ? 'primary' : 'secondary'}
-              className="min-h-12 text-xs font-bold"
+              variant={range === key ? 'selected' : 'secondary'}
+              className="min-h-12 text-sm font-bold"
               aria-pressed={range === key}
               onClick={() => setRange(key)}
             >
@@ -79,7 +79,7 @@ export const ReportsTab: React.FC = () => {
         </div>
         <Button
           variant="secondary"
-          className="min-h-12 text-xs font-bold"
+          className="min-h-12 text-sm font-bold"
           disabled={!table || table.rows.length === 0}
           onClick={() => table && downloadCsv(`${REPORTS[report].label}-${range}`, table)}
         >
@@ -91,7 +91,7 @@ export const ReportsTab: React.FC = () => {
       {table?.summary.length ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {table.summary.map((item) => (
-            <div key={item.label} className="paper border border-[var(--border)] rounded-xl p-3">
+            <div key={item.label} className="paper border border-[var(--border)] rounded-xl p-4">
               <span className="text-xs text-[var(--text-secondary)] block">{item.label}</span>
               <span className="text-xl font-bold tabular-nums text-[var(--text-primary)] mt-0.5 block">{item.value}</span>
             </div>

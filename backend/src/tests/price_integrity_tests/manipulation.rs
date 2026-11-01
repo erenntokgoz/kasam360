@@ -21,7 +21,6 @@ async fn istemci_sifir_fiyat_gondererek_ekstre_ucretinden_kacamaz() {
         &mut conn,
         TENANT,
         &[item("itm_1", Some(cheating))],
-        None,
     )
     .await
     .expect("sunucu hesabı");
@@ -47,7 +46,6 @@ async fn istemci_fiyati_asiri_yuksek_gonderemez() {
         &mut conn,
         TENANT,
         &[item("itm_1", Some(inflated))],
-        None,
     )
     .await
     .expect("sunucu hesabı");
@@ -81,7 +79,6 @@ async fn baska_tenantin_secenegi_fiyatlandirilamaz() {
         &mut conn,
         TENANT,
         &[item("itm_1", Some(foreign))],
-        None,
     )
     .await;
     let err: String = match outcome {
@@ -122,7 +119,6 @@ async fn donmus_fiyat_modifieri_iki_kez_eklemez() {
         &mut conn,
         TENANT,
         &[item("itm_1", Some(selected))],
-        None,
     )
     .await
     .expect("sunucu hesabı");
@@ -147,7 +143,6 @@ async fn donmus_fiyat_yoksa_modifier_bir_kez_eklenir() {
         &mut conn,
         TENANT,
         &[item("itm_1", Some(selected))],
-        None,
     )
     .await
     .expect("sunucu hesabı");
@@ -176,7 +171,7 @@ async fn donmus_fiyat_baska_tenantin_kaleminden_alinmaz() {
 
     let mut conn = pool.acquire().await.expect("bağlantı alınır");
     let truth =
-        PaymentRepository::calculate_server_truth(&mut conn, TENANT, &[item("itm_x", None)], None)
+        PaymentRepository::calculate_server_truth(&mut conn, TENANT, &[item("itm_x", None)])
             .await
             .expect("sunucu hesabı");
     assert_eq!(

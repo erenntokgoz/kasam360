@@ -35,7 +35,8 @@ export const DebtsTab: React.FC = () => {
     void refresh();
   }, [refresh]);
 
-  const selected = cards.find((card) => card.id === selectedId) ?? null;
+  // Sağ taraf boş bir kutu olarak kalmasın: seçim yoksa ilk kart açık gelir.
+  const selected = cards.find((card) => card.id === selectedId) ?? cards[0] ?? null;
 
   const handleTab = (next: CariTab) => {
     setTab(next);
@@ -59,7 +60,7 @@ export const DebtsTab: React.FC = () => {
               key={item.id}
               role="tab"
               aria-selected={tab === item.id}
-              variant={tab === item.id ? 'primary' : 'secondary'}
+              variant={tab === item.id ? 'selected' : 'secondary'}
               onClick={() => handleTab(item.id)}
               className="min-h-12"
             >
@@ -105,16 +106,16 @@ export const DebtsTab: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedId(card.id)}
-                  aria-current={card.id === selectedId}
+                  aria-current={card.id === selected?.id}
                   className={`w-full min-h-12 p-3 text-left flex items-center justify-between gap-3 cursor-pointer ${
-                    card.id === selectedId ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'
+                    card.id === selected?.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'
                   }`}
                 >
                   <span className="min-w-0">
                     <span className="block text-xs font-bold truncate text-[var(--text-primary)]">
                       {card.name}
                     </span>
-                    <span className="block text-[11px] text-[var(--text-muted)] truncate">
+                    <span className="block text-xs text-[var(--text-muted)] truncate">
                       {card.phone || 'Telefon yok'}
                     </span>
                   </span>
@@ -133,7 +134,7 @@ export const DebtsTab: React.FC = () => {
             <CariCardDetail key={selected.id} card={selected} onChanged={refresh} />
           ) : (
             <div className="p-6 text-center text-xs text-[var(--text-muted)] paper border border-[var(--border)] rounded-xl">
-              Hareketleri görmek için listeden bir kart seçin.
+              {search.trim() ? 'Aramayla eşleşen kart yok.' : 'Henüz kart yok. Yeni Kart ile başlayın.'}
             </div>
           )}
         </div>

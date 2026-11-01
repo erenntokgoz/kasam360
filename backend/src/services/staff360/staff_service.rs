@@ -22,9 +22,9 @@ pub mod shift_plan;
 
 pub use custody::{add_custody, list_custody, return_custody};
 pub use incident::{list_incidents, record_incident};
-pub use leave::{decide_leave, list_leaves, request_leave};
+pub use leave::{cancel_leave, decide_leave, list_leaves, request_leave};
 pub use profile::{list_profiles, upcoming_birthdays, upsert_profile};
-pub use shift_plan::{add_shift_plan, list_shift_plans};
+pub use shift_plan::{add_shift_plan, delete_shift_plan, list_shift_plans, update_shift_plan};
 
 use chrono::NaiveDate;
 use sqlx::{sqlite::SqliteRow, Row};

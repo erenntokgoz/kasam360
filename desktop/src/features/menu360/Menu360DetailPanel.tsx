@@ -34,6 +34,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
     toggleProductActive,
     toggleProduct86,
     deleteModifierGroup,
+    deleteModifierOption,
     addModifierOption,
     setProductModifierGroupIds,
     productRecipe,
@@ -137,7 +138,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
           <button
             type="button"
             onClick={() => setSelectedProductId(null)}
-            className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded cursor-pointer"
+            className="w-12 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded cursor-pointer"
             aria-label="Kapat"
           >
             <X className="w-4 h-4" />
@@ -151,7 +152,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
               key={tab}
               type="button"
               onClick={() => setDetailTab(tab)}
-              className={`flex-1 py-2 text-xs font-semibold border-b-2 transition-colors capitalize cursor-pointer ${
+              className={`flex-1 min-h-12 text-sm font-semibold border-b-2 transition-colors capitalize cursor-pointer ${
                 detailTab === tab
                   ? 'border-[var(--accent-blue)] text-[var(--text-primary)] bg-[var(--bg-card)]'
                   : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
@@ -214,6 +215,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
             }}
             onOpenModifierModal={onOpenModifierModal}
             deleteModifierGroup={deleteModifierGroup}
+            deleteModifierOption={deleteModifierOption}
             addModifierOption={addModifierOption}
           />
         )}
@@ -222,11 +224,11 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
         {detailTab === 'fiyat' && (
           <div className="space-y-3">
             <div className="p-3 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
-              <span className="text-[11px] font-bold text-[var(--text-muted)] block mb-1">GÜNCEL FİYAT</span>
-              <div className="text-xl font-bold font-mono text-[var(--text-primary)]">
+              <span className="text-xs font-bold text-[var(--text-muted)] block mb-1">GÜNCEL FİYAT</span>
+              <div className="text-xl font-bold tabular-nums text-[var(--text-primary)]">
                 {selectedProduct ? formatMoney(selectedProduct.priceCents) : '—'}
               </div>
-              <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+              <span className="text-xs text-[var(--text-muted)] mt-1 block">
                 Tabak satış fiyatı
               </span>
             </div>
@@ -262,7 +264,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
           type="button"
           onClick={handleSave}
           disabled={busy}
-          className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+          className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
         >
           <Check className="w-4 h-4" />
           <span>{detailMode === 'new' ? 'Ürünü Oluştur' : 'Kaydet'}</span>
@@ -273,7 +275,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
             disabled={busy}
-            className="tactile-btn min-h-12 px-3.5 rounded-lg bg-transparent border border-[var(--accent-red-border)] hover:bg-[var(--accent-red-soft)] text-[var(--accent-red)] text-xs font-bold flex items-center justify-center cursor-pointer disabled:opacity-50"
+            className="tactile-btn min-h-12 px-3.5 rounded-lg bg-transparent border border-[var(--accent-red-border)] hover:bg-[var(--accent-red-soft)] text-[var(--accent-red)] text-sm font-bold flex items-center justify-center cursor-pointer disabled:opacity-50"
             aria-label="Sil"
           >
             <Trash2 className="w-4 h-4" />
@@ -284,7 +286,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
       {/* Silme Onay Modalı */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-80 paper border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-2xl">
+          <div className="w-80 paper border border-[var(--border)] rounded-xl p-4 space-y-4 shadow-2xl">
             <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Ürünü Sil?</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
               &quot;{selectedProduct?.name}&quot; menüden silinecek. Bu işlem denetim defterine kaydedilir.
@@ -293,14 +295,14 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
               <button
                 type="button"
                 onClick={() => setShowDeleteConfirm(false)}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-sm font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
               >
                 Vazgeç
               </button>
               <button
                 type="button"
                 onClick={handleDelete}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-xs font-bold text-white cursor-pointer"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-sm font-bold text-white cursor-pointer"
               >
                 Sil
               </button>

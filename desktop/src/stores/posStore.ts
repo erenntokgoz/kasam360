@@ -81,15 +81,13 @@ interface PosStore {
     product: Product,
     selectedModifiers?: OrderItemModifier[],
     cookingDegree?: string,
-    course?: 1 | 2 | 3,
     notes?: string
   ) => void;
   updateItemQty: (itemId: string, delta: number) => void;
   removeItem: (itemId: string) => void;
-  setItemCourse: (itemId: string, course: 1 | 2 | 3) => void;
   setItemNote: (itemId: string, notes: string) => void;
   clearTicket: () => void;
-  setLastSale: (sale: LastSale) => void;
+  setLastSale: (sale: LastSale | null) => void;
   sendToKitchen: () => Promise<boolean>;
   calculateTotalCents: () => number;
 }
@@ -310,15 +308,15 @@ export const usePosStore = create<PosStore>((set, get) => ({
 
   selectTicketItem: (selectedTicketItemId) => set({ selectedTicketItemId }),
 
-  addItemToTicket: (product, selectedModifiers = [], cookingDegree, course = 1, notes) => {
+  addItemToTicket: (product, selectedModifiers = [], cookingDegree, notes) => {
     const taxRateBp = product.taxRateBp ?? Math.round(product.vatRate * 100);
     const unitPrice = selectedModifiers.reduce((sum, m) => sum + m.priceDeltaCents, product.unitPriceCents);
     set((state) => {
       const draft = draftOf(state);
-      const isPlain = selectedModifiers.length === 0 && !cookingDegree && !notes && course === 1;
+      const isPlain = selectedModifiers.length === 0 && !cookingDegree && !notes;
       const same = isPlain
         ? draft.find((i) => i.productId === product.id && !i.notes && !i.cookingDegree &&
-            i.course === 1 && i.selectedModifiers.length === 0)
+            i.selectedModifiers.length === 0)
         : undefined;
       if (same) {
         const quantity = same.quantity + 1;
@@ -334,7 +332,6 @@ export const usePosStore = create<PosStore>((set, get) => ({
         vatRate: product.vatRate,
         taxRateBp,
         station: product.station,
-        course,
         cookingDegree,
         notes,
         selectedModifiers,
@@ -365,10 +362,6 @@ export const usePosStore = create<PosStore>((set, get) => ({
       ...withDraft(state, draftOf(state).filter((item) => item.id !== itemId)),
       selectedTicketItemId: state.selectedTicketItemId === itemId ? null : state.selectedTicketItemId,
     }));
-  },
-
-  setItemCourse: (itemId, course) => {
-    set((state) => withDraft(state, draftOf(state).map((i) => (i.id === itemId ? { ...i, course } : i))));
   },
 
   setItemNote: (itemId, notes) => {

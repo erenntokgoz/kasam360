@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { FloorTable, FloorZone, Reservation } from '../types/floor';
 import { invokeIPC } from '../services/tauriClient';
-import { isWithin60Minutes } from '../lib/date';
 import { sessionArgs } from './cariStore';
 
 interface FloorRow {
@@ -19,12 +18,15 @@ interface FloorRow {
   guestCount?: number | null;
   reservationCustomerName?: string | null;
   reservationTime?: string | null;
+  activeOrderId?: string | null;
+  remainingCents?: number | null;
 }
 
 const DEFAULT_ZONE = 'Salon';
 const STATUS: Record<string, FloorTable['status']> = {
   AVAILABLE: 'EMPTY',
   OCCUPIED: 'OCCUPIED',
+  BILL_REQUESTED: 'BILL_REQUESTED',
   RESERVED: 'RESERVED',
 };
 
@@ -40,6 +42,8 @@ export function mapFloorRow(row: FloorRow, index: number): FloorTable {
     status: STATUS[row.status] ?? 'OCCUPIED',
     occupiedSeats: row.guestCount ?? undefined,
     totalCents: row.currentTotal,
+    remainingCents: row.remainingCents ?? undefined,
+    activeOrderId: row.activeOrderId ?? undefined,
     openedAt: row.openedAt ?? undefined,
     waiterName: row.waiterName ?? undefined,
     reservedAt: row.reservationTime ?? undefined,
@@ -65,6 +69,9 @@ interface FloorStore {
   floorError: string | null;
   loadFloorPlan: () => Promise<void>;
   addTable: (name: string, zone: string, seats: number) => Promise<void>;
+  renameTable: (tableId: string, name: string) => Promise<void>;
+  removeTable: (tableId: string) => Promise<void>;
+  setBillRequested: (tableId: string, requested: boolean) => Promise<void>;
   setSelectedZoneId: (zoneId: string | null) => void;
   selectTable: (tableId: string | null) => void;
   openTableSlideOver: (tableId: string) => void;
@@ -76,8 +83,8 @@ interface FloorStore {
   moveTable: (sourceTableId: string, targetTableId: string) => Promise<boolean>;
   mergeTables: (sourceTableId: string, targetTableId: string) => Promise<boolean>;
   addReservation: (res: Omit<Reservation, 'id' | 'status'>) => Promise<void>;
+  updateReservation: (reservationId: string, res: Omit<Reservation, 'id' | 'status'>) => Promise<void>;
   closeReservation: (reservationId: string, action: 'ARRIVED' | 'CANCELLED') => Promise<void>;
-  checkReservationLocks: () => void;
 }
 
 export const useFloorStore = create<FloorStore>((set, get) => ({
@@ -102,7 +109,6 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
         tableCount: tables.filter((t) => t.zoneId === zone).length,
       }));
       set({ zones, tables, floorError: null });
-      get().checkReservationLocks();
     } catch (error) {
       set({ floorError: String(error) });
     }
@@ -119,6 +125,24 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
       actorId,
       actorRole,
     });
+    await get().loadFloorPlan();
+  },
+
+  renameTable: async (tableId, name) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('update_table_name', { id: tableId, name, tenantId, actorId, actorRole });
+    await get().loadFloorPlan();
+  },
+
+  removeTable: async (tableId) => {
+    const { actorId, actorRole } = sessionArgs();
+    await invokeIPC('remove_table', { id: tableId, actorId, actorRole });
+    await get().loadFloorPlan();
+  },
+
+  setBillRequested: async (tableId, requested) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('set_bill_requested', { tableId, requested, actorId, actorRole, tenantId });
     await get().loadFloorPlan();
   },
 
@@ -269,6 +293,24 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
     await get().loadFloorPlan();
   },
 
+  updateReservation: async (reservationId, resData) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('update_reservation', {
+      reservationId,
+      request: {
+        customerName: resData.customerName,
+        customerPhone: resData.customerPhone,
+        partySize: resData.guestCount,
+        reservedAt: resData.reservationTime,
+        note: resData.notes,
+      },
+      callerRole: actorRole,
+      callerId: actorId,
+      callerTenantId: tenantId,
+    });
+    await get().loadFloorPlan();
+  },
+
   closeReservation: async (reservationId, action) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
     await invokeIPC(action === 'ARRIVED' ? 'mark_reservation_arrived' : 'cancel_reservation', {
@@ -278,17 +320,5 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
       callerTenantId: tenantId,
     });
     await get().loadFloorPlan();
-  },
-
-  checkReservationLocks: () => {
-    // 60 dakika kuralı: Rezerve saatine 60dk kala masa otomatik rezerve rozeti alır ve kilitlenir
-    set((state) => ({
-      tables: state.tables.map((t) => {
-        if (t.reservedAt && isWithin60Minutes(t.reservedAt) && t.status === 'EMPTY') {
-          return { ...t, status: 'RESERVED' };
-        }
-        return t;
-      }),
-    }));
   },
 }));

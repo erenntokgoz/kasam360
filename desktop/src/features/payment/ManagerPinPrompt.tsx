@@ -56,7 +56,7 @@ export const ManagerPinPrompt: React.FC<ManagerPinPromptProps> = ({ scope, title
     <Modal isOpen onClose={onClose} title={title} maxWidth="sm">
       <div className="space-y-3">
         <p className="text-xs flex items-center gap-1.5 text-[var(--text-secondary)]">
-          <ShieldCheck className="w-4 h-4 text-[var(--accent-amber)]" />
+          <ShieldCheck className="w-4 h-4 text-[var(--text-secondary)]" />
           <span>Yönetici veya işletme sahibi PIN kodu</span>
         </p>
         <div aria-label="Girilen hane sayısı" className="h-12 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] flex items-center justify-center text-xl font-bold tracking-[0.4em] text-[var(--text-primary)]">

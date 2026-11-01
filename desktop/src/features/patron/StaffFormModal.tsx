@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { parseCents } from '../../lib/moneyInput';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { Button } from '../../ui/Button';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
 
@@ -51,6 +53,7 @@ export const StaffFormModal: React.FC<StaffFormModalProps> = ({
   const [salary, setSalary] = useState(salaryCents === null ? '' : (salaryCents / 100).toFixed(2).replace('.', ','));
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -113,23 +116,23 @@ export const StaffFormModal: React.FC<StaffFormModalProps> = ({
         </label>
         <div className="grid grid-cols-2 gap-2">
           {ROLES.map((option) => (
-            <Button key={option} type="button" variant={role === option ? 'primary' : 'secondary'} className="min-h-12" onClick={() => setRole(option)}>
+            <Button key={option} type="button" variant={role === option ? 'selected' : 'secondary'} className="min-h-12" onClick={() => setRole(option)}>
               {ROLE_LABEL[option]}
             </Button>
           ))}
         </div>
         <label className="block text-xs font-semibold text-[var(--text-secondary)]">
           {member ? 'Yeni PIN (değişmeyecekse boş)' : 'PIN (4-8 hane)'}
-          <Input id="staff-pin" type="password" inputMode="numeric" className="min-h-12 mt-1" value={pin} onChange={(event) => setPin(event.target.value)} />
+          <NumberInput kind="digits" id="staff-pin" type="password" className="min-h-12 mt-1" value={pin} onValueChange={setPin} />
         </label>
         <label className="block text-xs font-semibold text-[var(--text-secondary)]">
           Telefon
-          <Input id="staff-phone" className="min-h-12 mt-1" value={phone} onChange={(event) => setPhone(event.target.value)} />
+          <NumberInput id="staff-phone" kind="digits" maxLength={15} className="mt-1" value={phone} onValueChange={setPhone} />
         </label>
         {canSetSalary ? (
           <label className="block text-xs font-semibold text-[var(--text-secondary)]">
             Aylık Maaş (₺)
-            <Input id="staff-salary" inputMode="decimal" className="min-h-12 mt-1" value={salary} onChange={(event) => setSalary(event.target.value)} />
+            <NumberInput id="staff-salary" className="min-h-12 mt-1" value={salary} onValueChange={setSalary} />
           </label>
         ) : null}
         {member ? (
@@ -146,7 +149,24 @@ export const StaffFormModal: React.FC<StaffFormModalProps> = ({
         <Button type="submit" variant="primary" className="w-full min-h-12" isLoading={isBusy}>
           Kaydet
         </Button>
+        {member ? (
+          <Button type="button" variant="danger" className="w-full min-h-12" onClick={() => setAskDelete(true)}>
+            Personeli Sil
+          </Button>
+        ) : null}
       </form>
+      {member && askDelete ? (
+        <ConfirmDialog
+          title={`${member.name} silinsin mi?`}
+          message="Giriş yapamaz. Geçmiş kayıtları raporlarda kalır."
+          onConfirm={async () => {
+            const { actorId, actorRole, tenantId } = sessionArgs();
+            await invokeIPC('delete_staff_member', { actorRole, actorId, tenantId, staffId: member.id });
+            onSaved();
+          }}
+          onClose={() => setAskDelete(false)}
+        />
+      ) : null}
     </Modal>
   );
 };

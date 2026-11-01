@@ -128,6 +128,33 @@ pub async fn add_shift_plan(
     staff_service::add_shift_plan(&pool, &tenant, &actor_id, &plan).await
 }
 
+/// Gerçekleşmemiş planın gün ve saatini değiştirir.
+#[tauri::command]
+pub async fn update_shift_plan(
+    tenant_id: Option<String>,
+    actor_role: String,
+    plan_id: String,
+    plan: ShiftPlanInput,
+    pool: State<'_, DbPool>,
+) -> Result<(), String> {
+    crate::rbac::require_shift_planning(&actor_role)?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    staff_service::update_shift_plan(&pool, &tenant, &plan_id, &plan).await
+}
+
+/// Gerçekleşmemiş planı siler; gerçekleşen vardiya kasa kaydına bağlıdır.
+#[tauri::command]
+pub async fn delete_shift_plan(
+    tenant_id: Option<String>,
+    actor_role: String,
+    plan_id: String,
+    pool: State<'_, DbPool>,
+) -> Result<(), String> {
+    crate::rbac::require_shift_planning(&actor_role)?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    staff_service::delete_shift_plan(&pool, &tenant, &plan_id).await
+}
+
 // ---------------------------------------------------------------------------
 // İzin
 // ---------------------------------------------------------------------------
@@ -168,6 +195,19 @@ pub async fn decide_leave(
     crate::rbac::require_staff_admin(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     staff_service::decide_leave(&pool, &tenant, &approver_id, &leave_id, approve).await
+}
+
+/// İzni listeden kaldırır. Kayıt `Iptal` durumuna geçer; bordroda izin sayılmaz.
+#[tauri::command]
+pub async fn delete_leave(
+    tenant_id: Option<String>,
+    actor_role: String,
+    leave_id: String,
+    pool: State<'_, DbPool>,
+) -> Result<(), String> {
+    crate::rbac::require_staff_admin(&actor_role)?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    staff_service::cancel_leave(&pool, &tenant, &leave_id).await
 }
 
 // ---------------------------------------------------------------------------
@@ -296,10 +336,60 @@ pub async fn run_payroll(
 // Bahşiş havuzu
 // ---------------------------------------------------------------------------
 
-/// Nakit bahşişi havuza yazar. Kart bahşişi terminalde kaldığı için buraya girmez.
+#[tauri::command]
+pub async fn list_tip_entries(
+    period: String,
+    actor_role: String,
+    tenant_id: Option<String>,
+    pool: State<'_, DbPool>,
+) -> Result<Vec<tip_service::TipEntry>, String> {
+    crate::rbac::require_any(
+        &actor_role,
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager],
+    )?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    tip_service::list_entries(&pool, &tenant, &period).await
+}
+
+/// Yanlış girilen bahşişi siler; silinen tutar denetim defterinde kalır.
+#[tauri::command]
+pub async fn delete_tip_entry(
+    entry_id: String,
+    actor_id: String,
+    actor_role: String,
+    tenant_id: Option<String>,
+    pool: State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    state.lan_sync.require_local_write()?;
+    crate::rbac::require_any(
+        &actor_role,
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager],
+    )?;
+    let tenant = require_tenant_scope(tenant_id.as_deref())?;
+    let amount_cents = tip_service::delete_entry(&pool, &tenant, &entry_id).await?;
+    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
+    let ctx = crate::services::audit_service::AuditContext::new(
+        tenant,
+        actor_id,
+        actor_role,
+        crate::services::audit_service::category::FINANS,
+        "tip:deleted",
+        entry_id,
+        serde_json::json!({ "amountCents": amount_cents }),
+        chrono::Utc::now().to_rfc3339(),
+    )?;
+    crate::services::audit_service::AuditService::append(&mut conn, &audit_lock, &ctx).await?;
+    conn.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Bahşişi alındığı yöntemle havuza yazar.
 #[tauri::command]
 pub async fn record_tip_entry(
     amount_cents: i64,
+    payment_method: String,
     actor_id: String,
     actor_role: String,
     tenant_id: Option<String>,
@@ -317,7 +407,8 @@ pub async fn record_tip_entry(
     )?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let now = chrono::Local::now().to_rfc3339();
-    let id = tip_service::record_tip(&pool, &tenant, None, amount_cents, &now).await?;
+    let id =
+        tip_service::record_tip(&pool, &tenant, None, amount_cents, &payment_method, &now).await?;
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let ctx = crate::services::audit_service::AuditContext::new(

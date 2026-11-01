@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import { Trash2, Plus } from 'lucide-react';
+import { NumberInput } from '../../ui/NumberInput';
 import type { ModifierGroupDto } from '../../types/menu360';
 import { formatMoney } from '../../lib/formatMoney';
 import { parseMoneyToCents } from '../../stores/menu360Store';
@@ -15,6 +16,7 @@ interface Menu360DetailModifiyeProps {
   onToggleGroup: (groupId: string, checked: boolean) => void;
   onOpenModifierModal?: () => void;
   deleteModifierGroup: (groupId: string) => Promise<boolean>;
+  deleteModifierOption: (optionId: string) => Promise<boolean>;
   addModifierOption: (
     groupId: string,
     name: string,
@@ -29,6 +31,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
   onToggleGroup,
   onOpenModifierModal,
   deleteModifierGroup,
+  deleteModifierOption,
   addModifierOption,
 }) => {
   const [addingOptionGroupId, setAddingOptionGroupId] = useState<string | null>(null);
@@ -92,7 +95,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                 <span className="text-xs font-bold text-[var(--text-primary)] block">
                   {grp.name}
                 </span>
-                <span className="text-[10px] text-[var(--text-muted)]">
+                <span className="text-xs text-[var(--text-muted)]">
                   {grp.isRequired ? 'Zorunlu' : 'İsteğe Bağlı'} (Max: {grp.maxSelections ?? 'Sınırsız'})
                 </span>
                 </span>
@@ -100,7 +103,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
               <button
                 type="button"
                 onClick={() => deleteModifierGroup(grp.id)}
-                className="text-[var(--text-muted)] hover:text-[var(--accent-red)] p-1 cursor-pointer"
+                className="w-12 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--accent-red)] cursor-pointer"
                 title="Grubu tüm menüden sil"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -113,10 +116,18 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                   key={opt.id}
                   className="flex items-center justify-between text-xs py-1 px-2 rounded paper border border-[var(--border)] text-[var(--text-secondary)]"
                 >
-                  <span>{opt.name}</span>
-                  <span className="font-mono tabular-nums text-[var(--text-primary)]">
+                  <span className="flex-1 min-w-0 truncate">{opt.name}</span>
+                  <span className="tabular-nums text-[var(--text-primary)]">
                     +{formatMoney(opt.priceCents ?? opt.priceDeltaCents ?? 0)}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => void deleteModifierOption(opt.id)}
+                    aria-label={`${opt.name} seçeneğini sil`}
+                    className="w-10 h-10 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--accent-red)] cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -129,28 +140,22 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                   value={optName}
                   onChange={(e) => setOptName(e.target.value)}
                   placeholder="Seçenek adı (örn: Ekstra Sos)"
-                  className="w-full paper border border-[var(--border)] rounded px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+                  className="w-full paper border border-[var(--border)] rounded min-h-12 px-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                   autoFocus
                 />
                 <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={optDeltaInput}
-                    onChange={(e) => setOptDeltaInput(e.target.value)}
-                    placeholder="Fiyat farkı (TL)"
-                    className="flex-1 paper border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
-                  />
+                  <NumberInput aria-label="Fiyat farkı" className="flex-1" value={optDeltaInput} onValueChange={setOptDeltaInput} placeholder="Fiyat farkı (₺)" />
                   <button
                     type="button"
                     onClick={() => handleAddOptionSubmit(grp.id)}
-                    className="px-2.5 py-1.5 rounded bg-[var(--accent-blue)] text-white text-xs font-bold cursor-pointer"
+                    className="min-h-12 px-3 rounded bg-[var(--accent-blue)] text-white text-sm font-bold cursor-pointer"
                   >
                     Ekle
                   </button>
                   <button
                     type="button"
                     onClick={() => setAddingOptionGroupId(null)}
-                    className="px-2 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                    className="min-h-12 px-3 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                   >
                     İptal
                   </button>
@@ -164,7 +169,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                   setOptName('');
                   setOptDeltaInput('');
                 }}
-                className="text-[11px] font-semibold text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer pt-1"
+                className="min-h-12 text-sm font-semibold text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer pt-1"
               >
                 <Plus className="w-3 h-3" />
                 <span>Seçenek Ekle</span>

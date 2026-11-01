@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { parseCents } from '../../lib/moneyInput';
@@ -17,14 +18,15 @@ export interface RefundTarget {
 
 interface RefundModalProps {
   target: RefundTarget;
+  initialReason?: string;
   onClose: () => void;
   onDone: () => void;
 }
 
-export const RefundModal: React.FC<RefundModalProps> = ({ target, onClose, onDone }) => {
+export const RefundModal: React.FC<RefundModalProps> = ({ target, initialReason = '', onClose, onDone }) => {
   const remaining = target.total_cents - target.refunded_cents;
   const [amountText, setAmountText] = useState((remaining / 100).toFixed(2).replace('.', ','));
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(initialReason);
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,10 +75,9 @@ export const RefundModal: React.FC<RefundModalProps> = ({ target, onClose, onDon
         </p>
         <label className="block text-xs font-semibold text-[var(--text-secondary)]">
           Tutar (₺)
-          <input
-            inputMode="decimal"
+          <NumberInput
             value={amountText}
-            onChange={(event) => setAmountText(event.target.value)}
+            onValueChange={setAmountText}
             className="mt-1 w-full min-h-12 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] px-3 text-base font-bold tabular-nums text-[var(--text-primary)]"
           />
         </label>
