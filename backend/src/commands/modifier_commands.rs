@@ -170,6 +170,37 @@ pub async fn delete_modifier_group(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn delete_modifier_option(
+    actor_role: String,
+    option_id: String,
+    actor_id: Option<String>,
+    tenant_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    app_state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    rbac::require_any(&actor_role, &[Role::Owner])?;
+    let tid = require_tenant(tenant_id.as_deref())?;
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
+    let mut tx = pool.begin_write().await?;
+    let name = modifier_service::delete_option(&mut tx, &tid, &option_id).await?;
+    record_audit(
+        &mut tx,
+        &lock,
+        &tid,
+        &actor_id,
+        &actor_role,
+        category::MENU,
+        "menu:modifier_option_deleted",
+        &option_id,
+        serde_json::json!({ "name": name }),
+    )
+    .await?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Ürünün bağlı olduğu modifier gruplarını **değiştirir** (küme semantiği).
 ///
 /// Önceden bu bağlantı kurulamıyordu: `product_modifier_groups` tablosu

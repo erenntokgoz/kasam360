@@ -73,8 +73,6 @@ pub struct PaymentPayloadDto {
     pub terminal_id: Option<String>,
     #[serde(rename = "idempotencyKey")]
     pub idempotency_key: Option<String>,
-    #[serde(rename = "globalDiscount", default)]
-    pub global_discount: Option<serde_json::Value>,
     /// Anlık PIN onayından gelen tek kullanımlık jeton. Sunucu hesabında
     /// indirim varsa **zorunludur**; indirim yoksa yok sayılır.
     #[serde(rename = "approvalToken", default)]

@@ -66,8 +66,8 @@ export const TestPosPanel: React.FC = () => {
   };
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-3">
-      <h3 className="text-sm font-bold text-[var(--text-primary)]">Test Sanal POS</h3>
+    <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
+      <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Test Sanal POS</h3>
       <p className="text-xs text-[var(--text-secondary)]">Gerçek para çekmez, gerçek sağlayıcıya bağlanmaz. Saha testi için kart tahsilatında yanıt seçtirir.</p>
       <label className="flex min-h-12 items-center gap-2 text-sm text-[var(--text-primary)]">
         <input type="checkbox" checked={enabled} onChange={(event) => void toggle(event.target.checked)} />

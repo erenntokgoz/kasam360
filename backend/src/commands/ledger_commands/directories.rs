@@ -307,6 +307,34 @@ pub async fn create_directory(
     read_card(&pool, &tid, id).await
 }
 
+/// Hareket görmemiş cari kartı siler.
+#[tauri::command]
+pub async fn delete_directory(
+    id: String,
+    operation_id: String,
+    tenant_id: Option<String>,
+    actor_role: Option<String>,
+    actor_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    require_ledger_write(actor_role.as_deref())?;
+    let tid = require_ledger_tenant(tenant_id.as_deref())?;
+    let intent = json!({ "id": id });
+    submit(
+        &pool,
+        &state,
+        &tid,
+        &operation_id,
+        actor_id,
+        actor_role,
+        intent,
+        CariOp::DeleteCard { directory_id: id },
+    )
+    .await?;
+    Ok(())
+}
+
 /// Mevcut bir cari rehber kartını günceller.
 #[tauri::command]
 pub async fn update_directory(

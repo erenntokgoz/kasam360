@@ -1,23 +1,34 @@
 // Menü Yeni Kategori Ekleme Modalı
 // Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Check } from 'lucide-react';
 import { useMenu360Store } from '../../stores/menu360Store';
+import type { CategoryDto } from '../../types/menu360';
 
 interface Menu360CategoryModalProps {
   isOpen: boolean;
+  /** Verilirse pencere düzenleme açılır. */
+  category?: CategoryDto | null;
   onClose: () => void;
 }
 
 export const Menu360CategoryModal: React.FC<Menu360CategoryModalProps> = ({
   isOpen,
+  category = null,
   onClose,
 }) => {
-  const { createCategory, busy } = useMenu360Store();
+  const { createCategory, updateCategory, busy } = useMenu360Store();
   const [name, setName] = useState('');
   const [station, setStation] = useState('BAR');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setName(category?.name ?? '');
+    setStation(category?.defaultStation ?? 'BAR');
+    setError(null);
+  }, [isOpen, category]);
 
   if (!isOpen) return null;
 
@@ -28,24 +39,26 @@ export const Menu360CategoryModal: React.FC<Menu360CategoryModalProps> = ({
       return;
     }
 
-    const success = await createCategory(name.trim(), station);
+    const success = category
+      ? await updateCategory(category, name.trim(), station)
+      : await createCategory(name.trim(), station);
     if (success) {
       setName('');
       onClose();
     } else {
-      setError('Kategori oluşturulamadı.');
+      setError('Kategori kaydedilemedi.');
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-      <div className="w-96 bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden select-none shadow-2xl">
+      <div className="w-96 paper border border-[var(--border)] rounded-xl overflow-hidden select-none shadow-2xl">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-panel)]">
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">+ Yeni Kategori Ekle</h3>
+          <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">{category ? 'Kategoriyi Düzenle' : 'Yeni Kategori'}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+            className="w-12 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -59,7 +72,7 @@ export const Menu360CategoryModal: React.FC<Menu360CategoryModalProps> = ({
           )}
 
           <div>
-            <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+            <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
               Kategori Adı
             </label>
             <input
@@ -67,13 +80,13 @@ export const Menu360CategoryModal: React.FC<Menu360CategoryModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Örn: Sıcak İçecekler"
-              className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+              className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+            <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
               Varsayılan İstasyon
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -82,7 +95,7 @@ export const Menu360CategoryModal: React.FC<Menu360CategoryModalProps> = ({
                   key={st}
                   type="button"
                   onClick={() => setStation(st)}
-                  className={`py-2 px-1 text-xs font-bold rounded-md border cursor-pointer text-center transition-colors ${
+                  className={`min-h-12 px-1 text-sm font-bold rounded-md border cursor-pointer text-center transition-colors ${
                     station === st
                       ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border-[var(--accent-blue)] shadow-[inset_0_0_0_1px_var(--accent-blue)]'
                       : 'bg-[var(--bg-subtle)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-secondary)]'
@@ -98,17 +111,17 @@ export const Menu360CategoryModal: React.FC<Menu360CategoryModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+              className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-sm font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
             >
               Vazgeç
             </button>
             <button
               type="submit"
               disabled={busy}
-              className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-xs font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-sm font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
-              <span>Oluştur</span>
+              <span>Kaydet</span>
             </button>
           </div>
         </form>

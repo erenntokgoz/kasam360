@@ -10,6 +10,7 @@ import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { mapServerItem, type CartItemWire } from '../../lib/orderMath';
 import type { OrderItem } from '../../types/pos';
+import type { OrderBalance } from '../../stores/posStore';
 
 export interface TableSlideOverProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export interface TableSlideOverProps {
   onMoveTable: (sourceId: string, targetId: string) => void;
   onMergeTable: (sourceId: string, targetId: string) => void;
   onCloseReservation: (reservationId: string, action: 'ARRIVED' | 'CANCELLED') => Promise<void>;
+  onToggleBill: (tableId: string, requested: boolean) => Promise<void>;
 }
 
 export const TableSlideOver: React.FC<TableSlideOverProps> = ({
@@ -33,33 +35,42 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
   onMoveTable,
   onMergeTable,
   onCloseReservation,
+  onToggleBill,
 }) => {
   const [moveTargetId, setMoveTargetId] = useState<string>('');
   const [mergeTargetId, setMergeTargetId] = useState<string>('');
   const [showMoveBox, setShowMoveBox] = useState(false);
   const [showMergeBox, setShowMergeBox] = useState(false);
   const [tableItems, setTableItems] = useState<OrderItem[]>([]);
+  const [balance, setBalance] = useState<OrderBalance | null>(null);
   const tableId = table?.id;
-  const isOccupied = table?.status === 'OCCUPIED';
+  const activeOrderId = table?.activeOrderId;
+  const isOccupied = table?.status === 'OCCUPIED' || table?.status === 'BILL_REQUESTED';
 
   // Kanca erken dönüşten önce durmalıdır: masa seçilince kanca sayısı değişir ve
   // React tüm uygulamayı boş ekrana düşürür.
   useEffect(() => {
     if (!isOpen || !isOccupied || !tableId) {
       setTableItems([]);
+      setBalance(null);
       return;
     }
     const { tenantId } = sessionArgs();
+    if (activeOrderId) {
+      void invokeIPC<OrderBalance>('get_order_balance', { orderId: activeOrderId, tenantId })
+        .then(setBalance)
+        .catch(() => setBalance(null));
+    }
     void invokeIPC<CartItemWire[]>('get_order_items', { tableId, tenantId })
       .then((wire) => setTableItems(wire.map(mapServerItem).filter((item): item is OrderItem => item !== null)))
       .catch(() => setTableItems([]));
-  }, [isOpen, isOccupied, tableId]);
+  }, [isOpen, isOccupied, tableId, activeOrderId]);
 
   if (!table) return null;
 
   const elapsed = isOccupied ? minutesElapsed(table.openedAt) : 0;
   const emptyTables = allTables.filter((t) => t.id !== table.id && t.status === 'EMPTY');
-  const occupiedTables = allTables.filter((t) => t.id !== table.id && t.status === 'OCCUPIED');
+  const occupiedTables = allTables.filter((t) => t.id !== table.id && (t.status === 'OCCUPIED' || t.status === 'BILL_REQUESTED'));
 
   const handleConfirmMove = () => {
     if (!moveTargetId) return;
@@ -79,14 +90,26 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
       onClose={onClose}
       title={table.tableNumber}
       subtitle={`${table.zoneName} · ${table.capacity} Kişilik Kapasite`}
-      footer={
+      footer={isOccupied ? (
         <div className="space-y-2">
-          <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
-            <span className="text-xs text-[var(--text-secondary)]">Toplam Tutar</span>
-            <span className="text-xl font-bold text-[var(--accent-amber)] tabular-nums">
-              {formatMoney(table.totalCents)}
-            </span>
+          <div className="pb-2 border-b border-[var(--border)] space-y-0.5">
+            {balance && balance.paidCents > 0 ? (
+              <div className="flex items-center justify-between text-sm text-[var(--text-secondary)] tabular-nums">
+                <span>Toplam {formatMoney(balance.totalCents)}</span>
+                <span>Ödenen {formatMoney(balance.paidCents)}</span>
+              </div>
+            ) : null}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[var(--text-secondary)]">{balance ? 'Kalan Tutar' : 'Toplam Tutar'}</span>
+              <span className="text-xl font-bold text-[var(--text-primary)] tabular-nums">
+                {formatMoney(balance?.remainingCents ?? table.totalCents)}
+              </span>
+            </div>
           </div>
+
+          <Button variant="secondary" className="w-full" onClick={() => void onToggleBill(table.id, table.status !== 'BILL_REQUESTED')}>
+            {table.status === 'BILL_REQUESTED' ? 'Hesap İsteğini Kaldır' : 'Hesap İstendi'}
+          </Button>
 
           <div className="grid grid-cols-2 gap-2">
             <Button
@@ -104,22 +127,22 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
               size="lg"
               onClick={() => onPayTable(table)}
               className="w-full text-xs"
-              disabled={table.totalCents <= 0}
+              disabled={(table.remainingCents ?? table.totalCents) <= 0}
             >
               <CreditCard className="w-4 h-4" />
               <span>Hesap Al</span>
             </Button>
           </div>
         </div>
-      }
+      ) : undefined}
     >
       {/* Durum Özeti */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3.5 space-y-3">
+      <div className="paper border border-[var(--border)] rounded-xl p-4.5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-[var(--text-secondary)]">Masa Durumu:</span>
             {isOccupied ? (
-              <Badge variant="amber">Dolu</Badge>
+              <Badge variant="amber">{table.status === 'BILL_REQUESTED' ? 'Hesap istendi' : 'Dolu'}</Badge>
             ) : table.status === 'RESERVED' ? (
               <Badge variant="blue">Rezerve</Badge>
             ) : (
@@ -129,7 +152,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
 
           {isOccupied ? (
             <span className="text-xs text-[var(--text-muted)] flex items-center gap-1 tabular-nums">
-              <Clock className="w-3.5 h-3.5 text-[var(--accent-amber)]" />
+              <Clock className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
               <span>{elapsed} dakikadır açık</span>
             </span>
           ) : null}
@@ -139,25 +162,26 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
           <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[var(--border)] text-xs text-[var(--text-secondary)]">
             <div className="flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-              <span>{table.occupiedSeats || 2} Kişi Oturuyor</span>
+              <span>{table.occupiedSeats ? `${table.occupiedSeats} kişi` : 'Kişi girilmedi'}</span>
             </div>
-            <div>
-              <span className="text-[var(--text-muted)]">Garson: </span>
-              <span className="font-semibold text-[var(--text-primary)]">
-                {table.waiterName || 'Mehmet K.'}
-              </span>
-            </div>
+            {table.waiterName ? (
+              <div>
+                <span className="text-[var(--text-muted)]">Garson: </span>
+                <span className="font-semibold text-[var(--text-primary)]">{table.waiterName}</span>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
 
       {/* Sipariş Kalemleri Önizleme */}
+      {isOccupied ? (
       <div className="space-y-2">
         <span className="text-xs font-bold text-[var(--text-secondary)] block">
           Açık Adisyon Kalemleri
         </span>
 
-        {isOccupied && tableItems.length > 0 ? (
+        {tableItems.length > 0 ? (
           <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3 divide-y divide-[var(--border)] text-xs max-h-60 overflow-y-auto">
             {tableItems.map((item) => (
               <div key={item.id} className="py-2 first:pt-0 last:pb-0 flex justify-between items-center">
@@ -166,7 +190,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
                     {item.quantity}x {item.name}
                   </span>
                   {item.cookingDegree || item.notes || (item.selectedModifiers && item.selectedModifiers.length > 0) ? (
-                    <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">
+                    <span className="block text-xs text-[var(--text-muted)] mt-0.5">
                       {[
                         item.cookingDegree,
                         item.selectedModifiers?.map((m) => m.name).join(', '),
@@ -189,6 +213,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
           </div>
         )}
       </div>
+      ) : null}
 
       {table.status === 'RESERVED' && table.reservationId ? (
         <div className="space-y-2 pt-2 border-t border-[var(--border)]">
@@ -243,14 +268,14 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
 
           {/* Masa Taşı Kutusu */}
           {showMoveBox ? (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3 space-y-2.5">
+            <div className="paper border border-[var(--border)] rounded-xl p-4 space-y-2.5">
               <span className="text-xs font-semibold text-[var(--text-primary)] block">
                 Hedef Boş Masa Seçin
               </span>
               <select
                 value={moveTargetId}
                 onChange={(e) => setMoveTargetId(e.target.value)}
-                className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+                className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none"
               >
                 <option value="">Hedef masa seçin...</option>
                 {emptyTables.map((t) => (
@@ -273,14 +298,14 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
 
           {/* Masa Birleştir Kutusu */}
           {showMergeBox ? (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3 space-y-2.5">
+            <div className="paper border border-[var(--border)] rounded-xl p-4 space-y-2.5">
               <span className="text-xs font-semibold text-[var(--text-primary)] block">
                 Birleştirilecek Dolu Masayı Seçin
               </span>
               <select
                 value={mergeTargetId}
                 onChange={(e) => setMergeTargetId(e.target.value)}
-                className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+                className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none"
               >
                 <option value="">Dolu masa seçin...</option>
                 {occupiedTables.map((t) => (

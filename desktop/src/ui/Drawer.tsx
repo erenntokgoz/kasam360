@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { cn } from '../lib/cn';
 import { Button } from './Button';
+import { useFocusTrap } from './useFocusTrap';
 
 export interface DrawerProps {
   isOpen: boolean;
@@ -21,6 +22,9 @@ export const Drawer: React.FC<DrawerProps> = ({
   footer,
   width = 'md',
 }) => {
+  const panelRef = useRef<HTMLElement>(null);
+  useFocusTrap(panelRef, isOpen);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -46,15 +50,18 @@ export const Drawer: React.FC<DrawerProps> = ({
       onClick={onClose}
     >
       <aside
+        ref={panelRef}
+        tabIndex={-1}
+        aria-label={title}
         className={cn(
-          'w-full h-full bg-[var(--bg-panel)] border-l border-[var(--border)] flex flex-col justify-between shadow-2xl transition-transform duration-150',
+          'outline-none w-full h-full paper !rounded-none border-l border-[var(--border)] flex flex-col justify-between shadow-2xl transition-transform duration-150',
           widthClasses
         )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-base font-bold text-[var(--text-primary)]">{title}</h2>
+            <h2 className="print-title text-base font-bold text-[var(--text-primary)]">{title}</h2>
             {subtitle ? <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subtitle}</p> : null}
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Kapat">

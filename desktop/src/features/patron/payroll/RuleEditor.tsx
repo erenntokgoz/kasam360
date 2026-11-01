@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
 import { parseCents } from '../../../lib/moneyInput';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
-import { Input } from '../../../ui/Input';
 
 export interface PayrollRule {
   userId: string;
@@ -80,11 +80,11 @@ export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSave
             <option key={id} value={id}>{label}</option>
           ))}
         </select>
-        <Input aria-label="Maaş" inputMode="decimal" placeholder={model === 'HOURLY' ? 'Saatlik ücret (₺)' : 'Aylık maaş (₺)'} className="min-h-12 tabular-nums !w-44" value={salary} onChange={(event) => setSalary(event.target.value)} />
+        <NumberInput aria-label="Maaş" placeholder={model === 'HOURLY' ? 'Saatlik ücret (₺)' : 'Aylık maaş (₺)'} className="min-h-12 tabular-nums !w-44" value={salary} onValueChange={setSalary} />
         {model === 'COMMISSION' || model === 'PROFIT_SHARE' ? (
-          <Input aria-label="Yüzde" inputMode="numeric" placeholder="Yüzde" className="min-h-12 tabular-nums !w-24" value={percent} onChange={(event) => setPercent(event.target.value)} />
+          <NumberInput kind="integer" aria-label="Yüzde" placeholder="Yüzde" className="min-h-12 tabular-nums !w-24" value={percent} onValueChange={setPercent} />
         ) : null}
-        <Button variant="secondary" className="min-h-12 text-xs font-bold" disabled={!ready} onClick={() => void save()}>
+        <Button variant="secondary" className="min-h-12 text-sm font-bold" disabled={!ready} onClick={() => void save()}>
           Kuralı Kaydet
         </Button>
       </div>

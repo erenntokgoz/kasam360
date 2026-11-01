@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { KdsTicket, KdsItemStatus } from '../types/kds';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
+import { useUIStore } from './uiStore';
 
 interface KdsItemWire {
   id: string;
@@ -10,6 +11,7 @@ interface KdsItemWire {
   status?: string | null;
   station?: string | null;
   notes?: string | null;
+  modifiers?: string[] | null;
 }
 
 interface KdsOrderWire {
@@ -38,41 +40,60 @@ const WIRE_STATUS: Record<KdsItemStatus, string> = {
 };
 
 function stationOf(value?: string | null): 'MUTFAK' | 'BAR' | 'TATLI' {
-  return value === 'BAR' || value === 'TATLI' ? value : 'MUTFAK';
+  const upper = (value ?? '').toLocaleUpperCase('tr-TR');
+  return upper === 'BAR' || upper === 'TATLI' ? upper : 'MUTFAK';
 }
+
+const statusOf = (item: KdsItemWire): KdsItemStatus => ITEM_STATUS[(item.status ?? 'PENDING').toUpperCase()] ?? 'PENDING';
 
 /** Her istasyon kendi biletini görür; adisyon istasyonlara bölünür. */
 export function mapKdsOrders(orders: KdsOrderWire[]): KdsTicket[] {
-  return orders.flatMap((order, index) => {
-    const stations = [...new Set(order.items.map((item) => stationOf(item.station)))];
+  return orders.flatMap((order) => {
+    // Teslim edilen kalem ekranda kalmaz: biten istasyonun fişi de kapanır.
+    const open = order.items.filter((item) => statusOf(item) !== 'SERVED');
+    const stations = [...new Set(open.map((item) => stationOf(item.station)))];
     return stations.map((station) => ({
       id: `${order.id}:${station}`,
       orderId: order.id,
-      ticketNumber: index + 1,
+      ticketNumber: order.orderNumber,
       tableName: order.tableNumber ?? 'Tezgâh',
       waiterName: order.waiterName ?? undefined,
       station,
       createdAt: order.createdAt,
       elapsedMinutes: Math.floor(order.elapsedSeconds / 60),
-      isCompleted: false,
-      items: order.items
+      items: open
         .filter((item) => stationOf(item.station) === station)
         .map((item) => ({
           id: item.id,
           orderItemId: item.id,
           productName: item.name,
           quantity: item.quantity,
-          course: 1 as const,
           station,
+          modifiers: item.modifiers ?? [],
           notes: item.notes ?? undefined,
-          status: ITEM_STATUS[(item.status ?? 'PENDING').toUpperCase()] ?? 'PENDING',
+          status: statusOf(item),
         })),
     }));
   });
 }
 
+export type KdsTicketStage = 'PENDING' | 'PREPARING' | 'READY';
+
+/** Fişin tek düğmesi bu aşamaya göre ilerler. */
+export function ticketStage(ticket: KdsTicket): KdsTicketStage {
+  if (ticket.items.every((item) => item.status === 'READY')) return 'READY';
+  return ticket.items.some((item) => item.status !== 'PENDING') ? 'PREPARING' : 'PENDING';
+}
+
+const NEXT_ITEM_STATUS: Record<KdsTicketStage, KdsItemStatus> = {
+  PENDING: 'PREPARING',
+  PREPARING: 'READY',
+  READY: 'SERVED',
+};
+
 interface KdsStore {
   tickets: KdsTicket[];
+  hasLoaded: boolean;
   selectedStation: 'TUMU' | 'MUTFAK' | 'BAR' | 'TATLI';
   activeStations: Record<'MUTFAK' | 'BAR' | 'TATLI', boolean>;
   soundEnabled: boolean;
@@ -80,14 +101,14 @@ interface KdsStore {
   setSelectedStation: (station: 'TUMU' | 'MUTFAK' | 'BAR' | 'TATLI') => void;
   setStationActive: (station: 'MUTFAK' | 'BAR' | 'TATLI', active: boolean) => void;
   toggleItemStatus: (ticketId: string, itemId: string) => Promise<void>;
-  completeTicket: (ticketId: string) => Promise<void>;
-  recallLastTicket: () => Promise<void>;
+  advanceTicket: (ticketId: string) => Promise<void>;
   toggleSound: () => void;
   playOrderBell: () => void;
 }
 
 export const useKdsStore = create<KdsStore>((set, get) => ({
   tickets: [],
+  hasLoaded: false,
   selectedStation: 'TUMU',
   activeStations: {
     MUTFAK: true, // Mutfakta aktif ekran oturumu var
@@ -99,7 +120,14 @@ export const useKdsStore = create<KdsStore>((set, get) => ({
   loadTickets: async () => {
     const { actorRole, tenantId } = sessionArgs();
     const orders = await invokeIPC<KdsOrderWire[]>('get_active_tickets', { tenantId, actorRole });
-    set({ tickets: mapKdsOrders(orders) });
+    const known = new Set(get().tickets.map((ticket) => ticket.id));
+    const tickets = mapKdsOrders(orders);
+    set({ tickets });
+    // Mutfak sayfasında yeni fiş zil çalar; ilk yüklemede eski fişler için çalmaz.
+    if (get().hasLoaded && useUIStore.getState().activeModule === 'KDS' && tickets.some((ticket) => !known.has(ticket.id))) {
+      get().playOrderBell();
+    }
+    set({ hasLoaded: true });
   },
 
   setSelectedStation: (selectedStation) => set({ selectedStation }),
@@ -111,10 +139,11 @@ export const useKdsStore = create<KdsStore>((set, get) => ({
 
   // Durum sunucuya yazılmadan ekranda ilerlemez; yoksa diğer ekranlar ayrışır.
   toggleItemStatus: async (ticketId, itemId) => {
+    // Kaleme dokunmak hazırlık durumunu değiştirir; teslim fiş düğmesiyle yapılır.
     const nextStatus: Record<KdsItemStatus, KdsItemStatus> = {
       PENDING: 'PREPARING',
       PREPARING: 'READY',
-      READY: 'SERVED',
+      READY: 'PREPARING',
       SERVED: 'READY',
     };
     const item = get().tickets.find((t) => t.id === ticketId)?.items.find((i) => i.id === itemId);
@@ -128,25 +157,21 @@ export const useKdsStore = create<KdsStore>((set, get) => ({
     await get().loadTickets();
   },
 
-  completeTicket: async (ticketId) => {
+  advanceTicket: async (ticketId) => {
     const ticket = get().tickets.find((t) => t.id === ticketId);
     if (!ticket) return;
     const { actorRole, tenantId } = sessionArgs();
-    for (const item of ticket.items) {
+    const stage = ticketStage(ticket);
+    const target = NEXT_ITEM_STATUS[stage];
+    // Hazır bekleyen kalem geriye dönmesin diye yalnız bu aşamada ilerleyecekler yazılır.
+    const items = stage === 'PENDING' ? ticket.items.filter((item) => item.status === 'PENDING') : ticket.items.filter((item) => item.status !== target);
+    for (const item of items) {
       await invokeIPC('update_kds_item_status', {
-        payload: { itemId: item.id, status: WIRE_STATUS.SERVED },
+        payload: { itemId: item.id, status: WIRE_STATUS[target] },
         tenantId,
         actorRole,
       });
     }
-    await get().loadTickets();
-  },
-
-  recallLastTicket: async () => {
-    const orderId = get().tickets[0]?.orderId;
-    if (!orderId) return;
-    const { actorId, actorRole, tenantId } = sessionArgs();
-    await invokeIPC('recall_kds_ticket', { orderId, actorId, actorRole, tenantId });
     await get().loadTickets();
   },
 

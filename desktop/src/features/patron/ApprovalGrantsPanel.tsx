@@ -49,8 +49,8 @@ export const ApprovalGrantsPanel: React.FC = () => {
   const grantable = staff?.filter((member) => member.role !== 'OWNER' && member.role !== 'MANAGER') ?? [];
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-3">
-      <h2 className="text-sm font-bold text-[var(--text-primary)]">Onay yetkisi</h2>
+    <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
+      <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Onay yetkisi</h2>
       <p className="text-xs text-[var(--text-secondary)]">
         Patron ve müdür her zaman yetkilidir. Yetki verdiğiniz personel iptal, ikram ve iadeyi kendi PIN'iyle onaylar.
       </p>
@@ -62,7 +62,7 @@ export const ApprovalGrantsPanel: React.FC = () => {
           <li key={member.id} className="flex items-center justify-between gap-3 py-2">
             <span className="min-w-0 text-sm font-semibold text-[var(--text-primary)] truncate">{member.name}</span>
             <Button
-              variant={member.can_approve ? 'primary' : 'secondary'}
+              variant={member.can_approve ? 'selected' : 'secondary'}
               className="min-h-12 shrink-0"
               onClick={() => void toggle(member)}
             >

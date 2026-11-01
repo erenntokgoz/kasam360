@@ -180,7 +180,6 @@ pub struct KdsOrderDto {
     pub items: Vec<serde_json::Value>,
     pub created_at: String,
     pub elapsed_seconds: i64,
-    pub priority: String,
     pub notes: Option<String>,
 }
 
@@ -310,34 +309,28 @@ pub async fn execute_get_active_tickets(
         };
 
         let created_at_str: String = r.try_get("created_at").unwrap_or_default();
-        let (elapsed_seconds, priority) =
-            if let Some(created_at) = parse_kds_created_at(&created_at_str) {
-                let elapsed = (chrono::Utc::now() - created_at).num_seconds().max(0);
-                let prio = if elapsed >= 900 {
-                    "RUSH".to_string()
-                } else if elapsed >= 600 {
-                    "WARNING".to_string()
-                } else {
-                    "NORMAL".to_string()
-                };
-                (elapsed, prio)
-            } else {
-                (0, "NORMAL".to_string())
-            };
+        let elapsed_seconds = parse_kds_created_at(&created_at_str)
+            .map(|created_at| (chrono::Utc::now() - created_at).num_seconds().max(0))
+            .unwrap_or(0);
 
         res.push(KdsOrderDto {
             id: id.clone(),
-            order_number: format!(
-                "ORD-{}",
-                id.chars().take(4).collect::<String>().to_uppercase()
-            ),
+            // Kimliğin başı her adisyonda aynı önektir; ayırt eden son haneleridir.
+            order_number: id
+                .chars()
+                .rev()
+                .take(4)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect::<String>()
+                .to_uppercase(),
             table_number: r.try_get("table_name").ok(),
             waiter_name: r.try_get("waiter_name").ok(),
             status: final_status,
             items,
             created_at: created_at_str,
             elapsed_seconds,
-            priority,
             notes: r.try_get("notes").ok(),
         });
     }
@@ -359,89 +352,4 @@ pub async fn get_active_tickets(
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     execute_get_active_tickets(&mut conn, &tenant_id).await
-}
-
-/// Yanlışlıkla kapatılan KDS biletini tekrar hazırlık durumuna alır.
-#[tauri::command]
-pub async fn recall_kds_ticket(
-    order_id: String,
-    actor_id: String,
-    actor_role: String,
-    tenant_id: String,
-    pool: tauri::State<'_, DbPool>,
-    state: tauri::State<'_, AppState>,
-) -> Result<bool, String> {
-    kds_kapisi(Some(&actor_role))?;
-    let tenant_id = tenant_id.trim().to_string();
-    if tenant_id.is_empty() {
-        return Err("UNAUTHORIZED: tenant_id is required".to_string());
-    }
-
-    let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
-    let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
-
-    let order_exists: Option<(String,)> =
-        sqlx::query_as("SELECT id FROM orders WHERE id = ? AND tenant_id = ?")
-            .bind(&order_id)
-            .bind(&tenant_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-
-    if order_exists.is_none() {
-        return Err("NOT_FOUND: Geri çağrılacak sipariş bulunamadı.".to_string());
-    }
-
-    sqlx::query(
-        "UPDATE orders SET status = 'IN_PROGRESS', updated_at = datetime('now') WHERE id = ? AND tenant_id = ?"
-    )
-    .bind(&order_id)
-    .bind(&tenant_id)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    sqlx::query(
-        "UPDATE order_items SET status = 'Preparing' WHERE order_id = ? AND tenant_id = ? AND status IN ('READY', 'COMPLETED', 'SERVED', 'Ready', 'Completed', 'Served')"
-    )
-    .bind(&order_id)
-    .bind(&tenant_id)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let event_id = crate::id_generator::generate_id("evt_kds");
-    sqlx::query(
-        "INSERT INTO events (event_id, tenant_id, aggregate_id, aggregate_type, event_type, payload, created_at) VALUES (?, ?, ?, 'KDS_TICKET', 'TICKET_RECALLED', ?, datetime('now'))"
-    )
-    .bind(&event_id)
-    .bind(&tenant_id)
-    .bind(&order_id)
-    .bind(serde_json::json!({
-        "orderId": &order_id,
-        "actorId": &actor_id,
-        "actorRole": &actor_role,
-        "action": "recall_ticket"
-    }).to_string())
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let ctx = crate::services::audit_service::AuditContext::new(
-        tenant_id,
-        actor_id,
-        actor_role,
-        crate::services::audit_service::category::SIPARIS_MASA,
-        "kds:ticket_recalled",
-        order_id.clone(),
-        serde_json::json!({
-            "orderId": order_id,
-            "status": "Preparing",
-        }),
-        chrono::Utc::now().to_rfc3339(),
-    )?;
-    crate::services::audit_service::AuditService::append(&mut tx, &audit_lock, &ctx).await?;
-
-    tx.commit().await.map_err(|e| e.to_string())?;
-    Ok(true)
 }

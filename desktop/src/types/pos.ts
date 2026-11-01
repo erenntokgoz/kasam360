@@ -47,7 +47,6 @@ export interface OrderItem {
   unitPriceCents: number;
   vatRate: number;
   station: 'MUTFAK' | 'BAR' | 'TATLI' | 'KASA';
-  course: 1 | 2 | 3;
   notes?: string;
   cookingDegree?: string;
   selectedModifiers: OrderItemModifier[];

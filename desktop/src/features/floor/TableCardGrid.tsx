@@ -8,28 +8,31 @@ export interface TableCardGridProps {
   onInspectTable: (table: FloorTable) => void;
 }
 
-export const TableCardGrid: React.FC<TableCardGridProps> = ({
-  tables,
-  onOpenTable,
-  onInspectTable,
-}) => {
+/** Birden çok bölüm varsa masalar bölüm adıyla ayrılır: garson yerini aramaz. */
+export const TableCardGrid: React.FC<TableCardGridProps> = ({ tables, onOpenTable, onInspectTable }) => {
   if (tables.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 text-center">
-        <span className="text-xs text-[var(--text-muted)]">Bu bölgede henüz masa tanımlı değil</span>
+        <span className="text-[var(--text-secondary)]">Bu bölümde masa yok. Masalar düğmesinden ekleyin.</span>
       </div>
     );
   }
 
+  const zones = [...new Set(tables.map((table) => table.zoneName))];
+
   return (
-    <div className="flex-1 overflow-y-auto p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 content-start">
-      {tables.map((table) => (
-        <TableCard
-          key={table.id}
-          table={table}
-          onOpenTable={onOpenTable}
-          onInspectTable={onInspectTable}
-        />
+    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {zones.map((zone) => (
+        <section key={zone} className="space-y-2">
+          {zones.length > 1 ? <h2 className="zone-title">{zone}</h2> : null}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] auto-rows-[150px] gap-4">
+            {tables
+              .filter((table) => table.zoneName === zone)
+              .map((table) => (
+                <TableCard key={table.id} table={table} onOpenTable={onOpenTable} onInspectTable={onInspectTable} />
+              ))}
+          </div>
+        </section>
       ))}
     </div>
   );

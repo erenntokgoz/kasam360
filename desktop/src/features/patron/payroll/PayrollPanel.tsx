@@ -90,8 +90,8 @@ export const PayrollPanel: React.FC = () => {
         {periods.map((item) => (
           <Button
             key={item}
-            variant={period === item ? 'primary' : 'secondary'}
-            className="min-h-12 text-xs tabular-nums"
+            variant={period === item ? 'selected' : 'secondary'}
+            className="min-h-12 text-sm tabular-nums"
             onClick={() => {
               setPeriod(item);
               setRuns(null);
@@ -100,7 +100,7 @@ export const PayrollPanel: React.FC = () => {
             {item}
           </Button>
         ))}
-        <Button variant="primary" className="min-h-12 text-xs font-bold" isLoading={isBusy} disabled={rules.length === 0} onClick={() => void calculate()}>
+        <Button variant="primary" className="min-h-12 text-sm font-bold" isLoading={isBusy} disabled={rules.length === 0} onClick={() => void calculate()}>
           Bordroyu Hesapla
         </Button>
         {runs && isOwner ? (

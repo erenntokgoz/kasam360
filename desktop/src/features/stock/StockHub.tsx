@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Bar, BarTab } from '../../ui/Bar';
 import { StockCountPanel } from './StockCountPanel';
 import { StockModule } from './StockModule';
 import { StockOverview } from './StockOverview';
@@ -17,22 +18,11 @@ export function StockHub() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <nav className="flex gap-2 border-b border-[var(--border)] bg-[var(--bg-panel)] px-4 py-2" aria-label="Stok bölümleri">
+      <Bar label="Stok bölümleri" plain>
         {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`tactile-btn min-h-12 rounded-lg px-4 text-xs font-bold ${
-              tab === id
-                ? 'bg-[var(--brand)] text-white'
-                : 'bg-[var(--bg-card)] text-[var(--text-secondary)]'
-            }`}
-          >
-            {label}
-          </button>
+          <BarTab key={id} active={tab === id} onClick={() => setTab(id)}>{label}</BarTab>
         ))}
-      </nav>
+      </Bar>
       {tab === 'OVERVIEW' ? <StockOverview /> : null}
       {tab === 'PURCHASE' ? <StockModule /> : null}
       {tab === 'COUNT' ? <StockCountPanel /> : null}

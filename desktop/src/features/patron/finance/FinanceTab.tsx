@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
 import { parseCents } from '../../../lib/moneyInput';
@@ -74,7 +75,7 @@ export const FinanceTab: React.FC = () => {
   const limit = budgets.reduce((sum, item) => sum + item.monthlyLimitCents, 0);
 
   return (
-    <div className="space-y-4 max-w-[1500px] mx-auto">
+    <div className="space-y-4">
       {error ? (
         <p role="alert" className="p-3 rounded-lg text-sm font-semibold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
           Giderler okunamadı: {error}
@@ -93,7 +94,7 @@ export const FinanceTab: React.FC = () => {
           { label: 'Toplam Bütçe', value: limit > 0 ? formatMoney(limit) : 'Tanımlı değil' },
           { label: 'Kalan', value: limit > 0 && expenses ? formatMoney(limit - budgets.reduce((sum, item) => sum + item.spentCents, 0)) : '-' },
         ].map((item) => (
-          <div key={item.label} className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4">
+          <div key={item.label} className="paper border border-[var(--border)] rounded-xl p-4">
             <span className="text-xs font-semibold text-[var(--text-secondary)] block">{item.label}</span>
             <span className="text-3xl font-bold tabular-nums text-[var(--text-primary)] mt-1 block">{item.value}</span>
           </div>
@@ -110,11 +111,11 @@ export const FinanceTab: React.FC = () => {
       <Panel title="Gider Ekle ve Dönem Giderleri">
         <div className="flex flex-wrap gap-2">
           <CategorySelect value={category} onChange={setCategory} />
-          <Input aria-label="Tutar" inputMode="decimal" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-36" value={amount} onChange={(event) => setAmount(event.target.value)} />
+          <NumberInput aria-label="Tutar" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-36" value={amount} onValueChange={setAmount} />
           <Input aria-label="Açıklama" placeholder="Açıklama" className="min-h-12 !w-auto flex-1 min-w-48" value={note} onChange={(event) => setNote(event.target.value)} />
           <div className="flex gap-1" role="group" aria-label="Ödeme şekli">
             {METHODS.map((item) => (
-              <Button key={item.id} variant={method === item.id ? 'primary' : 'secondary'} className="min-h-12 text-xs" onClick={() => setMethod(item.id)}>
+              <Button key={item.id} variant={method === item.id ? 'selected' : 'secondary'} className="min-h-12 text-sm" onClick={() => setMethod(item.id)}>
                 {item.label}
               </Button>
             ))}
@@ -136,11 +137,11 @@ export const FinanceTab: React.FC = () => {
               {voiding === item.id ? (
                 <>
                   <Input aria-label="İptal nedeni" placeholder="İptal nedeni" className="min-h-12 !w-48" value={voidReason} onChange={(event) => setVoidReason(event.target.value)} />
-                  <Button variant="danger" className="min-h-12 text-xs" disabled={voidReason.trim() === ''} onClick={() => void confirmVoid(item.id)}>Onayla</Button>
-                  <Button variant="ghost" className="min-h-12 text-xs" onClick={() => setVoiding(null)}>Vazgeç</Button>
+                  <Button variant="danger" className="min-h-12 text-sm" disabled={voidReason.trim() === ''} onClick={() => void confirmVoid(item.id)}>Onayla</Button>
+                  <Button variant="ghost" className="min-h-12 text-sm" onClick={() => setVoiding(null)}>Vazgeç</Button>
                 </>
               ) : (
-                <Button variant="ghost" className="min-h-12 text-xs" onClick={() => { setVoiding(item.id); setVoidReason(''); }}>İptal</Button>
+                <Button variant="ghost" className="min-h-12 text-sm" onClick={() => { setVoiding(item.id); setVoidReason(''); }}>İptal</Button>
               )}
             </li>
           ))}

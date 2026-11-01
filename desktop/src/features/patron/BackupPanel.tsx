@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
+import { formatNumber } from '../../lib/numberText';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { Button } from '../../ui/Button';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
+import { NumberInput } from '../../ui/NumberInput';
 
 interface BackupStatus {
   directory: string;
@@ -44,7 +48,8 @@ export const BackupPanel: React.FC = () => {
   const [files, setFiles] = useState<BackupFile[]>([]);
   const [mirror, setMirror] = useState('');
   const [target, setTarget] = useState<BackupFile | null>(null);
-  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [deleting, setDeleting] = useState<BackupFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -80,11 +85,11 @@ export const BackupPanel: React.FC = () => {
     }
   };
 
-  const { actorRole } = sessionArgs();
+  const { actorId, actorRole, tenantId } = sessionArgs();
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-3">
-      <h2 className="text-sm font-bold text-[var(--text-primary)]">Yedekler</h2>
+    <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-4">
+      <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Yedekler</h2>
       <p className="text-xs text-[var(--text-secondary)]">
         Değişiklik varsa saatte bir ve her gün sonunda yedek alınır. Son yedek:{' '}
         <span className="font-semibold tabular-nums">{status?.lastBackupAt ?? 'Henüz yok'}</span>
@@ -127,46 +132,71 @@ export const BackupPanel: React.FC = () => {
 
       <ul className="divide-y divide-[var(--border)]">
         {files.slice(0, 20).map((file) => (
-          <li key={file.path} className="flex items-center justify-between gap-3 py-2">
-            <div className="min-w-0">
+          <li key={file.path} className="flex items-center justify-between gap-3 py-3">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-[var(--text-primary)] tabular-nums">{stampText(file.createdAt)}</p>
-              <p className="text-xs text-[var(--text-secondary)]">
-                {TAG_LABEL[file.tag] ?? file.tag} · {Math.ceil(file.bytes / 1024)} KB
+              <p className="text-sm text-[var(--text-secondary)] tabular-nums">
+                {TAG_LABEL[file.tag] ?? file.tag} · {formatNumber(Math.ceil(file.bytes / 1024))} KB
               </p>
             </div>
-            <Button variant="secondary" className="min-h-12 shrink-0" onClick={() => setTarget(file)}>
+            <Button variant="secondary" className="shrink-0" onClick={() => setTarget(file)}>
               Geri Dön
+            </Button>
+            <Button variant="ghost" className="shrink-0" aria-label={`${stampText(file.createdAt)} yedeğini sil`} onClick={() => setDeleting(file)}>
+              <Trash2 className="w-5 h-5" />
             </Button>
           </li>
         ))}
       </ul>
 
+      {deleting ? (
+        <ConfirmDialog
+          title="Yedek silinsin mi?"
+          message={stampText(deleting.createdAt)}
+          onConfirm={async () => {
+            await invokeIPC('delete_backup', { filePath: deleting.path, actorRole });
+            await load();
+          }}
+          onClose={() => setDeleting(null)}
+        />
+      ) : null}
+
       {target ? (
-        <Modal isOpen onClose={() => setTarget(null)} title="Yedeğe Geri Dön" maxWidth="sm">
-          <div className="space-y-3">
+        <Modal
+          isOpen
+          onClose={() => {
+            setTarget(null);
+            setPin('');
+          }}
+          title="Yedeğe Geri Dön"
+          maxWidth="sm"
+        >
+          <div className="space-y-4">
             <p className="text-sm text-[var(--text-secondary)]">
               {stampText(target.createdAt)} sonrasındaki işlemler ekrandan kalkar. Mevcut veri önce ayrıca yedeklenir. Uygulama yeniden açılır.
             </p>
-            <Input
-              id="restore-password"
-              aria-label="Hesap şifresi"
+            <NumberInput
+              id="restore-pin"
+              aria-label="PIN"
+              kind="digits"
               type="password"
-              placeholder="Hesap şifresi"
-              className="min-h-12"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              placeholder="PIN"
+              maxLength={8}
+              value={pin}
+              onValueChange={setPin}
             />
             {error ? (
-              <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
+              <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">
                 {error}
               </p>
             ) : null}
             <Button
               variant="danger"
-              className="w-full min-h-12"
-              disabled={password.length === 0}
+              size="lg"
+              className="w-full"
+              disabled={pin.length < 4}
               isLoading={isBusy}
-              onClick={() => void run(() => invokeIPC('restore_backup', { filePath: target.path, password, actorRole }))}
+              onClick={() => void run(() => invokeIPC('restore_backup', { filePath: target.path, pin, actorId, actorRole, tenantId }))}
             >
               Geri Dön ve Yeniden Aç
             </Button>

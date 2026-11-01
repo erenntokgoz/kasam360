@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { useCariStore } from '../../stores/cariStore';
 import { localDate, newOperationId, parseCents } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
@@ -91,11 +92,10 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ document, onClose, onApprov
             <label htmlFor="doc-total" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
               Belge Tutarı (₺)
             </label>
-            <Input
+            <NumberInput
               id="doc-total"
-              inputMode="decimal"
               value={total}
-              onChange={(event) => setTotal(event.target.value)}
+              onValueChange={setTotal}
               className="tabular-nums min-h-12"
               required
             />
@@ -183,7 +183,7 @@ export const SupplierDocumentsPanel: React.FC<SupplierDocumentsPanelProps> = ({ 
   };
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--accent-amber-border)] rounded-xl overflow-hidden">
+    <section className="paper border border-[var(--accent-amber-border)] rounded-xl overflow-hidden">
       <h4 className="px-4 py-3 border-b border-[var(--border)] text-xs font-bold text-[var(--text-primary)]">
         Belge Bekleniyor
       </h4>
@@ -192,7 +192,7 @@ export const SupplierDocumentsPanel: React.FC<SupplierDocumentsPanelProps> = ({ 
           <li key={document.purchaseOrderId} className="p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="min-w-0">
               <p className="font-bold text-[var(--text-primary)] truncate">{document.supplierName}</p>
-              <p className="text-[11px] text-[var(--text-muted)]">
+              <p className="text-xs text-[var(--text-muted)]">
                 Sipariş {document.orderNumber}
                 {document.directoryId ? '' : ' · Cari kart onayda açılır'}
               </p>

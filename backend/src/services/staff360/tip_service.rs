@@ -9,38 +9,116 @@ use sqlx::SqlitePool;
 
 use crate::services::staff360::payroll_types::{TipAllocation, TipAllocationInput, TipPoolSummary};
 
-/// Havuza bahşiş ekler. Kartla alınan bahşiş terminale işlendiği için
-/// buraya **yalnız nakit** bahşiş yazılır; kart bahşişini de yazmak havuzu
-/// gerçekte olmayan parayla şişirirdi.
+/// Havuza bahşiş ekler. Yöntem kayıtta durur: kart bahşişi kasadaki nakitle
+/// karıştırılmasın, dağıtımda hangi paranın nereden geldiği görülsün.
 pub async fn record_tip(
     pool: &SqlitePool,
     tenant_id: &str,
     order_id: Option<&str>,
     amount_cents: i64,
+    payment_method: &str,
     paid_at: &str,
 ) -> Result<String, String> {
     let mut tx = pool.begin_write().await?;
     if amount_cents <= 0 {
         return Err("bahsis sifirdan buyuk olmali".to_string());
     }
+    if !matches!(payment_method, "CASH" | "CARD") {
+        return Err("VALIDATION: bahşiş yöntemi nakit veya kart olmalıdır".to_string());
+    }
     let period = period_of(paid_at).ok_or_else(|| format!("tarih ayrıştırılamadı: {paid_at}"))?;
 
     let id = crate::id_generator::generate_id("tip");
     sqlx::query(
-        "INSERT INTO tip_pool_entries (id, tenant_id, period, order_id, amount_cents, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO tip_pool_entries
+             (id, tenant_id, period, order_id, amount_cents, payment_method, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     )
     .bind(&id)
     .bind(tenant_id)
     .bind(&period)
     .bind(order_id)
     .bind(amount_cents)
+    .bind(payment_method)
     .bind(paid_at)
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     tx.commit().await?;
     Ok(id)
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TipEntry {
+    pub id: String,
+    pub amount_cents: i64,
+    pub payment_method: String,
+    pub created_at: String,
+}
+
+pub async fn list_entries(
+    pool: &SqlitePool,
+    tenant_id: &str,
+    period: &str,
+) -> Result<Vec<TipEntry>, String> {
+    let rows: Vec<(String, i64, String, String)> = sqlx::query_as(
+        "SELECT id, amount_cents, payment_method, created_at FROM tip_pool_entries
+          WHERE tenant_id = ?1 AND period = ?2 ORDER BY created_at DESC",
+    )
+    .bind(tenant_id)
+    .bind(period)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, amount_cents, payment_method, created_at)| TipEntry {
+            id,
+            amount_cents,
+            payment_method,
+            created_at,
+        })
+        .collect())
+}
+
+/// Yanlış girilen bahşişi siler. Dağıtılmış dönemde silinmez: personele yazılan pay
+/// havuzdan büyük kalırdı.
+pub async fn delete_entry(
+    pool: &SqlitePool,
+    tenant_id: &str,
+    entry_id: &str,
+) -> Result<i64, String> {
+    let mut tx = pool.begin_write().await?;
+    let entry: Option<(String, i64)> = sqlx::query_as(
+        "SELECT period, amount_cents FROM tip_pool_entries WHERE tenant_id = ?1 AND id = ?2",
+    )
+    .bind(tenant_id)
+    .bind(entry_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let (period, amount_cents) =
+        entry.ok_or_else(|| "NOT_FOUND: bahşiş kaydı bulunamadı".to_string())?;
+    let distributed: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM tip_distributions WHERE tenant_id = ?1 AND period = ?2",
+    )
+    .bind(tenant_id)
+    .bind(&period)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    if distributed > 0 {
+        return Err("CONFLICT: dağıtılmış dönemin bahşişi silinemez.".to_string());
+    }
+    sqlx::query("DELETE FROM tip_pool_entries WHERE tenant_id = ?1 AND id = ?2")
+        .bind(tenant_id)
+        .bind(entry_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    tx.commit().await?;
+    Ok(amount_cents)
 }
 
 /// Dönemin havuz toplamı. Satır yoksa 0 meşrudur (kimse bahşiş vermemiştir);

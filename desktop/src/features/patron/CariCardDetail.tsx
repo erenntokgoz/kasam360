@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { sessionArgs, useCariStore } from '../../stores/cariStore';
-import { errorText, localDate } from '../../lib/cariInput';
+import { errorText, localDate, newOperationId } from '../../lib/cariInput';
 import { invokeIPC } from '../../services/tauriClient';
 import { formatServerDateTime } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { Input } from '../../ui/Input';
+import { CariCardModal } from './CariCardModal';
 import { CariOpenDebtModal } from './CariOpenDebtModal';
 import { CariPaymentModal } from './CariPaymentModal';
 import type { DirectoryContact, LedgerDebt, StatementLine } from '../../types/ledger';
@@ -90,7 +93,7 @@ interface CariCardDetailProps {
 }
 
 export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged }) => {
-  const { debts, statement, loadCardDetail } = useCariStore();
+  const { debts, statement, loadCardDetail, deleteCard } = useCariStore();
   const [from, setFrom] = useState(() => {
     const today = new Date();
     return localDate(new Date(today.getFullYear(), today.getMonth(), 1));
@@ -98,6 +101,8 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
   const [to, setTo] = useState(() => localDate(new Date()));
   const [payingDebt, setPayingDebt] = useState<LedgerDebt | null>(null);
   const [isOpeningDebt, setIsOpeningDebt] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const reload = useCallback(() => loadCardDetail(card.id, from, to), [loadCardDetail, card.id, from, to]);
 
@@ -116,18 +121,25 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
 
   return (
     <div className="space-y-4">
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+      <section className="paper border border-[var(--border)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-bold text-[var(--text-primary)] truncate">{card.name}</h3>
-          <p className="text-[11px] text-[var(--text-muted)]">
+          <h3 className="print-title text-sm font-bold text-[var(--text-primary)] truncate">{card.name}</h3>
+          <p className="text-xs text-[var(--text-muted)]">
             {card.phone || 'Telefon yok'}
             {card.taxNo ? ` · VKN ${card.taxNo}` : ''} · Limit{' '}
             <span className="tabular-nums">{formatMoney(card.creditLimitCents)}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={() => setIsEditing(true)} aria-label={`${card.name} düzenle`}>
+            <Pencil className="w-5 h-5" />
+            <span>Düzenle</span>
+          </Button>
+          <Button variant="ghost" onClick={() => setIsDeleting(true)} aria-label={`${card.name} sil`}>
+            <Trash2 className="w-5 h-5" />
+          </Button>
           <div className="text-right">
-            <span className="block text-[11px] text-[var(--text-secondary)]">
+            <span className="block text-xs text-[var(--text-secondary)]">
               {card.balanceCents >= 0 ? 'Alacağımız' : 'Borcumuz'}
             </span>
             <span className="text-base font-bold tabular-nums text-[var(--text-primary)]">
@@ -140,7 +152,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
         </div>
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden">
+      <section className="paper border border-[var(--border)] rounded-xl overflow-hidden">
         <h4 className="px-4 py-3 border-b border-[var(--border)] text-xs font-bold text-[var(--text-primary)]">
           Açık Kayıtlar
         </h4>
@@ -158,7 +170,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
                     {debt.status === 'PARTIAL' ? <Badge variant="neutral">Kısmi</Badge> : null}
                     {debt.isOverdue ? <Badge variant="red">Vadesi geçti</Badge> : null}
                   </div>
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
                     {debt.description || linkLabel(debt) || 'Açıklama yok'}
                     {debt.dueDate ? ` · Vade ${debt.dueDate}` : ''}
                   </p>
@@ -168,7 +180,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
                     <span className="block font-bold text-sm tabular-nums text-[var(--text-primary)]">
                       {formatMoney(debt.remainingAmountCents)}
                     </span>
-                    <span className="block text-[10px] tabular-nums text-[var(--text-muted)]">
+                    <span className="block text-xs tabular-nums text-[var(--text-muted)]">
                       Toplam {formatMoney(debt.totalAmountCents)}
                     </span>
                   </div>
@@ -182,7 +194,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
         )}
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden">
+      <section className="paper border border-[var(--border)] rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-xs font-bold text-[var(--text-primary)]">Ekstre</h4>
           <div className="flex items-center gap-2">
@@ -243,6 +255,28 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
         isOpen={isOpeningDebt}
         onClose={() => setIsOpeningDebt(false)}
         onOpened={handleChanged}
+      />
+      {isDeleting ? (
+        <ConfirmDialog
+          title={`${card.name} silinsin mi?`}
+          message="Yalnız hareket görmemiş kart silinir."
+          onConfirm={async () => {
+            await deleteCard(card.id, newOperationId());
+            onChanged();
+          }}
+          onClose={() => setIsDeleting(false)}
+        />
+      ) : null}
+
+      <CariCardModal
+        isOpen={isEditing}
+        directoryType={card.type}
+        card={card}
+        onClose={() => setIsEditing(false)}
+        onCreated={() => {
+          setIsEditing(false);
+          onChanged();
+        }}
       />
     </div>
   );

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { useCariStore } from '../../stores/cariStore';
 import { errorText, newOperationId, parseCents } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
+import { centsToText } from '../../lib/moneyInput';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
@@ -10,6 +12,8 @@ import type { DirectoryContact, DirectoryType } from '../../types/ledger';
 interface CariCardModalProps {
   isOpen: boolean;
   directoryType: DirectoryType;
+  /** Verilirse pencere düzenleme açılır. */
+  card?: DirectoryContact | null;
   onClose: () => void;
   onCreated: (card: DirectoryContact) => void;
 }
@@ -17,10 +21,11 @@ interface CariCardModalProps {
 export const CariCardModal: React.FC<CariCardModalProps> = ({
   isOpen,
   directoryType,
+  card = null,
   onClose,
   onCreated,
 }) => {
-  const { findSimilar, createCard } = useCariStore();
+  const { findSimilar, createCard, updateCard } = useCariStore();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [taxNo, setTaxNo] = useState('');
@@ -32,14 +37,14 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    setName('');
-    setPhone('');
-    setTaxNo('');
-    setLimit('');
+    setName(card?.name ?? '');
+    setPhone(card?.phone ?? '');
+    setTaxNo(card?.taxNo ?? '');
+    setLimit(card?.creditLimitCents ? centsToText(card.creditLimitCents) : '');
     setSimilar([]);
     setError(null);
     setOperationId(newOperationId());
-  }, [isOpen]);
+  }, [isOpen, card]);
 
   const save = async (allowSimilar: boolean) => {
     const creditLimitCents = limit.trim() ? parseCents(limit) : undefined;
@@ -51,6 +56,10 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
     setError(null);
     try {
       const trimmedPhone = phone.trim() || undefined;
+      if (card) {
+        onCreated(await updateCard(card, { name: name.trim(), phone: trimmedPhone, taxNo: taxNo.trim() || undefined, creditLimitCents }, operationId));
+        return;
+      }
       if (!allowSimilar) {
         const matches = await findSimilar(directoryType, name.trim(), trimmedPhone);
         if (matches.length > 0) {
@@ -58,7 +67,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
           return;
         }
       }
-      const card = await createCard(
+      const created = await createCard(
         {
           name: name.trim(),
           type: directoryType,
@@ -69,7 +78,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
         operationId,
         allowSimilar
       );
-      onCreated(card);
+      onCreated(created);
     } catch (caught) {
       setError(errorText(caught));
     } finally {
@@ -86,7 +95,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={directoryType === 'SUPPLIER' ? 'Yeni Tedarikçi Kartı' : 'Yeni Müşteri Kartı'}
+      title={card ? 'Kartı Düzenle' : directoryType === 'SUPPLIER' ? 'Yeni Tedarikçi Kartı' : 'Yeni Müşteri Kartı'}
       maxWidth="sm"
     >
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -111,31 +120,23 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
             <label htmlFor="cari-phone" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
               Telefon
             </label>
-            <Input
-              id="cari-phone"
-              value={phone}
-              onChange={(event) => {
-                setPhone(event.target.value);
-                setSimilar([]);
-              }}
-            />
+            <NumberInput id="cari-phone" kind="digits" maxLength={15} value={phone} onValueChange={(text) => { setPhone(text); setSimilar([]); }} />
           </div>
           <div>
             <label htmlFor="cari-tax" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
               Vergi No
             </label>
-            <Input id="cari-tax" value={taxNo} onChange={(event) => setTaxNo(event.target.value)} />
+            <NumberInput id="cari-tax" kind="digits" maxLength={11} value={taxNo} onValueChange={setTaxNo} />
           </div>
         </div>
         <div>
           <label htmlFor="cari-limit" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
             Cari Limiti (₺)
           </label>
-          <Input
+          <NumberInput
             id="cari-limit"
-            inputMode="decimal"
             value={limit}
-            onChange={(event) => setLimit(event.target.value)}
+            onValueChange={setLimit}
             className="tabular-nums"
           />
         </div>

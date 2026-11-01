@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
 import { toLocalIso } from '../../../lib/dateRange';
 import { invokeIPC } from '../../../services/tauriClient';
@@ -35,6 +36,7 @@ export const ShiftPlanPanel: React.FC<{ userId: string }> = ({ userId }) => {
   const [date, setDate] = useState(dayOffset(0));
   const [start, setStart] = useState('09:00');
   const [end, setEnd] = useState('17:00');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -61,10 +63,21 @@ export const ShiftPlanPanel: React.FC<{ userId: string }> = ({ userId }) => {
     if (!person) return;
     setError(null);
     try {
-      await invokeIPC('add_shift_plan', {
-        actorId, actorRole, tenantId,
-        plan: { userId, planDate: date, startTime: start, endTime: end, plannedBreakMinutes: 0, roleRequired: person.role, station: null },
-      });
+      const plan = { userId, planDate: date, startTime: start, endTime: end, plannedBreakMinutes: 0, roleRequired: person.role, station: null };
+      if (editingId) await invokeIPC('update_shift_plan', { actorRole, tenantId, planId: editingId, plan });
+      else await invokeIPC('add_shift_plan', { actorId, actorRole, tenantId, plan });
+      setEditingId(null);
+      await load();
+    } catch (caught) {
+      setError(errorText(caught));
+    }
+  };
+
+  const remove = async (planId: string) => {
+    const { actorRole, tenantId } = sessionArgs();
+    setError(null);
+    try {
+      await invokeIPC('delete_shift_plan', { actorRole, tenantId, planId });
       await load();
     } catch (caught) {
       setError(errorText(caught));
@@ -80,6 +93,21 @@ export const ShiftPlanPanel: React.FC<{ userId: string }> = ({ userId }) => {
             <span className="tabular-nums text-xs text-[var(--text-secondary)] w-24">{plan.planDate}</span>
             <span className="text-sm font-semibold text-[var(--text-primary)] flex-1 min-w-0 truncate">{plan.userName}</span>
             <span className="tabular-nums text-sm text-[var(--text-primary)]">{plan.startTime} – {plan.endTime}</span>
+            <Button
+              variant="ghost"
+              aria-label="Planı düzenle"
+              onClick={() => {
+                setEditingId(plan.id);
+                setDate(plan.planDate);
+                setStart(plan.startTime);
+                setEnd(plan.endTime);
+              }}
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" aria-label="Planı sil" onClick={() => void remove(plan.id)}>
+              <Trash2 className="w-5 h-5" />
+            </Button>
           </li>
         ))}
       </ul>
@@ -87,8 +115,8 @@ export const ShiftPlanPanel: React.FC<{ userId: string }> = ({ userId }) => {
         <Input aria-label="Plan tarihi" type="date" className="min-h-12 !w-40" value={date} onChange={(event) => setDate(event.target.value)} />
         <Input aria-label="Başlangıç" type="time" className="min-h-12 !w-28" value={start} onChange={(event) => setStart(event.target.value)} />
         <Input aria-label="Bitiş saati" type="time" className="min-h-12 !w-28" value={end} onChange={(event) => setEnd(event.target.value)} />
-        <Button variant="primary" className="min-h-12 text-xs font-bold" onClick={() => void save()}>
-          Plana Ekle
+        <Button variant="primary" className="min-h-12 text-sm font-bold" onClick={() => void save()}>
+          {editingId ? 'Kaydet' : 'Plana Ekle'}
         </Button>
       </div>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}

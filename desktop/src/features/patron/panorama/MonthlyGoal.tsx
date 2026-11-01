@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
 import { parseCents } from '../../../lib/moneyInput';
 import { usePanoramaStore, type MenuMetrics } from '../../../stores/panoramaStore';
 import { Button } from '../../../ui/Button';
-import { Input } from '../../../ui/Input';
 import { Panel } from './Panel';
 
 type Target = MenuMetrics['monthly_targets'][number];
@@ -42,20 +42,19 @@ export const MonthlyGoal: React.FC<{ target: Target | null }> = ({ target }) => 
     <Panel
       title="Aylık Hedef"
       aside={
-        <Button variant="ghost" size="sm" className="min-h-12 text-xs" onClick={() => setEditing(!editing)}>
+        <Button variant="ghost" size="sm" className="min-h-12 text-sm" onClick={() => setEditing(!editing)}>
           {target ? 'Değiştir' : 'Hedef Koy'}
         </Button>
       }
     >
       {editing ? (
         <div className="flex gap-2">
-          <Input
+          <NumberInput
             aria-label="Aylık ciro hedefi"
-            inputMode="decimal"
             placeholder="Hedef (₺)"
             className="min-h-12 tabular-nums"
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onValueChange={setText}
           />
           <Button variant="primary" className="min-h-12" disabled={cents === null || cents <= 0} onClick={() => void submit()}>
             Kaydet

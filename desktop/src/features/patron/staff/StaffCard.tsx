@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
+import { NumberInput } from '../../../ui/NumberInput';
 import { errorText, localDate } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
+import { formatNumber } from '../../../lib/numberText';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
+import { ConfirmDialog } from '../../../ui/ConfirmDialog';
 import { Input } from '../../../ui/Input';
 import { AdvanceForm } from '../payroll/AdvanceForm';
 import { LeavePanel } from '../payroll/LeavePanel';
@@ -36,7 +39,7 @@ interface Kpi {
 }
 
 interface MoneySummary {
-  advances: { id: string; amountCents: number; createdAt: string }[];
+  advances: { id: string; expenseId: string; amountCents: number; createdAt: string }[];
   tipCents: number;
 }
 
@@ -71,6 +74,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
   const [rules, setRules] = useState<PayrollRule[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [deletingAdvance, setDeletingAdvance] = useState<MoneySummary['advances'][number] | null>(null);
 
   const loadRules = useCallback(async () => {
     const { actorRole, tenantId } = sessionArgs();
@@ -139,14 +143,14 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
   ];
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-3 min-w-0">
+    <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-4 min-w-0 self-start">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">{member.name}</h3>
+          <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">{member.name}</h3>
           <p className="text-xs text-[var(--text-secondary)]">{ROLE_LABEL[member.role] ?? member.role}{member.is_active ? '' : ' · Pasif'}</p>
         </div>
         {member.role !== 'OWNER' ? (
-          <Button variant="secondary" className="min-h-12 text-xs" onClick={onEdit} aria-label={`${member.name} düzenle`}>
+          <Button variant="secondary" className="min-h-12 text-sm" onClick={onEdit} aria-label={`${member.name} düzenle`}>
             <Pencil className="w-4 h-4 mr-1" />
             <span>Düzenle</span>
           </Button>
@@ -170,12 +174,12 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
             </label>
             {isOwner ? (
               <>
-                <Input aria-label="T.C. kimlik no" placeholder="T.C. kimlik no" className="min-h-12 !w-44" value={nationalId} onChange={(event) => setNationalId(event.target.value)} />
+                <NumberInput aria-label="T.C. kimlik no" kind="digits" maxLength={11} placeholder="T.C. kimlik no" className="!w-52" value={nationalId} onValueChange={setNationalId} />
                 <Input aria-label="Adres" placeholder="Adres" className="min-h-12 !w-56" value={address} onChange={(event) => setAddress(event.target.value)} />
                 <Input aria-label="Acil durum kişisi" placeholder="Acil durum kişisi" className="min-h-12 !w-48" value={emergency} onChange={(event) => setEmergency(event.target.value)} />
               </>
             ) : null}
-            <Button variant="primary" className="min-h-12 text-xs font-bold" onClick={() => void saveProfile()}>Kaydet</Button>
+            <Button variant="primary" className="min-h-12 text-sm font-bold" onClick={() => void saveProfile()}>Kaydet</Button>
           </div>
           {notice ? <p className="text-xs font-semibold text-[var(--accent-emerald)]">{notice}</p> : null}
         </div>
@@ -184,11 +188,11 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
       {tab === 'PERFORMANCE' ? (
         kpi ? (
           <dl className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <Fact label="Sipariş" value={String(kpi.orderCount)} />
-            <Fact label="Kalem" value={String(kpi.itemCount)} />
+            <Fact label="Sipariş" value={formatNumber(kpi.orderCount)} />
+            <Fact label="Kalem" value={formatNumber(kpi.itemCount)} />
             <Fact label="Satış" value={formatMoney(kpi.grossSalesCents)} />
             <Fact label="Ortalama Adisyon" value={formatMoney(kpi.avgTicketCents)} />
-            <Fact label="İptal" value={String(kpi.voidCount)} />
+            <Fact label="İptal" value={formatNumber(kpi.voidCount)} />
             <Fact label="En Çok Sattığı" value={kpi.topProduct ?? '-'} />
           </dl>
         ) : <p className="text-sm text-[var(--text-secondary)]">Bu ay sipariş kaydı yok.</p>
@@ -203,14 +207,30 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
           {money && money.advances.length > 0 ? (
             <ul className="text-sm divide-y divide-[var(--border)]">
               {money.advances.map((advance) => (
-                <li key={advance.id} className="flex justify-between py-2">
-                  <span className="text-[var(--text-secondary)]">{advance.createdAt.slice(0, 10)}</span>
+                <li key={advance.id} className="flex items-center gap-3 py-2">
+                  <span className="flex-1 text-[var(--text-secondary)]">{advance.createdAt.slice(0, 10)}</span>
                   <span className="font-bold tabular-nums">{formatMoney(advance.amountCents)}</span>
+                  <Button variant="ghost" aria-label="Avansı sil" onClick={() => setDeletingAdvance(advance)}>
+                    <Trash2 className="w-5 h-5" />
+                  </Button>
                 </li>
               ))}
             </ul>
           ) : <p className="text-sm text-[var(--text-secondary)]">Bu ay avans yok.</p>}
         </div>
+      ) : null}
+
+      {deletingAdvance ? (
+        <ConfirmDialog
+          title="Avans silinsin mi?"
+          message={formatMoney(deletingAdvance.amountCents)}
+          onConfirm={async () => {
+            const { actorId, actorRole, tenantId } = sessionArgs();
+            await invokeIPC('void_expense', { expenseId: deletingAdvance.expenseId, reason: 'Avans silindi', actorId, actorRole, tenantId });
+            await loadMoney();
+          }}
+          onClose={() => setDeletingAdvance(null)}
+        />
       ) : null}
 
       {tab === 'SALARY' ? <RuleEditor userId={member.id} rules={rules} onSaved={loadRules} /> : null}

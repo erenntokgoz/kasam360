@@ -157,17 +157,6 @@ async fn claim_items(
     Ok(value)
 }
 
-/// İstemcinin bildirdiği indirim tutarı. Kalan bakiyeyi aşamaz.
-fn discount_cents(payload: &PaymentPayloadDto, remaining: i64) -> i64 {
-    payload
-        .global_discount
-        .as_ref()
-        .and_then(|discount| discount.get("value"))
-        .and_then(serde_json::Value::as_i64)
-        .unwrap_or(0)
-        .clamp(0, remaining)
-}
-
 /// Yöntemi kanala ayırır. Bilinmeyen yöntem karta sayılmaz: kasa farkı buradan doğar.
 fn channel_amounts(method: &str, amount: i64) -> Result<[i64; 4], String> {
     match method.to_uppercase().as_str() {
@@ -265,21 +254,14 @@ pub async fn settle_order_payment(
 
     let balance = order_balance(tx, tenant_id, order_id).await?;
     let amount = payload.total_amount;
-    let discount = discount_cents(payload, balance.remaining_cents);
-    if amount < 0 || (amount == 0 && discount == 0) {
+    if amount <= 0 {
         return Err("INVALID_AMOUNT: tahsilat tutarı sıfırdan büyük olmalıdır.".to_string());
     }
-    if amount + discount > balance.remaining_cents {
+    if amount > balance.remaining_cents {
         return Err(format!(
-            "OVERPAYMENT: kalan bakiye {} kuruş; {} kuruş tahsil edilemez.",
-            balance.remaining_cents,
-            amount + discount
+            "OVERPAYMENT: kalan bakiye {} kuruş; {amount} kuruş tahsil edilemez.",
+            balance.remaining_cents
         ));
-    }
-    // İndirim kalanı kapatmalıdır: parçalı akışta sonraki ödemelerin hangi
-    // tutardan süreceği belirsizleşmesin.
-    if discount > 0 && amount + discount != balance.remaining_cents {
-        return Err("VALIDATION: indirim yalnız kalan hesabı kapatan tahsilatta uygulanır.".into());
     }
     let tendered_change = payload.amount_tendered - amount;
     if tendered_change < 0 {
@@ -288,18 +270,17 @@ pub async fn settle_order_payment(
 
     let lines = order_lines(tx, tenant_id, order_id).await?;
     let selected = claim_items(tx, tenant_id, &lines, &payload.items).await?;
-    if !payload.items.is_empty() && (selected - amount - discount).abs() > 1 {
+    if !payload.items.is_empty() && (selected - amount).abs() > 1 {
         return Err(format!(
-            "TOTAL_MISMATCH: seçilen kalemler {selected} kuruş, tahsilat {} kuruş.",
-            amount + discount
+            "TOTAL_MISMATCH: seçilen kalemler {selected} kuruş, tahsilat {amount} kuruş."
         ));
     }
 
     let truth = ServerTruth {
         subtotal_cents: 0,
         tax_cents: 0,
-        discount_cents: discount,
-        gross_cents: amount + discount,
+        discount_cents: 0,
+        gross_cents: amount,
         total_cents: amount,
     };
     let approval = PaymentService::consume_approvals(
@@ -315,7 +296,7 @@ pub async fn settle_order_payment(
     .await?;
     PaymentRepository::insert_sale_event(tx, payload, tenant_id).await?;
 
-    let remaining_cents = balance.remaining_cents - amount - discount;
+    let remaining_cents = balance.remaining_cents - amount;
     let order_closed = remaining_cents == 0;
     let fifo = if order_closed {
         Some(close_order(tx, tenant_id, order_id, &table_id, &now_iso).await?)
@@ -379,7 +360,7 @@ pub async fn settle_order_payment(
             "itemsCount": payload.items.len(),
             "remainingCents": remaining_cents,
             "orderClosed": order_closed,
-            "discountCents": discount,
+            "discountCents": 0,
             "discountApproval": approval.as_ref().map(|used| serde_json::json!({
                 "operation": used.operation,
                 "approverId": used.approver_id,

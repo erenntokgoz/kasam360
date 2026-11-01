@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../services/tauriClient', () => ({ invokeIPC: vi.fn() }));
 
 import { useLedgerStore } from './ledgerStore';
+import { useUIStore } from './uiStore';
 
 describe('yönetim gezinmesi', () => {
   beforeEach(() => useLedgerStore.setState({ activeErpTab: 'PANORAMA', erpSection: null }));
@@ -11,7 +12,8 @@ describe('yönetim gezinmesi', () => {
     useLedgerStore.getState().openAlertTarget('PAYROLL');
     expect(useLedgerStore.getState()).toMatchObject({ activeErpTab: 'STAFF', erpSection: 'PAYROLL' });
     useLedgerStore.getState().openAlertTarget('LOG');
-    expect(useLedgerStore.getState()).toMatchObject({ activeErpTab: 'SETTINGS', erpSection: 'AUDIT' });
+    expect(useLedgerStore.getState()).toMatchObject({ erpSection: 'AUDIT' });
+    expect(useUIStore.getState().activeModule).toBe('SETTINGS');
     useLedgerStore.getState().openAlertTarget('EXPENSES');
     expect(useLedgerStore.getState()).toMatchObject({ activeErpTab: 'FINANCE', erpSection: null });
   });

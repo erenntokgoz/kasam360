@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { useStockStore } from '../../stores/stockStore';
 import { Button } from '../../ui/Button';
-import { Input } from '../../ui/Input';
 
 interface CountLine {
   product_id: string;
@@ -135,15 +135,15 @@ export function StockCountPanel() {
   ));
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 space-y-5 max-w-3xl">
+    <div className="flex-1 overflow-y-auto p-4 space-y-4">
       {error ? (
         <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
           {error}
         </p>
       ) : null}
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-3">
-        <h2 className="text-sm font-bold text-[var(--text-primary)]">Stok sayımı</h2>
+      <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Stok sayımı</h2>
         {!isOpen ? (
           <Button
             variant="primary"
@@ -158,7 +158,7 @@ export function StockCountPanel() {
               <option value="">Ürün seçin</option>
               {productOptions}
             </select>
-            <Input aria-label="Sayılan miktar" inputMode="decimal" placeholder="Sayılan" className="min-h-12" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+            <NumberInput kind="quantity" aria-label="Sayılan miktar" placeholder="Sayılan" className="min-h-12" value={quantity} onValueChange={setQuantity} />
             <Button variant="secondary" className="min-h-12" onClick={addLine}>
               Satırı Kaydet
             </Button>
@@ -198,8 +198,8 @@ export function StockCountPanel() {
         ) : null}
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-3">
-        <h2 className="text-sm font-bold text-[var(--text-primary)]">Fire kaydı</h2>
+      <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Fire kaydı</h2>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
           <select aria-label="Fire ürünü" className={select} value={wasteProductId} onChange={(event) => setWasteProductId(event.target.value)}>
             <option value="">Ürün seçin</option>
@@ -212,7 +212,7 @@ export function StockCountPanel() {
               </option>
             ))}
           </select>
-          <Input aria-label="Fire miktarı" inputMode="decimal" placeholder="Miktar" className="min-h-12" value={wasteQuantity} onChange={(event) => setWasteQuantity(event.target.value)} />
+          <NumberInput kind="quantity" aria-label="Fire miktarı" placeholder="Miktar" className="min-h-12" value={wasteQuantity} onValueChange={setWasteQuantity} />
           <Button variant="secondary" className="min-h-12" onClick={addWaste}>
             Fire Yaz
           </Button>

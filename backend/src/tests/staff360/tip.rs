@@ -6,16 +6,37 @@ use super::*;
 #[tokio::test]
 async fn havuz_toplami_gercek_bahsis_toplamidir() {
     let p = pool().await;
-    tip_service::record_tip(&p, "tenant_a", Some("ord_1"), 5_000, "2026-03-10T12:00:00Z")
-        .await
-        .expect("bahşiş");
-    tip_service::record_tip(&p, "tenant_a", Some("ord_2"), 3_500, "2026-03-11T12:00:00Z")
-        .await
-        .expect("bahşiş");
+    tip_service::record_tip(
+        &p,
+        "tenant_a",
+        Some("ord_1"),
+        5_000,
+        "CASH",
+        "2026-03-10T12:00:00Z",
+    )
+    .await
+    .expect("bahşiş");
+    tip_service::record_tip(
+        &p,
+        "tenant_a",
+        Some("ord_2"),
+        3_500,
+        "CASH",
+        "2026-03-11T12:00:00Z",
+    )
+    .await
+    .expect("bahşiş");
     // Farklı dönem: toplama girmemeli.
-    tip_service::record_tip(&p, "tenant_a", Some("ord_3"), 9_000, "2026-04-01T12:00:00Z")
-        .await
-        .expect("bahşiş");
+    tip_service::record_tip(
+        &p,
+        "tenant_a",
+        Some("ord_3"),
+        9_000,
+        "CASH",
+        "2026-04-01T12:00:00Z",
+    )
+    .await
+    .expect("bahşiş");
 
     let mart = tip_service::pool_total(&p, "tenant_a", "2026-03")
         .await
@@ -30,10 +51,10 @@ async fn havuz_toplami_gercek_bahsis_toplamidir() {
 #[tokio::test]
 async fn havuz_baska_kiraci_tutarini_gormez() {
     let p = pool().await;
-    tip_service::record_tip(&p, "tenant_a", None, 5_000, "2026-03-10T12:00:00Z")
+    tip_service::record_tip(&p, "tenant_a", None, 5_000, "CASH", "2026-03-10T12:00:00Z")
         .await
         .expect("bahşiş");
-    tip_service::record_tip(&p, "tenant_b", None, 77_000, "2026-03-10T12:00:00Z")
+    tip_service::record_tip(&p, "tenant_b", None, 77_000, "CASH", "2026-03-10T12:00:00Z")
         .await
         .expect("bahşiş");
 
@@ -51,7 +72,7 @@ async fn dagitimda_kurus_kaybi_olmaz() {
     kullanici(&p, "tenant_a", "usr_3", "Ceren", "WAITER").await;
     // 100 kuruş, üç eşit olmayan tabana bölünecek: 33/33/34 gibi bir dağılım
     // olmalı ve toplam **tam olarak** 100 kalmalı.
-    tip_service::record_tip(&p, "tenant_a", None, 100, "2026-03-10T12:00:00Z")
+    tip_service::record_tip(&p, "tenant_a", None, 100, "CASH", "2026-03-10T12:00:00Z")
         .await
         .expect("bahşiş");
 
@@ -100,7 +121,7 @@ async fn dagitimda_kurus_kaybi_olmaz() {
 async fn dagitim_tabani_sifirsa_hata_verir_kayip_sessizce_olmaz() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
-    tip_service::record_tip(&p, "tenant_a", None, 5_000, "2026-03-10T12:00:00Z")
+    tip_service::record_tip(&p, "tenant_a", None, 5_000, "CASH", "2026-03-10T12:00:00Z")
         .await
         .expect("bahşiş");
 
@@ -129,7 +150,7 @@ async fn katsayi_payagini_gercekten_degistirir() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
     kullanici(&p, "tenant_a", "usr_2", "Bora", "WAITER").await;
-    tip_service::record_tip(&p, "tenant_a", None, 10_000, "2026-03-10T12:00:00Z")
+    tip_service::record_tip(&p, "tenant_a", None, 10_000, "CASH", "2026-03-10T12:00:00Z")
         .await
         .expect("bahşiş");
 
@@ -187,8 +208,62 @@ async fn bos_havuz_dagitim_hatasi_verir() {
 #[tokio::test]
 async fn negatif_bahsis_kaydedilmez() {
     let p = pool().await;
-    let sonuc = tip_service::record_tip(&p, "tenant_a", None, -500, "2026-03-10T12:00:00Z").await;
+    let sonuc =
+        tip_service::record_tip(&p, "tenant_a", None, -500, "CASH", "2026-03-10T12:00:00Z").await;
     assert!(sonuc.is_err(), "negatif bahşiş havuzu küçültürdü");
-    let sonuc = tip_service::record_tip(&p, "tenant_a", None, 0, "2026-03-10T12:00:00Z").await;
+    let sonuc =
+        tip_service::record_tip(&p, "tenant_a", None, 0, "CASH", "2026-03-10T12:00:00Z").await;
     assert!(sonuc.is_err(), "sıfır bahşiş kaydı kirlilik üretir");
+}
+
+#[tokio::test]
+async fn bahsis_yontemi_nakit_veya_kart_olur() {
+    let p = pool().await;
+    tip_service::record_tip(&p, "tenant_a", None, 500, "CARD", "2026-03-10T12:00:00Z")
+        .await
+        .expect("kart bahşişi");
+    let sonuc =
+        tip_service::record_tip(&p, "tenant_a", None, 500, "CARI", "2026-03-10T12:00:00Z").await;
+    assert!(sonuc.is_err(), "bilinmeyen yöntem kaydedilmez");
+}
+
+#[tokio::test]
+async fn dagitilmamis_bahsis_silinir_dagitilmis_silinmez() {
+    let p = pool().await;
+    let first = tip_service::record_tip(&p, "tenant_a", None, 500, "CASH", "2026-03-10T12:00:00Z")
+        .await
+        .expect("bahşiş");
+    assert_eq!(
+        tip_service::delete_entry(&p, "tenant_a", &first)
+            .await
+            .expect("silinir"),
+        500
+    );
+    assert!(tip_service::list_entries(&p, "tenant_a", "2026-03")
+        .await
+        .expect("liste")
+        .is_empty());
+
+    let second = tip_service::record_tip(&p, "tenant_a", None, 900, "CARD", "2026-03-11T12:00:00Z")
+        .await
+        .expect("bahşiş");
+    assert!(tip_service::delete_entry(&p, "tenant_b", &second)
+        .await
+        .is_err());
+    kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
+    tip_service::distribute_pool(
+        &p,
+        "tenant_a",
+        "2026-03",
+        &[TipAllocationInput {
+            user_id: "usr_1".to_string(),
+            basis_cents: 1,
+            multiplier_percent: 100,
+        }],
+    )
+    .await
+    .expect("dağıtım");
+    assert!(tip_service::delete_entry(&p, "tenant_a", &second)
+        .await
+        .is_err());
 }

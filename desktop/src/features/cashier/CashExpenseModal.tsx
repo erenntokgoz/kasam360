@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { parseCents } from '../../lib/moneyInput';
 import { createExpense, EXPENSE_CATEGORIES } from '../../stores/expenseStore';
@@ -43,7 +44,7 @@ export const CashExpenseModal: React.FC<CashExpenseModalProps> = ({ onClose, onS
             <option key={id} value={id}>{label}</option>
           ))}
         </select>
-        <Input aria-label="Gider tutarı" inputMode="decimal" placeholder="Tutar (₺)" className="min-h-12 tabular-nums" value={amount} onChange={(event) => setAmount(event.target.value)} />
+        <NumberInput aria-label="Gider tutarı" placeholder="Tutar (₺)" className="min-h-12 tabular-nums" value={amount} onValueChange={setAmount} />
         <Input aria-label="Gider açıklaması" placeholder="Açıklama" className="min-h-12" value={note} onChange={(event) => setNote(event.target.value)} />
         {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
         <div className="flex gap-2">

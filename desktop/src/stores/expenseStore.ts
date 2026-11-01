@@ -59,6 +59,7 @@ interface ExpenseStore {
   voidExpense: (id: string, reason: string) => Promise<void>;
   setBudget: (category: string, monthlyLimitCents: number) => Promise<void>;
   addRecurring: (title: string, category: string, amountCents: number, dueDay: number) => Promise<void>;
+  updateRecurring: (id: string, title: string, category: string, amountCents: number, dueDay: number) => Promise<void>;
   removeRecurring: (id: string) => Promise<void>;
 }
 
@@ -135,6 +136,12 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
   addRecurring: async (title, category, amountCents, dueDay) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
     await invokeIPC('save_recurring_expense', { title, category, amountCents, dueDay, actorId, actorRole, tenantId });
+    await get().load();
+  },
+
+  updateRecurring: async (id, title, category, amountCents, dueDay) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('update_recurring_expense', { id, title, category, amountCents, dueDay, actorId, actorRole, tenantId });
     await get().load();
   },
 

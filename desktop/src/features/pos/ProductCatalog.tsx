@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { ArrowLeft, Search, Layers } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { usePosStore } from '../../stores/posStore';
 import { useUIStore } from '../../stores/uiStore';
 import { formatMoney } from '../../lib/formatMoney';
+import { matchesProduct } from '../../lib/searchText';
 import { Button } from '../../ui/Button';
-import { Input } from '../../ui/Input';
+import { Bar, BarAction, BarTab } from '../../ui/Bar';
 import type { Product } from '../../types/pos';
 
 export interface ProductCatalogProps {
@@ -13,6 +14,7 @@ export interface ProductCatalogProps {
 
 export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick }) => {
   const {
+    activeTableId,
     activeTableName,
     isWalkin,
     categories,
@@ -24,19 +26,17 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
     addItemToTicket,
     openModifierModal,
     loadModifierGroups,
+    openWalkinOrder,
     activeTariffName,
   } = usePosStore();
 
-  const { setActiveModule } = useUIStore();
+  const setActiveModule = useUIStore((state) => state.setActiveModule);
 
-  // Kategori ve arama filtreleme
+  // Tükenen ürün listeden düşmez: garson neden seçemediğini görmelidir.
   const filteredProducts = useMemo(() => {
     return products.filter((prod) => {
-      const matchCat =
-        selectedCategoryId === 'cat_all' || prod.categoryId === selectedCategoryId;
-      const matchQuery =
-        !searchQuery || prod.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchCat && matchQuery && prod.isAvailable;
+      if (searchQuery) return matchesProduct(searchQuery, prod.name, prod.barcode);
+      return selectedCategoryId === 'cat_all' || prod.categoryId === selectedCategoryId;
     });
   }, [products, selectedCategoryId, searchQuery]);
 
@@ -50,99 +50,77 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
     }
   };
 
+  if (!activeTableId && !isWalkin) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="max-w-md">
+          <h2 className="auth-title !text-5xl">Önce masa seçin.</h2>
+          <p className="mt-3 text-lg text-[var(--text-secondary)]">Sipariş bir masaya ya da tezgaha yazılır.</p>
+          <div className="mt-6 grid grid-cols-2 gap-2">
+            <Button variant="primary" size="lg" onClick={() => setActiveModule('FLOOR')}>
+              Salonu Aç
+            </Button>
+            <Button variant="secondary" size="lg" onClick={() => void openWalkinOrder()}>
+              Tezgah Satışı
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] select-none">
-      {/* Üst Bar */}
-      <div className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setActiveModule('FLOOR')}
-            className="!min-h-12 !px-3 text-xs"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Salona Dön</span>
-          </Button>
+      <Bar
+        label="Adisyon"
+        actions={
+          <label className="bar-search">
+            <Search className="w-4 h-4 shrink-0" />
+            <input type="search" aria-label="Ürün ara" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Ürün ara" />
+          </label>
+        }
+      >
+        <span className="bar-label">{activeTableName}</span>
+        {isWalkin ? <BarAction onClick={onBindTableClick}>Masaya Bağla</BarAction> : null}
+        {activeTariffName ? <span className="bar-label !font-semibold !text-[var(--text-secondary)]">{activeTariffName}</span> : null}
+      </Bar>
 
-          <div className="px-3.5 h-[38px] rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center gap-2.5">
-            <span className="text-xs font-bold text-[var(--text-primary)]">{activeTableName}</span>
-            {isWalkin ? (
-              <button
-                type="button"
-                onClick={onBindTableClick}
-                className="text-xs font-semibold text-[var(--accent-amber)] hover:underline cursor-pointer"
-              >
-                Masaya Bağla
-              </button>
-            ) : null}
-          </div>
-          {activeTariffName ? (
-            <span className="px-3 h-[38px] rounded-lg border border-[var(--accent-amber-border)] bg-[var(--accent-amber-soft)] flex items-center text-xs font-bold text-[var(--accent-amber)]">
-              Tarife: {activeTariffName}
-            </span>
-          ) : null}
-        </div>
-
-        {/* Arama Kutusu */}
-        <div className="relative w-full sm:w-64">
-          <Input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Ürün veya barkod ara..."
-            className="!min-h-12 pl-9 text-xs"
-          />
-          <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-2.5 pointer-events-none" />
-        </div>
-      </div>
-
-      {/* Kategori Hapları Şeridi */}
-      <div className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2 flex items-center gap-1.5 overflow-x-auto shrink-0">
-        {categories.map((cat) => {
-          const isSelected = selectedCategoryId === cat.id;
-          return (
-            <Button
-              key={cat.id}
-              variant={isSelected ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setSelectedCategoryId(cat.id)}
-              className="!min-h-12 whitespace-nowrap text-xs"
-            >
-              {cat.name}
-            </Button>
-          );
-        })}
-      </div>
+      <Bar label="Kategoriler" plain>
+        {categories.map((cat) => (
+          <BarTab key={cat.id} active={selectedCategoryId === cat.id} onClick={() => setSelectedCategoryId(cat.id)}>
+            {cat.name}
+          </BarTab>
+        ))}
+      </Bar>
 
       {/* Ürün Kartları Izgarası */}
       <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 content-start">
-        {filteredProducts.map((prod) => (
-          <div
-            key={prod.id}
-            onClick={() => void handleProductClick(prod)}
-            className="bg-[var(--bg-card)] border border-[var(--border)] hover:border-[var(--accent-amber-border)] rounded-xl p-3.5 min-h-[96px] flex flex-col justify-between cursor-pointer active:translate-y-[1px] transition-all duration-75 shadow-sm group"
-          >
-            <div>
-              <span className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--accent-amber)] block line-clamp-2">
-                {prod.name}
-              </span>
-              <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider block mt-0.5">
-                {prod.station}
-              </span>
-            </div>
-
-            <div className="flex items-baseline justify-between mt-2 pt-1 border-t border-[var(--border)]">
-              <span className="text-xs font-bold text-[var(--text-primary)] tabular-nums">
-                {formatMoney(prod.unitPriceCents)}
-              </span>
-              <span className="text-[10px] text-[var(--accent-amber)] font-semibold flex items-center gap-0.5">
-                <Layers className="w-3 h-3" />
-                <span>+ Ekle</span>
-              </span>
-            </div>
-          </div>
-        ))}
+        {filteredProducts.map((prod) => {
+          const soldOut = !prod.isAvailable;
+          return (
+            <button
+              key={prod.id}
+              type="button"
+              disabled={soldOut}
+              onClick={() => void handleProductClick(prod)}
+              className={`paper border border-[var(--border)] p-4 min-h-[124px] flex flex-col justify-between text-left shadow-sm transition-transform duration-75 ${
+                soldOut ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer active:translate-y-[1px]'
+              }`}
+            >
+              <span className="text-lg font-bold leading-snug line-clamp-2 text-[var(--text-primary)]">{prod.name}</span>
+              {soldOut ? (
+                <span className="text-sm font-bold text-[var(--accent-red)]">Tükendi</span>
+              ) : (
+                <span className="text-xl font-bold tabular-nums text-[var(--text-primary)]">{formatMoney(prod.unitPriceCents)}</span>
+              )}
+            </button>
+          );
+        })}
+        {filteredProducts.length === 0 ? (
+          <p className="col-span-full py-10 text-center text-[var(--text-secondary)]">
+            {searchQuery ? 'Aramayla eşleşen ürün yok.' : 'Bu kategoride ürün yok.'}
+          </p>
+        ) : null}
       </div>
     </div>
   );

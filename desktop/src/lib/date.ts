@@ -37,16 +37,3 @@ export function minutesElapsed(startTime?: string): number {
   const diffMs = Math.max(0, Date.now() - start);
   return Math.floor(diffMs / 60000);
 }
-
-/**
- * Rezervasyona 60 dakika veya daha az kalıp kalmadığını kontrol eder.
- * Anayasa Kuralı: Rezerve saatine 60dk kala masa otomatik rezerve rozeti alır ve kilitlenir.
- */
-export function isWithin60Minutes(reservationTimeStr?: string): boolean {
-  if (!reservationTimeStr) return false;
-  const target = new Date(reservationTimeStr).getTime();
-  if (isNaN(target)) return false;
-  const diffMs = target - Date.now();
-  const minutesLeft = diffMs / 60000;
-  return minutesLeft > 0 && minutesLeft <= 60;
-}

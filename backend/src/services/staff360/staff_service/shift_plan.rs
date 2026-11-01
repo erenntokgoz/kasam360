@@ -56,6 +56,65 @@ pub async fn list_shift_plans(
     Ok(out)
 }
 
+/// Gerçekleşmemiş planın gün ve saatini değiştirir.
+pub async fn update_shift_plan(
+    pool: &SqlitePool,
+    tenant_id: &str,
+    plan_id: &str,
+    plan: &ShiftPlanInput,
+) -> Result<(), String> {
+    if !is_iso_date(&plan.plan_date) {
+        return Err("plan tarihi YYYY-MM-DD biciminde olmali".to_string());
+    }
+    if plan.end_time <= plan.start_time {
+        return Err("vardiya bitisi baslangictan sonra olmali".to_string());
+    }
+    let mut tx = pool.begin_write().await?;
+    let changed = sqlx::query(
+        "UPDATE shift_plans
+            SET plan_date = ?1, start_time = ?2, end_time = ?3, updated_at = CURRENT_TIMESTAMP
+          WHERE tenant_id = ?4 AND id = ?5 AND realized_shift_id IS NULL",
+    )
+    .bind(&plan.plan_date)
+    .bind(&plan.start_time)
+    .bind(&plan.end_time)
+    .bind(tenant_id)
+    .bind(plan_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?
+    .rows_affected();
+    if changed == 0 {
+        return Err("CONFLICT: plan bulunamadı veya gerçekleşmiş".to_string());
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Gerçekleşmemiş planı siler. Gerçekleşen plan kasa vardiyasına bağlı kalır.
+pub async fn delete_shift_plan(
+    pool: &SqlitePool,
+    tenant_id: &str,
+    plan_id: &str,
+) -> Result<(), String> {
+    let mut tx = pool.begin_write().await?;
+    let changed = sqlx::query(
+        "DELETE FROM shift_plans
+          WHERE tenant_id = ?1 AND id = ?2 AND realized_shift_id IS NULL",
+    )
+    .bind(tenant_id)
+    .bind(plan_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?
+    .rows_affected();
+    if changed == 0 {
+        return Err("CONFLICT: plan bulunamadı veya gerçekleşmiş".to_string());
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Vardiya planı ekler. Bitiş, başlangıçtan sonra olmalıdır; aksi halde
 /// "gece vardiyası" adı altında negatif saatli plan kaydedilirdi.
 pub async fn add_shift_plan(

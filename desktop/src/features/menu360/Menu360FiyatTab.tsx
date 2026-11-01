@@ -4,8 +4,11 @@
 
 import React, { useState } from 'react';
 import { Percent, DollarSign, Check, Trash2, Plus, ArrowRight } from 'lucide-react';
-import { useMenu360Store, parseMoneyToCents } from '../../stores/menu360Store';
+import { NumberInput } from '../../ui/NumberInput';
+import { useMenu360Store } from '../../stores/menu360Store';
 import { formatMoney } from '../../lib/formatMoney';
+import { parseCents } from '../../lib/moneyInput';
+import { parsePercentBp } from '../../lib/numberText';
 import { useFeatureStore } from '../../stores/featureStore';
 
 export const Menu360FiyatTab: React.FC = () => {
@@ -34,22 +37,16 @@ export const Menu360FiyatTab: React.FC = () => {
   const [newListName, setNewListName] = useState('');
   const [newListDesc, setNewListDesc] = useState('');
 
+  // Yüzde baz puan, tutar kuruş olarak okunur: hesaba kayan nokta girmez.
+  const readValue = (): number | null => {
+    const value = updateType === 'PERCENTAGE' ? parsePercentBp(valInput) : parseCents(valInput);
+    return value !== null && value > 0 ? value : null;
+  };
+
   const handlePreview = () => {
     setResultMsg(null);
-    if (!valInput.trim()) return;
-
-    let valueNum = 0;
-    if (updateType === 'PERCENTAGE') {
-      valueNum = parseFloat(valInput.replace(',', '.'));
-      if (isNaN(valueNum) || valueNum <= 0) return;
-    } else {
-      try {
-        valueNum = parseMoneyToCents(valInput);
-        if (valueNum <= 0) return;
-      } catch {
-        return;
-      }
-    }
+    const valueNum = readValue();
+    if (valueNum === null) return;
 
     calculateBulkPreview(
       updateType,
@@ -60,12 +57,8 @@ export const Menu360FiyatTab: React.FC = () => {
 
   const handleApply = async () => {
     setShowApplyConfirm(false);
-    let valueNum = 0;
-    if (updateType === 'PERCENTAGE') {
-      valueNum = parseFloat(valInput.replace(',', '.'));
-    } else {
-      valueNum = parseMoneyToCents(valInput);
-    }
+    const valueNum = readValue();
+    if (valueNum === null) return;
 
     const res = await applyBulkPrice({
       updateType,
@@ -102,11 +95,11 @@ export const Menu360FiyatTab: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto p-5 gap-5 select-none bg-[var(--bg-canvas)]">
+    <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto p-4 gap-4 select-none bg-[var(--bg-canvas)]">
       {/* Sol Panel: Toplu Zam Yapıcı */}
-      <div className="flex-1 flex flex-col bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden shadow-sm">
+      <div className="flex-1 flex flex-col paper border border-[var(--border)] rounded-xl overflow-hidden shadow-sm">
         <div className="p-4 bg-[var(--bg-panel)] border-b border-[var(--border)]">
-          <h2 className="text-sm font-bold text-[var(--text-primary)]">
+          <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">
             Toplu Fiyat Artışı
           </h2>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -118,14 +111,14 @@ export const Menu360FiyatTab: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* 1. İşlem Tipi */}
             <div>
-              <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+              <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                 İşlem Tipi
               </label>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   onClick={() => { setUpdateType('PERCENTAGE'); clearBulkPreview(); }}
-                  className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border cursor-pointer transition-colors ${
+                  className={`min-h-12 px-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 border cursor-pointer transition-colors ${
                     updateType === 'PERCENTAGE'
                       ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border-[var(--accent-blue)] shadow-[inset_0_0_0_1px_var(--accent-blue)]'
                       : 'bg-[var(--bg-subtle)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-secondary)]'
@@ -137,7 +130,7 @@ export const Menu360FiyatTab: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => { setUpdateType('FIXED_AMOUNT'); clearBulkPreview(); }}
-                  className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border cursor-pointer transition-colors ${
+                  className={`min-h-12 px-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 border cursor-pointer transition-colors ${
                     updateType === 'FIXED_AMOUNT'
                       ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border-[var(--accent-blue)] shadow-[inset_0_0_0_1px_var(--accent-blue)]'
                       : 'bg-[var(--bg-subtle)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-secondary)]'
@@ -151,27 +144,21 @@ export const Menu360FiyatTab: React.FC = () => {
 
             {/* 2. Değer */}
             <div>
-              <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+              <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                 {updateType === 'PERCENTAGE' ? 'Artış Oranı (%)' : 'Artış Tutarı (TL)'}
               </label>
-              <input
-                type="text"
-                value={valInput}
-                onChange={(e) => { setValInput(e.target.value); clearBulkPreview(); }}
-                placeholder={updateType === 'PERCENTAGE' ? 'Örn: 15' : 'Örn: 10,00'}
-                className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm font-mono text-[var(--text-primary)] placeholder:text-[var(--text-muted)] tabular-nums focus:border-[var(--accent-blue)] focus:outline-none"
-              />
+              <NumberInput aria-label="Zam değeri" pinpad={updateType === 'FIXED_AMOUNT'} value={valInput} onValueChange={(text) => { setValInput(text); clearBulkPreview(); }} placeholder={updateType === 'PERCENTAGE' ? 'Örn: 15' : 'Örn: 10,00'} />
             </div>
 
             {/* 3. Kapsam */}
             <div>
-              <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+              <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                 Kapsam
               </label>
               <select
                 value={selectedCategory}
                 onChange={(e) => { setSelectedCategory(e.target.value); clearBulkPreview(); }}
-                className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none cursor-pointer"
+                className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none cursor-pointer"
               >
                 <option value="ALL">Tüm Menü (Bütün Kategoriler)</option>
                 {categories.map((c) => (
@@ -187,7 +174,7 @@ export const Menu360FiyatTab: React.FC = () => {
             <button
               type="button"
               onClick={handlePreview}
-              className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-xs font-bold border border-[var(--border)] flex items-center gap-1.5 cursor-pointer"
+              className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-sm font-bold border border-[var(--border)] flex items-center gap-1.5 cursor-pointer"
             >
               <span>Önizlemeyi Hesapla</span>
             </button>
@@ -197,7 +184,7 @@ export const Menu360FiyatTab: React.FC = () => {
                 type="button"
                 onClick={() => setShowApplyConfirm(true)}
                 disabled={busy}
-                className="tactile-btn min-h-12 px-5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="tactile-btn min-h-12 px-5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Check className="w-4 h-4" />
                 <span>Fiyatları Uygula ({bulkPreview.length} Ürün)</span>
@@ -238,16 +225,16 @@ export const Menu360FiyatTab: React.FC = () => {
                     return (
                       <tr key={item.id} className="hover:bg-[var(--bg-hover)] transition-colors">
                         <td className="p-2.5 font-medium text-[var(--text-primary)]">{item.name}</td>
-                        <td className="p-2.5 text-right font-mono text-[var(--text-secondary)] tabular-nums">
+                        <td className="p-2.5 text-right tabular-nums text-[var(--text-secondary)] tabular-nums">
                           {formatMoney(item.oldPriceCents)}
                         </td>
                         <td className="p-2.5 text-center text-[var(--text-muted)]">
                           <ArrowRight className="w-3.5 h-3.5 mx-auto" />
                         </td>
-                        <td className="p-2.5 text-right font-mono font-bold text-[var(--accent-blue)] tabular-nums">
+                        <td className="p-2.5 text-right tabular-nums font-bold text-[var(--accent-blue)] tabular-nums">
                           {formatMoney(item.newPriceCents)}
                         </td>
-                        <td className="p-2.5 text-right font-mono text-[var(--accent-emerald)] font-semibold tabular-nums">
+                        <td className="p-2.5 text-right tabular-nums text-[var(--accent-emerald)] font-semibold tabular-nums">
                           +{formatMoney(diff)}
                         </td>
                       </tr>
@@ -261,10 +248,10 @@ export const Menu360FiyatTab: React.FC = () => {
       </div>
 
       {/* Sağ Panel: Fiyat Listeleri */}
-      {isEnabled('feat_dynamic_pricing') && <div className="w-full lg:w-84 flex flex-col bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden shadow-sm shrink-0">
+      {isEnabled('feat_dynamic_pricing') && <div className="w-full lg:w-84 flex flex-col paper border border-[var(--border)] rounded-xl overflow-hidden shadow-sm shrink-0">
         <div className="p-4 bg-[var(--bg-panel)] border-b border-[var(--border)] flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">Fiyat Listeleri</h3>
+            <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Fiyat Listeleri</h3>
             <p className="text-xs text-[var(--text-secondary)] mt-0.5">
               Farklı zaman veya kanallara özel fiyat tarifeleri.
             </p>
@@ -272,7 +259,7 @@ export const Menu360FiyatTab: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsNewListOpen(true)}
-            className="p-2 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+            className="p-2 rounded-lg paper hover:bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
             title="Yeni Liste"
           >
             <Plus className="w-4 h-4" />
@@ -293,18 +280,18 @@ export const Menu360FiyatTab: React.FC = () => {
                 <div>
                   <h4 className="text-xs font-bold text-[var(--text-primary)]">{pl.name}</h4>
                   {pl.description && (
-                    <span className="text-[10px] text-[var(--text-muted)] block mt-0.5">
+                    <span className="text-xs text-[var(--text-muted)] block mt-0.5">
                       {pl.description}
                     </span>
                   )}
-                  <span className="text-[10px] font-mono text-[var(--text-secondary)] mt-1 block">
+                  <span className="text-xs tabular-nums text-[var(--text-secondary)] mt-1 block">
                     {pl.items?.length || 0} ürün tanımlı
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setDeletingPriceListId(pl.id)}
-                  className="p-1.5 text-[var(--text-muted)] hover:text-[var(--accent-red)] rounded cursor-pointer"
+                  className="w-12 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--accent-red)] rounded cursor-pointer"
                   title="Listeyi Sil"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -318,8 +305,8 @@ export const Menu360FiyatTab: React.FC = () => {
       {/* Toplu Zam Onay Modalı */}
       {showApplyConfirm && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-84 bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">
+          <div className="w-84 paper border border-[var(--border)] rounded-xl p-4 space-y-4 shadow-2xl">
+            <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">
               Fiyat Güncellemesini Onayla
             </h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -329,7 +316,7 @@ export const Menu360FiyatTab: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowApplyConfirm(false)}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-sm font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
               >
                 Vazgeç
               </button>
@@ -337,7 +324,7 @@ export const Menu360FiyatTab: React.FC = () => {
                 type="button"
                 onClick={handleApply}
                 disabled={busy}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-sm font-bold text-white cursor-pointer disabled:opacity-50"
               >
                 Onayla
               </button>
@@ -349,8 +336,8 @@ export const Menu360FiyatTab: React.FC = () => {
       {/* Fiyat Listesi Silme Onay Modalı */}
       {isEnabled('feat_dynamic_pricing') && deletingPriceListId && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-80 bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">Fiyat Listesini Sil?</h3>
+          <div className="w-80 paper border border-[var(--border)] rounded-xl p-4 space-y-4 shadow-2xl">
+            <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Fiyat Listesini Sil?</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
               Bu tarife listesi kalıcı olarak silinecek. Onaylıyor musunuz?
             </p>
@@ -358,7 +345,7 @@ export const Menu360FiyatTab: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setDeletingPriceListId(null)}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-sm font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
               >
                 Vazgeç
               </button>
@@ -366,7 +353,7 @@ export const Menu360FiyatTab: React.FC = () => {
                 type="button"
                 onClick={handleDeletePriceList}
                 disabled={busy}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-sm font-bold text-white cursor-pointer disabled:opacity-50"
               >
                 Sil
               </button>
@@ -378,11 +365,11 @@ export const Menu360FiyatTab: React.FC = () => {
       {/* Yeni Fiyat Listesi Modalı */}
       {isEnabled('feat_dynamic_pricing') && isNewListOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-84 bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-3 shadow-2xl">
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">+ Yeni Fiyat Listesi</h3>
+          <div className="w-84 paper border border-[var(--border)] rounded-xl p-4 space-y-3 shadow-2xl">
+            <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">+ Yeni Fiyat Listesi</h3>
             <form onSubmit={handleCreatePriceList} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                   Liste Adı
                 </label>
                 <input
@@ -390,12 +377,12 @@ export const Menu360FiyatTab: React.FC = () => {
                   value={newListName}
                   onChange={(e) => setNewListName(e.target.value)}
                   placeholder="Örn: Gece Tarifesi"
-                  className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+                  className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                   Açıklama (İsteğe Bağlı)
                 </label>
                 <input
@@ -403,21 +390,21 @@ export const Menu360FiyatTab: React.FC = () => {
                   value={newListDesc}
                   onChange={(e) => setNewListDesc(e.target.value)}
                   placeholder="23:00 sonrası geçerli tarife"
-                  className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+                  className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                 />
               </div>
               <div className="flex items-center gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsNewListOpen(false)}
-                  className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-xs font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                  className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-sm font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
                 >
                   Vazgeç
                 </button>
                 <button
                   type="submit"
                   disabled={busy}
-                  className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-xs font-bold text-white cursor-pointer disabled:opacity-50"
+                  className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-sm font-bold text-white cursor-pointer disabled:opacity-50"
                 >
                   Oluştur
                 </button>

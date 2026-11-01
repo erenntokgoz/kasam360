@@ -6,6 +6,8 @@ export interface NumpadProps {
   onDigit: (digit: string) => void;
   onClear: () => void;
   onBackspace: () => void;
+  /** Verilirse sol alt tuş virgül olur; Temizle tuş takımının dışına taşınır. */
+  onDecimal?: () => void;
   className?: string;
   buttonHeightClass?: string;
 }
@@ -14,8 +16,9 @@ export const Numpad: React.FC<NumpadProps> = ({
   onDigit,
   onClear,
   onBackspace,
+  onDecimal,
   className,
-  buttonHeightClass = '!min-h-[52px]',
+  buttonHeightClass = '!min-h-14',
 }) => {
   const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
@@ -26,24 +29,30 @@ export const Numpad: React.FC<NumpadProps> = ({
           key={d}
           type="button"
           variant="secondary"
-          className={cn(buttonHeightClass, 'text-lg font-bold')}
+          className={cn(buttonHeightClass, 'text-2xl font-bold')}
           onClick={() => onDigit(d)}
         >
           {d}
         </Button>
       ))}
-      <Button
-        type="button"
-        variant="ghost"
-        className={cn(buttonHeightClass, 'text-xs font-semibold text-[var(--text-secondary)]')}
-        onClick={onClear}
-      >
-        Temizle
-      </Button>
+      {onDecimal ? (
+        <Button type="button" variant="secondary" className={cn(buttonHeightClass, 'text-2xl font-bold')} onClick={onDecimal}>
+          ,
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          className={cn(buttonHeightClass, 'text-xs font-semibold text-[var(--text-secondary)]')}
+          onClick={onClear}
+        >
+          Temizle
+        </Button>
+      )}
       <Button
         type="button"
         variant="secondary"
-        className={cn(buttonHeightClass, 'text-lg font-bold')}
+        className={cn(buttonHeightClass, 'text-2xl font-bold')}
         onClick={() => onDigit('0')}
       >
         0
@@ -51,7 +60,7 @@ export const Numpad: React.FC<NumpadProps> = ({
       <Button
         type="button"
         variant="ghost"
-        className={cn(buttonHeightClass, 'text-xs font-semibold text-[var(--text-secondary)]')}
+        className={cn(buttonHeightClass, 'text-sm font-semibold text-[var(--text-secondary)]')}
         onClick={onBackspace}
       >
         Sil

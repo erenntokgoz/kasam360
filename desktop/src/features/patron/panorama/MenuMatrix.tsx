@@ -31,7 +31,7 @@ export const MenuMatrix: React.FC<{ metrics: MenuMetrics | null }> = ({ metrics 
           {QUADRANTS.map(({ key, countKey, title, advice }) => {
             const names = metrics.bcg_matrix.filter((item) => item.quadrant === key).map((item) => item.product_name);
             return (
-              <div key={key} className="rounded-lg bg-[var(--bg-card)] border border-[var(--border)] p-3 min-w-0">
+              <div key={key} className="rounded-lg paper border border-[var(--border)] p-4 min-w-0">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-xs font-bold text-[var(--text-primary)]">{title}</span>
                   <span className="text-lg font-bold tabular-nums text-[var(--text-primary)]">{metrics.bcg_counts[countKey]}</span>
@@ -39,7 +39,7 @@ export const MenuMatrix: React.FC<{ metrics: MenuMetrics | null }> = ({ metrics 
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5 truncate" title={names.join(', ')}>
                   {names.length > 0 ? names.join(', ') : 'Ürün yok'}
                 </p>
-                <p className="text-[11px] text-[var(--text-muted)] mt-1">{advice}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">{advice}</p>
               </div>
             );
           })}

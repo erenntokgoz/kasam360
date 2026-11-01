@@ -14,22 +14,12 @@ pub mod services;
 mod tests;
 pub mod user_credentials;
 
-pub use commands::analytics_commands;
-pub use commands::approval_commands;
-pub use commands::branch_commands;
-pub use commands::cashier_commands;
-pub use commands::inventory360_commands;
-pub use commands::inventory_commands;
-pub use commands::kitchen_commands;
-pub use commands::ledger_commands;
-pub use commands::legal360_commands;
-pub use commands::management_commands;
-pub use commands::modifier_commands;
-pub use commands::platform_commands;
-pub use commands::print_commands;
-pub use commands::report_commands;
-pub use commands::reservation_commands;
-pub use commands::waiter_commands;
+pub use commands::{
+    analytics_commands, approval_commands, branch_commands, cashier_commands,
+    inventory360_commands, inventory_commands, kitchen_commands, ledger_commands,
+    legal360_commands, management_commands, modifier_commands, platform_commands, print_commands,
+    report_commands, reservation_commands, waiter_commands,
+};
 
 use tauri::Manager;
 
@@ -37,9 +27,7 @@ pub use db::{init_db, DbPool};
 
 /// Tauri tarafından yönetilen global uygulama durumu.
 ///
-/// `payment_mutex`, tüm `process_payment` ve `process_split_payment` çağrılarını serileştirir.
-/// `audit_mutex`, denetim defteri (audit ledger) kayıtlarını serileştirir; menü ve ürün
-/// yönetim komutlarının kasayı kilitlenmesini engeller.
+/// `payment_mutex` tahsilatı, `audit_mutex` denetim defteri yazımını ayrı ayrı serileştirir.
 pub struct AppState {
     pub payment_mutex: tokio::sync::Mutex<()>,
     pub audit_mutex: std::sync::Arc<tokio::sync::Mutex<()>>,
@@ -112,7 +100,6 @@ pub fn run() {
     // Yapılandırılmış günlükleme (tracing + rolling file).
     // Loglama asla uygulamayı durdurmaz; hata olursa konsola fallback.
     crate::log::init();
-
     let builder = tauri::Builder::default()
         .setup(|app| {
             tauri::async_runtime::block_on(async {
@@ -167,7 +154,6 @@ pub fn run() {
             commands::process_split_payment,
             commands::kds_update_ticket_status,
             commands::get_active_tickets,
-            commands::recall_kds_ticket,
             commands::floor_commands::plan::get_floor_plan,
             commands::floor_commands::table_ops::move_table,
             // Kroki çizim. `get_floor_plan` ile karıştırılmamalı —
@@ -184,6 +170,9 @@ pub fn run() {
             reservation_commands::get_reservations,
             reservation_commands::get_reservation_day,
             reservation_commands::reserve_table,
+            reservation_commands::update_reservation,
+            reservation_commands::get_reservation_lead,
+            reservation_commands::set_reservation_lead,
             reservation_commands::cancel_reservation,
             reservation_commands::mark_reservation_no_show,
             reservation_commands::mark_reservation_arrived,
@@ -213,6 +202,7 @@ pub fn run() {
             commands::backup_commands::create_backup_now,
             commands::backup_commands::set_backup_mirror,
             commands::backup_commands::restore_backup,
+            commands::backup_commands::delete_backup,
             commands::backup_commands::restore_backup_on_setup,
             commands::sync_commands::take_over_device,
             commands::account_commands::get_device_session,
@@ -226,6 +216,7 @@ pub fn run() {
             commands::setup_commands::join_existing_business,
             commands::floor_commands::table_ops::add_table,
             commands::floor_commands::table_ops::remove_table,
+            commands::floor_commands::table_ops::set_bill_requested,
             commands::floor_commands::table_ops::update_table_name,
             commands::floor_commands::transfer::transfer_order_item,
             commands::get_daily_summary,
@@ -315,6 +306,7 @@ pub fn run() {
             modifier_commands::create_modifier_group,
             modifier_commands::add_modifier_option,
             modifier_commands::delete_modifier_group,
+            modifier_commands::delete_modifier_option,
             modifier_commands::set_product_modifier_groups,
             modifier_commands::get_product_modifier_group_ids,
             // Tek rapor merkezi. `get_daily_summary`, `get_receipts` ve
@@ -346,6 +338,7 @@ pub fn run() {
             ledger_commands::get_directories,
             ledger_commands::create_directory,
             ledger_commands::update_directory,
+            ledger_commands::delete_directory,
             ledger_commands::find_similar_directories,
             ledger_commands::get_debts,
             ledger_commands::create_debt,
@@ -369,6 +362,7 @@ pub fn run() {
             ledger_commands::get_recurring_expenses,
             ledger_commands::set_budget_limit,
             ledger_commands::save_recurring_expense,
+            ledger_commands::update_recurring_expense,
             ledger_commands::deactivate_recurring_expense,
             ledger_commands::get_directory_statement,
             ledger_commands::get_statement_order,
@@ -399,6 +393,15 @@ pub fn run() {
             commands::staff_commands::run_payroll,
             commands::staff_commands::get_tip_pool_summary,
             commands::staff_commands::record_tip_entry,
+            commands::staff_commands::list_tip_entries,
+            commands::staff_commands::delete_tip_entry,
+            commands::staff_commands::update_shift_plan,
+            commands::staff_commands::delete_leave,
+            commands::staff_commands::delete_shift_plan,
+            commands::order_change_commands::create_order_change_request,
+            commands::order_change_commands::list_order_change_requests,
+            commands::order_change_commands::decide_order_change_request,
+            commands::order_change_commands::resolve_order_change_request,
             commands::staff_commands::distribute_tip_pool,
             commands::staff_commands::get_staff_kpi,
             commands::staff_commands::get_staff_money_summary,

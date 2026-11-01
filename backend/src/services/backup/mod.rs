@@ -201,6 +201,17 @@ pub fn list_backups(dirs: &[PathBuf]) -> Vec<BackupFile> {
     files
 }
 
+/// Yalnız listede görünen yedek silinir: dışarıdan gelen yol başka dosyaya ulaşamaz.
+pub fn delete_listed(dirs: &[PathBuf], file_path: &Path) -> Result<(), BackupError> {
+    let path = list_backups(dirs)
+        .into_iter()
+        .map(|file| PathBuf::from(file.path))
+        .find(|path| path == file_path)
+        .ok_or_else(|| BackupError::Missing(file_path.display().to_string()))?;
+    fs::remove_file(&path).map_err(|e| io_error("yedek silinemedi", e))?;
+    fs::remove_file(checksum_path(&path)).map_err(|e| io_error("özet silinemedi", e))
+}
+
 /// Her türün son kopyaları kalır; disk yedekle dolup satışı durdurmamalıdır.
 pub fn prune(dir: &Path) {
     let files = list_backups(&[dir.to_path_buf()]);

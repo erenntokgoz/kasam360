@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type AppModule = 'FLOOR' | 'POS' | 'KDS' | 'CASHIER' | 'ERP';
+export type AppModule = 'FLOOR' | 'POS' | 'KDS' | 'CASHIER' | 'ERP' | 'SETTINGS';
 
 interface ModalState {
   payment: boolean;
@@ -32,9 +32,34 @@ interface UIStore {
   closeModal: (modalName: keyof ModalState) => void;
 }
 
+type Theme = 'dark' | 'light';
+
+const THEME_KEY = 'kasam360.theme';
+
+/** Tema cihaza özeldir. Depo okunamazsa koyu tema açılır; satışı etkilemez. */
+function loadTheme(): Theme {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
+function applyTheme(theme: Theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // Kayıt tutulamazsa seçim yalnız bu açılışta geçerlidir.
+  }
+}
+
+const initialTheme = loadTheme();
+if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', initialTheme);
+
 export const useUIStore = create<UIStore>((set, get) => ({
   activeModule: 'FLOOR',
-  theme: 'dark',
+  theme: initialTheme,
   idleSecondsLeft: 120,
   idleLimitSeconds: 120, // Varsayılan 2 dakika; 0 kalıcı personel oturumudur.
   modals: {
@@ -54,14 +79,14 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setActiveModule: (activeModule) => set({ activeModule }),
 
   setTheme: (theme) => {
-    document.documentElement.setAttribute('data-theme', theme);
+    applyTheme(theme);
     set({ theme });
   },
 
   toggleTheme: () =>
     set((state) => {
       const nextTheme = state.theme === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', nextTheme);
+      applyTheme(nextTheme);
       return { theme: nextTheme };
     }),
 

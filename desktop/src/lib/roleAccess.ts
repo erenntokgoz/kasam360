@@ -4,9 +4,9 @@ import type { UserRole } from '../types/auth';
 const OPERATIONS: AppModule[] = ['FLOOR', 'POS', 'KDS', 'CASHIER'];
 
 const MODULES: Record<UserRole, AppModule[]> = {
-  MASTER: [...OPERATIONS, 'ERP'],
-  OWNER: [...OPERATIONS, 'ERP'],
-  MANAGER: [...OPERATIONS, 'ERP'],
+  MASTER: [...OPERATIONS, 'ERP', 'SETTINGS'],
+  OWNER: [...OPERATIONS, 'ERP', 'SETTINGS'],
+  MANAGER: [...OPERATIONS, 'ERP', 'SETTINGS'],
   CASHIER: OPERATIONS,
   WAITER: ['FLOOR', 'POS', 'KDS'],
   KITCHEN: ['KDS'],

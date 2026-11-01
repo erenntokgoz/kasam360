@@ -14,6 +14,7 @@ import { useAuthStore } from './authStore';
 import { useFeatureStore } from './featureStore';
 import { mapRecipeCost } from '../lib/recipeCost';
 import { mapBulkPriceResult, mapCategory, mapPriceList, mapProduct } from '../lib/menuWire';
+import { applyPercentBp } from '../lib/numberText';
 import { createMenuModifierActions } from './menuModifierActions';
 import { createMenuRecipeActions } from './menuRecipeActions';
 
@@ -282,6 +283,32 @@ export const useMenu360Store = create<Menu360State>((set, get) => ({
     }
   },
 
+  updateCategory: async (category, name, defaultStation) => {
+    try {
+      const { actorRole, actorId, tenantId } = getAuthContext();
+      set({ busy: true, error: null });
+      await invokeIPC('update_category', {
+        actorRole,
+        actorId,
+        tenantId,
+        id: category.id,
+        name,
+        displayOrder: category.displayOrder,
+        icon: category.icon ?? null,
+        defaultStation,
+      });
+      set((state) => ({
+        categories: state.categories.map((c) => (c.id === category.id ? { ...c, name, defaultStation } : c)),
+      }));
+      return true;
+    } catch (err: unknown) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    } finally {
+      set({ busy: false });
+    }
+  },
+
   deleteCategory: async (categoryId) => {
     try {
       const { actorRole, actorId, tenantId } = getAuthContext();
@@ -314,8 +341,7 @@ export const useMenu360Store = create<Menu360State>((set, get) => ({
     const preview: Menu360BulkPreviewItem[] = prods.map((p) => {
       let newPriceCents = p.priceCents;
       if (updateType === 'PERCENTAGE') {
-        const delta = Math.round((p.priceCents * valueNum) / 100);
-        newPriceCents = Math.max(0, p.priceCents + delta);
+        newPriceCents = applyPercentBp(p.priceCents, valueNum);
       } else {
         newPriceCents = Math.max(0, p.priceCents + Math.round(valueNum));
       }
@@ -338,7 +364,7 @@ export const useMenu360Store = create<Menu360State>((set, get) => ({
       const args = {
         categoryId: input.categoryId || undefined,
         productIds: input.categoryId ? undefined : get().products.map((p) => p.id),
-        percentBp: input.updateType === 'PERCENTAGE' ? Math.round(input.value * 100) : undefined,
+        percentBp: input.updateType === 'PERCENTAGE' ? input.value : undefined,
         byCents: input.updateType === 'FIXED_AMOUNT' ? input.value : undefined,
         roundToTens: false,
       };

@@ -13,7 +13,8 @@ export interface TableItemSummary {
   quantity: number;
   unitPriceCents: number;
   totalCents: number;
-  course: 1 | 2 | 3;
+  /** Parça ödeme sonrası masada kalan tutar. */
+  remainingCents?: number;
   notes?: string;
 }
 
@@ -27,6 +28,8 @@ export interface FloorTable {
   occupiedSeats?: number;
   activeOrderId?: string;
   totalCents: number;
+  /** Parça ödeme sonrası masada kalan tutar. */
+  remainingCents?: number;
   openedAt?: string;
   waiterName?: string;
   reservedAt?: string;

@@ -373,3 +373,28 @@ async fn teslim_alinmamis_siparisin_belgesi_onaylanamaz() {
     let result = run(&p, TENANT, &document("a", "FT-1", 12_500, None)).await;
     assert!(matches!(result, Err(ApplyError::Rejected(m)) if m.starts_with("CONFLICT")));
 }
+
+#[tokio::test]
+async fn hareketsiz_kart_silinir_hareketli_kart_silinmez() {
+    let p = pool().await;
+    seed_debt(&p).await;
+    let used = CariOp::DeleteCard {
+        directory_id: "dir_1".to_string(),
+    };
+    assert!(matches!(
+        run(&p, TENANT, &used).await,
+        Err(ApplyError::Rejected(m)) if m.starts_with("CONFLICT")
+    ));
+
+    exec(
+        &p,
+        "INSERT INTO directories (id, tenant_id, name, type) VALUES ('dir_2', 'tnt_a', 'Yeni', 'CUSTOMER')",
+    )
+    .await;
+    let unused = CariOp::DeleteCard {
+        directory_id: "dir_2".to_string(),
+    };
+    assert!(run(&p, "tnt_b", &unused).await.is_err());
+    run(&p, TENANT, &unused).await.expect("silinir");
+    assert!(run(&p, TENANT, &unused).await.is_err());
+}

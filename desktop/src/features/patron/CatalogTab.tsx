@@ -29,13 +29,13 @@ export const CatalogTab: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-4 pt-3 pb-2 shrink-0">
+      <div className="shrink-0">
         <SectionTabs label="Menü ve Stok" tabs={tabs} active={section} onChange={setSection} />
       </div>
       {section === 'MENU' ? <Menu360Module /> : null}
       {section === 'TARIFF' ? <TariffPanel /> : null}
       {section === 'STOCK' ? <StockHub /> : null}
-      {section === 'QR' ? <div className="p-5 max-w-3xl"><QrMenuPanel /></div> : null}
+      {section === 'QR' ? <div className="p-4"><QrMenuPanel /></div> : null}
     </div>
   );
 };

@@ -3,6 +3,7 @@
 // Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
 
 import React from 'react';
+import { NumberInput } from '../../ui/NumberInput';
 import type { CategoryDto, ProductDto } from '../../types/menu360';
 
 interface Menu360DetailTemelProps {
@@ -51,7 +52,7 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
   return (
     <div className="space-y-3.5">
       <div>
-        <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
           Ürün Adı
         </label>
         <input
@@ -59,18 +60,18 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Örn: Espresso Double"
-          className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+          className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
           Kategori
         </label>
         <select
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
-          className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none cursor-pointer"
+          className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none cursor-pointer"
         >
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
@@ -81,31 +82,22 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
       </div>
 
       <div>
-        <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
           Satış Fiyatı
         </label>
         <div className="relative">
-          <input
-            type="text"
-            value={priceInput}
-            onChange={(e) => setPriceInput(e.target.value)}
-            placeholder="0,00"
-            className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm font-mono text-[var(--text-primary)] tabular-nums focus:border-[var(--accent-blue)] focus:outline-none pr-10"
-          />
-          <span className="absolute right-3 top-2.5 text-xs text-[var(--text-muted)] font-bold">
-            TL
-          </span>
+          <NumberInput aria-label="Satış Fiyatı" pinpadTitle="Satış Fiyatı" value={priceInput} onValueChange={setPriceInput} placeholder="0,00" />
         </div>
       </div>
 
-      <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase space-y-1">
+      <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase space-y-1">
         <span>KDV Oranı</span>
         <select aria-label="KDV Oranı" value={taxRateBp} onChange={(e) => setTaxRateBp(Number(e.target.value))} className="w-full min-h-12 bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 text-sm text-[var(--text-primary)]">
           {[0, 100, 1000, 2000].map((rate) => <option key={rate} value={rate}>%{rate / 100}</option>)}
         </select>
       </label>
 
-      <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase space-y-1">
+      <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase space-y-1">
         <span>Stok Birimi</span>
         <select value={stockUnit} onChange={(e) => setStockUnit(e.target.value)} className="w-full min-h-12 bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 text-sm text-[var(--text-primary)]">
           {stockUnit === 'belirsiz' && <option value="belirsiz">Belirsiz — düzeltin</option>}
@@ -114,7 +106,7 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
       </label>
 
       <div>
-        <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
           Barkod / SKU (İsteğe Bağlı)
         </label>
         <input
@@ -122,12 +114,12 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           placeholder="8690000000000"
-          className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm font-mono text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+          className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm tabular-nums text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
         />
       </div>
 
       <div>
-        <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+        <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
           Açıklama (İsteğe Bağlı)
         </label>
         <textarea
@@ -135,7 +127,7 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Ürün içeriği veya menü açıklaması…"
-          className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none resize-none"
+          className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none resize-none"
         />
       </div>
 
@@ -151,7 +143,7 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
             <button
               type="button"
               onClick={() => toggleProductActive(selectedProduct.id)}
-              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
+              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3.5 ${
                 selectedProduct.isActive ? 'bg-[var(--accent-emerald)]' : 'bg-[var(--border)]'
               }`}
             >
@@ -167,12 +159,12 @@ export const Menu360DetailTemel: React.FC<Menu360DetailTemelProps> = ({
           <div className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
             <div>
               <span className="text-xs font-semibold text-[var(--text-primary)]">Tükendi (Satış Dışı)</span>
-              <span className="block text-[10px] text-[var(--text-muted)]">Menüde pasif kalır</span>
+              <span className="block text-xs text-[var(--text-muted)]">Menüde pasif kalır</span>
             </div>
             <button
               type="button"
               onClick={() => toggleProduct86(selectedProduct.id, !selectedProduct.is86)}
-              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
+              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3.5 ${
                 selectedProduct.is86 ? 'bg-[var(--accent-red)]' : 'bg-[var(--border)]'
               }`}
             >

@@ -58,7 +58,7 @@ export const MustChangePinModal: React.FC = () => {
             maxLength={8}
             value={currentPin}
             onChange={(e) => setCurrentPin(e.target.value)}
-            className="text-center font-mono font-bold tracking-widest text-base"
+            className="text-center tabular-nums font-bold tracking-widest text-base"
             required
           />
         </div>
@@ -72,7 +72,7 @@ export const MustChangePinModal: React.FC = () => {
             maxLength={8}
             value={newPin}
             onChange={(e) => setNewPin(e.target.value)}
-            className="text-center font-mono font-bold tracking-widest text-base"
+            className="text-center tabular-nums font-bold tracking-widest text-base"
             required
             autoFocus
           />

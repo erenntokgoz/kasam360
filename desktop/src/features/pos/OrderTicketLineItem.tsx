@@ -1,16 +1,15 @@
 import React from 'react';
 import { Plus, Minus, ArrowRight, Gift, Trash2 } from 'lucide-react';
+import { activateOnKey } from '../../lib/activateOnKey';
 import type { OrderItem } from '../../types/pos';
 import { formatMoney } from '../../lib/formatMoney';
 import { Button } from '../../ui/Button';
-import { Badge } from '../../ui/Badge';
 
 export interface OrderTicketLineItemProps {
   item: OrderItem;
   isSelected: boolean;
   onSelect: () => void;
   onUpdateQty: (delta: number) => void;
-  onSetCourse: (course: 1 | 2 | 3) => void;
   onSetNote?: (notes: string) => void;
   onOpenTransfer: () => void;
   onOpenComp: () => void;
@@ -22,7 +21,6 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
   isSelected,
   onSelect,
   onUpdateQty,
-  onSetCourse,
   onSetNote,
   onOpenTransfer,
   onOpenComp,
@@ -30,30 +28,33 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
 }) => {
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={activateOnKey(() => onSelect())}
       className={`rounded-xl border p-3 transition-colors cursor-pointer ${
         isSelected
-          ? 'bg-[var(--bg-card)] border-[var(--accent-amber-border)] shadow-sm'
+          ? 'bg-[var(--bg-card)] border-[var(--border-strong)] shadow-sm'
           : 'bg-[var(--bg-card)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
       }`}
     >
       {/* Kalem Üstü: Adet, İsim ve Fiyat */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-md bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center font-bold text-xs text-[var(--accent-amber)] tabular-nums">
+          <span className="w-6 h-6 rounded-md bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center font-bold text-xs text-[var(--text-secondary)] tabular-nums">
             {item.quantity}
           </span>
           <div>
-            <span className="text-xs font-bold text-[var(--text-primary)] block">
+            <span className="hand text-xl leading-6 block">
               {item.name}
             </span>
             {item.cookingDegree ? (
-              <span className="text-[11px] text-[var(--accent-amber)] block">
+              <span className="text-xs text-[var(--text-secondary)] block">
                 {item.cookingDegree}
               </span>
             ) : null}
             {item.notes ? (
-              <span className="text-[11px] text-[var(--text-secondary)] italic block">
+              <span className="text-xs text-[var(--text-secondary)] italic block">
                 Not: {item.notes}
               </span>
             ) : null}
@@ -61,12 +62,9 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
         </div>
 
         <div className="text-right">
-          <span className="text-xs font-bold text-[var(--text-primary)] tabular-nums block">
+          <span className="hand text-xl leading-6 tabular-nums block">
             {formatMoney(item.totalCents)}
           </span>
-          <Badge variant={item.course === 1 ? 'emerald' : item.course === 2 ? 'amber' : 'blue'}>
-            {item.course}. Servis
-          </Badge>
         </div>
       </div>
 
@@ -76,27 +74,6 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
           className="mt-3 pt-2.5 border-t border-[var(--border)] space-y-2.5"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Kurs Seçici */}
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-[var(--text-secondary)] font-medium">Servis Sırası:</span>
-            <div className="flex gap-1">
-              {[1, 2, 3].map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => onSetCourse(c as 1 | 2 | 3)}
-                  className={`px-2 py-1 rounded text-[11px] font-semibold border cursor-pointer ${
-                    item.course === c
-                      ? 'bg-[var(--accent-amber)] text-white border-transparent'
-                      : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]'
-                  }`}
-                >
-                  {c}. Kurs
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Not Düzenleme */}
           {onSetNote ? (
             <div className="flex items-center gap-1.5 pt-1">
@@ -110,13 +87,13 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                     onSetNote((e.target as HTMLInputElement).value);
                   }
                 }}
-                className="w-full min-h-12 px-2.5 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none focus:border-[var(--accent-amber)]"
+                className="w-full min-h-12 px-2.5 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none focus:border-[var(--accent-amber)]"
               />
             </div>
           ) : null}
 
           {/* Miktar Artır/Azalt ve Satır İşlemleri */}
-          <div className="flex items-center justify-between gap-2 pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <div className="flex items-center gap-1">
               <Button
                 variant="secondary"
@@ -146,7 +123,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onOpenTransfer}
-                className="!min-h-12 !px-2 text-[11px]"
+                className="!min-h-12 !px-2 text-sm"
                 title="Masaya Taşı"
               >
                 <ArrowRight className="w-3 h-3 text-[var(--accent-blue)] mr-1" />
@@ -157,7 +134,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onOpenComp}
-                className="!min-h-12 !px-2 text-[11px]"
+                className="!min-h-12 !px-2 text-sm"
                 title="Müdür İkramı"
               >
                 <Gift className="w-3 h-3 text-[var(--accent-emerald)] mr-1" />
@@ -168,7 +145,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onOpenVoid}
-                className="!min-h-12 !px-2 text-[11px] text-[var(--accent-red)]"
+                className="!min-h-12 !px-2 text-sm text-[var(--accent-red)]"
                 title="İptal Et"
               >
                 <Trash2 className="w-3 h-3 mr-1" />

@@ -89,7 +89,7 @@ export const RevenueChart: React.FC<RevenueChartProps> = ({ kind, buckets }) => 
           </div>
         ))}
       </div>
-      <div className="flex gap-0.5 text-[11px] tabular-nums text-[var(--text-muted)]">
+      <div className="flex gap-0.5 text-xs tabular-nums text-[var(--text-muted)]">
         {shown.map((item, index) => (
           <span key={item.label} className="flex-1 text-center min-w-0 overflow-visible whitespace-nowrap">
             {index % every === 0 ? (kind === 'HOUR' ? item.label : dayLabel(item.label)) : ''}

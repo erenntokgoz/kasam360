@@ -5,9 +5,8 @@ export interface KdsTicketItem {
   orderItemId: string;
   productName: string;
   quantity: number;
-  course: 1 | 2 | 3;
   station: 'MUTFAK' | 'BAR' | 'TATLI' | 'KASA';
-  cookingDegree?: string;
+  modifiers: string[];
   notes?: string;
   status: KdsItemStatus;
 }
@@ -15,12 +14,11 @@ export interface KdsTicketItem {
 export interface KdsTicket {
   id: string;
   orderId: string;
-  ticketNumber: number;
+  ticketNumber: string;
   tableName: string;
   waiterName?: string;
   station: 'MUTFAK' | 'BAR' | 'TATLI' | 'KASA';
   createdAt: string;
   elapsedMinutes: number;
   items: KdsTicketItem[];
-  isCompleted: boolean;
 }

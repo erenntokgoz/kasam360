@@ -338,3 +338,28 @@ async fn baska_tenantin_urununun_modifierlari_okunamaz() {
         .expect_err("çapraz tenant ürün okunamamalı");
     assert!(err.contains("TENANT_ISOLATION"), "beklenen hata: {}", err);
 }
+
+#[tokio::test]
+async fn secenek_yalniz_kendi_isletmesinde_silinir() {
+    let pool = pool().await;
+    apply_runtime_migrations(&pool).await;
+    seed_tenant(&pool, TENANT_A).await;
+    let mut conn = conn_of(&pool).await;
+    let group = create_group(&mut conn, TENANT_A, "Sos", false, 0, None, None)
+        .await
+        .expect("grup");
+    let option = add_option(&mut conn, TENANT_A, &group, "Acı", 500)
+        .await
+        .expect("seçenek");
+
+    assert!(delete_option(&mut conn, "baska_isletme", &option)
+        .await
+        .is_err());
+    assert_eq!(
+        delete_option(&mut conn, TENANT_A, &option)
+            .await
+            .expect("silinir"),
+        "Acı"
+    );
+    assert!(delete_option(&mut conn, TENANT_A, &option).await.is_err());
+}

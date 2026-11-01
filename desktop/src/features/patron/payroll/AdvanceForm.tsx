@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
+import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { parseCents } from '../../../lib/moneyInput';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
-import { Input } from '../../../ui/Input';
 
 interface AdvanceFormProps {
   userId: string;
@@ -37,12 +37,12 @@ export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, onSave
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Input aria-label="Avans tutarı" inputMode="decimal" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-32" value={amount} onChange={(event) => setAmount(event.target.value)} />
+      <NumberInput aria-label="Avans tutarı" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-32" value={amount} onValueChange={setAmount} />
       <select aria-label="Avans ödeme şekli" className={fieldClass} value={method} onChange={(event) => setMethod(event.target.value)}>
         <option value="CASH">Nakit</option>
         <option value="BANK_TRANSFER">Havale</option>
       </select>
-      <Button variant="secondary" className="min-h-12 text-xs" disabled={cents === null || cents <= 0} onClick={() => void save()}>
+      <Button variant="secondary" className="min-h-12 text-sm" disabled={cents === null || cents <= 0} onClick={() => void save()}>
         Avans Ver
       </Button>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}

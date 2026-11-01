@@ -56,7 +56,7 @@ export const JoinBusinessForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
         </label>
         <Input
           id="setup-join-code"
-          className="min-h-12 font-mono"
+          className="min-h-12 tabular-nums"
           autoComplete="off"
           value={code}
           onChange={(event) => setCode(event.target.value)}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
 import { Button } from '../../ui/Button';
@@ -42,7 +43,7 @@ const CreateAccountForm: React.FC = () => {
       ) : null}
       <Input aria-label="E-posta" type="email" placeholder="E-posta" className="min-h-12" value={email} onChange={(event) => setEmail(event.target.value)} required />
       <Input aria-label="Şifre" type="password" placeholder="Şifre (en az 8 karakter)" className="min-h-12" value={password} onChange={(event) => setPassword(event.target.value)} required />
-      <Input aria-label="Sahip PIN" type="password" inputMode="numeric" placeholder="Sahip PIN" className="min-h-12" value={ownerPin} onChange={(event) => setOwnerPin(event.target.value)} required />
+      <NumberInput kind="digits" aria-label="Sahip PIN" type="password" placeholder="Sahip PIN" className="min-h-12" value={ownerPin} onValueChange={setOwnerPin} required />
       <Button type="submit" variant="primary" className="w-full min-h-12" isLoading={isBusy}>
         Hesabı Oluştur
       </Button>
@@ -57,8 +58,8 @@ export const AccountGate: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg-canvas)] p-6 select-none">
       <div className="min-h-full flex items-center justify-center">
-        <div className="w-full max-w-[400px] bg-[var(--bg-panel)] border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5">
-          <h1 className="font-bold text-base tracking-tight text-[var(--text-primary)]">KASAM360 Giriş</h1>
+        <div className="w-full max-w-[400px] paper border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-4">
+          <h1 className="print-title font-bold text-base tracking-tight text-[var(--text-primary)]">KASAM360 Giriş</h1>
           {error ? (
             <div role="alert" className="space-y-3">
               <p className="text-sm text-[var(--accent-red)] break-words">{error}</p>
