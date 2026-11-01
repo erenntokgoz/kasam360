@@ -15,6 +15,7 @@ import { BlindCloseModal } from './BlindCloseModal';
 import { CashExpenseModal } from './CashExpenseModal';
 import { CashMovementModal } from './CashMovementModal';
 import { ReceiptsTab } from './ReceiptsTab';
+import { ShiftMovements } from './ShiftMovements';
 
 /** Okunamayan tutar sıfır gösterilmez: kasa farkı sanılır. */
 const money = (cents?: number | null) => (cents == null ? '—' : formatMoney(cents));
@@ -159,6 +160,7 @@ export const CashierModule: React.FC = () => {
                 </div>
               </div>
             </div>
+            {summary ? <ShiftMovements summary={summary} /> : null}
           </>
         ) : activeTab === 'RECEIPTS' ? (
           <ReceiptsTab onRefunded={() => void loadShiftData()} />

@@ -66,6 +66,7 @@ export const SettingsTab: React.FC = () => {
         ) : null}
         {section === 'POS' ? <TestPosPanel /> : null}
         {section === 'AUDIT' ? <CriticalLogTab /> : null}
+        <p className="pt-4 text-center text-sm text-[var(--text-muted)]">KASAM360 {__APP_VERSION__}</p>
       </div>
     </section>
   );
