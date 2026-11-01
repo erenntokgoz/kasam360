@@ -73,18 +73,18 @@ export const ReceiptPreviewModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setFormat('CUSTOMER')}
-            className={`py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
+            className={`min-h-12 rounded-md text-sm font-semibold cursor-pointer transition-colors ${
               format === 'CUSTOMER'
                 ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            Müşteri Mali Fişi
+            Müşteri Bilgi Fişi
           </button>
           <button
             type="button"
             onClick={() => setFormat('KITCHEN')}
-            className={`py-2 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
+            className={`min-h-12 rounded-md text-sm font-semibold cursor-pointer transition-colors ${
               format === 'KITCHEN'
                 ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
@@ -97,10 +97,10 @@ export const ReceiptPreviewModal: React.FC = () => {
         {/* Fiş Kağıdı Önizlemesi */}
         <div className="receipt-paper p-5 rounded-lg border text-xs shadow-inner">
           {format === 'CUSTOMER' ? (
-            /* Format 1: Müşteri Mali Fişi */
+            /* Format 1: Müşteri Bilgi Fişi */
             <div className="space-y-3">
               <div className="text-center pb-2 border-b border-dashed border-gray-400">
-                <div className="text-[10px] text-gray-600 mt-1">
+                <div className="text-xs text-gray-600 mt-1">
                   {lastSale ? `İşlem: ${lastSale.transactionId.slice(0, 14)}` : 'Ön izleme'} · {formatDateTime()}
                 </div>
                 <div className="text-xs font-bold mt-1 uppercase">Masa: {tableName}</div>
@@ -118,9 +118,9 @@ export const ReceiptPreviewModal: React.FC = () => {
                 ))}
               </div>
 
-              {/* Mali Toplamlar */}
+              {/* Toplamlar */}
               <div className="space-y-1 pt-1 border-b border-dashed border-gray-400">
-                <div className="flex justify-between text-gray-600 text-[11px]">
+                <div className="flex justify-between text-gray-600 text-xs">
                   <span>Hesaplanan KDV:</span>
                   <span className="tabular-nums">{formatMoney(tax)}</span>
                 </div>
@@ -128,14 +128,14 @@ export const ReceiptPreviewModal: React.FC = () => {
                   <span>TOPLAM TUTAR:</span>
                   <span className="tabular-nums text-base">{formatMoney(total)}</span>
                 </div>
-                <div className="flex justify-between text-[11px] text-gray-600 pt-0.5">
+                <div className="flex justify-between text-xs text-gray-600 pt-0.5">
                   <span>Tahsilat Şekli:</span>
                   <span className="font-semibold uppercase">{lastSale ? METHOD_LABEL[lastSale.method] : 'Bekliyor'}</span>
                 </div>
               </div>
 
               {lastSale && lastSale.remainingCents > 0 ? (
-                <div className="flex justify-between text-[11px] font-bold">
+                <div className="flex justify-between text-xs font-bold">
                   <span>Kalan Bakiye:</span>
                   <span className="tabular-nums">{formatMoney(lastSale.remainingCents)}</span>
                 </div>
@@ -147,7 +147,7 @@ export const ReceiptPreviewModal: React.FC = () => {
               <div className="text-center pb-2 border-b-2 border-dashed border-gray-700">
                 <div className="text-3xl font-black tracking-tight">{tableName}</div>
                 <div className="text-xs font-bold mt-1">MUTFAK SİPARİŞ BİLETİ</div>
-                <div className="text-[10px] text-gray-600">Saat: {formatDateTime()}</div>
+                <div className="text-xs text-gray-600">Saat: {formatDateTime()}</div>
               </div>
 
               <div className="space-y-3 py-2 border-b-2 border-dashed border-gray-700">
@@ -161,7 +161,7 @@ export const ReceiptPreviewModal: React.FC = () => {
                           *** {[kItem.cookingDegree, kItem.notes].filter(Boolean).join(' · ')}
                         </span>
                       ) : null}
-                      <span className="block text-[10px] text-gray-600 font-bold uppercase">
+                      <span className="block text-xs text-gray-600 font-bold uppercase">
                         [{kItem.course}. {kItem.course === 1 ? 'BAŞLANGIÇ' : kItem.course === 2 ? 'ANA YEMEK' : 'TATLI / KAHVE'}]
                       </span>
                     </div>

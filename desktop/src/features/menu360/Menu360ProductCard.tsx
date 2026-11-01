@@ -1,6 +1,5 @@
 // Menü Ürün Kartı
 // Dokunsal mat donanım estetiği, kuruş formatlama ve anında durum göstergesi.
-// Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
 
 import React from 'react';
 import type { ProductDto } from '../../types/menu360';
@@ -44,23 +43,23 @@ export const Menu360ProductCard: React.FC<Menu360ProductCardProps> = ({
           </h3>
         </div>
 
-        <div className="text-base font-bold text-[var(--text-primary)] mt-1.5 tabular-nums tracking-tight font-mono">
+        <div className="text-base font-bold text-[var(--text-primary)] mt-1.5 tabular-nums tracking-tight tabular-nums">
           {formatMoney(product.priceCents)}
         </div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-[var(--border)]">
         {isOutOfStock ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-red)]" />
-            Tükendi — satışta değil
+            Tükendi
           </span>
         ) : isInactive ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[var(--bg-subtle)] text-[var(--text-muted)] border border-[var(--border)]">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-[var(--bg-subtle)] text-[var(--text-muted)] border border-[var(--border)]">
             Satışta değil
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 text-[11px] text-[var(--accent-emerald)] font-semibold">
+          <span className="inline-flex items-center gap-1 text-xs text-[var(--accent-emerald)] font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-emerald)]" />
             Satışta
           </span>

@@ -23,8 +23,8 @@ import type { PaymentMethod, PaymentResultWire, PaymentSplitMode, PaymentStatusW
 
 const SPLIT_TABS: { mode: PaymentSplitMode; label: string }[] = [
   { mode: 'FULL', label: 'Tam Hesap' },
-  { mode: 'ITEMS', label: 'Kalem Bazlı Böl' },
-  { mode: 'PARTIAL', label: 'Tutar Bazlı Böl' },
+  { mode: 'ITEMS', label: 'Kaleme Göre' },
+  { mode: 'PARTIAL', label: 'Tutara Göre' },
 ];
 
 /** İş kuralı reddi kesindir: para alınmamıştır. Diğer hatalarda sonuç bilinmez. */
@@ -59,7 +59,7 @@ export const PaymentModal: React.FC = () => {
   const { activeTableName, activeTableId, activeOrderId, balance, ticketItems, loadActiveOrder, setLastSale } = usePosStore();
   const { directories, createContact, loadDirectories } = useLedgerStore();
   const { loadFloorPlan } = useFloorStore();
-  const { loadShiftData } = useShiftStore();
+  const { activeShift, loadShiftData } = useShiftStore();
 
   const remainingCents = balance?.remainingCents ?? 0;
   const payableItems = useMemo(() => ticketItems.filter((item) => item.isSentToKitchen), [ticketItems]);
@@ -91,7 +91,8 @@ export const PaymentModal: React.FC = () => {
       .catch(() => setTestMode(false));
   }, [modals.payment, loadDirectories]);
 
-  if (!modals.payment) return null;
+  // Vardiya kapalıyken önce vardiya penceresi açılır; iki pencere üst üste binmez.
+  if (!modals.payment || !activeShift?.isOpen) return null;
 
   // Sunucu indirimi yalnız kalanı kapatan tahsilatta kabul eder; bu yüzden tam hesapta durur.
   const discountCents = splitMode === 'FULL' ? parseCents(discountText) ?? 0 : 0;
@@ -279,21 +280,21 @@ export const PaymentModal: React.FC = () => {
         if (!isUnresolved && !isProcessing) closeModal('payment');
       }}
       title={`${activeTableName} Tahsilatı`}
-      subtitle="Ödeme yöntemini ve tahsilat tipini seçin"
-      maxWidth="2xl"
+      maxWidth="5xl"
     >
-      <div className="space-y-4">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
+      <div className="space-y-4 min-w-0">
         <OrderStatusBanner />
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3.5">
+          <div className="bg-[var(--bg-subtle)] rounded-md p-3.5">
             <span className="text-xs text-[var(--text-secondary)] block">Adisyonun Kalan Bakiyesi</span>
-            <span className="text-lg font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
+            <span className="text-2xl font-extrabold tabular-nums mt-0.5 block">
               {balance ? formatMoney(remainingCents) : 'Okunamadı'}
             </span>
           </div>
-          <div className="bg-[var(--bg-subtle)] border border-[var(--accent-emerald-border)] rounded-xl p-3.5">
+          <div className="bg-[var(--bg-subtle)] rounded-md p-3.5">
             <span className="text-xs text-[var(--text-secondary)] block">Şu An Tahsil Edilecek</span>
-            <span className="text-xl font-bold text-[var(--accent-emerald)] tabular-nums mt-0.5 block">
+            <span className="hand text-4xl leading-none tabular-nums mt-1 block">
               {formatMoney(payNowCents)}
             </span>
           </div>
@@ -393,6 +394,20 @@ export const PaymentModal: React.FC = () => {
           </div>
         ) : null}
 
+        {splitMode !== 'ITEMS' ? (
+          <div className="ruled rounded-md bg-[var(--bg-card)] px-3 max-h-64 overflow-y-auto">
+            {payableItems.map((item) => (
+              <div key={item.id} className="hand h-12 grid grid-cols-[28px_minmax(0,1fr)_auto] gap-1.5 items-end pb-1 text-2xl leading-tight">
+                <span className="tabular-nums">{item.quantity}</span>
+                <span className="truncate">{item.name}</span>
+                <span className="tabular-nums">{formatMoney(item.totalCents).replace(' ₺', '')}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-3 min-w-0">
         <PaymentChannelSection
           channel={channel}
           onSelectChannel={setChannel}
@@ -426,11 +441,12 @@ export const PaymentModal: React.FC = () => {
             Tahsilat Sonucunu Sorgula
           </Button>
         ) : (
-          <Button variant="success" size="xl" onClick={handleExecutePayment} isLoading={isProcessing} className="w-full mt-2 text-base font-bold">
-            <Check className="w-5 h-5 mr-1.5" />
-            <span>{formatMoney(payNowCents)} Tahsilatı Tamamla</span>
+          <Button variant="success" size="xl" onClick={handleExecutePayment} isLoading={isProcessing} className="w-full">
+            <Check className="w-5 h-5" />
+            <span>{formatMoney(payNowCents)} Tahsil Et</span>
           </Button>
         )}
+      </div>
       </div>
       {askDiscountPin ? (
         <ManagerPinPrompt

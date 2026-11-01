@@ -117,7 +117,7 @@ export const SmartAuthModal: React.FC<SmartAuthModalProps> = ({
               <ShieldCheck className="w-4 h-4 text-[var(--accent-amber)]" />
               <span>Yönetici veya işletme sahibi PIN kodu</span>
             </span>
-            <span className="text-sm font-mono font-bold tracking-widest text-[var(--text-primary)]">
+            <span className="text-sm tabular-nums font-bold tracking-widest text-[var(--text-primary)]">
               {pinDigits ? pinDigits.replace(/./g, '•') : '----'}
             </span>
           </div>

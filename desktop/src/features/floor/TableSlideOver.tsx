@@ -40,7 +40,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
   const [showMergeBox, setShowMergeBox] = useState(false);
   const [tableItems, setTableItems] = useState<OrderItem[]>([]);
   const tableId = table?.id;
-  const isOccupied = table?.status === 'OCCUPIED';
+  const isOccupied = table?.status === 'OCCUPIED' || table?.status === 'BILL_REQUESTED';
 
   // Kanca erken dönüşten önce durmalıdır: masa seçilince kanca sayısı değişir ve
   // React tüm uygulamayı boş ekrana düşürür.
@@ -79,7 +79,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
       onClose={onClose}
       title={table.tableNumber}
       subtitle={`${table.zoneName} · ${table.capacity} Kişilik Kapasite`}
-      footer={
+      footer={isOccupied ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
             <span className="text-xs text-[var(--text-secondary)]">Toplam Tutar</span>
@@ -111,10 +111,10 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
             </Button>
           </div>
         </div>
-      }
+      ) : undefined}
     >
       {/* Durum Özeti */}
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3.5 space-y-3">
+      <div className="paper border border-[var(--border)] rounded-xl p-3.5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-[var(--text-secondary)]">Masa Durumu:</span>
@@ -152,12 +152,13 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
       </div>
 
       {/* Sipariş Kalemleri Önizleme */}
+      {isOccupied ? (
       <div className="space-y-2">
         <span className="text-xs font-bold text-[var(--text-secondary)] block">
           Açık Adisyon Kalemleri
         </span>
 
-        {isOccupied && tableItems.length > 0 ? (
+        {tableItems.length > 0 ? (
           <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3 divide-y divide-[var(--border)] text-xs max-h-60 overflow-y-auto">
             {tableItems.map((item) => (
               <div key={item.id} className="py-2 first:pt-0 last:pb-0 flex justify-between items-center">
@@ -166,7 +167,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
                     {item.quantity}x {item.name}
                   </span>
                   {item.cookingDegree || item.notes || (item.selectedModifiers && item.selectedModifiers.length > 0) ? (
-                    <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">
+                    <span className="block text-xs text-[var(--text-muted)] mt-0.5">
                       {[
                         item.cookingDegree,
                         item.selectedModifiers?.map((m) => m.name).join(', '),
@@ -189,6 +190,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
           </div>
         )}
       </div>
+      ) : null}
 
       {table.status === 'RESERVED' && table.reservationId ? (
         <div className="space-y-2 pt-2 border-t border-[var(--border)]">
@@ -243,7 +245,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
 
           {/* Masa Taşı Kutusu */}
           {showMoveBox ? (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3 space-y-2.5">
+            <div className="paper border border-[var(--border)] rounded-xl p-3 space-y-2.5">
               <span className="text-xs font-semibold text-[var(--text-primary)] block">
                 Hedef Boş Masa Seçin
               </span>
@@ -273,7 +275,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
 
           {/* Masa Birleştir Kutusu */}
           {showMergeBox ? (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-3 space-y-2.5">
+            <div className="paper border border-[var(--border)] rounded-xl p-3 space-y-2.5">
               <span className="text-xs font-semibold text-[var(--text-primary)] block">
                 Birleştirilecek Dolu Masayı Seçin
               </span>

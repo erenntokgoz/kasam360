@@ -58,8 +58,8 @@ export function StockOverview() {
         </p>
       ) : null}
 
-      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] p-4 space-y-3">
-        <h2 className="text-sm font-bold">Hızlı stok girişi</h2>
+      <section className="rounded-xl border border-[var(--border)] paper p-4 space-y-3">
+        <h2 className="print-title text-xl">Hızlı stok girişi</h2>
         <div className="grid gap-2 sm:grid-cols-4">
           <select aria-label="Giriş ürünü" className={select} value={productId} onChange={(event) => setProductId(event.target.value)}>
             <option value="">Ürün seçin</option>
@@ -77,8 +77,8 @@ export function StockOverview() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)]">
-        <h2 className="border-b border-[var(--border)] p-4 text-sm font-bold">Eldeki stok</h2>
+      <section className="rounded-xl border border-[var(--border)] paper">
+        <h2 className="border-b border-[var(--border)] p-4 print-title text-xl">Eldeki stok</h2>
         {rows.length === 0 ? <p className="p-4 text-xs text-[var(--text-secondary)]">Henüz ürün yok. Ürünü Menü sekmesinden ekleyin.</p> : null}
         <ul className="divide-y divide-[var(--border)]">
           {rows.map((row) => (

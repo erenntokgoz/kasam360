@@ -1,5 +1,4 @@
 // Menü Yeni Modifiye Grubu Ekleme Modalı
-// Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
 
 import React, { useState } from 'react';
 import { X, Check } from 'lucide-react';
@@ -44,13 +43,13 @@ export const Menu360ModifierModal: React.FC<Menu360ModifierModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-      <div className="w-96 bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden select-none shadow-2xl">
+      <div className="w-96 paper border border-[var(--border)] rounded-xl overflow-hidden select-none shadow-2xl">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-panel)]">
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">+ Yeni Modifiye Grubu</h3>
+          <h3 className="print-title text-xl">Yeni Modifiye Grubu</h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+            className="w-12 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -64,7 +63,7 @@ export const Menu360ModifierModal: React.FC<Menu360ModifierModalProps> = ({
           )}
 
           <div>
-            <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+            <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
               Grup Adı
             </label>
             <input
@@ -72,14 +71,14 @@ export const Menu360ModifierModal: React.FC<Menu360ModifierModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Örn: Sos Tercihi, Pişme Derecesi"
-              className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+              className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
               autoFocus
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+              <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                 Min Seçim
               </label>
               <input
@@ -87,12 +86,12 @@ export const Menu360ModifierModal: React.FC<Menu360ModifierModalProps> = ({
                 min={0}
                 value={minSel}
                 onChange={(e) => setMinSel(parseInt(e.target.value, 10) || 0)}
-                className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm font-mono text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none"
+                className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm tabular-nums text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+              <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                 Max Seçim
               </label>
               <input
@@ -100,7 +99,7 @@ export const Menu360ModifierModal: React.FC<Menu360ModifierModalProps> = ({
                 min={1}
                 value={maxSel}
                 onChange={(e) => setMaxSel(parseInt(e.target.value, 10) || 1)}
-                className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 py-2 text-sm font-mono text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none"
+                className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm tabular-nums text-[var(--text-primary)] focus:border-[var(--accent-blue)] focus:outline-none"
               />
             </div>
           </div>

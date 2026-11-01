@@ -57,12 +57,13 @@ export const StaffLedger: React.FC = () => {
     if (erpSection === 'PAYROLL') setSection('PAYROLL');
   }, [erpSection]);
 
-  const selected = staff?.find((member) => member.id === selectedId) ?? null;
+  // Sağ taraf boş bir kutu olarak kalmasın: seçim yoksa ilk kişi açık gelir.
+  const selected = staff?.find((member) => member.id === selectedId) ?? staff?.[0] ?? null;
   const active = staff?.filter((member) => member.is_active) ?? [];
   const editingProfile = editing && editing !== 'NEW' ? profiles[editing.id] : undefined;
 
   return (
-    <div className="space-y-4 max-w-[1500px] mx-auto">
+    <div className="flex flex-col gap-4 h-full min-h-0 max-w-[1500px] mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SectionTabs label="Personel Defteri" tabs={SECTIONS} active={section} onChange={setSection} />
         <Button variant="primary" className="min-h-12 shrink-0" onClick={() => setEditing('NEW')}>
@@ -74,15 +75,15 @@ export const StaffLedger: React.FC = () => {
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">Personel okunamadı: {error}</p> : null}
 
       {section === 'PEOPLE' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-          <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)] self-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)] gap-4 flex-1 min-h-0">
+          <ul className="paper overflow-y-auto divide-y divide-[var(--border)]">
             {(staff ?? []).map((member) => (
               <li key={member.id}>
                 <button
                   type="button"
                   onClick={() => setSelectedId(member.id)}
-                  aria-current={member.id === selectedId}
-                  className={`w-full min-h-14 px-4 py-2 text-left cursor-pointer ${member.id === selectedId ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'} ${member.is_active ? '' : 'opacity-60'}`}
+                  aria-current={member.id === selected?.id}
+                  className={`w-full min-h-14 px-4 py-2 text-left cursor-pointer ${member.id === selected?.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'} ${member.is_active ? '' : 'opacity-60'}`}
                 >
                   <span className="block text-sm font-bold text-[var(--text-primary)] truncate">{member.name}</span>
                   <span className="block text-xs text-[var(--text-secondary)]">
@@ -93,18 +94,18 @@ export const StaffLedger: React.FC = () => {
             ))}
           </ul>
           {selected ? (
-            <StaffCard
-              key={selected.id}
-              member={selected}
-              profile={profiles[selected.id]}
-              isOwner={isOwner}
-              onEdit={() => setEditing(selected)}
-              onChanged={load}
-            />
+            <div className="min-w-0 overflow-y-auto">
+              <StaffCard
+                key={selected.id}
+                member={selected}
+                profile={profiles[selected.id]}
+                isOwner={isOwner}
+                onEdit={() => setEditing(selected)}
+                onChanged={load}
+              />
+            </div>
           ) : (
-            <p className="p-6 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl">
-              Kartını görmek için listeden bir kişi seçin.
-            </p>
+            <p className="paper p-6 text-[var(--text-secondary)]">Henüz personel yok. Personel Ekle ile başlayın.</p>
           )}
         </div>
       ) : null}
@@ -114,7 +115,7 @@ export const StaffLedger: React.FC = () => {
       {section === 'TIPS' ? (
         <div className="space-y-4 max-w-3xl">
           {isOwner ? (
-            <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
+            <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
               {active.map((member) => (
                 <li key={member.id} className="flex items-center justify-between gap-3 px-4 py-2 min-h-14">
                   <span className="text-sm font-semibold text-[var(--text-primary)] truncate">{member.name}</span>

@@ -22,7 +22,7 @@ export const Badge: React.FC<BadgeProps> = ({ className, variant = 'neutral', ch
   return (
     <span
       className={cn(
-        'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border tabular-nums select-none tracking-tight',
+        'inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border tabular-nums select-none tracking-tight',
         variantClasses,
         className
       )}

@@ -42,17 +42,17 @@ export const PanoramaTab: React.FC = () => {
   return (
     <div className="space-y-4 max-w-[1500px] mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5" role="group" aria-label="Dönem">
+        <div className="flex items-center gap-6" role="group" aria-label="Dönem">
           {RANGES.map((key) => (
-            <Button
+            <button
               key={key}
-              variant={range === key ? 'primary' : 'secondary'}
-              className="min-h-12 text-xs font-bold"
+              type="button"
+              className="desk-tab"
               aria-pressed={range === key}
               onClick={() => setRange(key)}
             >
               {RANGE_LABELS[key]}
-            </Button>
+            </button>
           ))}
         </div>
         <Button variant="secondary" className="min-h-12 text-xs" onClick={() => void load()}>
@@ -73,22 +73,22 @@ export const PanoramaTab: React.FC = () => {
             <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{insights.join(' ')}</p>
           ) : null}
           <KpiStrip current={data.current} previous={data.previous} compareLabel={compareLabel} />
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div className="xl:col-span-2">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
               <RevenueChart kind={data.bucketKind} buckets={data.buckets} />
             </div>
             <LivePanel live={data.live} current={data.current} />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <AlertFeed alerts={data.alerts} />
             <PaymentMix channels={data.channels} />
             <MonthlyGoal target={metrics?.monthly_targets.find((item) => item.category === 'ALL') ?? null} />
           </div>
-          <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-            <div className="xl:col-span-3">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <div className="lg:col-span-3">
               <TopProducts products={data.products} showProfit={data.current.grossProfitCents !== null} />
             </div>
-            <div className="xl:col-span-2">
+            <div className="lg:col-span-2">
               <MenuMatrix metrics={metrics} />
             </div>
           </div>

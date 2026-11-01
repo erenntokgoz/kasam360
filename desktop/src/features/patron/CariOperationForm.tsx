@@ -86,7 +86,7 @@ export const OperationFeedback: React.FC<OperationFeedbackProps> = ({
       <p className="text-xs font-semibold text-[var(--accent-red)]">{error}</p>
       {pendingOperationId ? (
         <>
-          <p className="text-[11px] text-[var(--text-secondary)] break-all">
+          <p className="text-xs text-[var(--text-secondary)] break-all">
             İşlem kimliği: <span className="tabular-nums">{pendingOperationId}</span>
           </p>
           <Button

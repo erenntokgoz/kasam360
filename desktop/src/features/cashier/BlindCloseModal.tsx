@@ -123,7 +123,7 @@ export const BlindCloseModal: React.FC = () => {
           <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-4 divide-y divide-[var(--border)] text-xs">
             <div className="pb-2 flex justify-between">
               <span className="text-[var(--text-secondary)]">Rapor No:</span>
-              <span className="font-bold text-[var(--text-primary)] font-mono">{completedReport.reportNumber}</span>
+              <span className="font-bold text-[var(--text-primary)] tabular-nums">{completedReport.reportNumber}</span>
             </div>
             <div className="py-2 flex justify-between">
               <span className="text-[var(--text-secondary)]">Sayılan Nakit:</span>

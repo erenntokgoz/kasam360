@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSetupStore, type SetupMode } from '../../stores/setupStore';
 import { AccountLogin } from '../auth/AccountLogin';
+import { AuthLayout } from '../auth/AuthLayout';
 import { RestoreFromFile } from './RestoreFromFile';
 import { NewBusinessForm } from './NewBusinessForm';
 import { JoinBusinessForm } from './JoinBusinessForm';
@@ -9,32 +10,27 @@ export const SetupWizard: React.FC = () => {
   const { mode, draft, saveProgress } = useSetupStore();
   const choose = (next: SetupMode | null) => void saveProgress(next, draft).catch(() => undefined);
 
+  const headline =
+    mode === 'NEW'
+      ? { title: 'İşletmeni kur.', subtitle: 'İlk sahip hesabı ve PIN bu cihazda oluşur.' }
+      : mode === 'JOIN'
+      ? { title: 'Bu cihazı bağla.', subtitle: 'Mevcut işletmeden aldığın kodu gir.' }
+      : { title: 'İşletme hesabına gir.', subtitle: 'Yeni işletme kurabilir ya da bu cihazı mevcut işletmeye bağlayabilirsin.' };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg-canvas)] p-6 select-none">
-      <div className="min-h-full flex flex-col items-center justify-center">
-        <div className="w-full max-w-[560px] bg-[var(--bg-panel)] border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs text-[var(--text-primary)] bg-[var(--accent-amber)]">
-              360
-            </div>
-            <h1 className="font-bold text-base tracking-tight text-[var(--text-primary)]">
-              {mode === null ? 'KASAM360 Giriş' : 'KASAM360 Kurulumu'}
-            </h1>
-          </div>
+    <AuthLayout title={headline.title} subtitle={headline.subtitle}>
+      {mode === null ? (
+        // Web kaydı gelince `onRegister` web adresini açacak; o zamana kadar
+        // işletme bu cihazda kurulur, internet zorunlu olmaz.
+        <>
+          <h2 className="print-title text-2xl">Giriş</h2>
+          <AccountLogin onRegister={() => choose('NEW')} onJoinDevice={() => choose('JOIN')} />
+          <RestoreFromFile />
+        </>
+      ) : null}
 
-          {mode === null ? (
-            // Web kaydı gelince `onRegister` web adresini açacak; o zamana kadar
-            // işletme bu cihazda kurulur, internet zorunlu olmaz.
-            <>
-              <AccountLogin onRegister={() => choose('NEW')} onJoinDevice={() => choose('JOIN')} />
-              <RestoreFromFile />
-            </>
-          ) : null}
-
-          {mode === 'NEW' ? <NewBusinessForm onBack={() => choose(null)} /> : null}
-          {mode === 'JOIN' ? <JoinBusinessForm onBack={() => choose(null)} /> : null}
-        </div>
-      </div>
-    </div>
+      {mode === 'NEW' ? <NewBusinessForm onBack={() => choose(null)} /> : null}
+      {mode === 'JOIN' ? <JoinBusinessForm onBack={() => choose(null)} /> : null}
+    </AuthLayout>
   );
 };

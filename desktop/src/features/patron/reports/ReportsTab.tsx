@@ -48,33 +48,32 @@ export const ReportsTab: React.FC = () => {
   }, [report, range]);
 
   return (
-    <div className="space-y-4 max-w-[1500px] mx-auto">
-      <AccountantPanel />
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Rapor">
+    <div className="flex flex-col gap-4 min-h-full max-w-[1500px] mx-auto">
+      <div className="flex flex-wrap items-center gap-x-6 border-b-2 border-[var(--border)]" role="group" aria-label="Rapor">
         {(Object.keys(REPORTS) as ReportKey[]).map((key) => (
-          <Button
+          <button
             key={key}
-            variant={report === key ? 'primary' : 'secondary'}
-            className="min-h-12 text-xs font-bold"
+            type="button"
+            className="desk-tab text-lg"
             aria-pressed={report === key}
             onClick={() => setReport(key)}
           >
             {REPORTS[key].label}
-          </Button>
+          </button>
         ))}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5" role="group" aria-label="Dönem">
+        <div className="flex items-center gap-6" role="group" aria-label="Dönem">
           {RANGES.map((key) => (
-            <Button
+            <button
               key={key}
-              variant={range === key ? 'primary' : 'secondary'}
-              className="min-h-12 text-xs font-bold"
+              type="button"
+              className="desk-tab"
               aria-pressed={range === key}
               onClick={() => setRange(key)}
             >
               {RANGE_LABELS[key]}
-            </Button>
+            </button>
           ))}
         </div>
         <Button
@@ -91,7 +90,7 @@ export const ReportsTab: React.FC = () => {
       {table?.summary.length ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {table.summary.map((item) => (
-            <div key={item.label} className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-3">
+            <div key={item.label} className="paper border border-[var(--border)] rounded-xl p-3">
               <span className="text-xs text-[var(--text-secondary)] block">{item.label}</span>
               <span className="text-xl font-bold tabular-nums text-[var(--text-primary)] mt-0.5 block">{item.value}</span>
             </div>
@@ -106,9 +105,9 @@ export const ReportsTab: React.FC = () => {
       ) : !table ? (
         <p className="text-sm text-[var(--text-secondary)]">Rapor hazırlanıyor…</p>
       ) : table.rows.length === 0 ? (
-        <p className="text-sm text-[var(--text-secondary)]">{table.emptyText}</p>
+        <p className="paper flex-1 p-6 text-[var(--text-secondary)]">{table.emptyText}</p>
       ) : (
-        <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-x-auto">
+        <div className="paper flex-1 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-[var(--text-muted)]">
@@ -129,6 +128,7 @@ export const ReportsTab: React.FC = () => {
           </table>
         </div>
       )}
+      <AccountantPanel />
     </div>
   );
 };

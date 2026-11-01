@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { ShoppingBag, Calendar, MapPin, Grid } from 'lucide-react';
 import { useFloorStore } from '../../stores/floorStore';
 import { usePosStore } from '../../stores/posStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -115,104 +114,51 @@ export const FloorModule: React.FC = () => {
         </p>
       ) : null}
       <AddTableModal isOpen={isAddTableOpen} onClose={() => setIsAddTableOpen(false)} />
-      {/* Üst Operasyon Barı */}
-      <div className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        {/* Sol: Bölge Filtreleri */}
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          <Button
-            variant={selectedZoneId === null ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => setSelectedZoneId(null)}
-            className="!min-h-12 tabular-nums"
-          >
+      <div className="px-5 pt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 shrink-0 border-b-2 border-[var(--border)]">
+        <div className="flex items-center gap-6 overflow-x-auto" role="group" aria-label="Bölge">
+          <button type="button" className="desk-tab text-lg tabular-nums" aria-pressed={selectedZoneId === null} onClick={() => setSelectedZoneId(null)}>
             Tümü ({tables.length})
-          </Button>
-          {zones.map((zone) => {
-            const count = tables.filter((t) => t.zoneId === zone.id).length;
-            const isSelected = selectedZoneId === zone.id;
-            return (
-              <Button
-                key={zone.id}
-                variant={isSelected ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setSelectedZoneId(zone.id)}
-                className="!min-h-12 tabular-nums"
-              >
-                {zone.name} ({count})
-              </Button>
-            );
-          })}
+          </button>
+          {zones.map((zone) => (
+            <button
+              key={zone.id}
+              type="button"
+              className="desk-tab text-lg tabular-nums"
+              aria-pressed={selectedZoneId === zone.id}
+              onClick={() => setSelectedZoneId(zone.id)}
+            >
+              {zone.name} ({tables.filter((t) => t.zoneId === zone.id).length})
+            </button>
+          ))}
         </div>
 
-        {/* Sağ: Görünüm Şalteri, Tezgah Satışı ve Rezervasyon */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap pb-2">
           {isOwnerOrManager ? (
-            <Button variant="secondary" size="sm" onClick={() => setIsAddTableOpen(true)} className="min-h-12 text-xs font-bold">
+            <Button variant="ghost" size="sm" onClick={() => setIsAddTableOpen(true)}>
               Masa Ekle
             </Button>
           ) : null}
-          <div className="p-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                setViewMode('CARDS');
-                setKrokiEditMode(false);
-              }}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
-                viewMode === 'CARDS'
-                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Grid className="w-3.5 h-3.5" />
-              <span>Kart Görünümü</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('KROKI')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
-                viewMode === 'KROKI'
-                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <MapPin className="w-3.5 h-3.5" />
-              <span>Salon Krokisi</span>
-            </button>
-          </div>
-
-          {/* Kroki Düzenleme Butonu (Yalnızca kroki görünümünde ve yetkili kullanıcıda) */}
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-pressed={viewMode === 'KROKI'}
+            onClick={() => {
+              setKrokiEditMode(false);
+              setViewMode(viewMode === 'CARDS' ? 'KROKI' : 'CARDS');
+            }}
+          >
+            {viewMode === 'CARDS' ? 'Salon Planı' : 'Kart Görünümü'}
+          </Button>
           {viewMode === 'KROKI' && isOwnerOrManager ? (
-            <Button
-              variant={isKrokiEditMode ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setKrokiEditMode(!isKrokiEditMode)}
-              className="!min-h-12"
-            >
-              {isKrokiEditMode ? 'Düzenlemeyi Bitir' : 'Krokiyi Düzenle'}
+            <Button variant={isKrokiEditMode ? 'primary' : 'secondary'} size="sm" onClick={() => setKrokiEditMode(!isKrokiEditMode)}>
+              {isKrokiEditMode ? 'Düzenlemeyi Bitir' : 'Planı Düzenle'}
             </Button>
           ) : null}
-
-          {/* Hızlı Tezgah Satışı */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleWalkin}
-            className="!min-h-12"
-          >
-            <ShoppingBag className="w-4 h-4 text-[var(--accent-amber)]" />
-            <span>Tezgah Satışı</span>
+          <Button variant="secondary" size="sm" onClick={() => setIsResModalOpen(true)}>
+            Rezervasyon
           </Button>
-
-          {/* Yeni Rezervasyon */}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setIsResModalOpen(true)}
-            className="!min-h-12"
-          >
-            <Calendar className="w-4 h-4" />
-            <span>+ Rezervasyon</span>
+          <Button variant="primary" size="sm" onClick={handleWalkin}>
+            Tezgah Satışı
           </Button>
         </div>
       </div>

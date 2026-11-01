@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, Lock, Printer, Clock } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Lock, Printer } from 'lucide-react';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -13,6 +13,7 @@ import { BlindCloseModal } from './BlindCloseModal';
 import { CashExpenseModal } from './CashExpenseModal';
 import { CashMovementModal } from './CashMovementModal';
 import { ReceiptsTab } from './ReceiptsTab';
+import { ShiftOverview } from './ShiftOverview';
 
 /** Okunamayan tutar sıfır gösterilmez: kasa farkı sanılır. */
 const money = (cents?: number | null) => (cents == null ? 'Okunamadı' : formatMoney(cents));
@@ -59,57 +60,32 @@ export const CashierModule: React.FC = () => {
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] select-none">
       {/* Üst Bar */}
-      <div className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant={activeTab === 'SHIFT' ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => setActiveTab('SHIFT')}
-            className="min-h-12 text-xs font-bold"
-          >
-            Aktif Vardiya ve Kasa
-          </Button>
+      <div className="px-5 pt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 shrink-0 border-b-2 border-[var(--border)]">
+        <div className="flex items-center gap-6" role="group" aria-label="Kasa bölümü">
+          <button type="button" className="desk-tab text-lg" aria-pressed={activeTab === 'SHIFT'} onClick={() => setActiveTab('SHIFT')}>
+            Vardiya
+          </button>
 
-          <Button
-            variant={activeTab === 'RECEIPTS' ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => setActiveTab('RECEIPTS')}
-            className="min-h-12 text-xs font-bold"
-          >
+          <button type="button" className="desk-tab text-lg" aria-pressed={activeTab === 'RECEIPTS'} onClick={() => setActiveTab('RECEIPTS')}>
             Fişler ve İade
-          </Button>
+          </button>
 
-          <Button
-            variant={activeTab === 'DAY_CLOSE' ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => setActiveTab('DAY_CLOSE')}
-            className="min-h-12 text-xs font-bold"
-          >
-            Gün Sonu (Z Raporu)
-          </Button>
+          <button type="button" className="desk-tab text-lg" aria-pressed={activeTab === 'DAY_CLOSE'} onClick={() => setActiveTab('DAY_CLOSE')}>
+            Gün Sonu
+          </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pb-2">
           {isShiftOpen ? (
             <>
-              <Button
-                variant="outline-emerald"
-                size="sm"
-                onClick={() => setCashActionModal('IN')}
-                className="min-h-12 text-xs font-bold"
-              >
+              <Button variant="secondary" size="sm" onClick={() => setCashActionModal('IN')}>
                 <ArrowDownRight className="w-4 h-4 mr-1" />
-                <span>+ Nakit Giriş</span>
+                <span>Para Girişi</span>
               </Button>
 
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setCashActionModal('OUT')}
-                className="min-h-12 text-xs font-bold text-[var(--accent-red)] border-[var(--accent-red-border)] hover:bg-[var(--accent-red-soft)]"
-              >
+              <Button variant="secondary" size="sm" onClick={() => setCashActionModal('OUT')}>
                 <ArrowUpRight className="w-4 h-4 mr-1" />
-                <span>− Nakit Çıkış</span>
+                <span>Para Çıkışı</span>
               </Button>
 
               {canCloseDay ? (
@@ -143,107 +119,34 @@ export const CashierModule: React.FC = () => {
 
       {/* İçerik */}
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
-        {activeTab === 'SHIFT' ? (
-          <>
-            {/* Üst Kartlar: Çekmece Nakiti ve Satış Dağılımı */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[var(--bg-panel)] border border-[var(--accent-emerald-border)] rounded-xl p-4 shadow-sm">
-                <span className="text-xs text-[var(--text-secondary)] block">Kasa Çekmecesindeki Nakit</span>
-                <span className="text-2xl font-bold text-[var(--accent-emerald)] tabular-nums mt-1 block">
-                  {money(summary?.expectedCashInDrawerCents)}
-                </span>
-                <span className="text-[11px] text-[var(--text-muted)] mt-1 block">
-                  Açılış: {money(summary?.openingCashCents)}
-                </span>
-              </div>
-
-              <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
-                <span className="text-xs text-[var(--text-secondary)] block">Toplam Vardiya Cirosu</span>
-                <span className="text-2xl font-bold text-[var(--text-primary)] tabular-nums mt-1 block">
-                  {summary ? formatMoney(summary.totalSalesCents) : 'Okunamadı'}
-                </span>
-              </div>
-
-              <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
-                <span className="text-xs text-[var(--text-secondary)] block">Vardiya Sorumlusu</span>
-                <span className="text-xl font-bold text-[var(--text-primary)] mt-1 block truncate">
-                  {summary?.cashierName ?? 'Okunamadı'}
-                </span>
-                <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1 mt-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Açılış: {formatDateTime(summary?.openedAt)}</span>
-                </span>
-              </div>
+        {activeTab === 'SHIFT' && !isShiftOpen ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="max-w-md">
+              <h2 className="auth-title !text-5xl">Vardiya kapalı.</h2>
+              <p className="mt-3 text-lg text-[var(--text-secondary)]">Satış almak için çekmecedeki nakdi sayıp vardiyayı açın.</p>
+              <Button variant="primary" size="lg" className="mt-6" onClick={() => openModal('shiftGate')}>
+                Vardiyayı Aç
+              </Button>
             </div>
-
-            {/* Tahsilat Kanalları Dökümü */}
-            <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 shadow-sm space-y-3">
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                Ödeme Kanalları Dökümü
-              </h3>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
-                  <span className="text-xs text-[var(--text-secondary)] block">Nakit Tahsilat</span>
-                  <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {money(summary?.totalCashSalesCents)}
-                  </span>
-                </div>
-
-                <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
-                  <span className="text-xs text-[var(--text-secondary)] block">Kredi Kartı</span>
-                  <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {money(summary?.totalCardSalesCents)}
-                  </span>
-                </div>
-
-                <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
-                  <span className="text-xs text-[var(--text-secondary)] block">Yemek Kartları</span>
-                  <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {money(summary?.totalMealCardSalesCents)}
-                  </span>
-                </div>
-
-                <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
-                  <span className="text-xs text-[var(--text-secondary)] block">Veresiye (Cari)</span>
-                  <span className="text-base font-bold text-[var(--accent-amber)] tabular-nums mt-0.5 block">
-                    {money(summary?.totalVeresiyeCents)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </>
+          </div>
+        ) : activeTab === 'SHIFT' ? (
+          summary ? (
+            <ShiftOverview summary={summary} />
+          ) : (
+            <p role="alert" className="text-[var(--accent-red)] font-semibold">Vardiya özeti okunamadı. Kasa ekranını yeniden açın.</p>
+          )
         ) : activeTab === 'RECEIPTS' ? (
           <ReceiptsTab onRefunded={() => void loadShiftData()} />
         ) : (
           /* Gün Sonu / Z Raporu Sekmesi */
-          <div className="max-w-2xl bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-6 shadow-sm space-y-5">
-            <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
-              <div>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">Gün Sonu Kapanışı (Z Raporu)</h2>
-                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  Tüm açık masalar kapatıldığında ve vardiya sayımı yapıldığında Z Raporu üretilir.
-                </p>
-              </div>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => void handlePrintZ()}
-                disabled={!lastZReport}
-                className="text-xs"
-              >
-                <Printer className="w-4 h-4 mr-1.5" />
-                <span>Son Z Raporunu Yazdır</span>
-              </Button>
-            </div>
-
-            <div className="receipt-paper p-5 rounded-lg border text-xs space-y-3">
+          <div className="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-5 items-start">
+            <div className="paper receipt-paper p-6 text-sm space-y-3">
               <div className="text-center pb-2 border-b border-dashed border-gray-400">
-                <div className="font-bold text-sm">KASAM360 GÜN SONU RAPORU</div>
-                <div className="font-bold text-xs mt-1">
-                  {lastZReport ? 'GÜN SONU MALİ Z RAPORU (KAPANIŞ)' : 'GÜN SONU MALİ Z RAPORU (CANLI ÖNİZLEME)'}
+                <div className="font-bold text-base">KASAM360 GÜN SONU RAPORU</div>
+                <div className="font-bold mt-1">
+                  {lastZReport ? 'Gün sonu raporu (kapanış)' : 'Gün sonu raporu (ön izleme)'}
                 </div>
-                <div className="text-[10px] text-gray-600">
+                <div className="text-xs text-gray-600">
                   {lastZReport?.tenantName ?? ''} · Rapor No: {lastZReport?.reportNumber ?? 'Ön izleme'} · Tarih: {formatDateTime(lastZReport?.closedAt)}
                 </div>
               </div>
@@ -301,34 +204,44 @@ export const CashierModule: React.FC = () => {
                             : 'text-red-700'
                         }`}
                       >
-                        {lastZReport.differenceCents === 0 ? '0,00 ₺ (Kusursuz)' : formatMoney(lastZReport.differenceCents)}
+                        {lastZReport.differenceCents === 0 ? '0,00 ₺' : formatMoney(lastZReport.differenceCents)}
                       </span>
                     </div>
                   </>
                 ) : null}
                 <div className="flex justify-between pt-1 border-t border-gray-300 font-bold">
                   <span>GENEL GÜNLÜK CİRO:</span>
-                  <span className="text-sm tabular-nums">
+                  <span className="text-base tabular-nums">
                     {money(lastZReport?.totalRevenueCents ?? summary?.totalSalesCents)}
                   </span>
                 </div>
               </div>
 
-              <div className="text-center pt-1 text-[10px] text-gray-500">
-                Mali mühür SHA-256 zinciriyle denetim defterine işlenmiştir.
+              <div className="text-center pt-1 text-xs text-gray-500">
+                Bilgi amaçlıdır, mali belge değildir.
               </div>
             </div>
 
-            {canCloseDay ? (
-              <Button variant="danger" className="w-full min-h-12" onClick={() => void handleCloseDay()}>
-                Günü Kapat
-              </Button>
-            ) : null}
-            {dayCloseNotice ? (
-              <p role="alert" className={`text-xs font-semibold ${dayCloseNotice.ok ? 'text-[var(--accent-emerald)]' : 'text-[var(--accent-red)]'}`}>
-                {dayCloseNotice.text}
+            <section className="paper p-5 space-y-3">
+              <h2 className="print-title text-2xl">Gün Sonu</h2>
+              <p className="text-[var(--text-secondary)]">
+                Açık masalar kapatılıp vardiya sayımı yapıldığında Z raporu üretilir.
               </p>
-            ) : null}
+              {canCloseDay ? (
+                <Button variant="danger" size="lg" className="w-full" onClick={() => void handleCloseDay()}>
+                  Günü Kapat
+                </Button>
+              ) : null}
+              <Button variant="secondary" size="lg" className="w-full" onClick={() => void handlePrintZ()} disabled={!lastZReport}>
+                <Printer className="w-4 h-4 mr-1.5" />
+                <span>Son Z Raporunu Yazdır</span>
+              </Button>
+              {dayCloseNotice ? (
+                <p role="alert" className={`text-sm font-semibold ${dayCloseNotice.ok ? 'text-[var(--accent-emerald)]' : 'text-[var(--accent-red)]'}`}>
+                  {dayCloseNotice.text}
+                </p>
+              ) : null}
+            </section>
           </div>
         )}
       </div>

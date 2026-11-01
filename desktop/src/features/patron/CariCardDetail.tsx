@@ -59,14 +59,14 @@ const StatementRow: React.FC<{ line: StatementLine }> = ({ line }) => {
           {KIND_LABEL[line.kind]}
           {line.description ? ` · ${line.description}` : ''}
         </td>
-        <td className="px-3 py-2 text-[var(--text-secondary)]">
+        <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">
           {line.orderId && !line.documentNo ? (
             <button type="button" className="min-h-12 underline cursor-pointer" onClick={() => void toggle()}>{label}</button>
           ) : label ?? '-'}
         </td>
-        <td className="px-3 py-2 text-right">{debit ? formatMoney(debit) : ''}</td>
-        <td className="px-3 py-2 text-right">{credit ? formatMoney(credit) : ''}</td>
-        <td className="px-3 py-2 text-right">{formatMoney(line.balanceAfterCents)}</td>
+        <td className="px-3 py-2 text-right whitespace-nowrap">{debit ? formatMoney(debit) : ''}</td>
+        <td className="px-3 py-2 text-right whitespace-nowrap">{credit ? formatMoney(credit) : ''}</td>
+        <td className="px-3 py-2 text-right whitespace-nowrap">{formatMoney(line.balanceAfterCents)}</td>
       </tr>
       {error ? (
         <tr><td colSpan={6} role="alert" className="px-3 py-2 text-[var(--accent-red)]">{error}</td></tr>
@@ -116,10 +116,10 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
 
   return (
     <div className="space-y-4">
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+      <section className="paper border border-[var(--border)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-bold text-[var(--text-primary)] truncate">{card.name}</h3>
-          <p className="text-[11px] text-[var(--text-muted)]">
+          <h3 className="print-title text-xl truncate">{card.name}</h3>
+          <p className="text-xs text-[var(--text-muted)]">
             {card.phone || 'Telefon yok'}
             {card.taxNo ? ` · VKN ${card.taxNo}` : ''} · Limit{' '}
             <span className="tabular-nums">{formatMoney(card.creditLimitCents)}</span>
@@ -127,7 +127,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <span className="block text-[11px] text-[var(--text-secondary)]">
+            <span className="block text-xs text-[var(--text-secondary)]">
               {card.balanceCents >= 0 ? 'Alacağımız' : 'Borcumuz'}
             </span>
             <span className="text-base font-bold tabular-nums text-[var(--text-primary)]">
@@ -140,8 +140,8 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
         </div>
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden">
-        <h4 className="px-4 py-3 border-b border-[var(--border)] text-xs font-bold text-[var(--text-primary)]">
+      <section className="paper border border-[var(--border)] rounded-xl overflow-hidden">
+        <h4 className="px-4 py-3 border-b border-[var(--border)] print-title text-xl">
           Açık Kayıtlar
         </h4>
         {openDebts.length === 0 ? (
@@ -158,7 +158,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
                     {debt.status === 'PARTIAL' ? <Badge variant="neutral">Kısmi</Badge> : null}
                     {debt.isOverdue ? <Badge variant="red">Vadesi geçti</Badge> : null}
                   </div>
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
                     {debt.description || linkLabel(debt) || 'Açıklama yok'}
                     {debt.dueDate ? ` · Vade ${debt.dueDate}` : ''}
                   </p>
@@ -168,7 +168,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
                     <span className="block font-bold text-sm tabular-nums text-[var(--text-primary)]">
                       {formatMoney(debt.remainingAmountCents)}
                     </span>
-                    <span className="block text-[10px] tabular-nums text-[var(--text-muted)]">
+                    <span className="block text-xs tabular-nums text-[var(--text-muted)]">
                       Toplam {formatMoney(debt.totalAmountCents)}
                     </span>
                   </div>
@@ -182,9 +182,9 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
         )}
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-hidden">
+      <section className="paper border border-[var(--border)] rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-xs font-bold text-[var(--text-primary)]">Ekstre</h4>
+          <h4 className="print-title text-xl">Ekstre</h4>
           <div className="flex items-center gap-2">
             <Input
               type="date"
@@ -212,7 +212,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
                   <th className="px-3 py-2 font-semibold">Belge</th>
                   <th className="px-3 py-2 font-semibold text-right">Borç</th>
                   <th className="px-3 py-2 font-semibold text-right">Alacak</th>
-                  <th className="px-3 py-2 font-semibold text-right">Yürüyen Bakiye</th>
+                  <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">Bakiye</th>
                 </tr>
               </thead>
               <tbody className="tabular-nums text-[var(--text-primary)]">

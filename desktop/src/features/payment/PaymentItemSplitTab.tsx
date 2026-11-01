@@ -55,7 +55,7 @@ export const PaymentItemSplitTab: React.FC<PaymentItemSplitTabProps> = ({
                   {selected > 0 ? selected : ''}
                 </div>
                 <span className="text-xs font-bold">{item.name}</span>
-                <span className="text-[11px] text-[var(--text-muted)]">
+                <span className="text-xs text-[var(--text-muted)]">
                   (Mevcut: {item.quantity})
                 </span>
               </div>

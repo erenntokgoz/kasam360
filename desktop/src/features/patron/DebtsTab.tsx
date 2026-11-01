@@ -35,7 +35,8 @@ export const DebtsTab: React.FC = () => {
     void refresh();
   }, [refresh]);
 
-  const selected = cards.find((card) => card.id === selectedId) ?? null;
+  // Sağ taraf boş bir kutu olarak kalmasın: seçim yoksa ilk kart açık gelir.
+  const selected = cards.find((card) => card.id === selectedId) ?? cards[0] ?? null;
 
   const handleTab = (next: CariTab) => {
     setTab(next);
@@ -53,18 +54,18 @@ export const DebtsTab: React.FC = () => {
   return (
     <div className="flex flex-col gap-4 h-full min-h-0">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1.5" role="tablist" aria-label="Cari türü">
+        <div className="flex gap-6 mr-4" role="tablist" aria-label="Cari türü">
           {TABS.map((item) => (
-            <Button
+            <button
               key={item.id}
+              type="button"
               role="tab"
               aria-selected={tab === item.id}
-              variant={tab === item.id ? 'primary' : 'secondary'}
               onClick={() => handleTab(item.id)}
-              className="min-h-12"
+              className="desk-tab text-lg"
             >
               {item.label}
-            </Button>
+            </button>
           ))}
         </div>
         <div className="relative flex-1 min-w-[200px]">
@@ -93,8 +94,8 @@ export const DebtsTab: React.FC = () => {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 flex-1 min-h-0">
-        <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl overflow-y-auto divide-y divide-[var(--border)] max-h-[70vh]">
+      <div className="grid grid-cols-1 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)] gap-4 flex-1 min-h-0">
+        <ul className="paper overflow-y-auto divide-y divide-[var(--border)]">
           {cards.length === 0 ? (
             <li className="p-6 text-center text-xs text-[var(--text-muted)]">
               {search.trim() ? 'Aramayla eşleşen kart yok.' : 'Henüz kart yok.'}
@@ -105,20 +106,20 @@ export const DebtsTab: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedId(card.id)}
-                  aria-current={card.id === selectedId}
+                  aria-current={card.id === selected?.id}
                   className={`w-full min-h-12 p-3 text-left flex items-center justify-between gap-3 cursor-pointer ${
-                    card.id === selectedId ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'
+                    card.id === selected?.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'
                   }`}
                 >
                   <span className="min-w-0">
-                    <span className="block text-xs font-bold truncate text-[var(--text-primary)]">
+                    <span className="block font-bold truncate text-[var(--text-primary)]">
                       {card.name}
                     </span>
-                    <span className="block text-[11px] text-[var(--text-muted)] truncate">
+                    <span className="block text-xs text-[var(--text-muted)] truncate">
                       {card.phone || 'Telefon yok'}
                     </span>
                   </span>
-                  <span className={`text-xs font-bold tabular-nums shrink-0 ${balanceTone(card.balanceCents)}`}>
+                  <span className={`font-bold tabular-nums shrink-0 ${balanceTone(card.balanceCents)}`}>
                     {formatMoney(card.balanceCents)}
                   </span>
                 </button>
@@ -127,13 +128,13 @@ export const DebtsTab: React.FC = () => {
           )}
         </ul>
 
-        <div className="min-w-0 space-y-4 overflow-y-auto max-h-[70vh]">
+        <div className="min-w-0 space-y-4 overflow-y-auto">
           {tab === 'SUPPLIER' ? <SupplierDocumentsPanel onChanged={refresh} /> : null}
           {selected ? (
             <CariCardDetail key={selected.id} card={selected} onChanged={refresh} />
           ) : (
-            <div className="p-6 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl">
-              Hareketleri görmek için listeden bir kart seçin.
+            <div className="paper p-6 text-[var(--text-secondary)]">
+              {search.trim() ? 'Aramayla eşleşen kart yok.' : 'Henüz kart yok. Yeni Kart ile başlayın.'}
             </div>
           )}
         </div>

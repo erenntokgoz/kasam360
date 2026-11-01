@@ -18,13 +18,10 @@ interface ModalState {
 
 interface UIStore {
   activeModule: AppModule;
-  theme: 'dark' | 'light';
   idleSecondsLeft: number;
   idleLimitSeconds: number;
   modals: ModalState;
   setActiveModule: (module: AppModule) => void;
-  setTheme: (theme: 'dark' | 'light') => void;
-  toggleTheme: () => void;
   setIdleLimit: (seconds: number) => void;
   resetIdleTimer: () => void;
   decrementIdleTimer: () => void;
@@ -34,7 +31,6 @@ interface UIStore {
 
 export const useUIStore = create<UIStore>((set, get) => ({
   activeModule: 'FLOOR',
-  theme: 'dark',
   idleSecondsLeft: 120,
   idleLimitSeconds: 120, // Varsayılan 2 dakika; 0 kalıcı personel oturumudur.
   modals: {
@@ -52,18 +48,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
   },
 
   setActiveModule: (activeModule) => set({ activeModule }),
-
-  setTheme: (theme) => {
-    document.documentElement.setAttribute('data-theme', theme);
-    set({ theme });
-  },
-
-  toggleTheme: () =>
-    set((state) => {
-      const nextTheme = state.theme === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', nextTheme);
-      return { theme: nextTheme };
-    }),
 
   setIdleLimit: (seconds) => set({ idleLimitSeconds: seconds, idleSecondsLeft: seconds }),
 

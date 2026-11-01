@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { cn } from '../lib/cn';
 import { Button } from './Button';
 
@@ -8,7 +8,7 @@ export interface ModalProps {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '5xl';
   showCloseButton?: boolean;
 }
 
@@ -21,6 +21,13 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth = 'md',
   showCloseButton = true,
 }) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Dokunmatik kasada da klavye kullanılabilir: odak pencere içinde kalır.
+  useEffect(() => {
+    if (isOpen && !panelRef.current?.contains(document.activeElement)) panelRef.current?.focus();
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -39,6 +46,7 @@ export const Modal: React.FC<ModalProps> = ({
     xl: 'max-w-xl',
     '2xl': 'max-w-2xl',
     '3xl': 'max-w-3xl',
+    '5xl': 'max-w-5xl',
   }[maxWidth];
 
   return (
@@ -50,15 +58,15 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         className={cn(
-          'w-full bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
+          'w-full paper border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
           maxWidthClasses
         )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-base font-bold text-[var(--text-primary)]">{title}</h2>
-            {subtitle ? <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subtitle}</p> : null}
+            <h2 className="print-title text-2xl leading-tight">{title}</h2>
+            {subtitle ? <p className="text-sm text-[var(--text-secondary)] mt-0.5">{subtitle}</p> : null}
           </div>
           {showCloseButton ? (
             <Button variant="ghost" size="sm" onClick={onClose} aria-label="Kapat">
@@ -66,7 +74,7 @@ export const Modal: React.FC<ModalProps> = ({
             </Button>
           ) : null}
         </div>
-        <div className="p-5 overflow-y-auto max-h-[85vh]">{children}</div>
+        <div className="p-5 overflow-y-auto max-h-[calc(100vh-7rem)]">{children}</div>
       </div>
     </div>
   );

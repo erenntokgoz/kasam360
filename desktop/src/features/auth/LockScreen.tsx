@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { AlertCircle, Lock } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { Button } from '../../ui/Button';
 import { Numpad } from '../../ui/Numpad';
+import { AuthLayout } from './AuthLayout';
 
 export const LockScreen: React.FC = () => {
   const { user, isLocked, unlock, logout, loginError } = useAuthStore();
@@ -23,28 +24,21 @@ export const LockScreen: React.FC = () => {
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Terminal kilitli"
-      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-6 bg-[var(--bg-canvas)] select-none"
-    >
-      <div className="w-full max-w-[360px] bg-[var(--bg-panel)] border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5">
-        <div className="text-center">
-          <Lock className="w-6 h-6 mx-auto text-[var(--text-secondary)]" />
-          <h1 className="text-base font-bold mt-2 text-[var(--text-primary)]">Terminal Kilitli</h1>
-          <p className="text-xs mt-1 text-[var(--text-secondary)]">
-            {user.name} oturumu. Devam etmek için PIN kodunuzu girin.
-          </p>
-        </div>
+    <div role="dialog" aria-modal="true" aria-label="Ekran kilitli">
+      <AuthLayout title="Ekran kilitli." subtitle={`${user.name} oturumu açık kaldı.`} zIndexClass="z-[60]">
         {loginError ? (
-          <div role="alert" className="p-3 rounded-lg text-xs font-medium border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center justify-center gap-1.5">
+          <div role="alert" className="p-3 rounded-md text-sm font-semibold border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{loginError}</span>
           </div>
         ) : null}
-        <div aria-label="Girilen hane sayısı" className="h-12 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] flex items-center justify-center text-xl font-bold tracking-[0.4em] text-[var(--text-primary)]">
-          {'•'.repeat(pin.length)}
+        <div className="flex justify-center gap-4 h-8 items-center" aria-label={`${pin.length} hane girildi`}>
+          {Array.from({ length: Math.max(4, pin.length) }, (_, idx) => (
+            <span
+              key={idx}
+              className={`w-5 h-5 rounded-full border-2 border-[var(--print)] ${pin.length > idx ? 'bg-[var(--print)]' : ''}`}
+            />
+          ))}
         </div>
         <Numpad
           onDigit={(digit) => {
@@ -53,13 +47,15 @@ export const LockScreen: React.FC = () => {
           onClear={() => setPin('')}
           onBackspace={() => setPin((current) => current.slice(0, -1))}
         />
-        <Button type="button" variant="primary" size="lg" className="w-full" disabled={pin.length < 4} isLoading={isBusy} onClick={() => void submit()}>
-          Kilidi Aç
-        </Button>
-        <Button type="button" variant="secondary" className="w-full min-h-12" onClick={logout}>
-          Kullanıcı Değiştir
-        </Button>
-      </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Button type="button" variant="secondary" size="lg" onClick={logout}>
+            Kullanıcı Değiştir
+          </Button>
+          <Button type="button" variant="primary" size="lg" disabled={pin.length < 4} isLoading={isBusy} onClick={() => void submit()}>
+            Kilidi Aç
+          </Button>
+        </div>
+      </AuthLayout>
     </div>
   );
 };

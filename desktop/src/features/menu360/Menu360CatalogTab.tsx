@@ -1,6 +1,5 @@
 // Menü Katalog Sekmesi
 // Sol kategori ağacı, merkez ürün kartları ızgarası, sağ detay paneli.
-// Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
 
 import React, { useState } from 'react';
 import { useMenu360Store } from '../../stores/menu360Store';

@@ -142,8 +142,8 @@ export function StockCountPanel() {
         </p>
       ) : null}
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-3">
-        <h2 className="text-sm font-bold text-[var(--text-primary)]">Stok sayımı</h2>
+      <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <h2 className="print-title text-xl">Stok sayımı</h2>
         {!isOpen ? (
           <Button
             variant="primary"
@@ -198,8 +198,8 @@ export function StockCountPanel() {
         ) : null}
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-3">
-        <h2 className="text-sm font-bold text-[var(--text-primary)]">Fire kaydı</h2>
+      <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <h2 className="print-title text-xl">Fire kaydı</h2>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
           <select aria-label="Fire ürünü" className={select} value={wasteProductId} onChange={(event) => setWasteProductId(event.target.value)}>
             <option value="">Ürün seçin</option>

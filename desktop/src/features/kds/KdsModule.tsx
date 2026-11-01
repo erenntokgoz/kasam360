@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Volume2, VolumeX, RotateCcw, Check, Clock } from 'lucide-react';
+import { Volume2, VolumeX, RotateCcw, Check } from 'lucide-react';
 import { useKdsStore } from '../../stores/kdsStore';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
@@ -16,7 +16,6 @@ export const KdsModule: React.FC = () => {
     completeTicket,
     recallLastTicket,
     toggleSound,
-    playOrderBell,
   } = useKdsStore();
 
   useEffect(() => {
@@ -43,11 +42,10 @@ export const KdsModule: React.FC = () => {
 
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] select-none">
-      {/* Üst Operasyon Barı */}
-      <div className="bg-[var(--bg-panel)] border-b border-[var(--border)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-1.5">
+      <div className="px-5 pt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 shrink-0 border-b-2 border-[var(--border)]">
+        <div className="flex items-center gap-6 overflow-x-auto" role="group" aria-label="İstasyon">
           {[
-            { id: 'TUMU' as const, label: 'Tüm İstasyonlar' },
+            { id: 'TUMU' as const, label: 'Tümü' },
             { id: 'MUTFAK' as const, label: 'Mutfak' },
             { id: 'BAR' as const, label: 'Bar' },
             { id: 'TATLI' as const, label: 'Tatlı' },
@@ -55,167 +53,81 @@ export const KdsModule: React.FC = () => {
             const count = tickets.filter((t) =>
               st.id === 'TUMU' ? !t.isCompleted : t.station === st.id && !t.isCompleted
             ).length;
-            const isSelected = selectedStation === st.id;
             return (
-              <Button
+              <button
                 key={st.id}
-                variant={isSelected ? 'primary' : 'secondary'}
-                size="sm"
+                type="button"
+                className="desk-tab text-lg tabular-nums"
+                aria-pressed={selectedStation === st.id}
                 onClick={() => setSelectedStation(st.id)}
-                className="!min-h-12 tabular-nums text-xs"
               >
                 {st.label} ({count})
-              </Button>
+              </button>
             );
           })}
         </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={recallLastTicket}
-            className="!min-h-12 text-xs"
-          >
-            <RotateCcw className="w-3.5 h-3.5 mr-1" />
-            <span>Son Fişi Geri Çağır</span>
+        <div className="flex items-center gap-2 pb-2">
+          <Button variant="ghost" size="sm" onClick={recallLastTicket}>
+            <RotateCcw className="w-4 h-4" />
+            <span>Son Fişi Geri Al</span>
           </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={toggleSound}
-            className="!min-h-12 text-xs"
-            title={soundEnabled ? 'Sesi Kapat' : 'Sesi Aç'}
-          >
-            {soundEnabled ? (
-              <Volume2 className="w-4 h-4 text-[var(--accent-amber)]" />
-            ) : (
-              <VolumeX className="w-4 h-4 text-[var(--text-muted)]" />
-            )}
-            <span className="hidden sm:inline">Ses</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={playOrderBell}
-            className="!min-h-12 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            title="Zil Testi"
-          >
-            Test
+          <Button variant="ghost" size="sm" onClick={toggleSound} aria-pressed={soundEnabled}>
+            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            <span>{soundEnabled ? 'Ses Açık' : 'Ses Kapalı'}</span>
           </Button>
         </div>
       </div>
 
-      {/* Biletler Izgarası */}
-      <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 content-start">
+      {/* Sipariş yaprakları: geciken yaprak pembeye döner. */}
+      <div className="flex-1 overflow-y-auto p-5 grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-x-4 gap-y-6 content-start">
         {filteredTickets.length === 0 ? (
-          <div className="col-span-full py-16 text-center text-xs text-[var(--text-muted)]">
-            Hazırlanması bekleyen açık sipariş fişi bulunmuyor.
-          </div>
+          <p className="col-span-full py-16 text-center text-lg text-[var(--text-secondary)]">
+            Hazırlanacak sipariş yok.
+          </p>
         ) : (
           filteredTickets.map((ticket) => {
             const isUrgent = ticket.elapsedMinutes >= 15;
-
             return (
-              <div
-                key={ticket.id}
-                className={`bg-[var(--bg-panel)] rounded-xl border flex flex-col justify-between shadow-md overflow-hidden ${
-                  isUrgent ? 'border-[var(--accent-red)]' : 'border-[var(--border)]'
-                }`}
-              >
-                {/* Bilet Başlığı */}
-                <div
-                  className={`p-3.5 border-b flex items-center justify-between ${
-                    isUrgent
-                      ? 'bg-[var(--accent-red-soft)] border-[var(--accent-red-border)]'
-                      : 'bg-[var(--bg-subtle)] border-[var(--border)]'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-bold text-[var(--text-primary)]">
-                        {ticket.tableName}
-                      </span>
-                      <span className="text-xs font-mono font-bold text-[var(--accent-amber)]">
-                        #{ticket.ticketNumber}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-[var(--text-muted)] block mt-0.5">
-                      Garson: {ticket.waiterName || 'Servis'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-xs font-bold tabular-nums">
-                    <Clock
-                      className={`w-4 h-4 ${
-                        isUrgent ? 'text-[var(--accent-red)] animate-pulse' : 'text-[var(--text-secondary)]'
-                      }`}
-                    />
-                    <span className={isUrgent ? 'text-[var(--accent-red)]' : 'text-[var(--text-secondary)]'}>
-                      {ticket.elapsedMinutes} dk
-                    </span>
-                  </div>
-                </div>
-
-                {/* Kalemler */}
-                <div className="p-3.5 divide-y divide-[var(--border)] space-y-2 flex-1">
-                  {ticket.items.map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => toggleItemStatus(ticket.id, item.id)}
-                      className="pt-2 first:pt-0 flex items-start justify-between gap-2 cursor-pointer group"
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <span className="w-7 h-7 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center font-bold text-sm text-[var(--accent-amber)] tabular-nums shrink-0">
-                          {item.quantity}
+              <article key={ticket.id} className={`slip ${isUrgent ? 'slip-pink' : 'slip-yellow'} rounded-t-md px-4 pb-4 flex flex-col gap-2`}>
+                <header className="flex items-baseline justify-between gap-2">
+                  <h3 className="print-title text-2xl truncate">{ticket.tableName}</h3>
+                  <span className="font-bold tabular-nums text-[var(--serial)] shrink-0">
+                    {ticket.elapsedMinutes} dk
+                  </span>
+                </header>
+                <p className="text-sm font-semibold">
+                  {ticket.waiterName || 'Servis'} · Fiş {ticket.ticketNumber}
+                </p>
+                <div className="flex-1">
+                  {ticket.items.map((item) => {
+                    const isDone = item.status === 'READY' || item.status === 'SERVED';
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => toggleItemStatus(ticket.id, item.id)}
+                        className="w-full min-h-12 py-1.5 flex items-start justify-between gap-2 text-left cursor-pointer border-b border-black/20"
+                      >
+                        <span className="min-w-0">
+                          <span className={`hand block text-2xl leading-tight ${isDone ? 'line-through opacity-60' : ''}`}>
+                            {item.quantity} × {item.productName}
+                          </span>
+                          {item.cookingDegree ? <span className="block text-sm font-bold">{item.cookingDegree}</span> : null}
+                          {item.notes ? <span className="block text-sm">Not: {item.notes}</span> : null}
+                          <span className="block text-sm">{item.course}. servis</span>
                         </span>
-                        <div>
-                          <span
-                            className={`text-sm font-bold block ${
-                              item.status === 'READY' || item.status === 'SERVED'
-                                ? 'line-through text-[var(--text-muted)]'
-                                : 'text-[var(--text-primary)]'
-                            }`}
-                          >
-                            {item.productName}
-                          </span>
-                          {item.cookingDegree ? (
-                            <span className="text-xs font-semibold text-[var(--accent-amber)] block">
-                              {item.cookingDegree}
-                            </span>
-                          ) : null}
-                          {item.notes ? (
-                            <span className="text-xs text-[var(--text-secondary)] italic block">
-                              Not: {item.notes}
-                            </span>
-                          ) : null}
-                          <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider block mt-0.5">
-                            {item.course}. Kurs
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0">{getStatusBadge(item.status)}</div>
-                    </div>
-                  ))}
+                        <span className="shrink-0">{getStatusBadge(item.status)}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-
-                {/* Bilet Altı */}
-                <div className="p-3 border-t border-[var(--border)] bg-[var(--bg-subtle)] flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-[var(--text-muted)]">Kaleme dokunup durumu güncelleyin</span>
-                  <Button
-                    variant="success"
-                    size="sm"
-                    onClick={() => completeTicket(ticket.id)}
-                    className="!min-h-12 text-xs font-bold"
-                  >
-                    <Check className="w-4 h-4 mr-1" />
+                <div className="paper !bg-transparent">
+                  <Button variant="primary" className="w-full" onClick={() => completeTicket(ticket.id)}>
+                    <Check className="w-4 h-4" />
                     <span>Fişi Tamamla</span>
                   </Button>
                 </div>
-              </div>
+              </article>
             );
           })
         )}

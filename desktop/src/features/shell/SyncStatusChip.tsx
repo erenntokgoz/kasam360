@@ -25,14 +25,12 @@ export const SyncStatusChip: React.FC = () => {
     return () => clearInterval(timer);
   }, [refresh]);
 
-  if (!isTauri()) return null;
+  // Tek cihazda eşitleme yoktur; şerit yalnız bilgi gerektiğinde konuşur.
+  if (!isTauri() || status?.mode === 'SINGLE') return null;
 
   let label = 'Eşitleme durumu okunamadı';
-  let tone: 'emerald' | 'amber' | 'red' | 'blue' | 'neutral' = 'red';
-  if (status?.mode === 'SINGLE') {
-    label = 'Tek cihaz';
-    tone = 'neutral';
-  } else if (status) {
+  let tone: 'emerald' | 'amber' | 'red' | 'blue' = 'red';
+  if (status) {
     label = SYNC_STATE_LABEL[status.state];
     tone = TONE[status.state];
   }

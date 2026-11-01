@@ -68,12 +68,12 @@ export const CriticalLogTab: React.FC = () => {
     );
   }
   if (!rows) return <p className="text-sm text-[var(--text-secondary)]">Yükleniyor…</p>;
-  if (rows.length === 0) return <p className="text-sm text-[var(--text-secondary)]">Kritik işlem yok.</p>;
+  if (rows.length === 0) return <p className="paper p-6 text-[var(--text-secondary)]">Kritik işlem yok.</p>;
 
   const nameOf = (id: unknown) => (typeof id === 'string' ? names[id] ?? id : null);
 
   return (
-    <ul className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
+    <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
       {rows.map((row) => {
         const amount = amountOf(row.payload);
         const approver = nameOf(row.payload.approverId);

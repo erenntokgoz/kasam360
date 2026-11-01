@@ -1,6 +1,5 @@
 // Menü Sağ Detay Paneli (Drawer)
 // Temel bilgiler, modifiyeler, fiyatlandırma ve reçete dökümü.
-// Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
 
 import React, { useState, useEffect } from 'react';
 import { X, Trash2, Check, AlertCircle } from 'lucide-react';
@@ -131,13 +130,13 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
       {/* Üst Başlık & Sekmeler */}
       <div className="flex flex-col border-b border-[var(--border)]">
         <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-panel)] border-b border-[var(--border)]">
-          <h2 className="text-sm font-bold text-[var(--text-primary)] truncate">
+          <h2 className="print-title text-xl truncate">
             {detailMode === 'new' ? '+ Yeni Ürün' : selectedProduct?.name}
           </h2>
           <button
             type="button"
             onClick={() => setSelectedProductId(null)}
-            className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded cursor-pointer"
+            className="w-12 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded cursor-pointer"
             aria-label="Kapat"
           >
             <X className="w-4 h-4" />
@@ -151,7 +150,7 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
               key={tab}
               type="button"
               onClick={() => setDetailTab(tab)}
-              className={`flex-1 py-2 text-xs font-semibold border-b-2 transition-colors capitalize cursor-pointer ${
+              className={`flex-1 min-h-12 text-sm font-semibold border-b-2 transition-colors capitalize cursor-pointer ${
                 detailTab === tab
                   ? 'border-[var(--accent-blue)] text-[var(--text-primary)] bg-[var(--bg-card)]'
                   : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
@@ -222,11 +221,11 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
         {detailTab === 'fiyat' && (
           <div className="space-y-3">
             <div className="p-3 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
-              <span className="text-[11px] font-bold text-[var(--text-muted)] block mb-1">GÜNCEL FİYAT</span>
-              <div className="text-xl font-bold font-mono text-[var(--text-primary)]">
+              <span className="text-xs font-bold text-[var(--text-muted)] block mb-1">GÜNCEL FİYAT</span>
+              <div className="text-xl font-bold tabular-nums text-[var(--text-primary)]">
                 {selectedProduct ? formatMoney(selectedProduct.priceCents) : '—'}
               </div>
-              <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+              <span className="text-xs text-[var(--text-muted)] mt-1 block">
                 Tabak satış fiyatı
               </span>
             </div>
@@ -284,8 +283,8 @@ export const Menu360DetailPanel: React.FC<Menu360DetailPanelProps> = ({
       {/* Silme Onay Modalı */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-80 bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">Ürünü Sil?</h3>
+          <div className="w-80 paper border border-[var(--border)] rounded-xl p-5 space-y-4 shadow-2xl">
+            <h3 className="print-title text-xl">Ürünü Sil?</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
               &quot;{selectedProduct?.name}&quot; menüden silinecek. Bu işlem denetim defterine kaydedilir.
             </p>

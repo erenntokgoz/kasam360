@@ -116,7 +116,7 @@ export const NewBusinessForm: React.FC<{ onBack: () => void }> = ({ onBack }) =>
       ) : (
         <div className="w-full max-w-[320px] mx-auto flex flex-col gap-4">
           <div className="text-center">
-            <h2 className="text-sm font-bold text-[var(--text-primary)]">
+            <h2 className="print-title text-xl">
               {step === 'PIN' ? 'Sahip PIN kodunu belirleyin' : 'PIN kodunu tekrar girin'}
             </h2>
             <p className="text-xs mt-1 text-[var(--text-secondary)]">

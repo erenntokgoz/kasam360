@@ -1,132 +1,142 @@
 @import "tailwindcss";
 
-:root,
-[data-theme="dark"] {
-  color-scheme: dark;
-
-  /* ========================================================================
-     AGENTS.md Tactile Matte Palette — Canonical variable names (v3.0 spec)
-     ======================================================================== */
-  --bg-base: #090A0C;
-  --bg-surface: #111317;
-  --bg-elevated: #171A20;
-  --bg-interactive: #1E222A;
-  --border-subtle: #232730;
-  --border-strong: #323846;
-  --text-primary: #F3F4F6;
-  --text-secondary: #9CA3AF;
-  --text-tertiary: #6B7280;
-
-  /* Semantic action colors (AGENTS.md §4.2) */
-  --brand: #2563EB;
-  --brand-hover: #3B82F6;
-  --success: #10B981;
-  --success-hover: #059669;
-  --warning: #F59E0B;
-  --warning-hover: #D97706;
-  --danger: #EF4444;
-  --danger-hover: #DC2626;
-  --info: #06B6D4;
-
-  /* Legacy aliases — kept for existing component references */
-  --bg-canvas: var(--bg-base);
-  --bg-panel: var(--bg-surface);
-  --bg-card: var(--bg-elevated);
-  --bg-subtle: var(--bg-interactive);
-  --bg-hover: #2A2F3A;
-  --border: var(--border-subtle);
-  --text-muted: var(--text-tertiary);
-
-  /* Accent color aliases (map to semantic colors) */
-  --accent-amber: var(--warning);
-  --accent-amber-hover: var(--warning-hover);
-  --accent-amber-soft: rgba(245, 158, 11, 0.14);
-  --accent-amber-border: rgba(245, 158, 11, 0.40);
-
-  --accent-emerald: var(--success);
-  --accent-emerald-hover: var(--success-hover);
-  --accent-emerald-soft: rgba(16, 185, 129, 0.14);
-  --accent-emerald-border: rgba(16, 185, 129, 0.40);
-
-  --accent-red: var(--danger);
-  --accent-red-hover: var(--danger-hover);
-  --accent-red-soft: rgba(239, 68, 68, 0.14);
-  --accent-red-border: rgba(239, 68, 68, 0.40);
-
-  --accent-blue: var(--info);
-  --accent-blue-soft: rgba(6, 184, 212, 0.14);
-  --accent-blue-border: rgba(6, 184, 212, 0.40);
-
-  --accent-violet: #A78BFA;
-  --accent-violet-soft: rgba(167, 139, 250, 0.14);
-  --accent-violet-border: rgba(167, 139, 250, 0.40);
+/* Tek görünüm: koyu masa üstü ve üzerindeki adisyon kâğıtları. Kâğıt `.paper` ile
+   açılır ve renkleri kendi içinde yeniden tanımlar; bileşenler aynı adları kullanır. */
+@theme {
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.375rem;
 }
 
-[data-theme="light"] {
+:root {
+  color-scheme: dark;
+
+  --ink: #14161c;
+  --sheet: #f4f4f0;
+  --sheet-yellow: #f3df82;
+  --sheet-green: #bfdcc4;
+  --sheet-pink: #f2c6cf;
+  --sheet-rule: #c7ccd9;
+  --print: #27408b;
+  --serial: #b5121a;
+  --pen: #1a2ea8;
+
+  --bg-canvas: #14161c;
+  --bg-panel: #1b1e26;
+  --bg-card: #262a35;
+  --bg-subtle: #2a2e3a;
+  --bg-hover: #353a48;
+  --bg-surface: var(--bg-panel);
+  --border: #3f4452;
+  --border-strong: #5a6072;
+  --text-primary: #f4f4f0;
+  --text-secondary: #c9cbd3;
+  --text-muted: #a0a3b0;
+  --text-tertiary: #a0a3b0;
+
+  --brand: #f4f4f0;
+  --brand-hover: #ffffff;
+  --primary-bg: #f4f4f0;
+  --primary-hover: #ffffff;
+  --primary-fg: #14161c;
+  --success-bg: #bfdcc4;
+  --success-hover: #d2e8d6;
+  --success-fg: #14161c;
+  --danger-bg: #f2c6cf;
+  --danger-hover: #f8d9df;
+  --danger-fg: #14161c;
+  --warning: #f3df82;
+
+  --accent-amber: #f3df82;
+  --accent-amber-hover: #f8ea9f;
+  --accent-amber-soft: #3a3519;
+  --accent-amber-border: #84762f;
+  --accent-emerald: #bfdcc4;
+  --accent-emerald-hover: #d2e8d6;
+  --accent-emerald-soft: #23352a;
+  --accent-emerald-border: #5d7f67;
+  --accent-red: #f7b4c0;
+  --accent-red-hover: #f8d9df;
+  --accent-red-soft: #41222b;
+  --accent-red-border: #99505f;
+  --accent-blue: #b4c6f7;
+  --accent-blue-soft: #252f4d;
+  --accent-blue-border: #5a6fa8;
+  --accent-violet: #cfc1f5;
+  --accent-violet-soft: #30294a;
+  --accent-violet-border: #6f60a0;
+}
+
+.paper {
   color-scheme: light;
 
-  /* ========================================================================
-     AGENTS.md Tactile Matte Palette — Light theme (v3.0 spec)
-     ======================================================================== */
-  --bg-base: #F8FAFC;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #F1F5F9;
-  --bg-interactive: #E2E8F0;
-  --border-subtle: #CBD5E1;
-  --border-strong: #94A3B8;
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-tertiary: #64748B;
+  --bg-canvas: #e8e7df;
+  --bg-panel: #f4f4f0;
+  --bg-card: #fbfbf8;
+  --bg-subtle: #e9e8e0;
+  --bg-hover: #dddcd2;
+  --bg-surface: #f4f4f0;
+  --border: #c6c4ba;
+  --border-strong: #8b8a81;
+  --text-primary: #14161c;
+  --text-secondary: #3f434d;
+  --text-muted: #565a65;
+  --text-tertiary: #565a65;
 
-  /* Semantic action colors (light) */
-  --brand: #2563EB;
-  --brand-hover: #1D4ED8;
-  --success: #059669;
-  --success-hover: #047857;
-  --warning: #D97706;
-  --warning-hover: #B45309;
-  --danger: #DC2626;
-  --danger-hover: #B91C1C;
-  --info: #0284C7;
+  --brand: #27408b;
+  --brand-hover: #1f3370;
+  --primary-bg: #27408b;
+  --primary-hover: #1f3370;
+  --primary-fg: #ffffff;
+  --success-bg: #17683f;
+  --success-hover: #125433;
+  --success-fg: #ffffff;
+  --danger-bg: #b5121a;
+  --danger-hover: #930e15;
+  --danger-fg: #ffffff;
+  --warning: #7a5200;
 
-  /* Legacy aliases — kept for existing component references */
-  --bg-canvas: var(--bg-base);
-  --bg-panel: var(--bg-surface);
-  --bg-card: var(--bg-elevated);
-  --bg-subtle: var(--bg-interactive);
-  --bg-hover: #F1F5F9;
-  --border: var(--border-subtle);
-  --text-muted: var(--text-tertiary);
+  --accent-amber: #7a5200;
+  --accent-amber-hover: #5f4000;
+  --accent-amber-soft: #f3df82;
+  --accent-amber-border: #b79f3a;
+  --accent-emerald: #17683f;
+  --accent-emerald-hover: #125433;
+  --accent-emerald-soft: #bfdcc4;
+  --accent-emerald-border: #7dab89;
+  --accent-red: #b5121a;
+  --accent-red-hover: #930e15;
+  --accent-red-soft: #f2c6cf;
+  --accent-red-border: #d68a99;
+  --accent-blue: #27408b;
+  --accent-blue-soft: #d5def5;
+  --accent-blue-border: #8fa3d6;
+  --accent-violet: #54348f;
+  --accent-violet-soft: #e2d9f3;
+  --accent-violet-border: #a792cf;
 
-  /* Accent color aliases (light) */
-  --accent-amber: var(--warning);
-  --accent-amber-hover: var(--warning-hover);
-  --accent-amber-soft: rgba(217, 119, 6, 0.10);
-  --accent-amber-border: rgba(217, 119, 6, 0.32);
-
-  --accent-emerald: var(--success);
-  --accent-emerald-hover: var(--success-hover);
-  --accent-emerald-soft: rgba(5, 150, 105, 0.10);
-  --accent-emerald-border: rgba(5, 150, 105, 0.32);
-
-  --accent-red: var(--danger);
-  --accent-red-hover: var(--danger-hover);
-  --accent-red-soft: rgba(220, 38, 38, 0.10);
-  --accent-red-border: rgba(220, 38, 38, 0.32);
-
-  --accent-blue: var(--info);
-  --accent-blue-soft: rgba(2, 132, 199, 0.10);
-  --accent-blue-border: rgba(2, 132, 199, 0.32);
-
-  --accent-violet: #7C3AED;
-  --accent-violet-soft: rgba(124, 58, 237, 0.10);
-  --accent-violet-border: rgba(124, 58, 237, 0.32);
+  background-color: var(--sheet);
+  color: var(--ink);
+  border-color: var(--border);
+  border-radius: 6px;
+}
+.paper .paper {
+  background-color: var(--bg-card);
 }
 
 * {
   box-sizing: border-box;
   user-select: none;
   -webkit-user-select: none;
+}
+/* Hata metni ve işlem kimliği destek için kopyalanabilmelidir. */
+[role="alert"],
+[role="alert"] *,
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 html, body {
@@ -136,28 +146,153 @@ html, body {
   height: 100%;
   background-color: var(--bg-canvas);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.45;
+  font-family: "Schibsted Grotesk Variable", "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
 }
 
-/* Dokunsal Donanım Tuşları (Tactile Matte Hardware) */
+:focus-visible {
+  outline: 3px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+/* Fiziksel tuş: basınca bir piksel iner. */
 .tactile-btn {
   border: 1px solid var(--border);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08), 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   transition: background-color 100ms ease, border-color 100ms ease, transform 60ms ease, opacity 100ms ease;
 }
 .tactile-btn:active:not(:disabled) {
   transform: translateY(1px);
-  box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.4);
 }
 .tactile-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Adisyon yaprağı: üstte delikler, altta koparılmış kenar. */
+.slip {
+  --slip: var(--sheet);
+  position: relative;
+  background-color: var(--slip);
+  color: var(--ink);
+  padding-top: 26px;
+}
+.slip::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  left: 12px;
+  right: 12px;
+  height: 7px;
+  background: radial-gradient(circle at 3.5px 3.5px, var(--slip-hole, #14161c) 3.5px, transparent 4px) 0 0 / 18px 7px repeat-x;
+}
+.slip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -7px;
+  height: 7px;
+  background:
+    linear-gradient(135deg, var(--slip) 50%, transparent 50%) 0 0 / 12px 7px repeat-x,
+    linear-gradient(225deg, var(--slip) 50%, transparent 50%) 0 0 / 12px 7px repeat-x;
+}
+.slip-yellow { --slip: var(--sheet-yellow); }
+.slip-green { --slip: var(--sheet-green); }
+.slip-pink { --slip: var(--sheet-pink); }
+.slip-white { --slip: var(--sheet); }
+
+.hand {
+  font-family: "Kalam", "Segoe Print", cursive;
+  font-weight: 700;
+  color: var(--pen);
+}
+.print-title {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--print);
+}
+.ruled {
+  background-image: repeating-linear-gradient(transparent 0 47px, var(--sheet-rule) 47px 48px);
+  background-attachment: local;
+}
+
+/* Masa üstü sekmeleri: seçili olan altı çizgili, kâğıda değil masaya aittir. */
+.desk-tab {
+  min-height: 48px;
+  padding: 0 4px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.desk-tab[aria-pressed="true"],
+.desk-tab[aria-selected="true"],
+.desk-tab[aria-current="page"] {
+  color: var(--text-primary);
+  border-bottom-color: var(--sheet-yellow);
+}
+.paper .desk-tab[aria-pressed="true"],
+.paper .desk-tab[aria-selected="true"] {
+  border-bottom-color: var(--print);
+}
+
+.dock-tab {
+  position: relative;
+  top: -2px;
+  min-height: 66px;
+  padding: 0 clamp(12px, 1.6vw, 22px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  border-radius: 0 0 8px 8px;
+  cursor: pointer;
+}
+.dock-tab[aria-current="page"] {
+  background-color: var(--sheet);
+  color: var(--ink);
+}
+
+.kbd-badge {
+  font: 700 0.6875rem/1 "Schibsted Grotesk Variable", sans-serif;
+  padding: 3px 5px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px currentColor;
+  opacity: 0.65;
+}
+
+.auth-title {
+  font-size: clamp(2.75rem, 6.5vw, 5.25rem);
+  line-height: 0.95;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+.animate-shake { animation: shake 180ms ease 2; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Termal Fiş Önizleme Stili */
@@ -196,9 +331,6 @@ html, body {
   0%, 100% { transform: translateX(0); }
   20%, 60% { transform: translateX(-6px); }
   40%, 80% { transform: translateX(6px); }
-}
-.animate-shake {
-  animation: tactile-shake 220ms ease-in-out;
 }
 
 /* İnce Kaydırma Çubuğu */

@@ -120,7 +120,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                   <label className="text-xs font-semibold text-[var(--text-secondary)]">
                     {group.name}
                   </label>
-                  <span className="text-[10px] text-[var(--text-muted)]">
+                  <span className="text-xs text-[var(--text-muted)]">
                     {group.maxSelections === 1 ? 'Tek Seçim' : `Maksimum ${group.maxSelections}`}
                   </span>
                 </div>

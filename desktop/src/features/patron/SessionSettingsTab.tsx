@@ -27,9 +27,9 @@ export const SessionSettingsTab: React.FC = () => {
   };
 
   return (
-    <div className="max-w-xl space-y-5">
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-3">
-        <h2 className="text-sm font-bold text-[var(--text-primary)]">İşletme hesabı</h2>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      <section className="paper border border-[var(--border)] rounded-xl p-5 space-y-3">
+        <h2 className="print-title text-xl">İşletme hesabı</h2>
         <p className="text-xs text-[var(--text-secondary)]">{session.email}</p>
         <label className="flex items-center gap-3 min-h-12 text-sm text-[var(--text-primary)] cursor-pointer">
           <input
@@ -48,8 +48,8 @@ export const SessionSettingsTab: React.FC = () => {
         </Button>
       </section>
 
-      <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-3">
-        <h2 className="text-sm font-bold text-[var(--text-primary)]">Personel oturumu</h2>
+      <section className="paper border border-[var(--border)] rounded-xl p-5 space-y-3">
+        <h2 className="print-title text-xl">Personel oturumu</h2>
         <p className="text-xs text-[var(--text-secondary)]">
           Personel PIN ile girer. Hareketsiz kalınca ekran kilitlenir; kalıcı oturumda kilitlenmez.
         </p>
@@ -68,7 +68,7 @@ export const SessionSettingsTab: React.FC = () => {
       </section>
 
       {error ? (
-        <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
+        <p role="alert" className="lg:col-span-2 text-sm font-semibold text-[var(--accent-red)]">
           {error}
         </p>
       ) : null}

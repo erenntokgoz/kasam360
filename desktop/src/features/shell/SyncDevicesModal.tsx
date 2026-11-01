@@ -62,7 +62,7 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({ isOpen, onCl
                       {member.name}
                       {member.isLocal ? ' (bu cihaz)' : ''}
                     </p>
-                    <p className="text-[11px] text-[var(--text-muted)] tabular-nums">
+                    <p className="text-xs text-[var(--text-muted)] tabular-nums">
                       {member.lastSeen ? `Son görülme ${formatDateTime(member.lastSeen)}` : 'Görülmedi'}
                       {member.acknowledgedIndex != null ? ` · Son eşitlenen ${member.acknowledgedIndex}` : ''}
                     </p>
@@ -152,7 +152,7 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({ isOpen, onCl
             {pairing ? (
               <p className="text-xs break-all tabular-nums p-3 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)]">
                 {pairing.code}
-                <span className="block text-[11px] text-[var(--text-muted)] mt-1">
+                <span className="block text-xs text-[var(--text-muted)] mt-1">
                   Tek kullanımlık. Geçerlilik: {formatDateTime(`${pairing.expiresAt}Z`)}
                 </span>
               </p>

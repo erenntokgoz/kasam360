@@ -7,6 +7,7 @@ import { formatMoney } from '../../lib/formatMoney';
 import { errorText } from '../../lib/cariInput';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
+import { Numpad } from '../../ui/Numpad';
 
 export interface PaymentChannelSectionProps {
   channel: PaymentMethod;
@@ -70,15 +71,12 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
     <div className="space-y-3">
       {/* Ödeme Kanalları */}
       <div className="space-y-1.5">
-        <label className="block text-xs font-semibold text-[var(--text-secondary)]">
-          Ödeme Kanalı
-        </label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {[
             { id: 'CASH' as const, label: 'Nakit', icon: Banknote },
-            { id: 'CARD' as const, label: 'Kredi Kartı', icon: CreditCard },
+            { id: 'CARD' as const, label: 'Kart', icon: CreditCard },
             { id: 'MEAL_CARD' as const, label: 'Yemek Kartı', icon: Utensils },
-            { id: 'VERESIYE' as const, label: 'Veresiye (Cari)', icon: BookOpen },
+            { id: 'VERESIYE' as const, label: 'Cari', icon: BookOpen },
           ].map((ch) => {
             const Icon = ch.icon;
             const isSelected = channel === ch.id;
@@ -86,10 +84,10 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
               <Button
                 key={ch.id}
                 type="button"
-                variant={isSelected ? 'success' : 'secondary'}
+                variant={isSelected ? 'primary' : 'secondary'}
                 size="md"
                 onClick={() => onSelectChannel(ch.id)}
-                className="!min-h-12 text-xs font-bold"
+                className="!min-h-14"
               >
                 <Icon className="w-4 h-4 mr-1.5 shrink-0" />
                 <span>{ch.label}</span>
@@ -99,46 +97,33 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
         </div>
       </div>
 
-      {/* Nakit Ödemede Banknotlar ve Para Üstü */}
       {channel === 'CASH' ? (
-        <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3.5 space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-[var(--text-secondary)]">
-              Müşteriden Alınan Nakit (₺)
-            </label>
-            {changeDueCents > 0 ? (
-              <span className="text-xs font-bold text-[var(--accent-emerald)] tabular-nums">
-                Para Üstü: {formatMoney(changeDueCents)}
-              </span>
-            ) : null}
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-md bg-[var(--bg-subtle)] p-3">
+              <span className="block text-sm text-[var(--text-secondary)]">Alınan</span>
+              <span className="block text-2xl font-extrabold tabular-nums">{formatMoney(tenderedCents)}</span>
+            </div>
+            <div className="rounded-md bg-[var(--accent-emerald-soft)] p-3">
+              <span className="block text-sm text-[var(--text-secondary)]">Para üstü</span>
+              <span className="block text-2xl font-extrabold tabular-nums">{formatMoney(changeDueCents)}</span>
+            </div>
           </div>
-
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              min="0"
-              step="10"
-              value={tenderedLiras}
-              onChange={(e) => onChangeTendered(e.target.value)}
-              placeholder={Math.round(payNowCents / 100).toString()}
-              className="text-base font-bold tabular-nums flex-1"
-            />
-          </div>
-
-          <div className="grid grid-cols-4 gap-2">
-            {[200, 500, 1000, 2000].map((banknote) => (
-              <Button
-                key={banknote}
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => handleBanknotePreset(banknote)}
-                className="tabular-nums text-xs"
-              >
-                {banknote} ₺
+          <div className="grid grid-cols-4 gap-1.5">
+            {[100, 200, 500, 1000].map((banknote) => (
+              <Button key={banknote} variant="secondary" size="sm" className="tabular-nums whitespace-nowrap !px-1" onClick={() => handleBanknotePreset(banknote)}>
+                {banknote.toLocaleString('tr-TR')} ₺
               </Button>
             ))}
           </div>
+          <Numpad
+            buttonHeightClass="!min-h-14"
+            onDigit={(digit) => {
+              if (tenderedLiras.length < 7) onChangeTendered(tenderedLiras + digit);
+            }}
+            onClear={() => onChangeTendered('')}
+            onBackspace={() => onChangeTendered(tenderedLiras.slice(0, -1))}
+          />
         </div>
       ) : null}
 
@@ -195,7 +180,7 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
             <select
               value={selectedDirectoryId}
               onChange={(e) => onSelectDirectory(e.target.value)}
-              className="w-full min-h-12 px-3 rounded-lg bg-[var(--bg-panel)] text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
+              className="w-full min-h-12 px-3 rounded-lg paper text-[var(--text-primary)] border border-[var(--border)] text-xs outline-none"
             >
               <option value="">Cari müşteri seçin...</option>
               {directories

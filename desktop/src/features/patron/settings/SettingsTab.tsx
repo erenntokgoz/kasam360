@@ -35,13 +35,13 @@ export const SettingsTab: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-4 max-w-[1500px] mx-auto">
+    <div className="flex flex-col gap-4 min-h-full max-w-[1500px] mx-auto">
       <SectionTabs label="Ayarlar" tabs={tabs} active={section} onChange={setSection} />
       {section === 'SESSION' ? <SessionSettingsTab /> : null}
       {section === 'GRANTS' ? <ApprovalGrantsPanel /> : null}
       {section === 'DEVICES' ? (
-        <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-4 space-y-2 max-w-xl">
-          <h3 className="text-sm font-bold text-[var(--text-primary)]">Bağlı Cihazlar</h3>
+        <section className="paper p-5 space-y-2">
+          <h3 className="print-title text-xl">Bağlı Cihazlar</h3>
           <p className="text-xs text-[var(--text-secondary)]">Eşleştirme, pasife alma ve cihaz devralma buradan yapılır.</p>
           <Button variant="secondary" className="min-h-12 text-xs" onClick={() => setDevicesOpen(true)}>Cihazları Yönet</Button>
           <SyncDevicesModal isOpen={devicesOpen} onClose={() => setDevicesOpen(false)} />
@@ -55,6 +55,7 @@ export const SettingsTab: React.FC = () => {
       ) : null}
       {section === 'POS' ? <TestPosPanel /> : null}
       {section === 'AUDIT' ? <CriticalLogTab /> : null}
+      <p className="mt-auto pt-4 text-center text-sm text-[var(--text-muted)]">KASAM360 {__APP_VERSION__}</p>
     </div>
   );
 };

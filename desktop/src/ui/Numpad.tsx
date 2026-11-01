@@ -15,7 +15,7 @@ export const Numpad: React.FC<NumpadProps> = ({
   onClear,
   onBackspace,
   className,
-  buttonHeightClass = '!min-h-[52px]',
+  buttonHeightClass = '!min-h-16',
 }) => {
   const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
@@ -26,7 +26,7 @@ export const Numpad: React.FC<NumpadProps> = ({
           key={d}
           type="button"
           variant="secondary"
-          className={cn(buttonHeightClass, 'text-lg font-bold')}
+          className={cn(buttonHeightClass, 'text-2xl font-bold')}
           onClick={() => onDigit(d)}
         >
           {d}
@@ -43,7 +43,7 @@ export const Numpad: React.FC<NumpadProps> = ({
       <Button
         type="button"
         variant="secondary"
-        className={cn(buttonHeightClass, 'text-lg font-bold')}
+        className={cn(buttonHeightClass, 'text-2xl font-bold')}
         onClick={() => onDigit('0')}
       >
         0

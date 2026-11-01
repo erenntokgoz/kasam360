@@ -183,8 +183,8 @@ export const SupplierDocumentsPanel: React.FC<SupplierDocumentsPanelProps> = ({ 
   };
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--accent-amber-border)] rounded-xl overflow-hidden">
-      <h4 className="px-4 py-3 border-b border-[var(--border)] text-xs font-bold text-[var(--text-primary)]">
+    <section className="paper border border-[var(--accent-amber-border)] rounded-xl overflow-hidden">
+      <h4 className="px-4 py-3 border-b border-[var(--border)] print-title text-xl">
         Belge Bekleniyor
       </h4>
       <ul className="divide-y divide-[var(--border)]">
@@ -192,7 +192,7 @@ export const SupplierDocumentsPanel: React.FC<SupplierDocumentsPanelProps> = ({ 
           <li key={document.purchaseOrderId} className="p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="min-w-0">
               <p className="font-bold text-[var(--text-primary)] truncate">{document.supplierName}</p>
-              <p className="text-[11px] text-[var(--text-muted)]">
+              <p className="text-xs text-[var(--text-muted)]">
                 Sipariş {document.orderNumber}
                 {document.directoryId ? '' : ' · Cari kart onayda açılır'}
               </p>

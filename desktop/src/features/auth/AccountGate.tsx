@@ -5,6 +5,7 @@ import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { AccountLogin } from './AccountLogin';
+import { AuthLayout } from './AuthLayout';
 
 /** Sahibi henüz hesabı olmayan eski işletme: kimliği sahip PIN'i kanıtlar. */
 const CreateAccountForm: React.FC = () => {
@@ -55,24 +56,20 @@ export const AccountGate: React.FC = () => {
   const { session, error, load } = useDeviceSessionStore();
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg-canvas)] p-6 select-none">
-      <div className="min-h-full flex items-center justify-center">
-        <div className="w-full max-w-[400px] bg-[var(--bg-panel)] border border-[var(--border)] rounded-2xl p-6 flex flex-col gap-5">
-          <h1 className="font-bold text-base tracking-tight text-[var(--text-primary)]">KASAM360 Giriş</h1>
-          {error ? (
-            <div role="alert" className="space-y-3">
-              <p className="text-sm text-[var(--accent-red)] break-words">{error}</p>
-              <Button variant="primary" className="w-full min-h-12" onClick={() => void load()}>
-                Yeniden Dene
-              </Button>
-            </div>
-          ) : session?.accountMissing ? (
-            <CreateAccountForm />
-          ) : (
-            <AccountLogin />
-          )}
+    <AuthLayout title="İşletme hesabına gir." subtitle="Bu cihaz hesabına bağlandıktan sonra personel PIN ile çalışır.">
+      <h2 className="print-title text-2xl">Giriş</h2>
+      {error ? (
+        <div role="alert" className="space-y-3">
+          <p className="text-sm text-[var(--accent-red)] break-words">{error}</p>
+          <Button variant="primary" className="w-full" onClick={() => void load()}>
+            Yeniden Dene
+          </Button>
         </div>
-      </div>
-    </div>
+      ) : session?.accountMissing ? (
+        <CreateAccountForm />
+      ) : (
+        <AccountLogin />
+      )}
+    </AuthLayout>
   );
 };

@@ -2,8 +2,7 @@ import { canOpenModule, homeModule } from '../lib/roleAccess';
 import React, { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
-import { TopStatusBar } from '../features/shell/TopStatusBar';
-import { SidebarNav } from '../features/shell/SidebarNav';
+import { AppDock } from '../features/shell/AppDock';
 import { FloorModule } from '../features/floor/FloorModule';
 import { PosModule } from '../features/pos/PosModule';
 import { KdsModule } from '../features/kds/KdsModule';
@@ -132,10 +131,10 @@ export const App: React.FC = () => {
   if (!canUseOperations(user?.role)) {
     return (
       <div className="h-screen w-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex items-center justify-center p-6">
-        <div className="bg-[var(--bg-surface)] border border-[var(--border-strong)] rounded-lg p-6 max-w-sm space-y-4">
+        <div className="paper p-6 max-w-sm space-y-4">
           <h1 className="text-base font-bold">Platform hesabı</h1>
           <p className="text-sm text-[var(--text-secondary)]">Bu hesapla satış ve işletme ekranları açılamaz.</p>
-          <button type="button" onClick={logout} className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--brand)] text-white">
+          <button type="button" onClick={logout} className="tactile-btn min-h-12 px-4 rounded-md font-bold cursor-pointer bg-[var(--primary-bg)] text-[var(--primary-fg)]">
             Çıkış Yap
           </button>
         </div>
@@ -150,13 +149,7 @@ export const App: React.FC = () => {
     <div className="h-screen w-screen overflow-hidden bg-[var(--bg-canvas)]">
     {/* Kilit oturumu kapatmaz: açık ekranlar ve sepet korunur, ama erişilemez olur. */}
     <div {...lockedProps} className="flex flex-col h-full w-full overflow-hidden text-[var(--text-primary)] select-none">
-      {/* 1. Üst Durum Çubuğu */}
-      <TopStatusBar />
-
-      {/* 2. Ana Çalışma Alanı: Sol 72px Donanım Menüsü + Merkez Modül */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
-        <SidebarNav />
-
         <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
           {/* Zero-latency modül geçişi: açık sepeti, filtreleri ve krokiyi korumak için sekmeler canlı kalır */}
           <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'FLOOR' ? '' : 'hidden'}`}>
@@ -181,7 +174,9 @@ export const App: React.FC = () => {
         </main>
       </div>
 
-      {/* 3. Global Modal ve Katmanlar */}
+      <AppDock />
+
+      {/* Global Modal ve Katmanlar */}
       <LoginOverlay />
       <MustChangePinModal />
       <ShiftGateModal />

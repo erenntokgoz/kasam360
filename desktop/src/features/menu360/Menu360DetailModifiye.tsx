@@ -1,6 +1,5 @@
 // Menü Ürün Detay Paneli - Modifiye ve Opsiyonlar Alt Sekmesi
 // Ürünün seçenek grupları, seçenek ekleme/silme ve fiyat farkları.
-// Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
 
 import React, { useState } from 'react';
 import { Trash2, Plus } from 'lucide-react';
@@ -92,7 +91,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                 <span className="text-xs font-bold text-[var(--text-primary)] block">
                   {grp.name}
                 </span>
-                <span className="text-[10px] text-[var(--text-muted)]">
+                <span className="text-xs text-[var(--text-muted)]">
                   {grp.isRequired ? 'Zorunlu' : 'İsteğe Bağlı'} (Max: {grp.maxSelections ?? 'Sınırsız'})
                 </span>
                 </span>
@@ -100,7 +99,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
               <button
                 type="button"
                 onClick={() => deleteModifierGroup(grp.id)}
-                className="text-[var(--text-muted)] hover:text-[var(--accent-red)] p-1 cursor-pointer"
+                className="w-12 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--accent-red)] cursor-pointer"
                 title="Grubu tüm menüden sil"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -111,7 +110,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
               {grp.options.map((opt) => (
                 <div
                   key={opt.id}
-                  className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)]"
+                  className="flex items-center justify-between text-xs py-1 px-2 rounded paper border border-[var(--border)] text-[var(--text-secondary)]"
                 >
                   <span>{opt.name}</span>
                   <span className="font-mono tabular-nums text-[var(--text-primary)]">
@@ -129,7 +128,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                   value={optName}
                   onChange={(e) => setOptName(e.target.value)}
                   placeholder="Seçenek adı (örn: Ekstra Sos)"
-                  className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+                  className="w-full paper border border-[var(--border)] rounded min-h-12 px-2.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                   autoFocus
                 />
                 <div className="flex items-center gap-1.5">
@@ -138,19 +137,19 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                     value={optDeltaInput}
                     onChange={(e) => setOptDeltaInput(e.target.value)}
                     placeholder="Fiyat farkı (TL)"
-                    className="flex-1 bg-[var(--bg-card)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
+                    className="flex-1 paper border border-[var(--border)] rounded min-h-12 px-2.5 text-xs tabular-nums text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => handleAddOptionSubmit(grp.id)}
-                    className="px-2.5 py-1.5 rounded bg-[var(--accent-blue)] text-white text-xs font-bold cursor-pointer"
+                    className="min-h-12 px-3 rounded bg-[var(--accent-blue)] text-white text-xs font-bold cursor-pointer"
                   >
                     Ekle
                   </button>
                   <button
                     type="button"
                     onClick={() => setAddingOptionGroupId(null)}
-                    className="px-2 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                    className="min-h-12 px-3 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                   >
                     İptal
                   </button>
@@ -164,7 +163,7 @@ export const Menu360DetailModifiye: React.FC<Menu360DetailModifiyeProps> = ({
                   setOptName('');
                   setOptDeltaInput('');
                 }}
-                className="text-[11px] font-semibold text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer pt-1"
+                className="min-h-12 text-xs font-semibold text-[var(--accent-blue)] hover:underline flex items-center gap-1 cursor-pointer pt-1"
               >
                 <Plus className="w-3 h-3" />
                 <span>Seçenek Ekle</span>

@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { Users, Clock, X } from 'lucide-react';
 import type { FloorTable } from '../../types/floor';
 import { formatMoney } from '../../lib/formatMoney';
 import { minutesElapsed, formatTime } from '../../lib/date';
-import { Badge } from '../../ui/Badge';
-import { Button } from '../../ui/Button';
+import { GuestPickerModal } from './GuestPickerModal';
 
 export interface TableCardProps {
   table: FloorTable;
@@ -12,139 +10,68 @@ export interface TableCardProps {
   onInspectTable: (table: FloorTable) => void;
 }
 
+/** Dolu masa gerçek bir adisyon yaprağıdır; boş masa yalnız yer tutar. */
 export const TableCard: React.FC<TableCardProps> = ({ table, onOpenTable, onInspectTable }) => {
   const [showGuestPicker, setShowGuestPicker] = useState(false);
 
-  const isOccupied = table.status === 'OCCUPIED';
+  const hasOrder = table.status === 'OCCUPIED' || table.status === 'BILL_REQUESTED';
   const isReserved = table.status === 'RESERVED';
-  const isEmpty = table.status === 'EMPTY';
-
-  const elapsedMins = isOccupied ? minutesElapsed(table.openedAt) : 0;
 
   const handleClick = () => {
-    if (isOccupied) {
-      onInspectTable(table);
-    } else if (isEmpty) {
-      setShowGuestPicker(true);
-    } else if (isReserved) {
-      // Rezerve masaya tıklandığında yine de teyit ile sipariş açılabilir
-      setShowGuestPicker(true);
-    }
+    // Rezervasyon yalnız masa çekmecesinden kapatılır: müşteri geldi ya da iptal edildi.
+    if (hasOrder || (isReserved && table.reservationId)) onInspectTable(table);
+    else setShowGuestPicker(true);
   };
 
-  const handleSelectGuests = (count: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowGuestPicker(false);
-    onOpenTable(table, count);
-  };
+  const guestPicker = (
+    <GuestPickerModal table={showGuestPicker ? table : null} onClose={() => setShowGuestPicker(false)} onPick={onOpenTable} />
+  );
 
-  return (
-    <div
-      onClick={handleClick}
-      className={`relative min-h-[120px] rounded-xl border p-3 flex flex-col justify-between cursor-pointer select-none transition-all duration-100 ${
-        isOccupied
-          ? 'bg-[var(--bg-card)] border-[var(--accent-amber-border)] shadow-md hover:border-[var(--accent-amber)]'
-          : isReserved
-          ? 'bg-[var(--bg-card)] border-[var(--accent-blue-border)] shadow-sm hover:border-[var(--accent-blue)]'
-          : 'bg-[var(--bg-card)] border-[var(--border)] hover:border-[var(--accent-emerald-border)] hover:bg-[var(--bg-hover)]'
-      }`}
-    >
-      {/* Üst Satır: Masa Adı ve Durum Rozeti */}
-      <div className="flex items-start justify-between gap-1.5">
-        <div>
-          <span className="text-sm font-bold text-[var(--text-primary)] block tracking-tight">
+  if (!hasOrder && !isReserved) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={handleClick}
+          className="min-h-[150px] h-full p-4 rounded-md border-2 border-dashed border-[var(--border-strong)] flex flex-col justify-between text-left cursor-pointer hover:bg-[var(--bg-panel)] transition-colors"
+        >
+          <span className="text-3xl font-extrabold tracking-tight text-[var(--text-primary)] truncate w-full">
             {table.tableNumber}
           </span>
-          <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1 mt-0.5">
-            <Users className="w-3 h-3" />
-            <span>{table.capacity} Kişilik</span>
+          <span className="text-sm text-[var(--text-secondary)]">Boş · {table.capacity} kişilik</span>
+        </button>
+        {guestPicker}
+      </>
+    );
+  }
+
+  const sheet = table.status === 'BILL_REQUESTED' ? 'slip-pink' : isReserved ? 'slip-white' : 'slip-yellow';
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        className={`slip ${sheet} min-h-[150px] h-full rounded-t-md px-4 pb-3 flex flex-col justify-between text-left cursor-pointer transition-transform duration-75 active:translate-y-[2px]`}
+      >
+        <span className="print-title text-3xl leading-none truncate w-full">{table.tableNumber}</span>
+        {hasOrder ? (
+          <span className="block">
+            <span className="block text-sm font-bold">
+              {table.status === 'BILL_REQUESTED' ? 'Hesap istendi' : `${table.waiterName ?? 'Servis'} · ${table.occupiedSeats ?? table.capacity} kişi`}
+              {' · '}
+              <span className="tabular-nums">{minutesElapsed(table.openedAt)} dk</span>
+            </span>
+            <span className="hand block text-3xl leading-tight tabular-nums">{formatMoney(table.totalCents)}</span>
           </span>
-        </div>
-
-        <div>
-          {isOccupied ? (
-            <Badge variant="amber">Dolu</Badge>
-          ) : isReserved ? (
-            <Badge variant="blue">Rezerve</Badge>
-          ) : (
-            <Badge variant="emerald">Boş</Badge>
-          )}
-        </div>
-      </div>
-
-      {/* Orta / Alt Bölüm: Bakiye veya Bilgi */}
-      <div className="mt-2 pt-2 border-t border-[var(--border)]">
-        {isOccupied ? (
-          <div className="flex items-baseline justify-between">
-            <span className="text-xs text-[var(--text-secondary)] flex items-center gap-1 tabular-nums">
-              <Clock className="w-3 h-3 text-[var(--accent-amber)]" />
-              <span>{elapsedMins} dk</span>
-            </span>
-            <span className="text-sm font-bold text-[var(--accent-amber)] tabular-nums">
-              {formatMoney(table.totalCents)}
-            </span>
-          </div>
-        ) : isReserved ? (
-          <div className="text-[11px] text-[var(--accent-blue)] truncate">
-            <span>{table.customerName || 'Rezervasyon'}</span>
-            <span className="block text-[10px] text-[var(--text-muted)]">
-              Saat: {formatTime(table.reservedAt)}
-            </span>
-          </div>
         ) : (
-          <div className="text-[11px] text-[var(--text-muted)] flex items-center justify-between">
-            <span>Müsait</span>
-            <span className="text-[10px] text-[var(--accent-emerald)] font-semibold">+ Sipariş Aç</span>
-          </div>
+          <span className="block">
+            <span className="block text-sm font-bold">Rezerve · {formatTime(table.reservedAt)}</span>
+            <span className="hand block text-2xl leading-tight truncate">{table.customerName ?? 'Rezervasyon'}</span>
+          </span>
         )}
-      </div>
-
-      {/* Hızlı Kişi Sayısı Seçici Popover */}
-      {showGuestPicker ? (
-        <div
-          className="absolute inset-0 z-20 bg-[var(--bg-panel)] rounded-xl border border-[var(--accent-amber-border)] p-2.5 flex flex-col justify-between shadow-xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between pb-1 border-b border-[var(--border)]">
-            <span className="text-[11px] font-bold text-[var(--text-primary)]">
-              {table.tableNumber} · Kişi Sayısı
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowGuestPicker(false)}
-              className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
-              aria-label="Kapat"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-4 gap-1.5 py-1">
-            {[1, 2, 3, 4, 5, 6, 8, 10].map((num) => (
-              <Button
-                key={num}
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={(e) => handleSelectGuests(num, e)}
-                className="!min-h-12 text-xs font-bold tabular-nums"
-              >
-                {num}
-              </Button>
-            ))}
-          </div>
-
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={(e) => handleSelectGuests(2, e)}
-            className="!min-h-12 text-xs w-full"
-          >
-            Siparişe Başla (2 Kişi)
-          </Button>
-        </div>
-      ) : null}
-    </div>
+      </button>
+      {guestPicker}
+    </>
   );
 };

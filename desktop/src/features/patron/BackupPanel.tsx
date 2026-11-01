@@ -83,8 +83,8 @@ export const BackupPanel: React.FC = () => {
   const { actorRole } = sessionArgs();
 
   return (
-    <section className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-xl p-5 space-y-3">
-      <h2 className="text-sm font-bold text-[var(--text-primary)]">Yedekler</h2>
+    <section className="paper border border-[var(--border)] rounded-xl p-5 space-y-3">
+      <h2 className="print-title text-xl">Yedekler</h2>
       <p className="text-xs text-[var(--text-secondary)]">
         Değişiklik varsa saatte bir ve her gün sonunda yedek alınır. Son yedek:{' '}
         <span className="font-semibold tabular-nums">{status?.lastBackupAt ?? 'Henüz yok'}</span>

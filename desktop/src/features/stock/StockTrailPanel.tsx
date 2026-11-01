@@ -69,7 +69,7 @@ export function StockTrailPanel() {
         ))}
       </select>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
-      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] overflow-x-auto">
+      <section className="rounded-xl border border-[var(--border)] paper overflow-x-auto">
         {rows.length === 0 && !error ? <p className="p-4 text-xs text-[var(--text-secondary)]">Kayıtlı stok hareketi yok.</p> : null}
         {rows.length > 0 ? (
           <table className="w-full text-left text-xs">
@@ -94,7 +94,7 @@ export function StockTrailPanel() {
                     {row.quantity > 0 ? '+' : ''}{row.quantity.toLocaleString('tr-TR')}
                   </td>
                   <td className="p-3 text-[var(--text-secondary)]">{row.reason ?? '-'}</td>
-                  <td className="p-3 font-mono text-[var(--text-secondary)]">
+                  <td className="p-3 tabular-nums text-[var(--text-secondary)]">
                     {SOURCE_LABEL[row.kind]} {(row.orderId ?? row.sourceId ?? '-').slice(-8)}
                   </td>
                   <td className="p-3">{row.actorName}</td>

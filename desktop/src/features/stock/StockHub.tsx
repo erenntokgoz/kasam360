@@ -17,26 +17,19 @@ export function StockHub() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <nav className="flex gap-2 border-b border-[var(--border)] bg-[var(--bg-panel)] px-4 py-2" aria-label="Stok bölümleri">
+      <nav className="flex gap-6 px-5" aria-label="Stok bölümleri">
         {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`tactile-btn min-h-12 rounded-lg px-4 text-xs font-bold ${
-              tab === id
-                ? 'bg-[var(--brand)] text-white'
-                : 'bg-[var(--bg-card)] text-[var(--text-secondary)]'
-            }`}
-          >
+          <button key={id} type="button" onClick={() => setTab(id)} className="desk-tab" aria-pressed={tab === id}>
             {label}
           </button>
         ))}
       </nav>
-      {tab === 'OVERVIEW' ? <StockOverview /> : null}
-      {tab === 'PURCHASE' ? <StockModule /> : null}
-      {tab === 'COUNT' ? <StockCountPanel /> : null}
-      {tab === 'TRAIL' ? <StockTrailPanel /> : null}
+      <div className="paper flex-1 min-h-0 flex flex-col overflow-hidden mx-5 mb-5">
+        {tab === 'OVERVIEW' ? <StockOverview /> : null}
+        {tab === 'PURCHASE' ? <StockModule /> : null}
+        {tab === 'COUNT' ? <StockCountPanel /> : null}
+        {tab === 'TRAIL' ? <StockTrailPanel /> : null}
+      </div>
     </div>
   );
 }
