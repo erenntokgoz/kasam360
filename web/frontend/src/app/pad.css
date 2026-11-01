@@ -1,0 +1,130 @@
+/* Defter yığını, koparma şeridi, yan sekmeler ve soru satırları. */
+@layer components {
+  /* Defter sabitlenince yapraklar üst üste biner ve tek tek koparılır. */
+  .pad {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding-block: 0.25rem 1.25rem;
+  }
+
+  .pad-stub,
+  .pad-tabs {
+    display: none;
+  }
+
+  .pad.is-pinned {
+    display: block;
+    height: calc(100svh - var(--header-height) - 0.75rem);
+    margin-top: 0.25rem;
+    padding-block: 0;
+  }
+
+  .pad.is-pinned .pad-slot {
+    position: absolute;
+    inset: 0 max(32px, env(safe-area-inset-right, 0px)) 0 max(32px, env(safe-area-inset-left, 0px));
+    transform-origin: 50% 0;
+    will-change: transform;
+  }
+
+  .pad.is-pinned .sheet {
+    height: 100%;
+    box-shadow: 0 22px 34px -14px rgba(0, 0, 0, 0.55);
+  }
+
+  /* Koparılan yaprağın üst şeridi spiralde kalır. */
+  .pad.is-pinned .pad-stub {
+    position: absolute;
+    display: block;
+    top: 0;
+    left: max(32px, env(safe-area-inset-left, 0px));
+    right: max(32px, env(safe-area-inset-right, 0px));
+    height: var(--tear-line);
+    background: var(--tone);
+    border-bottom: 3px dotted rgba(20, 22, 28, 0.24);
+    visibility: hidden;
+  }
+
+  .pad.is-pinned .form-row {
+    padding-block: clamp(0.4rem, 1.5vh, 0.875rem);
+  }
+
+  .pad.is-pinned {
+    --row: clamp(2.125rem, 5.2vh, 3.25rem);
+  }
+
+  .pad.is-pinned .ruled {
+    min-height: 0;
+  }
+
+  .pad.is-pinned .sheet-head {
+    padding-bottom: clamp(0.375rem, 1.6vh, 1.25rem);
+  }
+
+  .pad.is-pinned .pen {
+    font-size: clamp(1.25rem, 2.7vh, 1.625rem);
+  }
+
+  .pad-tabs {
+    position: absolute;
+    z-index: 30;
+    top: 1.75rem;
+    right: 0;
+    flex-direction: column;
+    gap: 0.375rem;
+    transform: translateX(calc(100% - 32px));
+  }
+
+  .pad-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    min-height: 5.75rem;
+    padding: 0.5rem 0.375rem 0.5rem 0.125rem;
+    border-radius: 0 5px 5px 0;
+    background: var(--tone);
+    color: var(--ink);
+    font-size: 0.875rem;
+    font-weight: 700;
+    writing-mode: vertical-rl;
+    transform: translateX(-6px);
+    transition: transform 140ms ease-out;
+  }
+
+  .pad-tab[aria-current="true"] {
+    transform: translateX(0);
+  }
+
+  .faq-item summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 3.25rem;
+    padding-block: 0.625rem;
+    font-size: 1.1875rem;
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .faq-item summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq-item summary::after {
+    content: "+";
+    color: var(--print);
+    font-size: 1.75rem;
+    font-weight: 500;
+    transition: transform 140ms ease-out;
+  }
+
+  .faq-item[open] summary::after {
+    transform: rotate(45deg);
+  }
+}

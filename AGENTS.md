@@ -11,6 +11,8 @@
 - **Dizin Yapısı:**
   - `backend/`: Rust + Tauri 2 + SQLite (sqlx) + Argon2id. Yüksek güvenlikli çekirdek motor ve 247 doğrulanmış IPC komutu.
   - `desktop/`: React 18 + Vite + TypeScript + Tailwind CSS v4 + Zustand + Lucide Icons. Endüstriyel dokunsal mat donanım (Tactile Matte Hardware) tasarım sistemi.
+  - `web/frontend/`: Next.js + TypeScript + Tailwind CSS v4 + GSAP tanıtım sitesi. Görsel dili adisyon defteridir ve marka kılavuzunu izler; bölüm 4 yalnız POS uygulaması içindir. Dosya adlarında çerçevenin zorunlu kıldığı `page.tsx`, `layout.tsx` gibi adlar istisnadır.
+  - `web/backend/`: Hono + TypeScript API servisi. Erken erişim talebini alır; lisans, hesap ve ödeme bildirimleri buraya eklenir.
   - `docs/`: Mimari ve güvenlik şartnameleri (`security-audit.md`, `offline-conflict-policy.md`).
 
 ---

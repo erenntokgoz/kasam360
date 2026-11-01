@@ -7,6 +7,8 @@ Restoran/Kafe/Bar için Local-First POS + ERP.
 
 - **desktop/** — React + Vite + TypeScript (UI)
 - **backend/** — Tauri + Rust + SQLite (çekirdek)
+- **web/frontend/** — Next.js tanıtım sitesi
+- **web/backend/** — Hono API servisi
 - **mobile/** — boş (gelecek)
 - **packages/contracts/** — Rust → TS tip üretimi (ts-rs)
 

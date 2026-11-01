@@ -12,6 +12,9 @@ desktop/node_modules/
 dist/
 dist-ssr/
 desktop/dist/
+web/frontend/.next/
+web/frontend/next-env.d.ts
+web/frontend/*.tsbuildinfo
 
 # Env
 .env

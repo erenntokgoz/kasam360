@@ -1,0 +1,488 @@
+@import "tailwindcss";
+@import "./pad.css";
+
+/* Site bir adisyon defteridir: masa zemini, spiral, kopya nüsha renkleri, basılı form ve tükenmez kalem. */
+:root {
+  --desk: #14161c;
+  --ink: #14161c;
+  --ink-soft: #3f434d;
+  --paper-white: #f4f4f0;
+  --paper-pink: #f2c6cf;
+  --paper-yellow: #f3df82;
+  --paper-green: #bfdcc4;
+  --board: #b5ab99;
+  --print: #27408b;
+  --serial: #b5121a;
+  --pen: #1a2ea8;
+  --header-height: 84px;
+  --tear-line: 1.5rem;
+  --row: 3.25rem;
+}
+
+@theme inline {
+  --color-desk: var(--desk);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-paper: var(--paper-white);
+  --color-print: var(--print);
+  --color-serial: var(--serial);
+  --color-pen: var(--pen);
+  --font-sans: var(--font-grotesk), "Segoe UI", sans-serif;
+  --font-pen: var(--font-kalam), "Segoe Print", cursive;
+}
+
+html {
+  background: var(--desk);
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--header-height) + 1rem);
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--desk);
+  color: var(--paper-white);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  overflow-x: clip;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(39, 64, 139, 0.2);
+}
+
+/* Çentikli telefonda kayan içerik durum çubuğunun altında görünmesin. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--desk);
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p,
+li,
+dd {
+  text-wrap: pretty;
+}
+
+:focus-visible {
+  outline: 3px solid var(--pen);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.on-desk :focus-visible {
+  outline-color: var(--paper-white);
+}
+
+@layer components {
+  .skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 60;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    background: var(--paper-white);
+    color: var(--ink);
+    font-weight: 700;
+    transform: translateY(-200%);
+  }
+
+  .skip-link:focus {
+    transform: none;
+  }
+
+  .gutter {
+    width: 100%;
+    max-width: 76rem;
+    margin-inline: auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  /* Spiral: logodaki defterin telleri sayfanın üstüne iner. */
+  .spiral {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -14px;
+    height: 34px;
+    background-image: url("/spiral.svg");
+    background-repeat: round no-repeat;
+    background-position: 0 0;
+    background-size: 34px 34px;
+    pointer-events: none;
+  }
+
+  .nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding-inline: 0.75rem;
+    text-decoration-line: underline;
+    text-decoration-color: transparent;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 6px;
+    transition: text-decoration-color 120ms ease;
+  }
+
+  .nav-link[aria-current="page"] {
+    text-decoration-color: currentColor;
+  }
+
+  .sheet {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    overflow: hidden;
+    background: var(--tone, var(--paper-white));
+    color: var(--ink);
+    color-scheme: light;
+    padding: calc(var(--tear-line) + 1rem) 1.25rem 1.75rem;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 3px 0 -1px var(--tone, var(--paper-white)), 0 4px 0 -1px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Koparma yeri: gerçek defterdeki gibi noktalı delik sırası. */
+  .sheet::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--tear-line);
+    border-top: 3px dotted rgba(20, 22, 28, 0.24);
+  }
+
+  .tone-white {
+    --tone: var(--paper-white);
+  }
+
+  .tone-pink {
+    --tone: var(--paper-pink);
+  }
+
+  .tone-yellow {
+    --tone: var(--paper-yellow);
+  }
+
+  .tone-green {
+    --tone: var(--paper-green);
+  }
+
+  .tone-board {
+    --tone: var(--board);
+  }
+
+  .tone-board::before {
+    display: none;
+  }
+
+  /* Bütün yapraklar aynı kolon çizgisine oturur; sayfa çevrilince göz zıplamaz. */
+  .sheet-grid {
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    gap: 2rem 3.5rem;
+  }
+
+  .sheet-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .sheet-logo {
+    display: block;
+    width: auto;
+    height: 40px;
+    margin-left: -8px;
+  }
+
+  /* Türkçe kelimeler uzundur; dar ekranda boyut genişliğe bağlanır, en son çare satır kırılır. */
+  .sheet-title {
+    font-weight: 800;
+    font-size: clamp(1.875rem, 10vw, 3.25rem);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
+  }
+
+  .sheet-subtitle {
+    font-weight: 800;
+    font-size: clamp(1.75rem, 8.4vw, 2.75rem);
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    overflow-wrap: anywhere;
+  }
+
+  .printed {
+    color: var(--print);
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+
+  .serial {
+    color: var(--serial);
+    font-weight: 700;
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+
+  .pen {
+    color: var(--pen);
+    font-family: var(--font-pen);
+    font-size: 1.3125rem;
+    line-height: 1.2;
+  }
+
+  .form-row {
+    display: grid;
+    align-items: baseline;
+    gap: 0.25rem 1rem;
+    padding-block: 0.5rem;
+    border-bottom: 1px solid var(--print);
+  }
+
+  .form-head {
+    border-bottom-width: 2px;
+  }
+
+  /* Boş satırlar: basılı form yaprağın sonuna kadar sürer, alan boş kalmaz. */
+  .ruled {
+    flex: 1;
+    min-height: calc(var(--row) * 2);
+    background-image: repeating-linear-gradient(to bottom, transparent 0 calc(var(--row) - 1px), var(--print) calc(var(--row) - 1px) var(--row));
+    background-size: 100% var(--row);
+  }
+
+  /* Beş satırın yeri baştan ayrılır; yazı gelirken sayfa zıplamaz. */
+  .ruled-log {
+    min-height: calc(var(--row) * 5);
+  }
+
+  .ruled-entry {
+    display: flex;
+    align-items: center;
+    height: var(--row);
+    font-size: clamp(0.9375rem, 4.5vw, 1.3125rem);
+    text-wrap: nowrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
+    padding-inline: 1.375rem;
+    border-radius: 4px;
+    background: var(--ink);
+    color: var(--paper-white);
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+    transition-property: background-color, transform, box-shadow;
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+  }
+
+  .btn:active {
+    transform: translateY(2px);
+    box-shadow: none;
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+
+  .btn-paper {
+    background: var(--paper-white);
+    color: var(--ink);
+    min-height: 2.75rem;
+  }
+
+  .text-link {
+    color: var(--print);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .field {
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.5rem 0.25rem;
+    border: 0;
+    border-bottom: 2px solid var(--print);
+    border-radius: 0;
+    background: transparent;
+    color: var(--pen);
+    font-family: var(--font-pen);
+    font-size: 1.3125rem;
+    transition: border-color 120ms ease, background-color 120ms ease;
+  }
+
+  .field::placeholder {
+    color: var(--ink-soft);
+    opacity: 0.55;
+  }
+
+  .field[aria-invalid="true"] {
+    border-bottom-color: var(--serial);
+  }
+
+  .rubber-stamp {
+    display: inline-block;
+    padding: 0.125rem 0.75rem;
+    border: 3px solid var(--serial);
+    border-radius: 6px;
+    color: var(--serial);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    transform: rotate(-7deg);
+    animation: stamp-down 200ms cubic-bezier(0.55, 0, 1, 0.45);
+  }
+
+  .ballpoint {
+    --pen-size: clamp(88px, 24vw, 130px);
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 5;
+    width: var(--pen-size);
+    height: var(--pen-size);
+    margin-top: calc(var(--pen-size) * -1);
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  @media (min-width: 768px) {
+    .gutter {
+      padding-left: max(32px, env(safe-area-inset-left, 0px));
+      padding-right: max(32px, env(safe-area-inset-right, 0px));
+    }
+
+    .sheet {
+      padding: calc(var(--tear-line) + 1.25rem) 3rem 2.25rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .sheet-grid {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    }
+
+    .sheet-title {
+      font-size: clamp(2.5rem, min(5.8vw, 10vh), 5rem);
+    }
+
+    .sheet-subtitle {
+      font-size: clamp(2.125rem, min(4.2vw, 7.4vh), 3.625rem);
+    }
+  }
+
+  @media (min-width: 1600px) {
+    .gutter {
+      max-width: 88rem;
+    }
+  }
+
+  /* Dokunmatikte hover son dokunuşta takılı kalır; yalnız gerçek imleçte çalışır. */
+  @media (hover: hover) {
+    .nav-link:hover {
+      text-decoration-color: currentColor;
+    }
+
+    .btn:hover {
+      background: var(--print);
+    }
+
+    .btn-paper:hover {
+      background: var(--paper-yellow);
+    }
+
+    .field:hover {
+      background-color: rgba(39, 64, 139, 0.06);
+    }
+
+    .pad-tab:hover {
+      transform: translateX(0);
+    }
+  }
+
+  /* Dış kenarda sekme için yer varsa defterin yanından çıkar. */
+  @media (min-width: 1240px) {
+    .pad.is-pinned .pad-tabs {
+      display: flex;
+    }
+  }
+}
+
+/* Kalem izi yalnız JS varsa gizlenir; JS yoksa ya da hareket kapalıysa yazı en baştan okunur. */
+@media (prefers-reduced-motion: no-preference) {
+  html.js .ink-line {
+    clip-path: inset(-10% 100% -10% 0);
+    animation: ink-failsafe 0s linear 7s forwards;
+  }
+
+  html.js .ink-circle {
+    stroke-dashoffset: 1;
+    animation: ink-failsafe 0s linear 7s forwards;
+  }
+
+  .ink-reveal {
+    animation: ink-write 620ms linear both;
+  }
+}
+
+/* Betik takılırsa yazı sonsuza dek gizli kalmasın. */
+@keyframes ink-failsafe {
+  to {
+    clip-path: inset(-10% 0 -10% 0);
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ink-write {
+  from {
+    clip-path: inset(-10% 100% -10% 0);
+  }
+  to {
+    clip-path: inset(-10% 0 -10% 0);
+  }
+}
+
+@keyframes stamp-down {
+  from {
+    opacity: 0;
+    transform: rotate(-7deg) scale(1.9);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-7deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .rubber-stamp {
+    animation: none;
+  }
+}
