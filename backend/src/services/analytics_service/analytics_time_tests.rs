@@ -194,7 +194,7 @@ async fn hedef_gerceklesmesi_yuzde_ve_fark_doner() {
     line(&pool, "t1", "o1", "p1", 1, 50_000).await;
     target(&pool, "t1", "2026-03", "ALL", 100_000).await;
 
-    let t = monthly_target_status(&pool, "t1", "2026-03")
+    let t = monthly_target_status(&pool, "t1", "2026-03", 0)
         .await
         .expect("okunmali");
     assert_eq!(t.len(), 1);
@@ -208,7 +208,7 @@ async fn hedef_sifir_kenar_yuzde_null_dondurur() {
     let pool = test_pool().await;
     target(&pool, "t1", "2026-03", "ALL", 0).await;
 
-    let t = monthly_target_status(&pool, "t1", "2026-03")
+    let t = monthly_target_status(&pool, "t1", "2026-03", 0)
         .await
         .expect("okunmali");
     // Hedef 0: oran hesaplanamaz, "sınırsız aşıldı" denemez.
@@ -218,7 +218,7 @@ async fn hedef_sifir_kenar_yuzde_null_dondurur() {
 #[tokio::test]
 async fn hedef_tanımlanmamışsa_satir_yoktur() {
     let pool = test_pool().await;
-    let t = monthly_target_status(&pool, "t1", "2026-03")
+    let t = monthly_target_status(&pool, "t1", "2026-03", 0)
         .await
         .expect("okunmali");
     assert!(t.is_empty());
@@ -236,7 +236,7 @@ async fn all_hedefi_tum_kategorileri_toplar() {
     line(&pool, "t1", "o1", "p2", 1, 20_000).await;
     target(&pool, "t1", "2026-03", "ALL", 100_000).await;
 
-    let t = monthly_target_status(&pool, "t1", "2026-03")
+    let t = monthly_target_status(&pool, "t1", "2026-03", 0)
         .await
         .expect("okunmali");
     // ALL iki kategoriyi de kapsar: 30000 + 20000.
@@ -256,7 +256,7 @@ async fn kategori_hedefi_yalniz_kendi_kategorisini_toplar() {
     line(&pool, "t1", "o1", "p2", 1, 20_000).await;
     target(&pool, "t1", "2026-03", "Kahve", 100_000).await;
 
-    let t = monthly_target_status(&pool, "t1", "2026-03")
+    let t = monthly_target_status(&pool, "t1", "2026-03", 0)
         .await
         .expect("okunmali");
     assert_eq!(t[0].actual_cents, 30_000);
@@ -270,11 +270,34 @@ async fn hedef_baska_ayi_olmaz() {
     line(&pool, "t1", "o1", "p1", 1, 99_000).await;
     target(&pool, "t1", "2026-03", "ALL", 100_000).await;
 
-    let t = monthly_target_status(&pool, "t1", "2026-03")
+    let t = monthly_target_status(&pool, "t1", "2026-03", 0)
         .await
         .expect("okunmali");
     // Subat cirosu Mart hedefi sayılmaz.
     assert_eq!(t[0].actual_cents, 0);
+}
+
+#[tokio::test]
+async fn hedef_ay_siniri_yerel_saatle_cizilir() {
+    let pool = test_pool().await;
+    product(&pool, "t1", "p1", "Kahve", "c1", 1000).await;
+    // UTC 28 Şubat 22:30 = İstanbul 1 Mart 01:30: Mart satışıdır.
+    order(&pool, "t1", "o1", "PAID", "2026-02-28T22:30:00Z").await;
+    line(&pool, "t1", "o1", "p1", 1, 40_000).await;
+    // UTC 31 Mart 21:30 = İstanbul 1 Nisan 00:30: Mart'a sayılmaz.
+    order(&pool, "t1", "o2", "PAID", "2026-03-31T21:30:00Z").await;
+    line(&pool, "t1", "o2", "p1", 1, 7_000).await;
+    target(&pool, "t1", "2026-03", "ALL", 100_000).await;
+
+    let local = monthly_target_status(&pool, "t1", "2026-03", 180)
+        .await
+        .expect("okunmali");
+    assert_eq!(local[0].actual_cents, 40_000);
+    // Ofsetsiz okuma tam tersini sayardı: hatanın kanıtı.
+    let utc = monthly_target_status(&pool, "t1", "2026-03", 0)
+        .await
+        .expect("okunmali");
+    assert_eq!(utc[0].actual_cents, 7_000);
 }
 
 // ---------------------------------------------------------------------------

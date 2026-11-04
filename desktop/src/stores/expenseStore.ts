@@ -25,16 +25,6 @@ export interface Expense {
   recurringId: string | null;
 }
 
-export interface BudgetRow {
-  category: string;
-  monthlyLimitCents: number;
-  spentCents: number;
-  remainingCents: number;
-  usedPercent: number;
-  isExceeded: boolean;
-  isNearLimit: boolean;
-}
-
 export interface RecurringRow {
   id: string;
   title: string;
@@ -46,20 +36,17 @@ export interface RecurringRow {
 }
 
 interface ExpenseStore {
-  /** `YYYY-AA`: Finans bölümündeki tüm paneller bu ayı gösterir. */
+  /** `YYYY-AA`: gider, sabit gider ve kâr panelleri bu ayı gösterir. */
   period: string;
   setPeriod: (period: string) => void;
   report: FinancialProfitSummary | null;
   expenses: Expense[] | null;
-  budgets: BudgetRow[];
   recurring: RecurringRow[];
   error: string | null;
   load: () => Promise<void>;
   addExpense: (category: string, amountCents: number, paymentMethod: string, description: string, recurringId?: string) => Promise<void>;
   voidExpense: (id: string, reason: string) => Promise<void>;
   editExpense: (old: Expense, category: string, amountCents: number, paymentMethod: string, description: string) => Promise<void>;
-  removeBudget: (category: string) => Promise<void>;
-  setBudget: (category: string, monthlyLimitCents: number) => Promise<void>;
   addRecurring: (title: string, category: string, amountCents: number, dueDay: number) => Promise<void>;
   updateRecurring: (id: string, title: string, category: string, amountCents: number, dueDay: number) => Promise<void>;
   removeRecurring: (id: string) => Promise<void>;
@@ -74,6 +61,10 @@ const lastDay = (period: string) => {
   const [year, month] = period.split('-').map(Number);
   return two(new Date(year, month, 0).getDate());
 };
+
+/** "Diğer" kategorisi ne olduğunu söylemez; açıklama olmadan kayıt anlamsızdır. */
+export const needsDescription = (category: string, description: string) =>
+  category === 'OTHER' && description.trim() === '';
 
 /** Tek gider yolu: Finans ve Kasa aynı komutu kullanır. */
 export async function createExpense(category: string, amountCents: number, paymentMethod: string, description: string, recurringId?: string, expenseDate?: string) {
@@ -93,7 +84,6 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
   },
   report: null,
   expenses: null,
-  budgets: [],
   recurring: [],
   error: null,
 
@@ -107,14 +97,13 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
       const report = actorRole === 'OWNER'
         ? await invokeIPC<FinancialProfitSummary>('get_financial_report', { actorRole, tenantId, startDate, endDate })
         : null;
-      const [expenses, budgets, recurring] = await Promise.all([
+      const [expenses, recurring] = await Promise.all([
         invokeIPC<Expense[]>('get_expenses', { actorRole, tenantId, startDate, endDate: `${endDate} 23:59:59` }),
-        invokeIPC<BudgetRow[]>('get_budget_status', { actorRole, tenantId, asOf: startDate }),
         invokeIPC<RecurringRow[]>('get_recurring_expenses', { actorRole, tenantId, asOf: today() }),
       ]);
-      set({ report, expenses, budgets, recurring, error: null });
+      set({ report, expenses, recurring, error: null });
     } catch (caught) {
-      set({ report: null, expenses: null, budgets: [], recurring: [], error: errorText(caught) });
+      set({ report: null, expenses: null, recurring: [], error: errorText(caught) });
     }
   },
 
@@ -134,18 +123,6 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
     const { actorId, actorRole, tenantId } = sessionArgs();
     await createExpense(category, amountCents, paymentMethod, description, old.recurringId ?? undefined, old.expenseDate);
     await invokeIPC('void_expense', { expenseId: old.id, reason: 'Düzeltme', actorId, actorRole, tenantId });
-    await get().load();
-  },
-
-  removeBudget: async (category) => {
-    const { actorId, actorRole, tenantId } = sessionArgs();
-    await invokeIPC('delete_budget_limit', { category, actorId, actorRole, tenantId });
-    await get().load();
-  },
-
-  setBudget: async (category, monthlyLimitCents) => {
-    const { actorId, actorRole, tenantId } = sessionArgs();
-    await invokeIPC('set_budget_limit', { category, monthlyLimitCents, actorId, actorRole, tenantId });
     await get().load();
   },
 

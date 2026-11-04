@@ -133,7 +133,6 @@ pub struct AnalyticsMetrics {
     pub bcg_counts: BcgCounts,
     pub combinations: Vec<ProductCombination>,
     pub peak_hours: Vec<PeakHourBucket>,
-    pub monthly_targets: Vec<MonthlyTargetStatus>,
     pub competitor_gaps: Vec<CompetitorPriceGap>,
     pub void_loss: Option<VoidLossRate>,
 }

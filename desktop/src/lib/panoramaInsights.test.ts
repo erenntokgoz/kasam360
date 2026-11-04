@@ -5,7 +5,7 @@ import type { Kpi, PanoramaData } from '../stores/panoramaStore';
 
 const kpi = (over: Partial<Kpi>): Kpi => ({
   collectedCents: 0, orders: 0, averageTicketCents: 0, refundCents: 0, discountCents: 0,
-  voidCents: 0, vatCents: 0, cogsCents: null, grossProfitCents: null, costIncomplete: false, ...over,
+  voidCents: 0, vatCents: 0, cogsCents: null, grossProfitCents: null, costIncomplete: false, costMissingSales: 0, ...over,
 });
 
 const data = (over: Partial<PanoramaData>): PanoramaData => ({

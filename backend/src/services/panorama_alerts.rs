@@ -4,7 +4,7 @@
 //! patron her ekranı gezmeden riski göremiyordu. Okunamayan kaynak "sorun yok" sayılmaz,
 //! kendi uyarısını üretir: boş liste gerçekten sorun olmadığı anlamına gelmelidir.
 
-use crate::services::{budget_service, staff360};
+use crate::services::staff360;
 use serde::Serialize;
 use sqlx::{Row, SqlitePool};
 
@@ -40,20 +40,6 @@ fn unreadable(area: &str, reason: &str, target: &'static str) -> Alert {
         reason.to_string(),
         target,
     )
-}
-
-fn category_label(category: &str) -> &str {
-    match category {
-        "RENT" => "Kira",
-        "UTILITIES" => "Fatura",
-        "SUPPLIER" => "Tedarikçi",
-        "STAFF_ADVANCE" => "Personel avansı",
-        "TAX" => "Vergi",
-        "PERSONAL" => "Şahsi",
-        "MAINTENANCE" => "Bakım",
-        "OTHER" => "Diğer",
-        other => other,
-    }
 }
 
 fn money(cents: i64) -> String {
@@ -268,26 +254,6 @@ pub async fn collect(
                 .collect()
         });
     add(flags, "Şüpheli işlem radarı", "LOG");
-    let budgets = budget_service::budget_status(pool, tenant, None)
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .filter(|row| row.is_exceeded)
-                .map(|row| {
-                    alert(
-                        "WARNING",
-                        format!("{} bütçesi aşıldı", category_label(&row.category)),
-                        format!(
-                            "{} harcandı, sınır {}.",
-                            money(row.spent_cents),
-                            money(row.monthly_limit_cents)
-                        ),
-                        "EXPENSES",
-                    )
-                })
-                .collect()
-        });
-    add(budgets, "Bütçe", "EXPENSES");
     match last_backup {
         Ok(at) => alerts.extend(backup_alert(at.as_deref())),
         Err(reason) => alerts.push(unreadable("Yedek durumu", &reason, "SETTINGS")),

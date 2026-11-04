@@ -41,6 +41,9 @@ pub struct FinancialReport {
     /// Satışların içindeki KDV. İşletmenin parası değildir, kârdan çıkar.
     pub total_vat_cents: i64,
     pub gross_profit_cents: i64,
+    /// Dönemde partisi olmadan düşülen satış kalemi sayısı. Sıfır değilse
+    /// maliyet eksik, kâr gerçeğinden yüksektir; ekran kârı yaklaşık gösterir.
+    pub cost_missing_lines: i64,
     pub total_expenses_cents: i64,
     pub net_profit_cents: i64,
     pub receivables_cents: i64,
@@ -203,6 +206,31 @@ pub async fn financial_report(
     let gross_profit_cents =
         total_revenue_cents - total_refunds_cents - total_vat_cents - total_cogs_cents;
 
+    // FIFO düşümü partisi olmayan tüketimi `untrackedDeficit` ile işaretler; o
+    // kalemin maliyeti sıfır sayılmıştır. Sayı, kârın neden yaklaşık olduğunu söyler.
+    let cost_missing_sql = "SELECT COUNT(*) FROM order_items i
+         JOIN orders o ON o.id = i.order_id AND o.tenant_id = i.tenant_id
+         JOIN events e ON e.tenant_id = i.tenant_id AND e.aggregate_id = i.stock_source_id
+                      AND e.event_type = 'FIFO_STOCK_DEDUCTED'
+         WHERE i.tenant_id = ? AND i.status != 'CANCELLED' AND o.status = 'PAID'
+           AND CAST(json_extract(e.payload, '$.untrackedDeficit') AS REAL) > 0";
+    let cost_missing_lines: i64 = match range {
+        Some((s, e)) => sqlx::query_scalar(&format!(
+            "{cost_missing_sql} AND date(o.created_at) >= date(?) AND date(o.created_at) <= date(?)"
+        ))
+        .bind(tenant_id)
+        .bind(s)
+        .bind(e)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|err| format!("Maliyeti eksik satışlar sayılamadı: {}", err))?,
+        None => sqlx::query_scalar(cost_missing_sql)
+            .bind(tenant_id)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|err| format!("Maliyeti eksik satışlar sayılamadı: {}", err))?,
+    };
+
     // ------------------------------------------------------------------
     // 3. Gider (personel avansı gider değil, personelden alacaktır; kârdan düşülmez)
     // ------------------------------------------------------------------
@@ -348,6 +376,7 @@ pub async fn financial_report(
         total_refunds_cents,
         total_vat_cents,
         gross_profit_cents,
+        cost_missing_lines,
         total_expenses_cents,
         net_profit_cents,
         receivables_cents,
@@ -360,3 +389,7 @@ pub async fn financial_report(
 #[cfg(test)]
 #[path = "pnl_service_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "pnl_cost_missing_tests.rs"]
+mod cost_missing_tests;

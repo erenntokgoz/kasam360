@@ -96,6 +96,9 @@ pub struct FinancialReportDto {
     pub total_vat_cents: i64,
     #[serde(rename = "grossProfitCents", default)]
     pub gross_profit_cents: i64,
+    /// Partisiz düşülen kalem sayısı; sıfır değilse kâr yaklaşıktır.
+    #[serde(rename = "costMissingLines", default)]
+    pub cost_missing_lines: i64,
     #[serde(rename = "totalExpensesCents")]
     pub total_expenses_cents: i64,
     #[serde(rename = "netProfitCents")]

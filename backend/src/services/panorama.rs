@@ -26,6 +26,8 @@ pub struct Kpi {
     pub gross_profit_cents: Option<i64>,
     /// Parti girişi olmayan satış varsa kâr gerçeğinden yüksek görünür; ekran söyler.
     pub cost_incomplete: bool,
+    /// Partisiz düşüm taşıyan tahsilat sayısı; kâr bu yüzden yaklaşık gösterilir.
+    pub cost_missing_sales: i64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -170,6 +172,7 @@ async fn kpi(
         cogs_cents: Some(cogs),
         gross_profit_cents: Some(collected - refund - vat - cogs),
         cost_incomplete: blind > 0,
+        cost_missing_sales: blind,
     })
 }
 

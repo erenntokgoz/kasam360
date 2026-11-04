@@ -25,7 +25,7 @@ use analytics_types::{AnalyticsMetrics, AnalyticsRange};
 
 pub use analytics_product::{bcg_classify, bcg_counts, combinations, median, product_margins};
 pub use analytics_time::{
-    competitor_price_gaps, current_month, monthly_target_status, peak_hours, void_loss_rate,
+    competitor_price_gaps, monthly_target_status, peak_hours, void_loss_rate,
 };
 pub use analytics_types::{
     quadrant_label, AnalyticsMetrics as Metrics, BcgCounts, BcgEntry, BcgQuadrant,
@@ -48,7 +48,6 @@ pub async fn analytics_metrics(
     let counts = bcg_counts(&bcg_matrix);
     let combos = combinations(pool, tenant_id, range, min_support).await?;
     let hours = peak_hours(pool, tenant_id, range).await?;
-    let targets = monthly_target_status(pool, tenant_id, &current_month()).await?;
     let gaps = competitor_price_gaps(pool, tenant_id).await?;
     let void_loss = void_loss_rate(pool, tenant_id, range).await?;
 
@@ -63,7 +62,6 @@ pub async fn analytics_metrics(
         bcg_counts: counts,
         combinations: combos,
         peak_hours: hours,
-        monthly_targets: targets,
         competitor_gaps: gaps,
         void_loss: Some(void_loss),
     })

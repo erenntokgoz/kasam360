@@ -1,41 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
-import { RANGE_LABELS, reportPeriod, type RangeKey } from '../../../lib/dateRange';
+import { toLocalIso } from '../../../lib/dateRange';
+import { downloadFile } from '../../../lib/downloadFile';
+import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
-import { AccountantPanel } from './AccountantPanel';
-import { REPORTS, type ReportKey, type ReportTable } from './reportDefinitions';
+import { Input } from '../../../ui/Input';
+import { OWNER_ONLY_REPORTS, REPORTS, type ReportKey, type ReportTable } from './reportDefinitions';
+import { reportCsv, reportFileName, type ReportFileMeta } from './reportCsv';
 
-const RANGES: RangeKey[] = ['TODAY', 'YESTERDAY', 'WEEK', 'MONTH'];
+const two = (value: number) => String(value).padStart(2, '0');
+const dayText = (date: Date) => `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
+const daysAgo = (days: number) => {
+  const now = new Date();
+  return dayText(new Date(now.getFullYear(), now.getMonth(), now.getDate() - days));
+};
 
-const csvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+/** Hazır dönemler yalnız tarih alanlarını doldurur; seçili dönem her zaman alanlarda görünür. */
+const QUICK: { label: string; from: () => string; to: () => string }[] = [
+  { label: 'Bugün', from: () => daysAgo(0), to: () => daysAgo(0) },
+  { label: 'Dün', from: () => daysAgo(1), to: () => daysAgo(1) },
+  { label: '7 Gün', from: () => daysAgo(6), to: () => daysAgo(0) },
+  { label: '30 Gün', from: () => daysAgo(29), to: () => daysAgo(0) },
+];
 
-/** Excel Türkçe karakterleri doğru açsın diye BOM ve noktalı virgül kullanılır. */
-function downloadCsv(name: string, table: ReportTable) {
-  const lines = [table.columns, ...table.rows].map((row) => row.map(csvCell).join(';'));
-  const url = URL.createObjectURL(new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${name}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+/** Yerel gün sınırları: `YYYY-AA-GG` 00:00 ile 23:59:59 arası, yerel ofsetle. */
+function dayBounds(from: string, to: string) {
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  return { from: toLocalIso(new Date(fy, fm - 1, fd)), to: toLocalIso(new Date(ty, tm - 1, td, 23, 59, 59)) };
 }
 
 export const ReportsTab: React.FC = () => {
+  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+  const keys = (Object.keys(REPORTS) as ReportKey[]).filter((key) => isOwner || !OWNER_ONLY_REPORTS.has(key));
   const [report, setReport] = useState<ReportKey>('SALES');
-  const [range, setRange] = useState<RangeKey>('WEEK');
+  const [from, setFrom] = useState(() => daysAgo(6));
+  const [to, setTo] = useState(() => daysAgo(0));
   const [table, setTable] = useState<ReportTable | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const rangeError = from === '' || to === '' ? 'Başlangıç ve bitiş seçin.' : from > to ? 'Başlangıç bitişten sonra olamaz.' : null;
 
   useEffect(() => {
     let current = true;
     setTable(null);
     setError(null);
-    const period = reportPeriod(range);
+    if (rangeError) return undefined;
     const { actorRole, tenantId } = sessionArgs();
     REPORTS[report]
-      .load({ actorRole, tenantId, from: period.from, to: period.to })
+      .load({ actorRole, tenantId, ...dayBounds(from, to), fromDate: from, toDate: to })
       .then((next) => {
         if (current) setTable(next);
       })
@@ -45,13 +59,14 @@ export const ReportsTab: React.FC = () => {
     return () => {
       current = false;
     };
-  }, [report, range]);
+  }, [report, from, to, rangeError]);
+
+  const meta: ReportFileMeta = { title: REPORTS[report].label, from, to, filters: [['Rapor türü', REPORTS[report].label]] };
 
   return (
     <div className="space-y-4">
-      <AccountantPanel />
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Rapor">
-        {(Object.keys(REPORTS) as ReportKey[]).map((key) => (
+        {keys.map((key) => (
           <Button
             key={key}
             variant={report === key ? 'selected' : 'secondary'}
@@ -63,30 +78,50 @@ export const ReportsTab: React.FC = () => {
           </Button>
         ))}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5" role="group" aria-label="Dönem">
-          {RANGES.map((key) => (
-            <Button
-              key={key}
-              variant={range === key ? 'selected' : 'secondary'}
-              className="min-h-12 text-sm font-bold"
-              aria-pressed={range === key}
-              onClick={() => setRange(key)}
-            >
-              {RANGE_LABELS[key]}
-            </Button>
-          ))}
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)]">
+          Başlangıç
+          <Input type="date" className="min-h-12 !w-44 tabular-nums" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)]">
+          Bitiş
+          <Input type="date" className="min-h-12 !w-44 tabular-nums" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} />
+        </label>
+        <div className="flex items-center gap-1.5" role="group" aria-label="Hazır dönem">
+          {QUICK.map((item) => {
+            const active = from === item.from() && to === item.to();
+            return (
+              <Button
+                key={item.label}
+                variant={active ? 'selected' : 'secondary'}
+                className="min-h-12 text-sm font-bold"
+                aria-pressed={active}
+                onClick={() => {
+                  setFrom(item.from());
+                  setTo(item.to());
+                }}
+              >
+                {item.label}
+              </Button>
+            );
+          })}
         </div>
         <Button
           variant="secondary"
-          className="min-h-12 text-sm font-bold"
+          className="min-h-12 text-sm font-bold ml-auto"
           disabled={!table || table.rows.length === 0}
-          onClick={() => table && downloadCsv(`${REPORTS[report].label}-${range}`, table)}
+          onClick={() => table && downloadFile(reportFileName(meta), reportCsv(meta, table), 'text/csv;charset=utf-8')}
         >
           <Download className="w-4 h-4 mr-1.5" />
           <span>Excel'e Aktar</span>
         </Button>
       </div>
+
+      {table?.warning ? (
+        <p role="status" className="p-3 rounded-lg text-sm font-semibold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
+          {table.warning}
+        </p>
+      ) : null}
 
       {table?.summary.length ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -99,7 +134,9 @@ export const ReportsTab: React.FC = () => {
         </div>
       ) : null}
 
-      {error ? (
+      {rangeError ? (
+        <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{rangeError}</p>
+      ) : error ? (
         <p role="alert" className="p-3 rounded-lg text-sm font-semibold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
           Rapor okunamadı: {error}
         </p>

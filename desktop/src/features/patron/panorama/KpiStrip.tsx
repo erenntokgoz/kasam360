@@ -46,7 +46,7 @@ export const KpiStrip: React.FC<KpiStripProps> = ({ current, previous, compareLa
   const profit = current.grossProfitCents;
   const margin = marginPercent(profit, current.collectedCents);
   const profitNote = current.costIncomplete
-    ? 'Bazı satışların maliyeti yok; gerçek kâr daha düşük olabilir.'
+    ? `Maliyet eksik: ${current.costMissingSales} satışta parti yok, kâr yaklaşık`
     : margin !== null
       ? `Tahsilatın %${margin} kadarı, KDV ve maliyet düşülmüş`
       : 'KDV ve maliyet düşülmüş';
@@ -61,8 +61,8 @@ export const KpiStrip: React.FC<KpiStripProps> = ({ current, previous, compareLa
       />
       {profit !== null ? (
         <Tile
-          label="Kâr"
-          value={formatMoney(profit)}
+          label={current.costIncomplete ? 'Kâr (yaklaşık)' : 'Kâr'}
+          value={current.costIncomplete ? `≈ ${formatMoney(profit)}` : formatMoney(profit)}
           change={percentChange(profit, previous.grossProfitCents ?? 0)}
           compareLabel={compareLabel}
           note={profitNote}
