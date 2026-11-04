@@ -83,16 +83,19 @@ export const MenuProductCard: React.FC<MenuProductCardProps> = ({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-[var(--border)]">
+        {/* İki durum birlikte olabilir: satış dışı bir ürün ayrıca tükenmiş işaretli kalabilir. */}
         {isOutOfStock ? (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-red)]" />
-            Tükendi — satışta değil
+            Tükendi
           </span>
-        ) : isInactive ? (
+        ) : null}
+        {isInactive ? (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-[var(--bg-subtle)] text-[var(--text-muted)] border border-[var(--border)]">
-            Satışta değil
+            Satış Dışı
           </span>
-        ) : (
+        ) : null}
+        {isOutOfStock || isInactive ? null : (
           <span className="inline-flex items-center gap-1 text-xs text-[var(--accent-emerald)] font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-emerald)]" />
             Satışta

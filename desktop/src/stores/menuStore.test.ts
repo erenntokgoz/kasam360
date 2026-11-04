@@ -57,6 +57,7 @@ describe('Menu Store Actions & Bulk Pricing', () => {
           priceCents: 4500,
           isActive: true,
           is86: false,
+          isRaw: false,
         },
         {
           id: 'p2',
@@ -65,6 +66,7 @@ describe('Menu Store Actions & Bulk Pricing', () => {
           priceCents: 6500,
           isActive: true,
           is86: true,
+          isRaw: false,
         },
         {
           id: 'p3',
@@ -73,6 +75,7 @@ describe('Menu Store Actions & Bulk Pricing', () => {
           priceCents: 22000,
           isActive: false,
           is86: false,
+          isRaw: false,
         },
       ],
       categories: [
@@ -88,6 +91,7 @@ describe('Menu Store Actions & Bulk Pricing', () => {
       filters: {
         tukendi: false,
         satista: false,
+        satisDisi: false,
         categoryId: null,
       },
     });

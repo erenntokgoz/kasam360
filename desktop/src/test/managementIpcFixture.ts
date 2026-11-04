@@ -24,6 +24,7 @@ let mockManagementProducts: ProductDto[] = SEED_PRODUCTS.map((p) => ({
   is86: false,
   defaultStation: p.station,
   stockUnit: 'adet',
+  isRaw: false,
 }));
 
 let mockCategories: CategoryDto[] = SEED_CATEGORIES.filter((c) => c.id !== 'cat_all').map((c) => ({
@@ -67,11 +68,16 @@ const mockProductModifierGroupIds = new Map<string, string[]>();
 const mockStockBatches: Array<{
   id: string; product_id: string; product_name: string; remaining_quantity: number;
   unit_cost_cents: number; received_at: string; expiry_date: null; stock_unit: string;
+  usable_grams_per_unit: number | null;
 }> = [];
 const mockSuppliers: Array<{ id: string; name: string }> = [];
 const mockPurchaseOrders: Array<{
   id: string; supplier_id: string; order_number: string; status: string; total_cents: number;
+  product_ids: string[];
 }> = [];
+// Aynı işlem kimliği ikinci kez yazmaz; gerçek işlem günlüğü gibi önceki sonucu döndürür.
+const mockReceipts = new Map<string, { orderId: string; settlement: string; dueDate: string | null; documentNo: string | null }>();
+export const mockReceiptLog = () => [...mockReceipts.values()];
 const mockPurchaseLines = new Map<string, Array<{
   productId: string; quantity: number; unitCostCents: number;
 }>>();
@@ -140,6 +146,7 @@ export function handleManagementMockIPC<T>(
         is86: false,
         defaultStation: cat?.defaultStation || 'BAR',
         stockUnit: typeof args.stockUnit === 'string' ? args.stockUnit : 'adet',
+        isRaw: args.isRaw === true,
       };
       mockManagementProducts.unshift(newProd);
       return newProd as unknown as T;
@@ -270,14 +277,20 @@ export function handleManagementMockIPC<T>(
       }, 0);
       if (!Number.isSafeInteger(total)) throw new Error('Alış tutarı sınırı aşıldı.');
       const order = { id: `por_demo_${Date.now()}`, supplier_id: input.supplierId,
-        order_number: input.orderNumber.trim(), status: 'TASI', total_cents: total };
+        order_number: input.orderNumber.trim(), status: 'TASI', total_cents: total,
+        product_ids: input.items.map((item) => item.productId) };
       mockPurchaseOrders.unshift(order);
       mockPurchaseLines.set(order.id, input.items);
       return order as T;
     }
 
-    case 'receive_purchase_order_command': {
-      const { orderId } = args as { orderId: string };
+    case 'receive_purchase': {
+      const payload = args.payload as {
+        operationId: string; purchaseOrderId: string; settlement: string; dueDate: string | null;
+        documentNo: string | null; usableGrams: { productId: string; usableGramsPerUnit: number }[];
+      };
+      if (mockReceipts.has(payload.operationId)) return { status: 'APPLIED' } as T;
+      const orderId = payload.purchaseOrderId;
       const order = mockPurchaseOrders.find((candidate) => candidate.id === orderId);
       if (!order || order.status !== 'TASI') throw new Error('CONFLICT: sipariş alınamaz');
       const lines = mockPurchaseLines.get(orderId) ?? [];
@@ -288,10 +301,12 @@ export function handleManagementMockIPC<T>(
           product_id: product.id, product_name: product.name,
           stock_unit: product.stockUnit ?? 'adet',
           remaining_quantity: line.quantity, unit_cost_cents: line.unitCostCents,
-          received_at: new Date().toISOString(), expiry_date: null });
+          received_at: new Date().toISOString(), expiry_date: null,
+          usable_grams_per_unit: payload.usableGrams.find((entry) => entry.productId === product.id)?.usableGramsPerUnit ?? null });
       }
       order.status = 'ALINDI';
-      return order.total_cents as T;
+      mockReceipts.set(payload.operationId, { orderId, settlement: payload.settlement, dueDate: payload.dueDate, documentNo: payload.documentNo });
+      return { status: 'APPLIED' } as T;
     }
 
     case 'get_product_modifier_group_ids': {

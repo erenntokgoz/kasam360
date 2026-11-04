@@ -52,6 +52,7 @@ export const TariffFormModal: React.FC<TariffFormModalProps> = ({ tariff, produc
   const [days, setDays] = useState<number[]>(schedule?.daysOfWeek ?? []);
   const [validFrom, setValidFrom] = useState(schedule?.validFrom ?? '');
   const [validTo, setValidTo] = useState(schedule?.validTo ?? '');
+  const [isScheduled, setIsScheduled] = useState(Boolean(schedule));
   const [selected, setSelected] = useState<string[]>(tariff?.productIds ?? []);
   const [onlySelected, setOnlySelected] = useState((tariff?.productIds.length ?? 0) > 0);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +63,7 @@ export const TariffFormModal: React.FC<TariffFormModalProps> = ({ tariff, produc
       setError('Tarife adı ve yüzde girin.');
       return;
     }
-    if (Boolean(startTime) !== Boolean(endTime)) {
+    if (isScheduled && Boolean(startTime) !== Boolean(endTime)) {
       setError('Başlangıç ve bitiş saatini birlikte girin.');
       return;
     }
@@ -70,15 +71,19 @@ export const TariffFormModal: React.FC<TariffFormModalProps> = ({ tariff, produc
       setError('En az bir ürün seçin.');
       return;
     }
-    const hasSchedule = Boolean(startTime || validFrom || validTo || days.length);
+    if (isScheduled && !(startTime || validFrom || validTo || days.length)) {
+      setError('Takvim için saat, gün veya tarih girin.');
+      return;
+    }
     onSave({
       id: tariff?.id ?? null,
       name: name.trim(),
       percent: direction === 'UP' ? value : -value,
       productIds: onlySelected ? selected : null,
-      schedule: hasSchedule
+      // Yeni takvim kapalı başlar: tarife listede Aç düğmesiyle devreye girer.
+      schedule: isScheduled
         ? {
-            enabled: schedule?.enabled ?? true,
+            enabled: schedule?.enabled ?? false,
             startTime: startTime || null,
             endTime: endTime || null,
             daysOfWeek: days,
@@ -100,6 +105,12 @@ export const TariffFormModal: React.FC<TariffFormModalProps> = ({ tariff, produc
           </select>
           <NumberInput kind="integer" aria-label="Yüzde" placeholder="Yüzde" className="min-h-12" value={percent} onValueChange={setPercent} />
         </div>
+        <label className="flex min-h-12 items-center gap-2 text-sm">
+          <input type="checkbox" checked={isScheduled} onChange={(event) => setIsScheduled(event.target.checked)} />
+          <span>Takvime bağla</span>
+        </label>
+        {isScheduled ? (
+        <>
         <div className="grid grid-cols-2 gap-2">
           <label className="text-xs font-semibold">Başlangıç saati<Input type="time" className="min-h-12" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label>
           <label className="text-xs font-semibold">Bitiş saati<Input type="time" className="min-h-12" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label>
@@ -123,6 +134,8 @@ export const TariffFormModal: React.FC<TariffFormModalProps> = ({ tariff, produc
             );
           })}
         </div>
+        </>
+        ) : null}
         <label className="flex min-h-12 items-center gap-2 text-sm">
           <input type="checkbox" checked={onlySelected} onChange={(event) => setOnlySelected(event.target.checked)} />
           <span>Yalnız seçilen ürünlere uygula</span>

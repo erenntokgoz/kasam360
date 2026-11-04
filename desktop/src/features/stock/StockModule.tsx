@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { formatNumber } from '../../lib/numberText';
 import { NumberInput } from '../../ui/NumberInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { parseMoneyToCents } from '../../lib/moneyParser';
@@ -7,6 +6,9 @@ import { useStockStore } from '../../stores/stockStore';
 import { formatDay } from '../../lib/date';
 import { StockItemPicker } from './StockItemPicker';
 import { StockSupplierPicker } from './StockSupplierPicker';
+import { ReceiptOptions } from './ReceiptOptions';
+import { emptyReceiptDraft, toReceiptInput, type ReceiptDraft } from '../../lib/purchaseReceipt';
+import { batchQuantityText } from '../../lib/stockText';
 
 interface OrderRow {
   key: string;
@@ -32,6 +34,7 @@ export function StockModule() {
   const [rows, setRows] = useState<OrderRow[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [pendingReceiveId, setPendingReceiveId] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptDraft>(emptyReceiptDraft);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -59,8 +62,24 @@ export function StockModule() {
     }
   };
 
-  const handleReceive = async (orderId: string) => {
-    if (await receiveOrder(orderId)) setPendingReceiveId(null);
+  const gramItemsOf = (productIds: string[]) =>
+    products.filter((product) => productIds.includes(product.id) && product.stockUnit === 'adet')
+      .map((product) => ({ id: product.id, name: product.name }));
+
+  const startReceive = (orderId: string) => {
+    setReceipt(emptyReceiptDraft());
+    setFormError(null);
+    setPendingReceiveId(orderId);
+  };
+
+  const handleReceive = async (orderId: string, productIds: string[]) => {
+    try {
+      setFormError(null);
+      const input = toReceiptInput(receipt, gramItemsOf(productIds).map((item) => item.id));
+      if (await receiveOrder(orderId, input)) setPendingReceiveId(null);
+    } catch (caught: unknown) {
+      setFormError(caught instanceof Error ? caught.message : String(caught));
+    }
   };
 
   return (
@@ -77,7 +96,10 @@ export function StockModule() {
 
         <div>
           <section className="rounded-xl border border-[var(--border)] paper p-4 space-y-3">
-            <h2 className="print-title text-sm font-bold">Satın Alma Siparişi</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="print-title text-sm font-bold">Satın Alma Siparişi</h2>
+              <button type="button" className={`${button} border border-[var(--border)] bg-[var(--bg-card)]`} onClick={() => setRows((current) => [...current, { key: crypto.randomUUID(), productId: '', quantity: '', unitCost: '' }])}>Kalem Ekle</button>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <StockSupplierPicker value={supplierId} onChange={setSupplierId} />
               <label className="block text-xs space-y-1"><span>Sipariş No</span>
@@ -93,7 +115,6 @@ export function StockModule() {
               </div>
             ))}
             <div className="flex flex-wrap gap-2">
-              <button type="button" className={`${button} border border-[var(--border)] bg-[var(--bg-card)]`} onClick={() => setRows((current) => [...current, { key: crypto.randomUUID(), productId: '', quantity: '', unitCost: '' }])}>+ Kalem Ekle</button>
               <button type="button" disabled={busy || rows.length === 0} className={`${button} bg-[var(--brand)] text-white`} onClick={() => void handleOrder()}>Siparişi Oluştur</button>
             </div>
           </section>
@@ -104,13 +125,24 @@ export function StockModule() {
           {orders.length === 0 ? <p className="p-4 text-xs text-[var(--text-secondary)]">Henüz sipariş yok.</p> : (
             <div className="divide-y divide-[var(--border)]">
               {orders.map((order) => (
-                <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
-                  <div><strong>{order.orderNumber}</strong><span className="ml-3 text-xs text-[var(--text-secondary)]">{suppliers.find((supplier) => supplier.id === order.supplierId)?.name ?? 'Tedarikçi'}</span></div>
-                  <div className="flex items-center gap-3"><span className="font-mono tabular-nums">{formatMoney(order.totalCents)}</span><span className="text-xs">{order.status === 'ALINDI' ? 'Alındı' : 'Bekliyor'}</span>
-                    {order.status === 'TASI' && (pendingReceiveId === order.id ? (
-                      <span className="flex gap-2"><button type="button" className={`${button} border border-[var(--border)]`} onClick={() => setPendingReceiveId(null)}>Vazgeç</button><button type="button" disabled={busy} className={`${button} bg-[var(--brand)] text-white`} onClick={() => void handleReceive(order.id)}>Teslimi Onayla</button></span>
-                    ) : <button type="button" disabled={busy} className={`${button} border border-[var(--border)]`} onClick={() => setPendingReceiveId(order.id)}>Teslim Al</button>)}
+                <div key={order.id} className="p-4 text-sm space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div><strong>{order.orderNumber}</strong><span className="ml-3 text-xs text-[var(--text-secondary)]">{suppliers.find((supplier) => supplier.id === order.supplierId)?.name ?? 'Tedarikçi'}</span></div>
+                    <div className="flex items-center gap-3"><span className="font-mono tabular-nums">{formatMoney(order.totalCents)}</span><span className="text-xs">{order.status === 'ALINDI' ? 'Alındı' : 'Bekliyor'}</span>
+                      {order.status === 'TASI' && pendingReceiveId !== order.id ? (
+                        <button type="button" disabled={busy} className={`${button} border border-[var(--border)]`} onClick={() => startReceive(order.id)}>Teslim Al</button>
+                      ) : null}
+                    </div>
                   </div>
+                  {order.status === 'TASI' && pendingReceiveId === order.id ? (
+                    <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-3">
+                      <ReceiptOptions value={receipt} onChange={setReceipt} gramItems={gramItemsOf(order.productIds)} disabled={busy} />
+                      <span className="flex gap-2">
+                        <button type="button" className={`${button} border border-[var(--border)]`} onClick={() => setPendingReceiveId(null)}>Vazgeç</button>
+                        <button type="button" disabled={busy} className={`${button} bg-[var(--brand)] text-white`} onClick={() => void handleReceive(order.id, order.productIds)}>Teslimi Onayla</button>
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -124,7 +156,7 @@ export function StockModule() {
               {batches.map((batch) => (
                 <div key={batch.id} className="grid gap-2 p-4 text-sm sm:grid-cols-[1fr_110px_130px_140px]">
                   <strong>{batch.productName}</strong>
-                  <span className="font-mono tabular-nums">{formatNumber(batch.remainingQuantity)} {batch.stockUnit}</span>
+                  <span className="font-mono tabular-nums">{batchQuantityText(batch)}</span>
                   <span className="font-mono tabular-nums">{formatMoney(batch.unitCostCents)} / {batch.stockUnit}</span>
                   <span className="text-xs text-[var(--text-secondary)]">{formatDay(batch.receivedAt)}</span>
                 </div>

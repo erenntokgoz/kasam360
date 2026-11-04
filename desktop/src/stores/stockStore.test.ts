@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { handleManagementMockIPC } from '../test/managementIpcFixture';
+import { handleManagementMockIPC, mockReceiptLog } from '../test/managementIpcFixture';
 import { useAuthStore } from './authStore';
 import { useStockStore } from './stockStore';
 
@@ -8,6 +8,8 @@ vi.mock('../services/tauriClient', () => ({
     handleManagementMockIPC(command, args),
   isTauri: () => false,
 }));
+
+const TERM = { settlement: 'TERM' as const, dueDate: null, documentNo: null, usableGrams: [] };
 
 describe('stok satın alma akışı', () => {
   beforeEach(() => {
@@ -31,11 +33,20 @@ describe('stok satın alma akışı', () => {
     const order = useStockStore.getState().orders[0];
     expect(order.totalCents).toBe(500);
     expect(order.status).toBe('TASI');
-    expect(await store.receiveOrder(order.id)).toBe(true);
+    expect(order.productIds).toEqual([product.id]);
+    expect(await store.receiveOrder(order.id, {
+      settlement: 'CASH', dueDate: null, documentNo: 'FT-1',
+      usableGrams: [{ productId: product.id, usableGramsPerUnit: 1200 }],
+    })).toBe(true);
     expect(useStockStore.getState().orders[0].status).toBe('ALINDI');
     expect(useStockStore.getState().batches.some((batch) =>
-      batch.productId === product.id && batch.remainingQuantity === 1.5 && batch.unitCostCents === 333
+      batch.productId === product.id && batch.remainingQuantity === 1.5 && batch.unitCostCents === 333 &&
+      batch.usableGramsPerUnit === 1200
     )).toBe(true);
+    expect(mockReceiptLog().find((entry) => entry.orderId === order.id)).toEqual({
+      orderId: order.id, settlement: 'CASH', dueDate: null, documentNo: 'FT-1',
+    });
+    expect(useStockStore.getState().receiptAttempt).toBeNull();
   });
 
   it('sahip oturumu olmadan stok verisi açmaz', async () => {
@@ -57,7 +68,7 @@ describe('stok satın alma akışı', () => {
     await useStockStore.getState().load();
     const previous = useStockStore.getState().orders.length;
     const product = useStockStore.getState().products[0];
-    expect(await useStockStore.getState().quickReceive(product.id, 1, 100, 'missing')).toBe(false);
+    expect(await useStockStore.getState().quickReceive(product.id, 1, 100, 'missing', TERM)).toBe(false);
     expect(useStockStore.getState().orders).toHaveLength(previous);
   });
 });

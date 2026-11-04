@@ -5,7 +5,7 @@ import { MenuRecipeTab } from './MenuRecipeTab';
 describe('reçetede ilk malzeme', () => {
   it('stok kalemi yokken de malzeme ekleme yolunu açar', () => {
     const html = renderToStaticMarkup(<MenuRecipeTab
-      product={{ id: 'prd_food', name: 'Yemek', categoryId: 'cat_food', priceCents: 10000, isActive: true, is86: false }}
+      product={{ id: 'prd_food', name: 'Yemek', categoryId: 'cat_food', priceCents: 10000, isActive: true, is86: false, isRaw: false }}
       products={[]} cost={null} busy={false} createRecipe={async () => true} deactivateRecipe={async () => true}
     />);
     expect(html).toContain('Malzeme Ekle');

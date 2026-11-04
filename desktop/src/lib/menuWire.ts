@@ -15,6 +15,7 @@ interface WireProduct {
   is_86: boolean;
   stockout_reason: string | null;
   stock_unit: string;
+  is_raw?: boolean;
 }
 
 interface WireCategory {
@@ -59,6 +60,7 @@ export function mapProduct(wire: WireProduct | ProductDto): ProductDto {
     is86: wire.is_86,
     stockoutReason: wire.stockout_reason ?? undefined,
     stockUnit: wire.stock_unit,
+    isRaw: wire.is_raw ?? false,
   };
 }
 

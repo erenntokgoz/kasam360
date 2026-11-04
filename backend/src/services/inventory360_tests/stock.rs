@@ -24,6 +24,20 @@ async fn stok_partileri_kiraciya_ve_kalan_miktara_gore_listelenir() {
     assert_eq!(rows[0].id, "bat_a");
     assert_eq!(rows[0].remaining_quantity, 3.0);
     assert_eq!(rows[0].unit_cost_cents, 120);
+    assert_eq!(rows[0].usable_grams_per_unit, None);
+}
+
+#[tokio::test]
+async fn gramli_parti_gramiyla_listelenir() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, "ten_a", "prd_tavuk", "Tavuk", 0).await;
+    parti_ekle(&mut conn, "ten_a", "bat_t", "prd_tavuk", 2.0, 9000, None).await;
+    sqlx::query("UPDATE inventory_batches SET usable_grams_per_unit = 1350.5 WHERE id = 'bat_t' AND tenant_id = 'ten_a'")
+        .execute(&mut conn).await.unwrap();
+
+    let rows = list_stock_batches(&mut conn, "ten_a").await.unwrap();
+    assert_eq!(rows[0].usable_grams_per_unit, Some(1350.5));
 }
 
 #[tokio::test]
@@ -86,4 +100,51 @@ async fn teslim_alinan_parti_recete_maliyetini_erisilebilir_yapar() {
         .unwrap()
         .unwrap();
     assert_eq!(cost.unit_cost_cents, Some(450));
+}
+
+#[tokio::test]
+async fn siparis_listesi_kalem_urunlerini_tasir() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, "ten_a", "prd_tavuk", "Tavuk", 0).await;
+    urun_ekle(&mut conn, "ten_a", "prd_un", "Un", 0).await;
+    sqlx::query("INSERT INTO suppliers (id, tenant_id, name, created_by) VALUES ('sup_1', 'ten_a', 'Kasap', 'usr_1')")
+        .execute(&mut conn).await.unwrap();
+    let line = |product_id: &str| PurchaseOrderLineInput {
+        product_id: product_id.into(),
+        quantity: 2.0,
+        unit_cost_cents: Some(100),
+    };
+    let created = create_purchase_order(
+        &mut conn,
+        "ten_a",
+        "usr_1",
+        PurchaseOrderInput {
+            supplier_id: "sup_1".into(),
+            order_number: "PO-9".into(),
+            expected_at: None,
+            notes: None,
+            items: vec![line("prd_tavuk"), line("prd_un")],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(created.product_ids, vec!["prd_tavuk", "prd_un"]);
+
+    let listed = crate::services::inventory360::suppliers::list_purchase_orders(
+        &mut conn,
+        "ten_a",
+        Some("TASI"),
+    )
+    .await
+    .unwrap();
+    let mut ids = listed[0].product_ids.clone();
+    ids.sort();
+    assert_eq!(ids, vec!["prd_tavuk", "prd_un"]);
+    assert!(
+        crate::services::inventory360::suppliers::list_purchase_orders(&mut conn, "ten_b", None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }

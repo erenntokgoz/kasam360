@@ -28,6 +28,7 @@ interface MenuDetailTemelProps {
   detailMode: 'view' | 'new';
   toggleProductActive: (id: string) => Promise<boolean>;
   toggleProduct86: (id: string, is86: boolean) => Promise<boolean>;
+  onConvertToRaw?: () => void;
 }
 
 export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
@@ -50,6 +51,7 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
   detailMode,
   toggleProductActive,
   toggleProduct86,
+  onConvertToRaw,
 }) => {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const canCreateCategory = useAuthStore((state) => state.user?.role === 'OWNER');
@@ -145,32 +147,34 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
 
       {selectedProduct && detailMode !== 'new' && (
         <div className="pt-2 space-y-2 border-t border-[var(--border)]">
-          {/* Satışta Durumu */}
+          {/* Satış dışı kalıcı karardır; tükendi gün içinde stok dönünce kalkar. */}
           <div className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
-            <span className="text-xs font-semibold text-[var(--text-primary)]">Satışta</span>
+            <span className="text-xs font-semibold text-[var(--text-primary)]">Satış Dışı</span>
             <button
               type="button"
+              role="switch"
+              aria-checked={!selectedProduct.isActive}
+              aria-label="Satış Dışı"
               onClick={() => toggleProductActive(selectedProduct.id)}
               className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3.5 ${
-                selectedProduct.isActive ? 'bg-[var(--accent-emerald)]' : 'bg-[var(--border)]'
+                !selectedProduct.isActive ? 'bg-[var(--text-muted)]' : 'bg-[var(--border)]'
               }`}
             >
               <span
                 className={`block w-3.5 h-3.5 rounded-full bg-white transition-transform ${
-                  selectedProduct.isActive ? 'translate-x-5' : 'translate-x-1'
+                  !selectedProduct.isActive ? 'translate-x-5' : 'translate-x-1'
                 }`}
               />
             </button>
           </div>
 
-          {/* Tükendi (86'd) Durumu */}
           <div className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
-            <div>
-              <span className="text-xs font-semibold text-[var(--text-primary)]">Tükendi (Satış Dışı)</span>
-              <span className="block text-xs text-[var(--text-muted)]">Menüde pasif kalır</span>
-            </div>
+            <span className="text-xs font-semibold text-[var(--text-primary)]">Tükendi</span>
             <button
               type="button"
+              role="switch"
+              aria-checked={selectedProduct.is86}
+              aria-label="Tükendi"
               onClick={() => toggleProduct86(selectedProduct.id, !selectedProduct.is86)}
               className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3.5 ${
                 selectedProduct.is86 ? 'bg-[var(--accent-red)]' : 'bg-[var(--border)]'
@@ -183,6 +187,12 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
               />
             </button>
           </div>
+
+          {onConvertToRaw ? (
+            <button type="button" className="tactile-btn w-full min-h-12 rounded-lg text-sm font-bold" onClick={onConvertToRaw}>
+              Hammaddeye Çevir
+            </button>
+          ) : null}
         </div>
       )}
     </div>

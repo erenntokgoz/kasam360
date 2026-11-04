@@ -16,6 +16,11 @@ export const CatalogBulkBar: React.FC<CatalogBulkBarProps> = ({ selected, onClea
   const [isDeleting, setIsDeleting] = useState(false);
   const chosen = products.filter((product) => selected.includes(product.id));
 
+  // Satış durumu yalnız değişmesi gereken üründe çevrilir; iki kez basmak geri almaz.
+  const setActive = async (id: string, isActive: boolean) => {
+    if (products.find((product) => product.id === id)?.isActive !== isActive) await toggleProductActive(id);
+  };
+
   const run = async (action: (id: string) => Promise<unknown>) => {
     for (const product of chosen) await action(product.id);
     onClear();
@@ -30,17 +35,9 @@ export const CatalogBulkBar: React.FC<CatalogBulkBarProps> = ({ selected, onClea
         <>
           <span className="text-sm font-bold tabular-nums">{chosen.length} ürün</span>
           <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => void run((id) => toggleProduct86(id, true))}>Tükendi</Button>
-          <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => void run((id) => toggleProduct86(id, false))}>Satışa Aç</Button>
-          <Button
-            variant="secondary"
-            className="min-h-12"
-            disabled={busy}
-            onClick={() => void run(async (id) => {
-              if (products.find((product) => product.id === id)?.isActive) await toggleProductActive(id);
-            })}
-          >
-            Pasife Al
-          </Button>
+          <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => void run((id) => toggleProduct86(id, false))}>Tükendi Kaldır</Button>
+          <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => void run((id) => setActive(id, false))}>Satış Dışı</Button>
+          <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => void run((id) => setActive(id, true))}>Satışa Aç</Button>
           <Button variant="danger" className="min-h-12" disabled={busy} onClick={() => setIsDeleting(true)}>Sil</Button>
           <Button variant="ghost" className="min-h-12" onClick={onClear}>Seçimi Bırak</Button>
         </>

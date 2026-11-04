@@ -9,6 +9,7 @@ import { activateOnKey } from '../../lib/activateOnKey';
 import { useMenuStore } from '../../stores/menuStore';
 import { MenuCategoryModal } from './MenuCategoryModal';
 import type { CategoryDto } from '../../types/menu';
+import { isOnSale, menuProducts } from '../../lib/productState';
 
 interface MenuCategoryTreeProps {
   onOpenNewCategoryModal: () => void;
@@ -25,6 +26,7 @@ export const MenuCategoryTree: React.FC<MenuCategoryTreeProps> = ({
     setCategoryFilter,
     toggleFilterTukendi,
     toggleFilterSatista,
+    toggleFilterSatisDisi,
     deleteCategory,
     busy,
   } = useMenuStore();
@@ -32,17 +34,27 @@ export const MenuCategoryTree: React.FC<MenuCategoryTreeProps> = ({
   const [deletingCat, setDeletingCat] = useState<CategoryDto | null>(null);
   const [editingCat, setEditingCat] = useState<CategoryDto | null>(null);
 
-  const totalCount = products.length;
-  const tukendiCount = products.filter((p) => p.is86).length;
-  const satistaCount = products.filter((p) => p.isActive && !p.is86).length;
+  const saleProducts = menuProducts(products);
+  const totalCount = saleProducts.length;
+  const tukendiCount = saleProducts.filter((p) => p.is86).length;
+  const satisDisiCount = saleProducts.filter((p) => !p.isActive).length;
+  const satistaCount = saleProducts.filter(isOnSale).length;
 
   return (
     <div className="w-60 xl:w-72 bg-[var(--bg-panel)] border-r border-[var(--border)] p-3 flex flex-col justify-between select-none shrink-0">
       <div className="space-y-4">
         {/* Kategoriler Bölümü */}
         <div>
-          <div className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-2 py-1">
-            Kategoriler
+          <div className="flex items-center justify-between gap-2 px-2">
+            <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Kategoriler</span>
+            <button
+              type="button"
+              onClick={onOpenNewCategoryModal}
+              className="tactile-btn min-h-12 px-3 rounded-md bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-xs font-bold border border-[var(--border)] inline-flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Kategori Ekle</span>
+            </button>
           </div>
           <div className="mt-1 space-y-0.5">
             <button
@@ -69,7 +81,9 @@ export const MenuCategoryTree: React.FC<MenuCategoryTreeProps> = ({
                 return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
               })
               .map((cat) => {
-              const count = products.filter((p) => p.categoryId === cat.id).length;
+              const count = saleProducts.filter((p) => p.categoryId === cat.id).length;
+              // Hammaddesi olan kategori de silinemez; sunucu ürünü olan kategoriyi reddeder.
+              const hasAny = products.some((p) => p.categoryId === cat.id);
               const isChild = Boolean(parents[cat.id]);
               const isSelected = filters.categoryId === cat.id;
               return (
@@ -101,13 +115,13 @@ export const MenuCategoryTree: React.FC<MenuCategoryTreeProps> = ({
                     </button>
                     <button
                       type="button"
-                      disabled={count > 0}
+                      disabled={hasAny}
                       onClick={(e) => {
                         e.stopPropagation();
                         setDeletingCat(cat);
                       }}
                       className="w-10 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--accent-red)] rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                      title={count > 0 ? 'Önce ürünleri taşıyın' : 'Kategoriyi sil'}
+                      title={hasAny ? 'Önce ürünleri taşıyın' : 'Kategoriyi sil'}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -142,6 +156,23 @@ export const MenuCategoryTree: React.FC<MenuCategoryTreeProps> = ({
 
             <button
               type="button"
+              aria-pressed={filters.satisDisi}
+              onClick={toggleFilterSatisDisi}
+              className={`w-full flex items-center justify-between min-h-12 px-3 rounded-md text-sm font-semibold cursor-pointer transition-colors ${
+                filters.satisDisi
+                  ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)] font-bold'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+              }`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[var(--text-muted)]" />
+                Satış Dışı
+              </span>
+              <span className="text-xs tabular-nums">{satisDisiCount}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={toggleFilterSatista}
               className={`w-full flex items-center justify-between min-h-12 px-3 rounded-md text-sm font-semibold cursor-pointer transition-colors ${
                 filters.satista
@@ -157,18 +188,6 @@ export const MenuCategoryTree: React.FC<MenuCategoryTreeProps> = ({
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Kategori Ekle Butonu */}
-      <div className="pt-2 border-t border-[var(--border)]">
-        <button
-          type="button"
-          onClick={onOpenNewCategoryModal}
-          className="tactile-btn w-full min-h-12 px-3 py-2 rounded-md bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-sm font-bold border border-[var(--border)] flex items-center justify-center gap-1.5 cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Kategori Ekle</span>
-        </button>
       </div>
 
       {/* Kategori Silme Onay Modalı */}

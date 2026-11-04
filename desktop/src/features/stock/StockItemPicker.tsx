@@ -90,7 +90,6 @@ export function StockItemPicker({ products, value, onChange, label = 'Ürün', d
       }}>Yeni stok kalemi oluştur</Button> : <p className="text-xs">Yeni kayıt için işletme sahibine başvurun.</p>}
       <Modal isOpen={open} title="Yeni stok kalemi" onClose={() => { if (!busy) setOpen(false); }} maxWidth="sm">
         <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-          <p className="text-sm">Hammadde veya ürün oluşturun. Satışa kendiliğinden açılmaz; mevcut stok girişiniz korunur.</p>
           {error ? <p role="alert" className="text-sm text-[var(--accent-red)]">{error}</p> : null}
           <label className="block">Ad<Input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label className="block">Stok birimi<select className={field} value={unit} onChange={(event) => setUnit(event.target.value)}>

@@ -7,6 +7,9 @@ import { Button } from '../../ui/Button';
 import { StockItemPicker } from './StockItemPicker';
 import { StockSupplierPicker } from './StockSupplierPicker';
 import { formatNumber } from '../../lib/numberText';
+import { ReceiptOptions } from './ReceiptOptions';
+import { emptyReceiptDraft, toReceiptInput, type ReceiptDraft } from '../../lib/purchaseReceipt';
+import { setProductRaw } from '../../lib/stockCreation';
 
 
 /** Ürün başına eldeki miktar ve maliyet. Hızlı giriş gerçek FIFO partisi açar. */
@@ -17,6 +20,10 @@ export function StockOverview() {
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptDraft>(emptyReceiptDraft);
+  const [converting, setConverting] = useState<string | null>(null);
+  const chosen = products.find((product) => product.id === productId);
+  const gramItems = chosen?.stockUnit === 'adet' ? [{ id: chosen.id, name: chosen.name }] : [];
 
   useEffect(() => {
     void load();
@@ -40,7 +47,9 @@ export function StockOverview() {
             id: product.id,
             name: product.name,
             unit: product.stockUnit,
+            isRaw: product.isRaw,
             quantity: own.reduce((sum, batch) => sum + batch.remainingQuantity, 0),
+            grams: own.reduce((sum, batch) => sum + batch.remainingQuantity * (batch.usableGramsPerUnit ?? 0), 0),
             valueCents: own.reduce((sum, batch) => sum + Math.round(batch.remainingQuantity * batch.unitCostCents), 0),
           };
         })
@@ -53,12 +62,30 @@ export function StockOverview() {
     const amount = Number(quantity.trim().replace(',', '.'));
     try {
       if (!productId || !Number.isFinite(amount) || amount <= 0) throw new Error('Ürün ve miktar girin.');
-      if (await quickReceive(productId, amount, parseMoneyToCents(unitCost), supplierId)) {
+      const input = toReceiptInput(receipt, gramItems.map((item) => item.id));
+      if (await quickReceive(productId, amount, parseMoneyToCents(unitCost), supplierId, input)) {
         setQuantity('');
         setUnitCost('');
+        setReceipt(emptyReceiptDraft());
       }
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : String(caught));
+    }
+  };
+
+  // Satış ürününe çevrilen kalem kapalı kalır; fiyatı ve satışa açılması menüden yapılır.
+  const convert = async (id: string, isRaw: boolean) => {
+    const product = products.find((item) => item.id === id);
+    if (!product) return;
+    setConverting(id);
+    setFormError(null);
+    try {
+      const updated = await setProductRaw(product, isRaw);
+      useStockStore.setState((state) => ({ products: state.products.map((item) => (item.id === id ? updated : item)) }));
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setConverting(null);
     }
   };
 
@@ -81,6 +108,7 @@ export function StockOverview() {
           <NumberInput aria-label="Birim alış fiyatı" placeholder="Birim alış (₺)" className="min-h-12" value={unitCost} onValueChange={setUnitCost} />
         </div>
         </fieldset>
+        <ReceiptOptions value={receipt} onChange={setReceipt} gramItems={gramItems} disabled={busy} />
         <Button variant="primary" className="min-h-12" disabled={busy} onClick={() => void receive()}>
           {pendingQuickReceipt ? 'Teslimi Yeniden Dene' : 'Stoğa Ekle'}
         </Button>
@@ -92,12 +120,19 @@ export function StockOverview() {
         <ul className="divide-y divide-[var(--border)]">
           {rows.map((row) => (
             <li key={row.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-              <span className="font-bold truncate">{row.name}</span>
+              <span className="min-w-0">
+                <span className="block font-bold truncate">{row.name}</span>
+                <span className="block text-xs text-[var(--text-secondary)]">{row.isRaw ? 'Hammadde' : 'Satış ürünü'}</span>
+              </span>
               <span className="flex items-center gap-4 tabular-nums">
                 <span className={row.quantity > 0 ? '' : 'font-bold text-[var(--accent-red)]'}>
                   {row.quantity > 0 ? `${formatNumber(row.quantity)} ${row.unit}` : 'Stok yok'}
+                  {row.grams > 0 ? ` · ${formatNumber(Math.round(row.grams))} g` : ''}
                 </span>
                 <span className="text-xs text-[var(--text-secondary)]">{formatMoney(row.valueCents)}</span>
+                <Button variant="secondary" className="min-h-12" disabled={busy || converting !== null} onClick={() => void convert(row.id, !row.isRaw)}>
+                  {row.isRaw ? 'Satış Ürününe Çevir' : 'Hammaddeye Çevir'}
+                </Button>
               </span>
             </li>
           ))}

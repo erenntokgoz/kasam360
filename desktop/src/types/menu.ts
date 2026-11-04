@@ -17,6 +17,16 @@ export interface ProductDto {
   stockoutReason?: string;
   stockUnit?: string;
   defaultStation?: string;
+  /** Hammadde satılmaz; menüde görünmez, stok ve reçetede görünür. */
+  isRaw: boolean;
+}
+
+/** Tükendi geçici, satış dışı kalıcı durumdur; süzgeçleri ayrıdır. */
+export interface ProductFilters {
+  tukendi: boolean;
+  satista: boolean;
+  satisDisi: boolean;
+  categoryId: string | null;
 }
 
 export interface CategoryDto {
@@ -135,11 +145,7 @@ export interface MenuState {
   activeTab: 'KATALOG' | 'FIYATLAR';
   detailTab: 'temel' | 'modifiye' | 'fiyat' | 'recete';
   searchQuery: string;
-  filters: {
-    tukendi: boolean;
-    satista: boolean;
-    categoryId: string | null;
-  };
+  filters: ProductFilters;
   busy: boolean;
   error: string | null;
   productRecipe: RecipeCostDto | null;
@@ -155,6 +161,7 @@ export interface MenuState {
   setCategoryFilter: (categoryId: string | null) => void;
   toggleFilterTukendi: () => void;
   toggleFilterSatista: () => void;
+  toggleFilterSatisDisi: () => void;
   clearError: () => void;
 
   saveProduct: (productData: Partial<ProductDto>) => Promise<boolean>;

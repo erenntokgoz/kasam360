@@ -13,6 +13,8 @@ pub struct StockBatch {
     pub unit_cost_cents: i64,
     pub received_at: String,
     pub expiry_date: Option<String>,
+    /// Adetle alınan malın bir adedinden çıkan kullanılabilir gram; ekranda partinin yanında görünür.
+    pub usable_grams_per_unit: Option<f64>,
 }
 
 pub async fn list_stock_batches(
@@ -21,7 +23,7 @@ pub async fn list_stock_batches(
 ) -> Result<Vec<StockBatch>, String> {
     let rows = sqlx::query(
         "SELECT b.id, b.product_id, p.name AS product_name, p.stock_unit, b.remaining_quantity,
-                b.unit_cost_cents, b.received_at, b.expiry_date
+                b.unit_cost_cents, b.received_at, b.expiry_date, b.usable_grams_per_unit
            FROM inventory_batches b
            JOIN products p ON p.id = b.product_id AND p.tenant_id = b.tenant_id
           WHERE b.tenant_id = ? AND b.remaining_quantity > 0
@@ -45,6 +47,9 @@ pub async fn list_stock_batches(
                 unit_cost_cents: row.try_get("unit_cost_cents").map_err(|e| e.to_string())?,
                 received_at: row.try_get("received_at").map_err(|e| e.to_string())?,
                 expiry_date: row.try_get("expiry_date").map_err(|e| e.to_string())?,
+                usable_grams_per_unit: row
+                    .try_get("usable_grams_per_unit")
+                    .map_err(|e| e.to_string())?,
             })
         })
         .collect()

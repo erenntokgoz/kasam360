@@ -14,6 +14,11 @@ describe('ürün arama', () => {
     expect(matchesProduct('869', 'Ayran', '8690001')).toBe(false);
   });
 
+  it('stok kodunda Türkçe dayanıklı arar', () => {
+    expect(matchesProduct('içk-0', 'Ayran', undefined, 'İÇK-01')).toBe(true);
+    expect(matchesProduct('yemek', 'Ayran', undefined, 'İÇK-01')).toBe(false);
+  });
+
   it('boş arama her ürünü gösterir', () => {
     expect(matchesProduct('  ', 'Ayran')).toBe(true);
   });
