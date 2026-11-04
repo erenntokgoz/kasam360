@@ -60,6 +60,21 @@ pub fn period_window(pay_period: &str, period: &str) -> Result<PeriodWindow, Str
     }
 }
 
+/// Verilen günü içeren dönemin anahtarı: ay `YYYY-MM`, hafta pazartesi, gün kendisi.
+pub fn current_key(pay_period: &str, today: NaiveDate) -> Result<String, String> {
+    match pay_period {
+        MONTHLY => Ok(today.format("%Y-%m").to_string()),
+        WEEKLY => {
+            let back = i64::from(today.weekday().num_days_from_monday());
+            Ok((today - Duration::days(back))
+                .format("%Y-%m-%d")
+                .to_string())
+        }
+        DAILY => Ok(today.format("%Y-%m-%d").to_string()),
+        other => Err(format!("gecersiz hakedis donemi: {other}")),
+    }
+}
+
 /// `YYYY-MM` dönemini `[baslangic, bitis]` aralığına çevirir.
 /// Geçersiz dönem hata verir; sessizce tüm zaman aralığına düşmez.
 pub fn period_range(period: &str) -> Result<(String, String), String> {
@@ -110,6 +125,15 @@ mod tests {
         assert_eq!(window.to, "2026-11-08T23:59:59");
         assert_eq!(window.days, 7);
         assert!(period_window(WEEKLY, "2026-11-03").is_err());
+    }
+
+    #[test]
+    fn icinde_bulunulan_donem_anahtari_hafta_pazartesiye_doner() {
+        let day = NaiveDate::from_ymd_opt(2026, 11, 5).expect("tarih");
+        assert_eq!(current_key(MONTHLY, day).expect("ay"), "2026-11");
+        assert_eq!(current_key(WEEKLY, day).expect("hafta"), "2026-11-02");
+        assert_eq!(current_key(DAILY, day).expect("gün"), "2026-11-05");
+        assert!(current_key("YEARLY", day).is_err());
     }
 
     #[test]

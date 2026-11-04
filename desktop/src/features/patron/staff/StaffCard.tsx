@@ -4,6 +4,7 @@ import { errorText, localDate } from '../../../lib/cariInput';
 import { formatDay } from '../../../lib/date';
 import { formatMoney } from '../../../lib/formatMoney';
 import { formatNumber } from '../../../lib/numberText';
+import { recentPeriods } from '../../../lib/payPeriod';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
@@ -38,7 +39,7 @@ interface Kpi {
 }
 
 interface MoneySummary {
-  advances: { id: string; expenseId: string; amountCents: number; createdAt: string }[];
+  advances: { id: string; expenseId: string; amountCents: number; paymentMethod: string; createdAt: string }[];
   tipCents: number;
 }
 
@@ -60,10 +61,13 @@ const Fact: React.FC<{ label: string; value: string }> = ({ label, value }) => (
 );
 
 const month = () => localDate(new Date()).slice(0, 7);
+const METHOD_LABEL: Record<string, string> = { CASH: 'Nakit', BANK_TRANSFER: 'Havale' };
 
 /** Kişiye ait her şey tek kartta. Tutar ve kimlik sekmeleri müdürde hiç açılmaz. */
 export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, onEdit, onChanged }) => {
   const [tab, setTab] = useState<CardTab>('PROFILE');
+  // Avans ve bahşiş sekmeleri aynı ayı gösterir: geçmiş ayın avansı da düzeltilebilsin.
+  const [moneyPeriod, setMoneyPeriod] = useState(month());
   const [kpi, setKpi] = useState<Kpi | null>(null);
   const [money, setMoney] = useState<MoneySummary | null>(null);
   const [rules, setRules] = useState<PayrollRule[]>([]);
@@ -78,8 +82,8 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
 
   const loadMoney = useCallback(async () => {
     const { actorRole, tenantId } = sessionArgs();
-    setMoney(await invokeIPC<MoneySummary>('get_staff_money_summary', { tenantId, actorRole, userId: member.id, period: month() }));
-  }, [member.id]);
+    setMoney(await invokeIPC<MoneySummary>('get_staff_money_summary', { tenantId, actorRole, userId: member.id, period: moneyPeriod }));
+  }, [member.id, moneyPeriod]);
 
   useEffect(() => {
     const { actorRole, tenantId } = sessionArgs();
@@ -180,12 +184,30 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
       {tab === 'SHIFTS' ? <ShiftPlanPanel userId={member.id} /> : null}
       {tab === 'LEAVE' ? <LeavePanel userId={member.id} /> : null}
 
+      {tab === 'ADVANCE' || tab === 'TIPS' ? (
+        <div className="flex flex-wrap gap-2">
+          {recentPeriods('MONTHLY').map((item) => (
+            <Button
+              key={item.key}
+              variant={moneyPeriod === item.key ? 'selected' : 'secondary'}
+              className="min-h-12 text-sm tabular-nums"
+              onClick={() => {
+                setMoneyPeriod(item.key);
+                setEditingAdvance(null);
+              }}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+
       {tab === 'ADVANCE' ? (
         <div className="space-y-3">
           <AdvanceForm
-            key={editingAdvance?.id ?? 'new'}
+            key={`${editingAdvance?.id ?? 'new'}-${moneyPeriod}`}
             userId={member.id}
-            period={month()}
+            period={moneyPeriod}
             editing={editingAdvance}
             onCancelEdit={() => setEditingAdvance(null)}
             onSaved={() => {
@@ -196,7 +218,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
             <ul className="text-sm divide-y divide-[var(--border)]">
               {money.advances.map((advance) => (
                 <li key={advance.id} className="flex items-center gap-3 py-2">
-                  <span className="flex-1 text-[var(--text-secondary)]">{formatDay(advance.createdAt)}</span>
+                  <span className="flex-1 text-[var(--text-secondary)] tabular-nums">{formatDay(advance.createdAt)} · {METHOD_LABEL[advance.paymentMethod] ?? advance.paymentMethod}</span>
                   <span className="font-bold tabular-nums">{formatMoney(advance.amountCents)}</span>
                   <Button variant="ghost" aria-label="Avansı düzenle" onClick={() => setEditingAdvance(advance)}>
                     <Pencil className="w-5 h-5" />
@@ -207,7 +229,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
                 </li>
               ))}
             </ul>
-          ) : <p className="text-sm text-[var(--text-secondary)]">Bu ay avans yok.</p>}
+          ) : <p className="text-sm text-[var(--text-secondary)]">{moneyPeriod} döneminde avans yok.</p>}
         </div>
       ) : null}
 
@@ -226,7 +248,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
 
       {tab === 'SALARY' ? <RuleEditor userId={member.id} rules={rules} onSaved={loadRules} /> : null}
 
-      {tab === 'TIPS' ? <Fact label="Bu ay dağıtılan bahşiş" value={money ? formatMoney(money.tipCents) : '-'} /> : null}
+      {tab === 'TIPS' ? <Fact label={`${moneyPeriod} dağıtılan bahşiş`} value={money ? formatMoney(money.tipCents) : '-'} /> : null}
     </section>
   );
 };

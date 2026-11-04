@@ -14,12 +14,13 @@ pub struct PayrollRule {
     pub full_name: String,
     pub model: String,
     pub base_salary_cents: i64,
-    pub commission_percent: i64,
     pub hourly_rate_cents: i64,
     pub tip_multiplier_percent: i64,
-    pub profit_share_percent: i64,
     pub pay_period: String,
     pub active: bool,
+    /// Taban ücretin saat karşılığı (aylık 225, haftalık 45, günlük 7,5 saat).
+    /// Tutar gizliyse `None`: müdür saat ücretinden maaşı geri hesaplayamasın.
+    pub hourly_equivalent_cents: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -28,9 +29,13 @@ pub struct PayrollRuleInput {
     pub user_id: String,
     pub model: String,
     pub base_salary_cents: i64,
+    /// Komisyon modeli kaldırıldı; eski istemci gönderirse 0 dışı değer reddedilir.
+    #[serde(default)]
     pub commission_percent: i64,
     pub hourly_rate_cents: i64,
     pub tip_multiplier_percent: i64,
+    /// Kâr payı modeli kaldırıldı; alan yalnız eski istemci uyumu için durur.
+    #[serde(default)]
     pub profit_share_percent: i64,
     /// Eski istemci göndermezse kural aylık kalır.
     #[serde(default = "default_pay_period")]
@@ -68,6 +73,9 @@ pub struct PayrollRun {
     /// Hesabın dayandığı veri: satış, vardiye saati, havuz tutarı. Denetim
     /// için tutarın yanında "bu nereden geldi" bilgisi de saklanır.
     pub basis_note: String,
+    /// Saatlik modelde dönemde kapanmış çalışma süresi. Süre tutar değildir; müdür
+    /// de görür ki eksik vardiya kaydı fark edilsin.
+    pub worked_seconds: i64,
     /// Hesaplanamadıysa nedeni. Sessizce 0 yazmak yerine sebep bildirilir.
     pub warning: Option<String>,
 }
@@ -125,4 +133,20 @@ pub struct SuspiciousFlag {
     pub detail: String,
     pub measured: String,
     pub threshold: String,
+}
+
+/// Kişi kartındaki içinde bulunulan dönem hak edişi.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HourlyEarnings {
+    pub pay_period: String,
+    pub period: String,
+    pub from: String,
+    pub to: String,
+    pub worked_seconds: i64,
+    /// `None` = çağıran tutarı göremiyor.
+    pub hourly_rate_cents: Option<i64>,
+    pub earned_cents: Option<i64>,
+    /// Saatlerin okunduğu kayıt; ekranda kaynağı açıkça yazmak için.
+    pub source: String,
 }

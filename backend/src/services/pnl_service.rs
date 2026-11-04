@@ -268,7 +268,7 @@ pub async fn financial_report(
         .map_err(|err| format!("Gider kategorileri okunamadı: {}", err))?,
         None => sqlx::query(
             "SELECT category, SUM(amount_cents) AS total_cents, COUNT(*) AS count
-             FROM general_expenses WHERE tenant_id = ?
+             FROM general_expenses WHERE tenant_id = ? AND category <> 'STAFF_ADVANCE'
              GROUP BY category ORDER BY total_cents DESC",
         )
         .bind(tenant_id)

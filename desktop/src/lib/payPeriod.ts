@@ -39,3 +39,9 @@ export function recentPeriods(kind: PayPeriod, now = new Date()): PeriodOption[]
     return { key, label: key };
   });
 }
+
+/** Çalışma süresi tek ondalıklı saat: tam sayı onda bir saat üzerinden, virgüllü. */
+export function hoursText(seconds: number): string {
+  const tenths = Math.floor((seconds + 180) / 360);
+  return `${Math.floor(tenths / 10)},${tenths % 10}`;
+}

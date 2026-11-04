@@ -414,6 +414,9 @@ pub fn run() {
             commands::staff_commands::distribute_tip_pool,
             commands::staff_commands::get_staff_kpi,
             commands::staff_commands::get_staff_money_summary,
+            commands::payroll_commands::set_tip_multiplier,
+            commands::payroll_commands::get_hourly_earnings,
+            commands::payroll_commands::correct_staff_advance,
             commands::staff_commands::get_suspicious_activity,
             // Envanter 360°. Reçete ve raf ömrü komutları kendi feature
             // bayrağı kapalıyken 404 döner; bayrak kontrolü komutun ilk adımıdır.
