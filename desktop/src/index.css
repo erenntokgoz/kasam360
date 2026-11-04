@@ -10,246 +10,260 @@
   --text-sm--line-height: 1.375rem;
 }
 
-/* Defter dili: masa üstü, kâğıt ve kalem. Yeni renk eklenmez; bütün yüzeyler bunlardan türer.
-   Koyu temada masa yeşil kesim matı, açık temada kareli defter yaprağıdır; kâğıt ikisinde aynı. */
-:root {
-  --ink: #1e2a66;
-  --ink-soft: #3b4679;
-  --ink-faint: #565f8c;
-  --pen-red: #b3261e;
-  --pen-green: #1c6b45;
-  --sheet: #fbf0b2;
-  --sheet-yellow: #fbf0b2;
-  --sheet-cream: #fffdf1;
-  --sheet-green: #cbe6c4;
-  --sheet-pink: #f9cbc6;
-  --sheet-blue: #cddff5;
-  --sheet-orange: #fbd8a4;
-  --sheet-rule: rgba(30, 42, 102, 0.14);
-  --marker: #ffb4d0;
-  --sketch: 8px;
-  --font-hand: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --lift: 0 1px 1px rgba(0, 0, 0, 0.14), 0 6px 14px -6px rgba(0, 0, 0, 0.32);
-
-  --print: var(--ink);
-  --serial: var(--pen-red);
-  --pen: var(--ink);
-  --brand: var(--ink);
-  --brand-hover: #2a3880;
-  --primary-bg: var(--ink);
-  --primary-hover: var(--brand-hover);
-  --primary-fg: var(--sheet);
-  --success: var(--pen-green);
-  --success-hover: #17593a;
-  --success-bg: var(--success);
-  --success-fg: #ffffff;
-  --danger: var(--pen-red);
-  --danger-hover: #961f18;
-  --danger-bg: var(--danger);
-  --danger-fg: #ffffff;
-}
+/* KASAM360 Arayüz Tasarım Sistemi
+   Tokenler ve tipografi C:\Users\Eren Tokgöz\Desktop\kasam360-arayuz-referansi.html referansından alınmıştır. */
 
 :root,
-[data-theme="dark"] {
-  color-scheme: dark;
-  --desk: #1c2f2b;
-  --desk-line: rgba(255, 255, 255, 0.05);
-
-  --bg-canvas: var(--desk);
-  --bg-panel: #223733;
-  --bg-card: #2a423d;
-  --bg-subtle: #2a423d;
-  --bg-hover: #355049;
-  --bg-surface: var(--bg-panel);
-  --bg-base: var(--bg-canvas);
-  --bg-elevated: var(--bg-card);
-  --bg-interactive: var(--bg-subtle);
-  --border: #456460;
-  --border-subtle: var(--border);
-  --border-strong: #6c8c86;
-  --text-primary: #fbf6dc;
-  --text-secondary: #d7dcc4;
-  --text-muted: #adbaa8;
-  --text-tertiary: var(--text-muted);
-  --warning: #fbd8a4;
-  --warning-hover: #fde6c4;
-  --info: var(--sheet-blue);
-
-  --accent-amber: #fbd8a4;
-  --accent-amber-hover: #fde6c4;
-  --accent-amber-soft: #3d4326;
-  --accent-amber-border: #8c7f45;
-  --accent-emerald: #cbe6c4;
-  --accent-emerald-hover: #dcefd6;
-  --accent-emerald-soft: #24463a;
-  --accent-emerald-border: #5d8a74;
-  --accent-red: #f9cbc6;
-  --accent-red-hover: #fbdcd8;
-  --accent-red-soft: #5a2a38;
-  --accent-red-border: #a65a6e;
-  --accent-blue: #cddff5;
-  --accent-blue-soft: #29434f;
-  --accent-blue-border: #6d8ba0;
-  --accent-violet: #e0d4f5;
-  --accent-violet-soft: #33384f;
-  --accent-violet-border: #7a7aa0;
-}
-
 [data-theme="light"] {
   color-scheme: light;
-  --desk: #eeebdf;
-  --desk-line: rgba(30, 42, 102, 0.08);
+  --base: #f4f6f8;
+  --surface: #ffffff;
+  --hover: #edf2f5;
+  --line: #d7dfe6;
+  --text: #19232c;
+  --muted: #526473;
+  --action: #214f58;
+  --button: #ffffff;
+  --ok: #1c6648;
+  --warn: #834710;
+  --focus: #257e91;
 
-  --bg-canvas: var(--desk);
-  --bg-panel: #f6f3e8;
-  --bg-card: #fffdf1;
-  --bg-subtle: #e7e3d3;
-  --bg-hover: #dfdac7;
-  --bg-surface: var(--bg-panel);
-  --bg-base: var(--bg-canvas);
-  --bg-elevated: var(--bg-card);
-  --bg-interactive: var(--bg-subtle);
-  --border: #c4bfa8;
-  --border-subtle: var(--border);
-  --border-strong: #8a8672;
-  --text-primary: var(--ink);
-  --text-secondary: var(--ink-soft);
-  --text-muted: var(--ink-faint);
-  --text-tertiary: var(--text-muted);
-  --warning: #7a5200;
-  --warning-hover: #5f4000;
-  --info: var(--ink);
+  /* Semantik sistem değişkenleri referans tokenlerine eşlenir */
+  --desk: var(--base);
+  --desk-line: transparent;
 
-  --accent-amber: #7a5200;
-  --accent-amber-hover: #5f4000;
-  --accent-amber-soft: #f7dfa6;
-  --accent-amber-border: #b79f3a;
-  --accent-emerald: var(--pen-green);
-  --accent-emerald-hover: #17593a;
-  --accent-emerald-soft: var(--sheet-green);
-  --accent-emerald-border: #7dab89;
-  --accent-red: var(--pen-red);
+  --bg-canvas: var(--base);
+  --bg-panel: var(--surface);
+  --bg-card: var(--surface);
+  --bg-subtle: var(--hover);
+  --bg-hover: var(--hover);
+  --bg-surface: var(--surface);
+  --bg-base: var(--base);
+  --bg-elevated: var(--surface);
+  --bg-interactive: var(--hover);
+
+  --border: var(--line);
+  --border-subtle: var(--line);
+  --border-strong: var(--line);
+
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  --text-muted: var(--muted);
+  --text-tertiary: var(--muted);
+
+  --brand: var(--action);
+  --brand-hover: #193e45;
+  --primary-bg: var(--action);
+  --primary-hover: #193e45;
+  --primary-fg: var(--button);
+
+  --success: var(--ok);
+  --success-hover: #144e36;
+  --success-bg: var(--ok);
+  --success-fg: var(--button);
+
+  --warning: var(--warn);
+  --warning-hover: #6d3a0c;
+
+  --danger: #b3261e;
+  --danger-hover: #961f18;
+  --danger-bg: #b3261e;
+  --danger-fg: #ffffff;
+
+  --info: var(--action);
+
+  --accent-amber: var(--warn);
+  --accent-amber-hover: #6d3a0c;
+  --accent-amber-soft: rgba(131, 71, 16, 0.12);
+  --accent-amber-border: var(--warn);
+
+  --accent-emerald: var(--ok);
+  --accent-emerald-hover: #144e36;
+  --accent-emerald-soft: rgba(28, 102, 72, 0.12);
+  --accent-emerald-border: var(--ok);
+
+  --accent-red: #b3261e;
   --accent-red-hover: #961f18;
-  --accent-red-soft: var(--sheet-pink);
-  --accent-red-border: #d68a7f;
-  --accent-blue: var(--ink);
-  --accent-blue-soft: var(--sheet-blue);
-  --accent-blue-border: #8fa3d6;
-  --accent-violet: #54348f;
-  --accent-violet-soft: #e2d9f3;
-  --accent-violet-border: #a792cf;
+  --accent-red-soft: rgba(179, 38, 30, 0.12);
+  --accent-red-border: #b3261e;
+
+  --accent-blue: var(--action);
+  --accent-blue-soft: rgba(33, 79, 88, 0.12);
+  --accent-blue-border: var(--line);
+
+  --sheet: var(--surface);
+  --sheet-yellow: var(--surface);
+  --sheet-cream: var(--surface);
+  --sheet-green: rgba(28, 102, 72, 0.12);
+  --sheet-pink: rgba(179, 38, 30, 0.12);
+  --sheet-blue: rgba(33, 79, 88, 0.12);
+  --sheet-orange: rgba(131, 71, 16, 0.12);
+  --sheet-rule: var(--line);
+  --slip: var(--surface);
+
+  --marker: var(--hover);
+  --sketch: 6px;
+  --font-hand: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --lift: 0 1px 3px rgba(17, 27, 36, 0.08), 0 4px 12px rgba(17, 27, 36, 0.04);
+
+  --print: var(--text);
+  --serial: var(--warn);
+  --pen: var(--text);
+  --ink: var(--text);
+  --ink-soft: var(--muted);
+  --ink-faint: var(--muted);
+  --pen-red: #b3261e;
+  --pen-green: var(--ok);
 }
 
-/* Kâğıt üstünde yazı kalemle, kenar çizgi kurşun renginde olur. */
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  color-scheme: dark;
+  --base: #10161b;
+  --surface: #182128;
+  --hover: #22303a;
+  --line: #33424e;
+  --text: #eef2f5;
+  --muted: #acbac5;
+  --action: #a0d7df;
+  --button: #14252b;
+  --ok: #8bd2ad;
+  --warn: #f0be83;
+  --focus: #9cdae6;
+
+  --desk: var(--base);
+  --desk-line: transparent;
+
+  --bg-canvas: var(--base);
+  --bg-panel: var(--surface);
+  --bg-card: var(--surface);
+  --bg-subtle: var(--hover);
+  --bg-hover: var(--hover);
+  --bg-surface: var(--surface);
+  --bg-base: var(--base);
+  --bg-elevated: var(--surface);
+  --bg-interactive: var(--hover);
+
+  --border: var(--line);
+  --border-subtle: var(--line);
+  --border-strong: var(--line);
+
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  --text-muted: var(--muted);
+  --text-tertiary: var(--muted);
+
+  --brand: var(--action);
+  --brand-hover: #b8e4eb;
+  --primary-bg: var(--action);
+  --primary-hover: #b8e4eb;
+  --primary-fg: var(--button);
+
+  --success: var(--ok);
+  --success-hover: #a3e2c1;
+  --success-bg: var(--ok);
+  --success-fg: var(--button);
+
+  --warning: var(--warn);
+  --warning-hover: #ffd4a3;
+
+  --danger: #f07167;
+  --danger-hover: #f89a93;
+  --danger-bg: #f07167;
+  --danger-fg: #14252b;
+
+  --info: var(--action);
+
+  --accent-amber: var(--warn);
+  --accent-amber-hover: #ffd4a3;
+  --accent-amber-soft: rgba(240, 190, 131, 0.15);
+  --accent-amber-border: var(--warn);
+
+  --accent-emerald: var(--ok);
+  --accent-emerald-hover: #a3e2c1;
+  --accent-emerald-soft: rgba(139, 210, 173, 0.15);
+  --accent-emerald-border: var(--ok);
+
+  --accent-red: #f07167;
+  --accent-red-hover: #f89a93;
+  --accent-red-soft: rgba(240, 113, 103, 0.15);
+  --accent-red-border: #f07167;
+
+  --accent-blue: var(--action);
+  --accent-blue-soft: rgba(160, 215, 223, 0.15);
+  --accent-blue-border: var(--line);
+
+  --sheet: var(--surface);
+  --sheet-yellow: var(--surface);
+  --sheet-cream: var(--surface);
+  --sheet-green: rgba(139, 210, 173, 0.15);
+  --sheet-pink: rgba(240, 113, 103, 0.15);
+  --sheet-blue: rgba(160, 215, 223, 0.15);
+  --sheet-orange: rgba(240, 190, 131, 0.15);
+  --sheet-rule: var(--line);
+  --slip: var(--surface);
+
+  --marker: var(--hover);
+  --sketch: 6px;
+  --font-hand: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --lift: 0 1px 3px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.22);
+
+  --print: var(--text);
+  --serial: var(--warn);
+  --pen: var(--text);
+  --ink: var(--text);
+  --ink-soft: var(--muted);
+  --ink-faint: var(--muted);
+  --pen-red: #f07167;
+  --pen-green: var(--ok);
+}
+
 .paper,
 .sheet,
-.bar {
-  color-scheme: light;
-  --bg-canvas: #f8edaa;
-  --bg-panel: var(--slip);
-  --bg-card: var(--sheet-cream);
-  --bg-subtle: rgba(255, 255, 255, 0.5);
-  --bg-hover: rgba(30, 42, 102, 0.08);
-  --bg-surface: var(--bg-panel);
-  --bg-base: var(--bg-canvas);
-  --bg-elevated: var(--bg-card);
-  --bg-interactive: var(--bg-subtle);
-  --border: rgba(30, 42, 102, 0.26);
-  --border-subtle: var(--border);
-  --border-strong: rgba(30, 42, 102, 0.55);
-  --text-primary: var(--ink);
-  --text-secondary: var(--ink-soft);
-  --text-muted: var(--ink-faint);
-  --text-tertiary: var(--text-muted);
-  --warning: #7a5200;
-  --warning-hover: #5f4000;
-  --info: var(--ink);
-
-  --accent-amber: #7a5200;
-  --accent-amber-hover: #5f4000;
-  --accent-amber-soft: var(--sheet-orange);
-  --accent-amber-border: #b79f3a;
-  --accent-emerald: var(--pen-green);
-  --accent-emerald-hover: #17593a;
-  --accent-emerald-soft: var(--sheet-green);
-  --accent-emerald-border: #7dab89;
-  --accent-red: var(--pen-red);
-  --accent-red-hover: #961f18;
-  --accent-red-soft: var(--sheet-pink);
-  --accent-red-border: #d68a7f;
-  --accent-blue: var(--ink);
-  --accent-blue-soft: var(--sheet-blue);
-  --accent-blue-border: #8fa3d6;
-  --accent-violet: #54348f;
-  --accent-violet-soft: #e2d9f3;
-  --accent-violet-border: #a792cf;
-
-  background-color: var(--slip);
-  color: var(--ink);
+.surface {
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--lift);
 }
 
-/* Uzun süre açık kalan işlem yüzeyleri etkin temanın renklerini kullanır. */
+.paper::before {
+  content: none !important;
+}
+
+.paper .paper:not(.fixed > .paper) {
+  box-shadow: none;
+}
+
 .work-surface {
-  background-color: var(--bg-panel);
-  color: var(--text-primary);
+  background-color: var(--surface);
+  color: var(--text);
 }
 
 .work-surface .btn-secondary,
 .work-surface .btn-selected {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
+  color: var(--text);
+  border-color: var(--line);
 }
 
-.work-surface .btn-secondary { background-color: var(--bg-card); }
-.work-surface .btn-secondary:hover { background-color: var(--bg-hover); }
-.work-surface .btn-selected { background-color: var(--accent-blue-soft); }
+.work-surface .btn-secondary {
+  background-color: var(--surface);
+}
+.work-surface .btn-secondary:hover {
+  background-color: var(--hover);
+}
+.work-surface .btn-selected {
+  background-color: var(--hover);
+  border-color: var(--action);
+}
 .work-surface select {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border-strong);
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
   padding-inline: 0.75rem;
 }
-
-/* Not kâğıdı: üstte delikler, zeminde çizgiler. */
-.paper {
-  --slip: var(--sheet);
-  background-image: repeating-linear-gradient(transparent 0 25px, var(--sheet-rule) 25px 26px);
-  background-position: 0 16px;
-  background-attachment: local;
-  border-color: var(--border);
-  border-radius: 4px;
-  box-shadow: var(--lift);
-}
-.paper:not(.absolute):not(.fixed) {
-  position: relative;
-}
-.paper::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  left: 12px;
-  right: 12px;
-  height: 6px;
-  pointer-events: none;
-  background: radial-gradient(circle at 3px 3px, var(--desk) 3px, transparent 3.5px) 0 0 / 16px 6px repeat-x;
-}
-.paper .paper:not(.fixed > .paper) {
-  --slip: var(--sheet-cream);
-  background-image: none;
-  box-shadow: none;
-}
-.paper .paper:not(.fixed > .paper)::before {
-  content: none;
-}
-
-/* Düz kart: çizgisiz, deliksiz. Masa ve ürün kartları not kâğıdı değildir. */
-.sheet {
-  --slip: var(--sheet-cream);
-  border-radius: 3px;
-  box-shadow: var(--lift);
-}
-.sheet.slip-orange { --slip: var(--sheet-orange); }
-.sheet.slip-blue { --slip: var(--sheet-blue); }
 
 * {
   box-sizing: border-box;
@@ -257,7 +271,6 @@
   -webkit-user-select: none;
 }
 
-/* Hata metni ve işlem kimliği destek için kopyalanabilmelidir. */
 [role="alert"],
 [role="alert"] *,
 input,
@@ -271,15 +284,12 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
-  background-color: var(--desk);
-  background-image:
-    linear-gradient(var(--desk-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--desk-line) 1px, transparent 1px);
-  background-size: 24px 24px;
-  color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 16px;
-  line-height: 1.4;
+  background-color: var(--base);
+  background-image: none;
+  color: var(--text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
   overflow: hidden;
@@ -287,142 +297,325 @@ html, body {
   touch-action: manipulation;
 }
 
-:focus-visible {
-  outline: 3px solid var(--accent-blue);
-  outline-offset: 2px;
+button, input {
+  font: inherit;
 }
-/* Pencere paneli odağı kod ile alır; panelin çevresinde çizgi görünmesin. */
+button {
+  cursor: pointer;
+}
+button, input {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: .55rem .8rem;
+  background: var(--surface);
+  color: var(--text);
+}
+button:hover {
+  background: var(--hover);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
 [tabindex="-1"]:focus-visible {
   outline: none;
 }
 
-/* Boş masa: mata kalemle çizilmiş masa. Sandalye çizgileri kişi sayısını gösterir. */
-.table-spot {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  width: 100%;
-  color: var(--text-muted);
-  cursor: pointer;
+h1, h2, p {
+  margin: 0;
 }
-.table-spot:hover {
-  color: var(--text-primary);
+h1 {
+  font-size: clamp(1.6rem, 4vw, 2.15rem);
+  letter-spacing: -0.04em;
 }
-.table-spot svg {
-  position: absolute;
-  inset: 4px;
-  width: calc(100% - 8px);
-  height: calc(100% - 8px);
-  pointer-events: none;
-}
-.table-spot-name {
-  position: relative;
-  font-family: var(--font-hand);
-  font-size: 1.375rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.table-spot-note {
-  position: relative;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--accent-blue);
+h2 {
+  font-size: 1.12rem;
 }
 
-/* Düğme kâğıda kalemle çizilmiş kutudur: köşeler düzensiz, gölge yok. */
 .tactile-btn {
-  font-family: var(--font-hand);
-  font-weight: 700;
-  border: 2px solid var(--ink);
-  border-radius: var(--sketch);
+  font-family: inherit;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   box-shadow: none;
-  transition: background-color 80ms ease, transform 60ms ease;
+  transition: background-color 80ms ease, border-color 80ms ease;
 }
 .tactile-btn:active:not(:disabled) {
-  transform: translateY(1px) rotate(-0.3deg);
+  transform: translateY(1px);
 }
 .tactile-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.primary,
+.btn-primary {
+  background-color: var(--action);
+  border-color: var(--action);
+  color: var(--button);
+  font-weight: 650;
+}
+.primary:hover,
+.btn-primary:hover {
+  background-color: var(--action);
+  filter: brightness(0.92);
+}
+
 .btn-secondary {
-  color: var(--ink);
-  background-color: var(--sheet-cream);
+  color: var(--text);
+  background-color: var(--surface);
+  border: 1px solid var(--line);
 }
 .btn-secondary:hover {
-  background-color: var(--sheet);
+  background-color: var(--hover);
 }
+
 .paper .btn-secondary,
 .bar .btn-secondary {
-  background-color: rgba(255, 255, 255, 0.55);
+  background-color: var(--surface);
+  border-color: var(--line);
 }
 .paper .btn-secondary:hover,
 .bar .btn-secondary:hover {
-  background-color: rgba(255, 255, 255, 0.85);
+  background-color: var(--hover);
 }
-.btn-primary {
-  color: var(--sheet);
-  background-color: var(--ink);
-}
-.btn-primary:hover {
-  background-color: var(--brand-hover);
-}
+
 .btn-selected {
-  color: var(--ink);
-  background-color: var(--marker);
+  color: var(--text);
+  background-color: var(--hover);
+  border-color: var(--action);
+  font-weight: 650;
 }
+
 .btn-ghost {
   color: inherit;
   background-color: transparent;
   border-color: transparent;
 }
 .btn-ghost:hover {
-  background-color: var(--bg-hover);
+  background-color: var(--hover);
 }
+
 .btn-success {
-  color: #ffffff;
-  background-color: var(--pen-green);
-  border-color: var(--pen-green);
+  color: var(--button);
+  background-color: var(--ok);
+  border-color: var(--ok);
+  font-weight: 650;
 }
+.btn-success:hover {
+  filter: brightness(0.92);
+}
+
 .btn-danger {
   color: #ffffff;
-  background-color: var(--pen-red);
-  border-color: var(--pen-red);
+  background-color: var(--danger);
+  border-color: var(--danger);
+  font-weight: 650;
+}
+.btn-danger:hover {
+  filter: brightness(0.92);
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  padding: 1.35rem 1rem;
+}
+.brand {
+  font-weight: 800;
+  letter-spacing: .035em;
+  margin: 0 .55rem 2.3rem;
+}
+.menu-label {
+  color: var(--muted);
+  font-size: .8rem;
+  margin: 0 .55rem .4rem;
+}
+.nav-item {
+  display: block;
+  padding: .65rem .7rem;
+  border-radius: 5px;
+  color: var(--text);
+  text-decoration: none;
+}
+.nav-item[aria-current] {
+  background: var(--hover);
+  box-shadow: inset 3px 0 var(--action);
+  font-weight: 650;
+}
+.nav-item:hover {
+  background: var(--hover);
+}
+
+.workspace {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: clamp(1rem, 4vw, 2.6rem);
+}
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.1rem;
+}
+.kicker {
+  color: var(--muted);
+  font-size: .86rem;
+}
+
+.filter {
+  padding: .75rem;
+  display: flex;
+  gap: .7rem;
+  align-items: center;
+}
+.filter input {
+  width: min(100%, 19rem);
+}
+.filter output {
+  margin-left: auto;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-wrap {
+  overflow: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+th, td {
+  padding: .75rem .85rem;
+  border-top: 1px solid var(--line);
+  white-space: nowrap;
+}
+th {
+  font-size: .83rem;
+  color: var(--muted);
+  background: var(--base);
+  font-weight: 600;
+}
+td:first-child {
+  font-weight: 620;
+}
+.number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.status {
+  color: var(--ok);
+  font-weight: 600;
+}
+.low {
+  color: var(--warn);
+}
+.empty {
+  padding: 1rem;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+
+dialog {
+  width: min(390px, calc(100% - 2rem));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1.25rem;
+  background: var(--surface);
+  color: var(--text);
+}
+dialog::backdrop {
+  background: #111b2480;
+}
+dialog form, label {
+  display: grid;
+  gap: .45rem;
+}
+dialog form {
+  gap: .9rem;
+  margin-top: 1rem;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .55rem;
+}
+
+.toast,
+[role="status"] > .paper {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  max-width: calc(100% - 2rem);
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-left: 3px solid var(--ok) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 8px 25px rgba(17, 27, 36, 0.14) !important;
+  padding: .65rem .85rem !important;
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  color: var(--text) !important;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  box-shadow: inset 0 0 0 1000px var(--surface);
+  caret-color: var(--text);
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: .55rem .8rem;
+  background-color: var(--surface);
+  color: var(--text);
+}
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+  border-color: var(--focus);
+}
+
+.paper input:not([type="checkbox"]):not([type="radio"]),
+.paper select,
+.paper textarea,
+.bar select {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+}
+.paper input:focus,
+.paper select:focus,
+.paper textarea:focus {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus);
 }
 
 .rounded-md,
 .rounded-lg,
 .rounded-xl,
 .rounded-2xl {
-  border-radius: 4px;
-}
-
-/* Tarayıcının otomatik doldurma mavisi kâğıdı bozar ve yazıyı okunmaz yapar. */
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus {
-  -webkit-text-fill-color: var(--ink);
-  box-shadow: inset 0 0 0 1000px var(--sheet-cream);
-  caret-color: var(--ink);
-}
-
-/* Form alanı kâğıttaki yazı satırıdır. */
-.paper input:not([type="checkbox"]):not([type="radio"]),
-.paper select,
-.paper textarea,
-.bar select {
-  background-color: rgba(255, 255, 255, 0.6);
-  border: 0;
-  border-bottom: 2px solid var(--ink);
-  border-radius: 2px 2px 0 0;
-  color: var(--ink);
-}
-.paper input:focus,
-.paper select:focus,
-.paper textarea:focus {
-  border-bottom-color: var(--pen-red);
-  background-color: rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
 }

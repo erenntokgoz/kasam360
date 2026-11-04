@@ -1,4 +1,4 @@
-/* Sol menü: sayfa kenarına yapışmış ayraç bayrakları. */
+/* Sol Menü: referans tasarımına uygun kenar çubuğu ve menü öğeleri */
 .side-rail {
   position: relative;
   z-index: 10;
@@ -8,88 +8,90 @@
   flex-direction: column;
   padding: 8px 0 10px;
   user-select: none;
+  background-color: var(--surface);
+  border-right: 1px solid var(--line);
 }
+
 .side-flag {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   width: 72px;
-  min-height: 58px;
-  margin-bottom: 8px;
-  padding: 6px 4px 6px 2px;
-  font-family: var(--font-hand);
-  font-weight: 700;
-  font-size: 0.875rem;
+  min-height: 52px;
+  margin: 0 auto 6px;
+  padding: 6px 4px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.8125rem;
   line-height: 1rem;
-  color: var(--ink);
-  background-color: var(--flag);
-  border-radius: 0 7px 7px 0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+  color: var(--muted);
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  box-shadow: none;
   cursor: pointer;
-  transition: width 90ms ease;
+  transition: background-color 90ms ease, color 90ms ease;
 }
-.side-flag:nth-child(5n + 1) { --flag: var(--sheet-yellow); }
-.side-flag:nth-child(5n + 2) { --flag: var(--sheet-pink); }
-.side-flag:nth-child(5n + 3) { --flag: var(--sheet-green); }
-.side-flag:nth-child(5n + 4) { --flag: var(--sheet-blue); }
-.side-flag:nth-child(5n + 5) { --flag: var(--sheet-orange); }
-.side-flag:nth-child(6) { --flag: var(--sheet-cream); }
 .side-flag:hover {
-  width: 78px;
+  width: 72px;
+  background-color: var(--hover);
+  color: var(--text);
 }
 .side-flag[aria-current="page"] {
-  width: 84px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+  width: 72px;
+  background-color: var(--hover);
+  box-shadow: inset 3px 0 var(--action);
+  font-weight: 650;
+  color: var(--text);
 }
+
 .side-tool {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   width: 72px;
   min-height: 48px;
-  font-family: var(--font-hand);
-  font-weight: 700;
-  font-size: 0.8125rem;
+  margin: 0 auto 4px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.75rem;
   line-height: 1rem;
-  color: var(--text-secondary);
+  color: var(--muted);
+  border-radius: 6px;
   cursor: pointer;
+  transition: background-color 90ms ease, color 90ms ease;
 }
 .side-tool:hover {
-  color: var(--text-primary);
+  background-color: var(--hover);
+  color: var(--text);
 }
 
-/* Üst menü: bloknotun üst kenarı. Sekmeler fosforlu kalemle işaretlenir. */
+/* Üst menü şeridi */
 .bar {
-  --slip: var(--sheet);
   position: relative;
   z-index: 5;
   display: flex;
   align-items: stretch;
-  min-height: 58px;
-  padding-top: 10px;
+  min-height: 52px;
+  padding-top: 0;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--line);
+  box-shadow: none;
 }
 .bar::before {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: 12px;
-  right: 12px;
-  height: 6px;
-  pointer-events: none;
-  background: radial-gradient(circle at 3px 3px, var(--desk) 3px, transparent 3.5px) 0 0 / 16px 6px repeat-x;
+  content: none;
 }
 .bar-plain {
-  --slip: var(--sheet-cream);
   min-height: 48px;
   padding-top: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+  box-shadow: none;
+  border-bottom: 1px solid var(--line);
 }
 .bar-plain::before {
   content: none;
@@ -97,7 +99,7 @@
 .paper .bar {
   background-color: transparent;
   box-shadow: none;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--line);
 }
 .bar-tabs {
   display: flex;
@@ -118,118 +120,123 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 48px;
-  padding: 0 12px;
-  font-family: var(--font-hand);
-  font-size: 1.0625rem;
-  font-weight: 700;
+  min-height: 44px;
+  padding: 0 14px;
+  margin: 4px 0;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
   white-space: nowrap;
-  color: var(--ink-soft);
+  color: var(--muted);
   cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 90ms ease, color 90ms ease;
 }
 .bar-item:hover {
-  color: var(--ink);
+  color: var(--text);
+  background-color: var(--hover);
 }
 .bar-item[aria-selected="true"],
 .bar-item[aria-pressed="true"] {
-  color: var(--ink);
-  background-image: linear-gradient(transparent 22%, var(--marker) 22%, var(--marker) 80%, transparent 80%);
-  background-repeat: no-repeat;
-  background-size: calc(100% - 12px) 100%;
-  background-position: center;
+  color: var(--text);
+  background-color: var(--hover);
+  box-shadow: inset 0 -2px 0 var(--action);
+  font-weight: 650;
 }
 .bar-actions > .bar-item {
-  min-height: 44px;
+  min-height: 38px;
   padding: 0 12px;
-  color: var(--ink);
-  border: 2px solid var(--ink);
-  border-radius: var(--sketch);
-  background-color: rgba(255, 255, 255, 0.5);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background-color: var(--surface);
 }
 .bar-actions > .bar-item:hover {
-  background-color: rgba(255, 255, 255, 0.85);
+  background-color: var(--hover);
 }
 .bar-actions > .bar-primary,
 .bar-actions > .bar-primary:hover {
-  color: var(--sheet);
-  background-color: var(--ink);
+  color: var(--button);
+  background-color: var(--action);
+  border-color: var(--action);
+  font-weight: 650;
 }
 .bar-actions > .bar-danger {
-  color: var(--pen-red);
-  border-color: var(--pen-red);
+  color: #ffffff;
+  background-color: var(--danger);
+  border-color: var(--danger);
+  font-weight: 650;
 }
 .bar-label {
   display: inline-flex;
   align-items: center;
   padding: 0 10px;
-  font-family: var(--font-hand);
-  font-size: 1.125rem;
+  font-family: inherit;
+  font-size: 1rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
   white-space: nowrap;
-  color: var(--ink);
+  color: var(--text);
 }
 .bar-search {
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 200px;
-  height: 44px;
-  padding: 0 4px;
-  color: var(--ink-soft);
-  border-bottom: 2px solid var(--ink);
+  width: 220px;
+  height: 38px;
+  padding: 0 8px;
+  margin: auto 0;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background-color: var(--surface);
 }
 .bar-search input {
   width: 100%;
   height: 100%;
+  min-height: auto;
+  border: 0;
+  padding: 0;
   background: transparent;
   outline: none;
-  font-size: 0.9375rem;
-  color: var(--ink);
+  font-size: 0.875rem;
+  color: var(--text);
 }
 .bar-search input::placeholder {
-  color: var(--ink-faint);
+  color: var(--muted);
 }
-
-.slip-yellow { --slip: var(--sheet-yellow); }
-.slip-green { --slip: var(--sheet-green); }
-.slip-pink { --slip: var(--sheet-pink); }
-.slip-white { --slip: var(--sheet-cream); }
 
 .hand {
-  font-family: var(--font-hand);
-  font-weight: 700;
-  color: var(--pen);
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text);
 }
-/* Başlıklar el yazısıdır; tutar ve liste okunaklı kalsın diye gövde baskı yazısıdır. */
 .print-title {
-  font-family: var(--font-hand);
+  font-family: inherit;
   font-weight: 700;
   font-size: 1.125rem;
-  color: var(--print);
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 .serial {
-  color: var(--serial);
+  color: var(--warn);
 }
 
 .auth-title {
-  font-family: var(--font-hand);
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-family: inherit;
+  font-size: clamp(2.5rem, 6vw, 4rem);
   line-height: 1;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--text);
 }
 
 .ruled {
-  background-image: repeating-linear-gradient(transparent 0 47px, var(--sheet-rule) 47px 48px);
-  background-attachment: local;
-}
-
-.receipt-paper {
-  --slip: var(--sheet-cream);
+  background-image: none;
 }
 
 .kbd-badge {
-  font: 700 0.6875rem/1 "Segoe UI", sans-serif;
+  font: 700 0.6875rem/1 system-ui, sans-serif;
   padding: 3px 5px;
   border-radius: 4px;
   box-shadow: inset 0 0 0 1px currentColor;
@@ -247,12 +254,11 @@
 /* Termal Fiş Önizleme Stili */
 .receipt-paper {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  background-color: var(--bg-surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
 }
 
-/* Basımda yalnız fiş kâğıdı çıkar; yazıcı sürücüsü 80 mm ruloyu kullanır. */
 @media print {
   @page {
     margin: 0;
@@ -298,38 +304,31 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--line);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bg-hover);
+  background: var(--hover);
 }
 
-/* Kroki: kesim matı üstünde kareli kâğıda çizilmiş kısım planları. */
+/* Kroki yerleşimi */
 .kroki-mat {
   position: absolute;
   inset: 0;
   display: flex;
   overflow: auto;
   padding: 24px;
-  background-color: var(--desk);
-  background-image:
-    linear-gradient(var(--desk-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--desk-line) 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-color: var(--base);
+  background-image: none;
 }
 .kroki-room {
   position: absolute;
-  color-scheme: light;
-  color: var(--ink);
-  --text-primary: var(--ink);
-  --text-secondary: var(--ink-soft);
-  background-color: var(--sheet-cream);
-  background-image:
-    linear-gradient(var(--sheet-rule) 1px, transparent 1px),
-    linear-gradient(90deg, var(--sheet-rule) 1px, transparent 1px);
-  background-size: 20px 20px;
-  border-radius: 4px;
+  color: var(--text);
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   box-shadow: var(--lift);
 }
 .kroki-room-head {
@@ -337,21 +336,22 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  height: 56px;
-  padding: 0 20px;
-  border-bottom: 2px solid var(--ink);
-  background: var(--sheet);
-  border-radius: 4px 4px 0 0;
-  font-weight: 700;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--base);
+  border-radius: 7px 7px 0 0;
+  font-weight: 650;
 }
 .kroki-room-head h3 {
   margin: 0;
   overflow: hidden;
-  font-family: var(--font-hand);
-  font-size: 1.5rem;
+  font-family: inherit;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
   white-space: nowrap;
   text-overflow: ellipsis;
-  background: linear-gradient(transparent 55%, var(--marker) 55%);
+  background: none;
 }
 .kroki-zoom {
   position: absolute;
@@ -360,8 +360,9 @@
   display: flex;
   gap: 4px;
   padding: 4px;
-  color: var(--ink);
-  background: var(--sheet-cream);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 6px;
   box-shadow: var(--lift);
 }
@@ -369,30 +370,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
 }
 .kroki-zoom button:hover {
-  background: var(--sheet);
+  background: var(--hover);
 }
 .kroki-room .table-spot,
 .kroki-room .table-spot svg,
 .kroki-room .table-spot-name {
-  color: var(--ink);
+  color: var(--text);
   opacity: 1;
 }
 
-/* Takvim ikonu kâğıtta kalem rengindedir; koyu temanın beyaz ikonu kâğıtta kayboluyordu. */
-.paper input::-webkit-calendar-picker-indicator,
-.sheet input::-webkit-calendar-picker-indicator,
-.bar input::-webkit-calendar-picker-indicator {
-  opacity: 1;
-  cursor: pointer;
-  filter: brightness(0) saturate(100%) invert(14%) sepia(45%) saturate(2600%) hue-rotate(218deg);
-}
-
-/* Tarayıcının gg.aa.yyyy kalıbı değiştirilemez: boş alanda gizlenir, yerine sade etiket yazılır. */
 input[data-empty-date] {
   position: relative;
 }
@@ -405,23 +399,22 @@ input[data-empty-date]:not(:focus)::before {
   left: 0.875rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-muted);
+  color: var(--muted);
   pointer-events: none;
 }
 
-/* Masa ızgarası: hücre çizgileri kesim matının kılavuzudur. */
 .table-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   grid-auto-rows: 160px;
-  border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
 }
 .table-cell {
   min-width: 0;
   padding: 6px;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .table-spot .table-spot-amount {
   position: relative;
@@ -431,31 +424,22 @@ input[data-empty-date]:not(:focus)::before {
 .table-spot[data-state="busy"],
 .table-spot[data-state="bill"],
 .table-spot[data-state="reserved"] {
-  color: var(--text-primary);
+  color: var(--text);
 }
 .table-spot[data-state="busy"] .table-top {
-  fill: var(--bg-hover);
+  fill: var(--hover);
 }
 .table-spot[data-state="bill"] {
-  color: var(--accent-amber);
+  color: var(--warn);
 }
 .table-spot[data-state="bill"] .table-top {
   fill: var(--accent-amber-soft);
 }
 .table-spot[data-state="reserved"] {
-  color: var(--accent-blue);
+  color: var(--action);
 }
 .table-spot[data-state="reserved"] .table-top {
   fill: var(--accent-blue-soft);
-}
-.kroki-room .table-spot[data-state="busy"] .table-top {
-  fill: var(--sheet);
-}
-.kroki-room .table-spot[data-state="bill"] .table-top {
-  fill: var(--sheet-orange);
-}
-.kroki-room .table-spot[data-state="reserved"] .table-top {
-  fill: var(--sheet-blue);
 }
 .kroki-room .table-spot-name {
   font-size: 1rem;
