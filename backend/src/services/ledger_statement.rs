@@ -37,6 +37,8 @@ pub struct StatementLine {
     /// Tedarikçi belgesi.
     pub document_no: Option<String>,
     pub purchase_order_id: Option<String>,
+    /// Alış satırının sipariş numarası; belge numarası girilmemişse ikisi aynıdır.
+    pub order_number: Option<String>,
 }
 
 /// Bir cari kartın dönem ekstresi.
@@ -122,10 +124,13 @@ pub async fn directory_statement(
     // Dönem içi borç hareketleri
     let debt_rows = sqlx::query(
         "SELECT deb.id, deb.type, deb.total_amount_cents, deb.description, deb.created_at,
-                deb.due_date, deb.order_id, sd.document_no, sd.purchase_order_id
+                deb.due_date, deb.order_id, sd.document_no, sd.purchase_order_id,
+                po.order_number
          FROM debts deb
          LEFT JOIN supplier_documents sd
                 ON sd.debt_id = deb.id AND sd.tenant_id = deb.tenant_id
+         LEFT JOIN purchase_orders po
+                ON po.id = sd.purchase_order_id AND po.tenant_id = sd.tenant_id
          WHERE deb.tenant_id = ? AND deb.directory_id = ?
            AND date(deb.created_at) >= date(?) AND date(deb.created_at) <= date(?)
          ORDER BY deb.created_at ASC, deb.id ASC",
@@ -142,11 +147,13 @@ pub async fn directory_statement(
     let payment_rows = sqlx::query(
         "SELECT dp.id, dp.debt_id, d.type as debt_type, dp.amount_cents,
                 dp.payment_method, dp.notes, dp.created_at, d.due_date, d.order_id,
-                sd.document_no, sd.purchase_order_id
+                sd.document_no, sd.purchase_order_id, po.order_number
          FROM debt_payments dp
          JOIN debts d ON d.id = dp.debt_id AND d.tenant_id = dp.tenant_id
          LEFT JOIN supplier_documents sd
                 ON sd.debt_id = d.id AND sd.tenant_id = d.tenant_id
+         LEFT JOIN purchase_orders po
+                ON po.id = sd.purchase_order_id AND po.tenant_id = sd.tenant_id
          WHERE dp.tenant_id = ? AND d.directory_id = ?
            AND date(dp.created_at) >= date(?) AND date(dp.created_at) <= date(?)
          ORDER BY dp.created_at ASC, dp.id ASC",
@@ -182,6 +189,7 @@ pub async fn directory_statement(
             order_id: r.try_get("order_id").map_err(|e| e.to_string())?,
             document_no: r.try_get("document_no").map_err(|e| e.to_string())?,
             purchase_order_id: r.try_get("purchase_order_id").map_err(|e| e.to_string())?,
+            order_number: r.try_get("order_number").map_err(|e| e.to_string())?,
         });
     }
 
@@ -217,6 +225,7 @@ pub async fn directory_statement(
             order_id: r.try_get("order_id").map_err(|e| e.to_string())?,
             document_no: r.try_get("document_no").map_err(|e| e.to_string())?,
             purchase_order_id: r.try_get("purchase_order_id").map_err(|e| e.to_string())?,
+            order_number: r.try_get("order_number").map_err(|e| e.to_string())?,
         });
     }
 

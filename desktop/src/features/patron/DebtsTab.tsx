@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { useCariStore } from '../../stores/cariStore';
+import { balanceLabel } from '../../lib/cariLedger';
 import { formatMoney } from '../../lib/formatMoney';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { CariCardModal } from './CariCardModal';
 import { CariCardDetail } from './CariCardDetail';
-import { SupplierDocumentsPanel } from './SupplierDocumentsPanel';
+import { CariPendingReceipts } from './CariPendingReceipts';
 import type { DirectoryContact } from '../../types/ledger';
 
 type CariTab = 'CUSTOMER' | 'SUPPLIER';
@@ -22,8 +23,29 @@ function balanceTone(cents: number): string {
   return 'text-[var(--text-muted)]';
 }
 
+const CardRow: React.FC<{ card: DirectoryContact; onOpen: () => void }> = ({ card, onOpen }) => (
+  <li>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full min-h-12 px-4 py-3 text-left flex items-center justify-between gap-3 cursor-pointer hover:bg-[var(--bg-hover)]"
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-bold truncate text-[var(--text-primary)]">{card.name}</span>
+        <span className="block text-xs text-[var(--text-muted)] truncate tabular-nums">{card.phone || 'Telefon yok'}</span>
+      </span>
+      <span className="text-right shrink-0">
+        <span className={`block text-sm font-bold tabular-nums ${balanceTone(card.balanceCents)}`}>
+          {formatMoney(Math.abs(card.balanceCents))}
+        </span>
+        <span className="block text-xs text-[var(--text-secondary)]">{balanceLabel(card.balanceCents)}</span>
+      </span>
+    </button>
+  </li>
+);
+
 export const DebtsTab: React.FC = () => {
-  const { cards, loadError, loadCards } = useCariStore();
+  const { cards, awaiting, loadError, loadCards, loadAwaiting } = useCariStore();
   const [tab, setTab] = useState<CariTab>('CUSTOMER');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -35,8 +57,13 @@ export const DebtsTab: React.FC = () => {
     void refresh();
   }, [refresh]);
 
-  // Sağ taraf boş bir kutu olarak kalmasın: seçim yoksa ilk kart açık gelir.
-  const selected = cards.find((card) => card.id === selectedId) ?? cards[0] ?? null;
+  useEffect(() => {
+    if (tab === 'SUPPLIER') void loadAwaiting();
+  }, [tab, loadAwaiting]);
+
+  const selected = selectedId ? cards.find((card) => card.id === selectedId) ?? null : null;
+  // Kartı olmayan tedarikçinin teslimi hiçbir kartta görünmez; listede durur, onayda kart açılır.
+  const unlinked = tab === 'SUPPLIER' ? awaiting.filter((document) => !document.directoryId) : [];
 
   const handleTab = (next: CariTab) => {
     setTab(next);
@@ -50,6 +77,40 @@ export const DebtsTab: React.FC = () => {
     setSelectedId(card.id);
     void loadCards(tab, '');
   };
+
+  const errorBox = loadError ? (
+    <div
+      role="alert"
+      className="p-3 rounded-lg bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red)] text-xs font-semibold"
+    >
+      {loadError}
+    </div>
+  ) : null;
+
+  if (selected) {
+    return (
+      <div className="flex flex-col gap-4 h-full min-h-0 overflow-y-auto">
+        {errorBox}
+        <CariCardDetail
+          key={selected.id}
+          card={selected}
+          onBack={() => setSelectedId(null)}
+          onChanged={() => void refresh()}
+          onDeleted={() => {
+            setSelectedId(null);
+            void refresh();
+          }}
+        />
+      </div>
+    );
+  }
+
+  const createButton = (
+    <Button variant="primary" onClick={() => setIsCreating(true)} className="min-h-12">
+      <Plus className="w-4 h-4" />
+      <span>Yeni Kart</span>
+    </Button>
+  );
 
   return (
     <div className="flex flex-col gap-4 h-full min-h-0">
@@ -79,66 +140,39 @@ export const DebtsTab: React.FC = () => {
             className="pl-9 min-h-12"
           />
         </div>
-        <Button variant="primary" onClick={() => setIsCreating(true)} className="min-h-12">
-          <Plus className="w-4 h-4" />
-          <span>Yeni Kart</span>
-        </Button>
       </div>
 
-      {loadError ? (
-        <div
-          role="alert"
-          className="p-3 rounded-lg bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red)] text-xs font-semibold"
-        >
-          {loadError}
-        </div>
-      ) : null}
+      {errorBox}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 flex-1 min-h-0">
-        <ul className="paper border border-[var(--border)] rounded-xl overflow-y-auto divide-y divide-[var(--border)] max-h-[70vh]">
-          {cards.length === 0 ? (
-            <li className="p-6 text-center text-xs text-[var(--text-muted)]">
-              {search.trim() ? 'Aramayla eşleşen kart yok.' : 'Henüz kart yok.'}
-            </li>
-          ) : (
-            cards.map((card) => (
-              <li key={card.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(card.id)}
-                  aria-current={card.id === selected?.id}
-                  className={`w-full min-h-12 p-3 text-left flex items-center justify-between gap-3 cursor-pointer ${
-                    card.id === selected?.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'
-                  }`}
-                >
-                  <span className="min-w-0">
-                    <span className="block text-xs font-bold truncate text-[var(--text-primary)]">
-                      {card.name}
-                    </span>
-                    <span className="block text-xs text-[var(--text-muted)] truncate">
-                      {card.phone || 'Telefon yok'}
-                    </span>
-                  </span>
-                  <span className={`text-xs font-bold tabular-nums shrink-0 ${balanceTone(card.balanceCents)}`}>
-                    {formatMoney(card.balanceCents)}
-                  </span>
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
+      <CariPendingReceipts
+        documents={unlinked}
+        showSupplier
+        onDone={() => {
+          void loadAwaiting();
+          void refresh();
+        }}
+      />
 
-        <div className="min-w-0 space-y-4 overflow-y-auto max-h-[70vh]">
-          {tab === 'SUPPLIER' ? <SupplierDocumentsPanel onChanged={refresh} /> : null}
-          {selected ? (
-            <CariCardDetail key={selected.id} card={selected} onChanged={refresh} />
-          ) : (
-            <div className="p-6 text-center text-xs text-[var(--text-muted)] paper border border-[var(--border)] rounded-xl">
-              {search.trim() ? 'Aramayla eşleşen kart yok.' : 'Henüz kart yok. Yeni Kart ile başlayın.'}
-            </div>
-          )}
+      <section className="paper border border-[var(--border)] rounded-xl overflow-hidden flex flex-col min-h-0">
+        <div className="px-4 py-2 border-b border-[var(--border)] flex items-center justify-between gap-2">
+          <h4 className="text-xs font-bold text-[var(--text-primary)] tabular-nums">
+            {tab === 'SUPPLIER' ? 'Tedarikçi Kartları' : 'Müşteri Kartları'} · {cards.length}
+          </h4>
+          {cards.length > 0 || search.trim() ? createButton : null}
         </div>
-      </div>
+        {cards.length === 0 ? (
+          <div className="p-8 flex flex-col items-center gap-3 text-xs text-[var(--text-muted)]">
+            <span>{search.trim() ? 'Eşleşen kart yok.' : 'Henüz kart yok.'}</span>
+            {search.trim() ? null : createButton}
+          </div>
+        ) : (
+          <ul className="overflow-y-auto divide-y divide-[var(--border)]">
+            {cards.map((card) => (
+              <CardRow key={card.id} card={card} onOpen={() => setSelectedId(card.id)} />
+            ))}
+          </ul>
+        )}
+      </section>
 
       <CariCardModal
         isOpen={isCreating}

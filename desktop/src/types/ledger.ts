@@ -11,10 +11,13 @@ export interface DirectoryContact {
   address?: string | null;
   type: DirectoryType;
   creditLimitCents: number;
-  balanceCents: number; // Pozitif: Alacağımız var, Negatif: Borcumuz var
+  balanceCents: number; // Pozitif: cari bize borçlu, negatif: biz cariye borçluyuz
   notes?: string | null;
   createdAt: string;
 }
+
+/** GIVEN: cariye borç yazılır (bize borçlanır); TAKEN: cariye alacak yazılır (biz borçlanırız). */
+export type OpenDebtType = 'GIVEN' | 'TAKEN';
 
 export type PatronActionType = 'BORC' | 'ALACAK' | 'GELIR' | 'GIDER';
 
@@ -23,7 +26,7 @@ export interface LedgerDebt {
   tenantId: string;
   directoryId: string;
   directoryName: string | null;
-  type: 'GIVEN' | 'TAKEN'; // GIVEN: Alacağımız, TAKEN: Borcumuz
+  type: 'GIVEN' | 'TAKEN'; // GIVEN: cariye borç yazıldı, TAKEN: cariye alacak yazıldı
   totalAmountCents: number;
   remainingAmountCents: number;
   dueDate?: string | null;
@@ -50,6 +53,7 @@ export interface StatementLine {
   orderId?: string | null;
   documentNo?: string | null;
   purchaseOrderId?: string | null;
+  orderNumber?: string | null;
 }
 
 export interface DirectoryStatement {

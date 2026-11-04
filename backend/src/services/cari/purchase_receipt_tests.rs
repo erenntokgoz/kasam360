@@ -310,6 +310,138 @@ async fn ekstre_kapanisi_negatif_bakiyede_de_kart_bakiyesine_esittir() {
     assert_eq!(statement.closing_balance_cents, balance);
     // İki alış, peşin ödeme ve kısmi ödeme: dört satır.
     assert_eq!(statement.lines.len(), 4);
+    // Alış ve ödeme satırları kendi siparişine numarayla bağlanır.
+    assert!(statement.lines.iter().all(|line| line
+        .order_number
+        .as_deref()
+        .is_some_and(|no| no.starts_with("S-po_"))));
     assert_eq!(statement.total_credit_cents, 46_000);
     assert_eq!(statement.total_debit_cents, 28_000);
+}
+
+fn open(debt_id: &str, debt_type: &str, amount_cents: i64, order_id: Option<&str>) -> CariOp {
+    CariOp::OpenDebt(crate::services::cari::OpenDebtInput {
+        debt_id: debt_id.to_string(),
+        directory_id: "dir_cus".to_string(),
+        debt_type: debt_type.to_string(),
+        amount_cents,
+        due_date: None,
+        is_cash: false,
+        order_id: order_id.map(str::to_string),
+        description: None,
+        created_at: NOW.to_string(),
+    })
+}
+
+/// İade ve düzeltme kaydın toplamını geriye dönük değiştirir; ekstre hareketlerden,
+/// kart kalanlardan hesaplandığı için iki yolun aynı sayıya varması burada kanıtlanır.
+#[tokio::test]
+async fn iade_ve_duzeltme_sonrasi_ekstre_kapanisi_kart_bakiyesine_esittir() {
+    let pool = pool().await;
+    sqlx::query(
+        "INSERT INTO directories (id, tenant_id, name, type) VALUES ('dir_cus', 'tnt_a', 'Ali', 'CUSTOMER')",
+    )
+    .execute(&pool)
+    .await
+    .expect("kart");
+    run(&pool, &open("dbt_elle", "GIVEN", 10_000, None))
+        .await
+        .expect("veresiye");
+    run(
+        &pool,
+        &CariOp::EditDebt(crate::services::cari::EditDebtInput {
+            debt_id: "dbt_elle".to_string(),
+            amount_cents: 12_000,
+            due_date: Some("2026-10-01".to_string()),
+            description: None,
+        }),
+    )
+    .await
+    .expect("düzeltme");
+    run(&pool, &open("dbt_adisyon", "GIVEN", 20_000, Some("ord_1")))
+        .await
+        .expect("adisyon");
+    run(
+        &pool,
+        &CariOp::RecordPayment(RecordPaymentInput {
+            payment_id: "pmt_tahsilat".to_string(),
+            debt_id: "dbt_adisyon".to_string(),
+            amount_cents: 15_000,
+            payment_method: "CREDIT_CARD".to_string(),
+            actor_id: "usr_1".to_string(),
+            notes: None,
+            expected_version: 0,
+            cash_movement_id: None,
+            shift_id: None,
+            created_at: NOW.to_string(),
+        }),
+    )
+    .await
+    .expect("tahsilat");
+    // 8.000 iade: 5.000 açık kısımdan düşer, 3.000 tahsil edilenden geri ödenir.
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    crate::services::refund_service::reduce_veresiye_debt(
+        &mut conn,
+        TENANT,
+        Some("ord_1"),
+        8_000,
+        "usr_1",
+    )
+    .await
+    .expect("iade");
+    drop(conn);
+    // Alacak kaydı bakiyeyi eksiye çevirir: işletme bu cariye borçlu.
+    run(&pool, &open("dbt_alacak", "TAKEN", 50_000, None))
+        .await
+        .expect("alacak kaydı");
+    run(&pool, &open("dbt_sil", "GIVEN", 7_000, None))
+        .await
+        .expect("silinecek");
+    run(
+        &pool,
+        &CariOp::DeleteDebt {
+            debt_id: "dbt_sil".to_string(),
+        },
+    )
+    .await
+    .expect("silme");
+
+    let statement = crate::services::ledger_statement::directory_statement(
+        &pool,
+        TENANT,
+        "dir_cus",
+        "2026-10-01",
+        "2999-12-31",
+    )
+    .await
+    .expect("ekstre");
+    let balance = card_balance(&pool, "dir_cus").await;
+    assert_eq!(balance, -38_000);
+    assert_eq!(statement.opening_balance_cents, 0);
+    assert_eq!(statement.closing_balance_cents, balance);
+    let refund = statement
+        .lines
+        .iter()
+        .find(|line| line.kind == "IADE")
+        .expect("iade satırı");
+    assert_eq!(refund.signed_amount_cents, 3_000);
+    assert_eq!(statement.total_debit_cents, 27_000);
+    assert_eq!(statement.total_credit_cents, 65_000);
+    assert_eq!(
+        statement.lines.last().map(|line| line.balance_after_cents),
+        Some(balance)
+    );
+
+    // Dönem bölünse de devreden açılış ve kapanış aynı bakiyeye varır.
+    let later = crate::services::ledger_statement::directory_statement(
+        &pool,
+        TENANT,
+        "dir_cus",
+        "2999-12-31",
+        "2999-12-31",
+    )
+    .await
+    .expect("sonraki dönem");
+    assert_eq!(later.opening_balance_cents, balance);
+    assert_eq!(later.closing_balance_cents, balance);
 }
