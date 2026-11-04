@@ -11,6 +11,8 @@ import { MenuProductCard } from './MenuProductCard';
 import { MenuDetailPanel } from './MenuDetailPanel';
 import { MenuCategoryModal } from './MenuCategoryModal';
 import { MenuModifierModal } from './MenuModifierModal';
+import { filterMenuProducts, menuProducts } from '../../lib/productState';
+import { Button } from '../../ui/Button';
 
 export const MenuCatalogTab: React.FC = () => {
   const {
@@ -39,35 +41,9 @@ export const MenuCatalogTab: React.FC = () => {
   // Katalog açılırken ilk ürün seçili gelir; sayfa yalnız karta tıklanınca açılır.
   const showPage = detailMode === 'new' || (isPageOpen && selectedProductId !== null);
 
-  // Filtreleme mantığı
-  const filteredProducts = products.filter((p) => {
-    // 1. Arama filtresi
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = p.name.toLowerCase().includes(q);
-      const matchBarcode = p.barcode?.toLowerCase().includes(q);
-      const matchSku = p.sku?.toLowerCase().includes(q);
-      if (!matchName && !matchBarcode && !matchSku) return false;
-    }
-
-    // 2. Kategori filtresi
-    // Üst kategori seçilince alt kategorilerin ürünleri de görünür.
-    if (filters.categoryId && p.categoryId !== filters.categoryId && parents[p.categoryId] !== filters.categoryId) {
-      return false;
-    }
-
-    // 3. Tükendi filtresi
-    if (filters.tukendi && !p.is86) {
-      return false;
-    }
-
-    // 4. Satışta filtresi
-    if (filters.satista && (!p.isActive || p.is86)) {
-      return false;
-    }
-
-    return true;
-  }).sort((a, b) => (extras[a.id]?.displayOrder ?? 0) - (extras[b.id]?.displayOrder ?? 0));
+  const saleProducts = menuProducts(products);
+  const filteredProducts = filterMenuProducts(products, searchQuery, filters, parents)
+    .sort((a, b) => (extras[a.id]?.displayOrder ?? 0) - (extras[b.id]?.displayOrder ?? 0));
 
   const move = (index: number, step: number) => {
     const ids = filteredProducts.map((p) => p.id);
@@ -75,7 +51,7 @@ export const MenuCatalogTab: React.FC = () => {
     if (target < 0 || target >= ids.length) return;
     [ids[index], ids[target]] = [ids[target], ids[index]];
     // Görünmeyen ürünler sıranın sonunda kalır: filtre başka ürünü kaydırmaz.
-    const rest = products.map((p) => p.id).filter((id) => !ids.includes(id));
+    const rest = saleProducts.map((p) => p.id).filter((id) => !ids.includes(id));
     void saveOrder([...ids, ...rest]);
   };
 
@@ -97,23 +73,19 @@ export const MenuCatalogTab: React.FC = () => {
 
       {/* 2. Merkez Ürün Izgarası */}
       <div className="flex-1 overflow-y-auto p-4 bg-[var(--bg-canvas)] space-y-3">
-        {products.length > 0 ? (
-          <CatalogBulkBar
-            selected={selected}
-            onClear={() => setSelected([])}
-            isSorting={isSorting}
-            onToggleSort={() => setIsSorting((value) => !value)}
-          />
-        ) : null}
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          {saleProducts.length > 0 ? (
+            <CatalogBulkBar
+              selected={selected}
+              onClear={() => setSelected([])}
+              isSorting={isSorting}
+              onToggleSort={() => setIsSorting((value) => !value)}
+            />
+          ) : <span />}
+          <Button variant="primary" className="min-h-12" onClick={() => setDetailMode('new')}>Yeni Ürün</Button>
+        </div>
         {filteredProducts.length === 0 ? (
-          <div className="h-full flex flex-col items-start gap-3 p-4">
-            <p className="text-sm font-semibold">{products.length === 0 ? 'Henüz ürün yok.' : 'Bu filtrede ürün yok.'}</p>
-            {products.length === 0 ? (
-              <button type="button" className="tactile-btn min-h-12 px-4 rounded-lg font-bold" onClick={() => setDetailMode('new')}>
-                Yeni Ürün
-              </button>
-            ) : null}
-          </div>
+          <p className="p-4 text-sm font-semibold">{saleProducts.length === 0 ? 'Henüz ürün yok.' : 'Bu filtrede ürün yok.'}</p>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
             {filteredProducts.map((prod, index) => (

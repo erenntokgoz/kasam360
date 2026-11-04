@@ -3,19 +3,14 @@
 // Tüm IPC çağrıları Tauri generate_handler sözleşmesine ve backend arayüzüne birebir uyar.
 
 import { create } from 'zustand';
-import type {
-  ModifierGroupDto,
-  PriceListDto,
-  MenuBulkPreviewItem,
-  MenuState,
-} from '../types/menu';
+import type { ModifierGroupDto, MenuState } from '../types/menu';
 import { invokeIPC } from '../services/tauriClient';
 import { useAuthStore } from './authStore';
 import { useFeatureStore } from './featureStore';
 import { mapRecipeCost } from '../lib/recipeCost';
-import { mapBulkPriceResult, mapCategory, mapPriceList, mapProduct } from '../lib/menuWire';
-import { applyPercentBp } from '../lib/numberText';
+import { mapCategory, mapPriceList, mapProduct } from '../lib/menuWire';
 import { createMenuModifierActions } from './menuModifierActions';
+import { createMenuPriceActions } from './menuPriceActions';
 import { createMenuRecipeActions } from './menuRecipeActions';
 
 export { parseMoneyToCents } from '../lib/moneyParser';
@@ -49,6 +44,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
   filters: {
     tukendi: false,
     satista: false,
+    satisDisi: false,
     categoryId: null,
   },
   busy: false,
@@ -80,6 +76,10 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     set((state) => ({
       filters: { ...state.filters, satista: !state.filters.satista },
     })),
+  toggleFilterSatisDisi: () =>
+    set((state) => ({
+      filters: { ...state.filters, satisDisi: !state.filters.satisDisi },
+    })),
 
   loadCatalog: async () => {
     try {
@@ -96,7 +96,8 @@ export const useMenuStore = create<MenuState>((set, get) => ({
           : Promise.resolve([]),
       ]);
 
-      const selected = get().selectedProductId || (prods && prods.length > 0 ? prods[0].id : null);
+      const firstSale = prods.map(mapProduct).find((product) => !product.isRaw);
+      const selected = get().selectedProductId || (firstSale?.id ?? null);
       set({
         products: prods.map(mapProduct),
         categories: cats.map(mapCategory),
@@ -132,7 +133,8 @@ export const useMenuStore = create<MenuState>((set, get) => ({
           categoryId: productData.categoryId,
           name: productData.name,
           priceCents,
-          isActive: priceCents > 0,
+          // Hammadde satışa açılmaz; sunucu da aynı kuralı uygular.
+          isActive: priceCents > 0 && !productData.isRaw,
           barcode: productData.barcode || null,
           description: productData.description || null,
           imageUrl: productData.imageUrl || null,
@@ -142,6 +144,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
           stockoutReason: null,
           stockUnit: productData.stockUnit ?? 'adet',
           taxRateBp: productData.taxRateBp ?? 1000,
+          isRaw: productData.isRaw ?? false,
         });
         const created = mapProduct(createdWire);
         set((state) => ({
@@ -162,6 +165,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
           name: productData.name || current?.name,
           priceCents: productData.priceCents ?? current?.priceCents,
           isActive: current?.isActive ?? true,
+          isRaw: productData.isRaw ?? current?.isRaw ?? false,
           barcode: productData.barcode ?? current?.barcode ?? null,
           description: productData.description ?? current?.description ?? null,
           imageUrl: current?.imageUrl ?? null,
@@ -251,7 +255,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
         const nextProducts = state.products.filter((p) => p.id !== productId);
         return {
           products: nextProducts,
-          selectedProductId: nextProducts.length > 0 ? nextProducts[0].id : null,
+          selectedProductId: nextProducts.find((p) => !p.isRaw)?.id ?? null,
         };
       });
       return true;
@@ -340,102 +344,6 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     }
   },
 
-  calculateBulkPreview: (updateType, valueNum, categoryId) => {
-    const prods = get().products.filter(
-      (p) => !categoryId || (p.categoryId === categoryId && p.isActive)
-    );
-    const preview: MenuBulkPreviewItem[] = prods.map((p) => {
-      let newPriceCents = p.priceCents;
-      if (updateType === 'PERCENTAGE') {
-        newPriceCents = applyPercentBp(p.priceCents, valueNum);
-      } else {
-        newPriceCents = Math.max(0, p.priceCents + Math.round(valueNum));
-      }
-      return {
-        id: p.id,
-        name: p.name,
-        oldPriceCents: p.priceCents,
-        newPriceCents,
-      };
-    });
-    set({ bulkPreview: preview });
-  },
-
-  clearBulkPreview: () => set({ bulkPreview: [] }),
-
-  applyBulkPrice: async (input) => {
-    try {
-      const { actorRole, actorId, tenantId } = getAuthContext();
-      set({ busy: true, error: null });
-      const args = {
-        categoryId: input.categoryId || undefined,
-        productIds: input.categoryId ? undefined : get().products.map((p) => p.id),
-        percentBp: input.updateType === 'PERCENTAGE' ? input.value : undefined,
-        byCents: input.updateType === 'FIXED_AMOUNT' ? input.value : undefined,
-        roundToTens: false,
-      };
-      const resultWire = await invokeIPC<Parameters<typeof mapBulkPriceResult>[0]>('bulk_update_product_prices', {
-        actorRole,
-        actorId,
-        tenantId,
-        args,
-      });
-      await get().loadCatalog();
-      set({ bulkPreview: [] });
-      return mapBulkPriceResult(resultWire);
-    } catch (err: unknown) {
-      set({ error: err instanceof Error ? err.message : String(err) });
-      return null;
-    } finally {
-      set({ busy: false });
-    }
-  },
-
-  createPriceList: async (name, description) => {
-    try {
-      const { actorRole, actorId, tenantId } = getAuthContext();
-      set({ busy: true, error: null });
-      const createdWire = await invokeIPC<Parameters<typeof mapPriceList>[0]>('create_price_list_command', {
-        actorRole,
-        actorId,
-        tenantId,
-        args: {
-          name,
-          kind: 'PERAKENDE',
-        },
-      });
-      const created = mapPriceList(createdWire);
-      const pl: PriceListDto = {
-        ...created,
-        description: description || created.description,
-      };
-      set((state) => ({ priceLists: [...state.priceLists, pl] }));
-      return true;
-    } catch (err: unknown) {
-      set({ error: err instanceof Error ? err.message : String(err) });
-      return false;
-    } finally {
-      set({ busy: false });
-    }
-  },
-
-  deletePriceList: async (priceListId) => {
-    try {
-      const { actorRole, actorId, tenantId } = getAuthContext();
-      set({ busy: true, error: null });
-      await invokeIPC('delete_price_list_command', { actorRole, actorId, tenantId, id: priceListId });
-      set((state) => ({
-        priceLists: state.priceLists.filter((pl) => pl.id !== priceListId),
-      }));
-      return true;
-    } catch (err: unknown) {
-      set({ error: err instanceof Error ? err.message : String(err) });
-      return false;
-    } finally {
-      set({ busy: false });
-    }
-  },
-
   loadProductRecipe: async (productId) => {
     set({ productRecipe: null, error: null });
     try {
@@ -494,6 +402,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     }
   },
 
+  ...createMenuPriceActions(set, get, getAuthContext),
   ...createMenuModifierActions(set, getAuthContext),
   ...createMenuRecipeActions(set, get, getAuthContext),
 }));

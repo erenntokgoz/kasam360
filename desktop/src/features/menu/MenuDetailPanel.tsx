@@ -127,6 +127,11 @@ export const MenuDetailPanel: React.FC<MenuDetailPanelProps> = ({
     }
   };
 
+  // Hammadde menüden çıkar ve satışa kapanır; stok ekranında satış ürününe geri çevrilir.
+  const convertToRaw = async () => {
+    if (await saveProduct({ isRaw: true })) setSelectedProductId(null);
+  };
+
   const handleDelete = async () => {
     if (!selectedProductId) return;
     const ok = await deleteProduct(selectedProductId);
@@ -205,6 +210,7 @@ export const MenuDetailPanel: React.FC<MenuDetailPanelProps> = ({
             detailMode={detailMode}
             toggleProductActive={toggleProductActive}
             toggleProduct86={toggleProduct86}
+            onConvertToRaw={isOwner ? () => void convertToRaw() : undefined}
           />
           <button
             type="button"

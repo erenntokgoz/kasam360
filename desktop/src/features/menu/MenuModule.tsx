@@ -8,13 +8,12 @@ import { formatNumber } from '../../lib/numberText';
 import { Bar, BarAction } from '../../ui/Bar';
 import { useMenuStore } from '../../stores/menuStore';
 import { MenuCatalogTab } from './MenuCatalogTab';
+import { menuProducts } from '../../lib/productState';
 
 /** Üst şerit tektir: bölüm sekmeleri dışarıdan gelir. */
 export const MenuModule: React.FC<{ tabs: React.ReactNode }> = ({ tabs }) => {
   const {
     products,
-    setActiveTab,
-    setDetailMode,
     searchQuery,
     setSearchQuery,
     filters,
@@ -28,7 +27,7 @@ export const MenuModule: React.FC<{ tabs: React.ReactNode }> = ({ tabs }) => {
     loadCatalog();
   }, [loadCatalog]);
 
-  const tukendiCount = products.filter((p) => p.is86).length;
+  const tukendiCount = menuProducts(products).filter((p) => p.is86).length;
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] select-none">
@@ -49,15 +48,6 @@ export const MenuModule: React.FC<{ tabs: React.ReactNode }> = ({ tabs }) => {
             </label>
             <BarAction aria-pressed={filters.tukendi} onClick={toggleFilterTukendi}>
               Tükendi <span className="tabular-nums">{formatNumber(tukendiCount)}</span>
-            </BarAction>
-            <BarAction
-              tone="primary"
-              onClick={() => {
-                setActiveTab('KATALOG');
-                setDetailMode('new');
-              }}
-            >
-              Yeni Ürün
             </BarAction>
           </>
         }

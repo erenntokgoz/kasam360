@@ -3,7 +3,7 @@ import type { ProductCategory, Product, OrderItem, OrderItemModifier, ModifierGr
 import type { LastSale } from '../types/payment';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
-import { syncErrorText } from '../lib/syncError';
+import { orderErrorText } from '../lib/orderError';
 import {
   lineTotalCents,
   mapServerItem,
@@ -396,7 +396,7 @@ export const usePosStore = create<PosStore>((set, get) => ({
       // sonucu belirsiz gönderim ikinci kez yazılmasın. Başarılı okuma hatayı
       // silmesin diye mesaj tazelemeden sonra yazılır.
       await get().loadActiveOrder();
-      set({ orderError: syncErrorText(error, 'sipariş gönderilmedi, taslak bu cihazda duruyor') });
+      set({ orderError: orderErrorText(error, 'sipariş gönderilmedi, taslak bu cihazda duruyor') });
       return false;
     } finally {
       set({ isSending: false });

@@ -14,6 +14,8 @@ pub struct PurchaseOrder {
     pub total_cents: i64,
     pub expected_at: Option<String>,
     pub notes: Option<String>,
+    /// Kalemlerin ürünleri: teslimde adetle alınan malın gramı bunlar için sorulur.
+    pub product_ids: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -164,6 +166,10 @@ pub async fn create_purchase_order(
         total_cents: toplam,
         expected_at: input.expected_at,
         notes: input.notes,
+        product_ids: kalemler
+            .iter()
+            .map(|(product_id, _, _)| product_id.clone())
+            .collect(),
     };
     Ok(siparis)
 }
@@ -310,10 +316,14 @@ pub async fn list_purchase_orders(
 ) -> Result<Vec<PurchaseOrder>, String> {
     let rows = if let Some(st) = status {
         sqlx::query(
-            "SELECT id, supplier_id, order_number, status, total_cents, expected_at, notes
-             FROM purchase_orders
-             WHERE tenant_id = ? AND status = ?
-             ORDER BY created_at DESC",
+            "SELECT po.id, po.supplier_id, po.order_number, po.status, po.total_cents,
+                    po.expected_at, po.notes,
+                    (SELECT GROUP_CONCAT(i.product_id) FROM purchase_order_items i
+                      WHERE i.tenant_id = po.tenant_id AND i.purchase_order_id = po.id)
+                      AS product_ids
+             FROM purchase_orders po
+             WHERE po.tenant_id = ? AND po.status = ?
+             ORDER BY po.created_at DESC",
         )
         .bind(tenant_id)
         .bind(st)
@@ -322,10 +332,14 @@ pub async fn list_purchase_orders(
         .map_err(|e| e.to_string())?
     } else {
         sqlx::query(
-            "SELECT id, supplier_id, order_number, status, total_cents, expected_at, notes
-             FROM purchase_orders
-             WHERE tenant_id = ?
-             ORDER BY created_at DESC",
+            "SELECT po.id, po.supplier_id, po.order_number, po.status, po.total_cents,
+                    po.expected_at, po.notes,
+                    (SELECT GROUP_CONCAT(i.product_id) FROM purchase_order_items i
+                      WHERE i.tenant_id = po.tenant_id AND i.purchase_order_id = po.id)
+                      AS product_ids
+             FROM purchase_orders po
+             WHERE po.tenant_id = ?
+             ORDER BY po.created_at DESC",
         )
         .bind(tenant_id)
         .fetch_all(&mut *conn)
@@ -335,6 +349,8 @@ pub async fn list_purchase_orders(
 
     let mut list = Vec::new();
     for r in rows {
+        // Ürün kimlikleri virgül içermez (önekli ULID); birleşik liste güvenle bölünür.
+        let product_ids: Option<String> = r.try_get("product_ids").map_err(|e| e.to_string())?;
         list.push(PurchaseOrder {
             id: r.try_get("id").map_err(|e| e.to_string())?,
             supplier_id: r.try_get("supplier_id").map_err(|e| e.to_string())?,
@@ -343,6 +359,9 @@ pub async fn list_purchase_orders(
             total_cents: r.try_get("total_cents").map_err(|e| e.to_string())?,
             expected_at: r.try_get("expected_at").ok(),
             notes: r.try_get("notes").ok(),
+            product_ids: product_ids
+                .map(|ids| ids.split(',').map(str::to_string).collect())
+                .unwrap_or_default(),
         });
     }
     Ok(list)

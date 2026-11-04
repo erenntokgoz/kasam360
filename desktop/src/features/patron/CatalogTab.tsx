@@ -3,14 +3,17 @@ import { useAuthStore } from '../../stores/authStore';
 import { useLedgerStore } from '../../stores/ledgerStore';
 import { MenuModule } from '../menu/MenuModule';
 import { StockHub } from '../stock/StockHub';
+import { TariffPanel } from '../menu/TariffPanel';
 import { BarTab } from '../../ui/Bar';
 import { SectionTabs, type SectionTab } from './SectionTabs';
 
-type CatalogSection = 'MENU' | 'STOCK';
+type CatalogSection = 'MENU' | 'STOCK' | 'TARIFF';
 
-/** Menü, stok ve menünün dışarı verilen dosyası tek bölümdedir. Stok yalnız patronda. */
+/** Menü, stok ve fiyat tarifeleri tek bölümdedir. Stok yalnız patronda; tarifeyi müdür de açıp kapatır. */
 export const CatalogTab: React.FC = () => {
-  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+  const role = useAuthStore((state) => state.user?.role);
+  const isOwner = role === 'OWNER';
+  const canTariff = isOwner || role === 'MANAGER';
   const erpSection = useLedgerStore((state) => state.erpSection);
   const [section, setSection] = useState<CatalogSection>('MENU');
 
@@ -21,6 +24,7 @@ export const CatalogTab: React.FC = () => {
   const tabs: SectionTab<CatalogSection>[] = [
     { id: 'MENU', label: 'Menü' },
     ...(isOwner ? [{ id: 'STOCK' as const, label: 'Stok' }] : []),
+    ...(canTariff ? [{ id: 'TARIFF' as const, label: 'Tarifeler' }] : []),
   ];
 
   return (
@@ -37,6 +41,7 @@ export const CatalogTab: React.FC = () => {
         </div>
       )}
       {section === 'STOCK' ? <StockHub /> : null}
+      {section === 'TARIFF' ? <TariffPanel /> : null}
     </div>
   );
 };

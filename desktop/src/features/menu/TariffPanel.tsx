@@ -15,11 +15,21 @@ const scheduleText = (schedule: TariffSchedule) =>
     .filter(Boolean)
     .join(' · ');
 
-/** Saatli tarife kendiliğinden açılır; saatsiz tarife elle açılır. Eklenmiş kalemin fiyatı değişmez. */
+/** Takvimli tarife takvimi açılınca, takvimsiz tarife elle açılınca açık sayılır. */
+export const isTariffOpen = (tariff: Tariff) => tariff.isActive || Boolean(tariff.schedule?.enabled);
+
+/** Uygulanan tarifeyi sunucu söyler: elle açılan, takvimi gelenin önüne geçer. */
+export function tariffStatus(tariff: Tariff, appliedId: string | null): string {
+  if (!isTariffOpen(tariff)) return 'Kapalı';
+  return tariff.id === appliedId ? 'Açık · uygulanıyor' : 'Açık · takvim bekliyor';
+}
+
+/** Eklenmiş kalemin fiyatı tarifeyle değişmez; tarife yalnız yeni kalemleri etkiler. */
 export const TariffPanel: React.FC = () => {
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const loadCatalog = usePosStore((state) => state.loadCatalog);
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
+  const [appliedId, setAppliedId] = useState<string | null>(null);
   const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,12 +38,14 @@ export const TariffPanel: React.FC = () => {
   const refresh = useCallback(async () => {
     const { actorRole, tenantId } = sessionArgs();
     try {
-      const [list, catalog] = await Promise.all([
+      const [list, catalog, applied] = await Promise.all([
         invokeIPC<Tariff[]>('get_price_tariffs', { actorRole, tenantId }),
         invokeIPC<{ id: string; name: string }[]>('pos_get_products', { tenantId }),
+        invokeIPC<{ id: string } | null>('get_active_price_tariff', { tenantId }),
       ]);
       setTariffs(list);
       setProducts(catalog);
+      setAppliedId(applied?.id ?? null);
     } catch (caught) {
       setError(String(caught));
     }
@@ -60,19 +72,27 @@ export const TariffPanel: React.FC = () => {
     }
   };
 
-  const save = (draft: TariffDraft) => {
+  const saveTariff = (draft: TariffDraft) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
-    void run(() => invokeIPC('save_price_tariff', { actorRole, actorId, tenantId, input: { ...draft, kind: 'OZEL' } }));
-  };
-
-  const toggleSchedule = (tariff: Tariff) => {
-    if (!tariff.schedule) return;
-    save({ ...tariff, productIds: tariff.productIds, schedule: { ...tariff.schedule, enabled: !tariff.schedule.enabled } });
+    return invokeIPC('save_price_tariff', { actorRole, actorId, tenantId, input: { ...draft, kind: 'OZEL' } });
   };
 
   const setActive = (tariffId: string | null) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
-    void run(() => invokeIPC('set_active_price_tariff', { actorRole, actorId, tenantId, tariffId }));
+    return invokeIPC('set_active_price_tariff', { actorRole, actorId, tenantId, tariffId });
+  };
+
+  // Takvimsiz tarife açılınca hemen uygulanır; takvimli tarife açılınca penceresini bekler.
+  const toggle = (tariff: Tariff) => {
+    const isOpen = isTariffOpen(tariff);
+    void run(async () => {
+      if (isOpen && tariff.isActive) await setActive(null);
+      if (tariff.schedule && tariff.schedule.enabled === isOpen) {
+        await saveTariff({ ...tariff, schedule: { ...tariff.schedule, enabled: !isOpen } });
+      } else if (!tariff.schedule && !isOpen) {
+        await setActive(tariff.id);
+      }
+    });
   };
 
   const remove = (tariffId: string) => {
@@ -83,48 +103,58 @@ export const TariffPanel: React.FC = () => {
   return (
     <div className="page-fill flex-1 overflow-y-auto p-4 space-y-4 text-[var(--text-primary)]">
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
-      {isOwner ? <Button variant="primary" className="min-h-12" onClick={() => setEditing('NEW')}>Tarife Ekle</Button> : null}
 
       <section className="rounded-xl border border-[var(--border)] paper">
-        <h2 className="print-title border-b border-[var(--border)] p-4 text-sm font-bold">Tarifeler</h2>
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] p-4">
+          <h2 className="print-title text-sm font-bold">Tarifeler</h2>
+          {isOwner ? <Button variant="primary" className="min-h-12" onClick={() => setEditing('NEW')}>Tarife Ekle</Button> : null}
+        </div>
         {tariffs.length === 0 ? <p className="p-4 text-xs text-[var(--text-secondary)]">Tanımlı tarife yok.</p> : null}
         <ul className="divide-y divide-[var(--border)]">
-          {tariffs.map((tariff) => (
-            <li key={tariff.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
-              <span className="min-w-0">
-                <span className="block font-bold">{tariff.name}</span>
-                <span className="block text-xs text-[var(--text-secondary)] tabular-nums">
-                  {tariff.percent > 0 ? `%${tariff.percent} zam` : `%${-tariff.percent} indirim`} ·{' '}
-                  {tariff.productIds.length === 0 ? 'Tüm ürünler' : `${tariff.productIds.length} ürün`}
-                  {tariff.schedule ? ` · ${scheduleText(tariff.schedule)}` : ''}
+          {tariffs.map((tariff) => {
+            const isOpen = isTariffOpen(tariff);
+            // Takvimi yalnız tarifeyi tanımlayan patron açıp kapatır; müdür elle açılanı yönetir.
+            const canToggle = isOwner || !tariff.schedule;
+            return (
+              <li key={tariff.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+                <span className="min-w-0">
+                  <span className="block font-bold">{tariff.name}</span>
+                  <span className="block text-xs text-[var(--text-secondary)] tabular-nums">
+                    {tariff.percent > 0 ? `%${tariff.percent} zam` : `%${-tariff.percent} indirim`} ·{' '}
+                    {tariff.productIds.length === 0 ? 'Tüm ürünler' : `${tariff.productIds.length} ürün`}
+                    {tariff.schedule ? ` · ${scheduleText(tariff.schedule)}` : ''}
+                  </span>
+                  <span className={`block text-xs font-bold ${isOpen ? 'text-[var(--accent-emerald)]' : 'text-[var(--text-secondary)]'}`}>
+                    {tariffStatus(tariff, appliedId)}
+                  </span>
                 </span>
-              </span>
-              <span className="flex gap-2">
-                {tariff.schedule ? (
-                  isOwner ? (
-                    <Button variant={tariff.schedule.enabled ? 'secondary' : 'primary'} className="min-h-12" disabled={busy} onClick={() => toggleSchedule(tariff)}>
-                      {tariff.schedule.enabled ? 'Durdur' : 'Başlat'}
+                <span className="flex gap-2">
+                  {canToggle ? (
+                    <Button variant={isOpen ? 'secondary' : 'primary'} className="min-h-12" disabled={busy} onClick={() => toggle(tariff)}>
+                      {isOpen ? 'Kapat' : 'Aç'}
                     </Button>
-                  ) : null
-                ) : tariff.isActive ? (
-                  <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => setActive(null)}>Kapat</Button>
-                ) : (
-                  <Button variant="primary" className="min-h-12" disabled={busy} onClick={() => setActive(tariff.id)}>Etkinleştir</Button>
-                )}
-                {isOwner && !tariff.isActive ? (
-                  <>
-                    <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => setEditing(tariff)}>Düzenle</Button>
-                    <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => remove(tariff.id)}>Sil</Button>
-                  </>
-                ) : null}
-              </span>
-            </li>
-          ))}
+                  ) : null}
+                  {isOwner && !isOpen ? (
+                    <>
+                      <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => setEditing(tariff)}>Düzenle</Button>
+                      <Button variant="secondary" className="min-h-12" disabled={busy} onClick={() => remove(tariff.id)}>Sil</Button>
+                    </>
+                  ) : null}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </section>
 
       {editing ? (
-        <TariffFormModal tariff={editing === 'NEW' ? null : editing} products={products} busy={busy} onClose={() => setEditing(null)} onSave={save} />
+        <TariffFormModal
+          tariff={editing === 'NEW' ? null : editing}
+          products={products}
+          busy={busy}
+          onClose={() => setEditing(null)}
+          onSave={(draft) => void run(() => saveTariff(draft))}
+        />
       ) : null}
     </div>
   );

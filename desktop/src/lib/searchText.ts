@@ -11,9 +11,10 @@ export function foldText(text: string): string {
     .trim();
 }
 
-/** Ürün adında geçen metni ya da birebir barkodu bulur. */
-export function matchesProduct(query: string, name: string, barcode?: string): boolean {
+/** Ürün adında ya da stok kodunda geçen metni veya birebir barkodu bulur. */
+export function matchesProduct(query: string, name: string, barcode?: string, sku?: string): boolean {
   const wanted = foldText(query);
   if (!wanted) return true;
-  return foldText(name).includes(wanted) || barcode === query.trim();
+  // Barkod okuyucu tam kodu yazar; parça eşleşmesi başka ürünü öne çıkarırdı.
+  return foldText(name).includes(wanted) || barcode === query.trim() || (!!sku && foldText(sku).includes(wanted));
 }
