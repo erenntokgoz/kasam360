@@ -51,7 +51,11 @@ pub async fn create_order_change_request(
         category::SIPARIS_MASA,
         "order_change:requested",
         id.clone(),
-        serde_json::json!({ "orderId": order_id, "reason": reason.trim() }),
+        serde_json::json!({
+            "orderId": order_id,
+            "reason": reason.trim(),
+            "status": if DECIDERS.contains(&role) { "APPROVED" } else { "PENDING" },
+        }),
         now,
     )?;
     AuditService::append(&mut tx, &audit_lock, &ctx).await?;

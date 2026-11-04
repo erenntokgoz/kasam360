@@ -110,6 +110,7 @@ pub async fn create_staff_member(
     // Yarış denetimi: ön kontrol ile yazma arasına başka bir istek girmiş olabilir.
     // Çakışma varsa transaction geri alınır, kayıt oluşmaz.
     crate::user_credentials::ensure_pin_unique_after_write(&mut tx, &tenant_id, &pin, &id).await?;
+    crate::user_credentials::record_pin_length(&mut tx, &tenant_id, &id, &pin).await?;
 
     // Rol ataması yetki matrisini değiştirdiği için kayıt "Personel" kategorisine
     // yazılır; defterde PIN'in kendisi ya da hash'i bulunmaz.
@@ -171,6 +172,7 @@ pub async fn reset_staff_pin(
     if updated.rows_affected() != 1 {
         return Err("NOT_FOUND: personel bulunamadı.".to_string());
     }
+    crate::user_credentials::record_pin_length(&mut tx, &tenant_id, &staff_id, &new_pin).await?;
     record_audit(
         &mut tx,
         &lock,

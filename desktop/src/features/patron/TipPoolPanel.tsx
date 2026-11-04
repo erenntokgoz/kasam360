@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { errorText, localDate } from '../../lib/cariInput';
 import { formatDateTime } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
@@ -39,6 +39,7 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
   const [percents, setPercents] = useState<Record<string, string>>({});
   const [entries, setEntries] = useState<TipEntry[]>([]);
   const [deleting, setDeleting] = useState<TipEntry | null>(null);
+  const [editing, setEditing] = useState<TipEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -75,6 +76,8 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
     void run(async () => {
       const { actorId, actorRole, tenantId } = sessionArgs();
       await invokeIPC('record_tip_entry', { amountCents, paymentMethod: method, actorId, actorRole, tenantId });
+      if (editing) await invokeIPC('delete_tip_entry', { entryId: editing.id, actorId, actorRole, tenantId });
+      setEditing(null);
       setAmount('');
     });
   };
@@ -123,7 +126,7 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
         <div className="grid grid-cols-3 gap-2">
           <Button variant={method === 'CASH' ? 'selected' : 'secondary'} onClick={() => setMethod('CASH')}>Nakit</Button>
           <Button variant={method === 'CARD' ? 'selected' : 'secondary'} onClick={() => setMethod('CARD')}>Kart</Button>
-          <Button variant="primary" onClick={addTip}>Havuza Ekle</Button>
+          <Button variant="primary" onClick={addTip}>{editing ? 'Kaydet' : 'Havuza Ekle'}</Button>
         </div>
         {entries.length > 0 ? (
           <ul className="divide-y divide-[var(--border)] max-h-64 overflow-y-auto">
@@ -131,6 +134,17 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
               <li key={entry.id} className="flex items-center gap-2 text-sm">
                 <span className="flex-1 min-w-0 truncate tabular-nums text-[var(--text-secondary)]">{formatDateTime(entry.createdAt)} · {METHOD_LABEL[entry.paymentMethod]}</span>
                 <span className="font-bold tabular-nums">{formatMoney(entry.amountCents)}</span>
+                <Button
+                  variant="ghost"
+                  aria-label="Bahşişi düzenle"
+                  onClick={() => {
+                    setEditing(entry);
+                    setMethod(entry.paymentMethod);
+                    setAmount((entry.amountCents / 100).toFixed(2).replace('.', ','));
+                  }}
+                >
+                  <Pencil className="w-4 h-4" />
+                </Button>
                 <Button variant="ghost" aria-label="Bahşişi sil" onClick={() => setDeleting(entry)}>
                   <Trash2 className="w-4 h-4" />
                 </Button>

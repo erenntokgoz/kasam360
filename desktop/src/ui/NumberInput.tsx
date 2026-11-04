@@ -35,6 +35,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const caretDigits = useRef<number | null>(null);
   const [isPadOpen, setIsPadOpen] = useState(false);
+  // Eksi işareti sessizce atılınca "-5" artı 5 olarak kaydediliyordu; kullanıcıya söylenir.
+  const [refusedMinus, setRefusedMinus] = useState(false);
   const raw = String(value);
   const display = kind === 'digits' ? raw : groupNumber(raw);
 
@@ -52,13 +54,15 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   });
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRefusedMinus(event.target.value.includes('-'));
     const typedBeforeCaret = event.target.value.slice(0, event.target.selectionStart ?? 0);
     caretDigits.current = typedBeforeCaret.replace(/[^\d,]/g, '').length;
     onValueChange(toRawNumber(event.target.value, kind));
   };
 
   return (
-    <div className={cn('relative w-full min-w-0', className)}>
+    <div className={cn('w-full min-w-0', className)}>
+      <div className="relative">
       <Input
         {...props}
         ref={inputRef}
@@ -69,6 +73,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         value={display}
         onChange={handleChange}
         onBlur={() => {
+          setRefusedMinus(false);
           if (raw.endsWith(',')) onValueChange(raw.slice(0, -1));
         }}
       />
@@ -82,6 +87,12 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         >
           <Grid3x3 className="w-5 h-5" />
         </button>
+      ) : null}
+      </div>
+      {refusedMinus ? (
+        <p role="alert" className="mt-1 text-xs font-semibold text-[var(--accent-red)]">
+          Eksi değer girilemez.
+        </p>
       ) : null}
       {isPadOpen ? (
         <PinpadModal

@@ -16,7 +16,7 @@ async fn pool() -> SqlitePool {
         "INSERT INTO users (id, tenant_id, role, name, pin_hash, is_active)
             VALUES ('usr_a', 'tnt_a', 'WAITER', 'Ali', 'x', 1);
          INSERT INTO shifts (id, tenant_id, cashier_id, status, opened_at, expected_amount_cents)
-            VALUES ('shf_a', 'tnt_a', 'usr_a', 'OPEN', datetime('now'), 0);",
+            VALUES ('shf_a', 'tnt_a', 'usr_a', 'OPEN', datetime('now'), 100000);",
     )
     .execute(&pool)
     .await
@@ -133,4 +133,18 @@ async fn avans_iptali_bordro_kaydini_da_kaldirir() {
         .await
         .expect("sayım");
     assert_eq!(left, 0);
+}
+
+#[tokio::test]
+async fn cekmecede_olmayan_nakit_gider_olarak_cikamaz() {
+    let pool = pool().await;
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let mut big = expense("CASH");
+    big.amount_cents = 100_001;
+    let error = insert_expense(&mut conn, "tnt_a", &big)
+        .await
+        .expect_err("eksi kasa reddedilmeli");
+    assert!(error.starts_with("INSUFFICIENT_CASH"), "{error}");
+    drop(conn);
+    assert_eq!(cash_total(&pool, "OUT").await, 0);
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Printer, Clock } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { formatNumber } from '../../lib/numberText';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -14,7 +14,10 @@ import { Button } from '../../ui/Button';
 import { BlindCloseModal } from './BlindCloseModal';
 import { CashExpenseModal } from './CashExpenseModal';
 import { CashMovementModal } from './CashMovementModal';
+import { FinanceTab } from '../patron/finance/FinanceTab';
+import { useLedgerStore } from '../../stores/ledgerStore';
 import { ReceiptsTab } from './ReceiptsTab';
+import { ShiftHistory } from './ShiftHistory';
 import { ShiftMovements } from './ShiftMovements';
 
 /** Okunamayan tutar sıfır gösterilmez: kasa farkı sanılır. */
@@ -23,12 +26,21 @@ const money = (cents?: number | null) => (cents == null ? '—' : formatMoney(ce
 export const CashierModule: React.FC = () => {
   const { activeShift, summary, lastZReport, loadShiftData, recordCashMovement, closeDay } = useShiftStore();
   const canCloseDay = useAuthStore((state) => state.user?.role === 'OWNER' || state.user?.role === 'MANAGER');
+  // Kör sayım: kasiyer çekmecede olması gereken tutarı ve onu türeten toplamları görmez.
+  const isBlind = useAuthStore((state) => state.user?.role === 'CASHIER');
   const [dayCloseNotice, setDayCloseNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const openModal = useUIStore((state) => state.openModal);
 
-  const [activeTab, setActiveTab] = useState<'SHIFT' | 'RECEIPTS' | 'DAY_CLOSE'>('SHIFT');
+  const [activeTab, setActiveTab] = useState<'SHIFT' | 'FINANCE' | 'RECEIPTS' | 'DAY_CLOSE'>('SHIFT');
+  const financeAsked = useLedgerStore((state) => state.activeErpTab === 'FINANCE');
   const [cashActionModal, setCashActionModal] = useState<'IN' | 'OUT' | null>(null);
   const [expenseOpen, setExpenseOpen] = useState(false);
+
+  useEffect(() => {
+    if (!financeAsked) return;
+    setActiveTab('SHIFT');
+    useLedgerStore.getState().setActiveErpTab('PANORAMA');
+  }, [financeAsked, canCloseDay]);
 
   useEffect(() => {
     loadShiftData();
@@ -74,93 +86,42 @@ export const CashierModule: React.FC = () => {
           ) : undefined
         }
       >
-        <BarTab active={activeTab === 'SHIFT'} onClick={() => setActiveTab('SHIFT')}>Vardiya</BarTab>
+        <BarTab active={activeTab === 'SHIFT'} onClick={() => setActiveTab('SHIFT')}>Defter</BarTab>
         <BarTab active={activeTab === 'RECEIPTS'} onClick={() => setActiveTab('RECEIPTS')}>Fişler</BarTab>
         <BarTab active={activeTab === 'DAY_CLOSE'} onClick={() => setActiveTab('DAY_CLOSE')}>Gün Sonu</BarTab>
       </Bar>
 
       {/* İçerik */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="page-fill flex-1 overflow-y-auto p-4 space-y-4">
         {activeTab === 'SHIFT' && !isShiftOpen ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="max-w-md">
-              <h2 className="auth-title !text-5xl">Vardiya açık değil.</h2>
-              <p className="mt-3 text-lg text-[var(--text-secondary)]">Satış almak için çekmecedeki nakdi sayıp vardiyayı başlatın.</p>
-              <Button variant="primary" size="lg" className="mt-6" onClick={() => openModal('shiftGate')}>
-                Vardiya Başlat
-              </Button>
-            </div>
+          <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-col items-start gap-4">
+            <h2 className="print-title text-sm font-bold">Vardiya açık değil</h2>
+            <Button variant="primary" className="min-h-12" onClick={() => openModal('shiftGate')}>Vardiya Başlat</Button>
           </div>
         ) : activeTab === 'SHIFT' ? (
           <>
-            {/* Üst Kartlar: Çekmece Nakiti ve Satış Dağılımı */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="paper border border-[var(--accent-emerald-border)] rounded-xl p-4 shadow-sm">
-                <span className="text-xs text-[var(--text-secondary)] block">Kasa Çekmecesindeki Nakit</span>
-                <span className="text-2xl font-bold text-[var(--accent-emerald)] tabular-nums mt-1 block">
-                  {money(summary?.expectedCashInDrawerCents)}
+            <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-wrap gap-x-10 gap-y-3">
+              {[
+                ...(isBlind
+                  ? []
+                  : [
+                      ['Çekmecedeki Nakit', money(summary?.expectedCashInDrawerCents)],
+                      ['Ciro', money(summary?.totalSalesCents)],
+                      ['Nakit', money(summary?.totalCashSalesCents)],
+                    ]),
+                ['Kart', money(summary?.totalCardSalesCents)],
+                ['Yemek Kartı', money(summary?.totalMealCardSalesCents)],
+                ['Veresiye', money(summary?.totalVeresiyeCents)],
+                ['Sorumlu', summary?.cashierName ?? '—'],
+              ].map(([label, value]) => (
+                <span key={label}>
+                  <span className="block text-xs text-[var(--text-secondary)]">{label}</span>
+                  <span className="block text-lg font-bold tabular-nums">{value}</span>
                 </span>
-                <span className="text-xs text-[var(--text-muted)] mt-1 block">
-                  Açılış: {money(summary?.openingCashCents)}
-                </span>
-              </div>
-
-              <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm">
-                <span className="text-xs text-[var(--text-secondary)] block">Toplam Vardiya Cirosu</span>
-                <span className="text-2xl font-bold text-[var(--text-primary)] tabular-nums mt-1 block">
-                  {money(summary?.totalSalesCents)}
-                </span>
-              </div>
-
-              <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm">
-                <span className="text-xs text-[var(--text-secondary)] block">Vardiya Sorumlusu</span>
-                <span className="text-xl font-bold text-[var(--text-primary)] mt-1 block truncate">
-                  {summary?.cashierName ?? '—'}
-                </span>
-                <span className="text-xs text-[var(--text-muted)] flex items-center gap-1 mt-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Açılış: {formatDateTime(summary?.openedAt)}</span>
-                </span>
-              </div>
+              ))}
             </div>
-
-            {/* Tahsilat Kanalları Dökümü */}
-            <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm space-y-3">
-              <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">
-                Ödeme Kanalları Dökümü
-              </h3>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
-                  <span className="text-xs text-[var(--text-secondary)] block">Nakit Tahsilat</span>
-                  <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {money(summary?.totalCashSalesCents)}
-                  </span>
-                </div>
-
-                <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
-                  <span className="text-xs text-[var(--text-secondary)] block">Kredi Kartı</span>
-                  <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {money(summary?.totalCardSalesCents)}
-                  </span>
-                </div>
-
-                <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
-                  <span className="text-xs text-[var(--text-secondary)] block">Yemek Kartları</span>
-                  <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {money(summary?.totalMealCardSalesCents)}
-                  </span>
-                </div>
-
-                <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3">
-                  <span className="text-xs text-[var(--text-secondary)] block">Veresiye (Cari)</span>
-                  <span className="text-base font-bold text-[var(--text-primary)] tabular-nums mt-0.5 block">
-                    {money(summary?.totalVeresiyeCents)}
-                  </span>
-                </div>
-              </div>
-            </div>
-            {summary ? <ShiftMovements summary={summary} /> : null}
+            {summary ? <ShiftMovements summary={summary} blind={isBlind} /> : null}
+            {canCloseDay ? <FinanceTab /> : null}
           </>
         ) : activeTab === 'RECEIPTS' ? (
           <ReceiptsTab onRefunded={() => void loadShiftData()} />
@@ -170,9 +131,6 @@ export const CashierModule: React.FC = () => {
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
               <div>
                 <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Gün Sonu Kapanışı (Z Raporu)</h2>
-                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  Tüm açık masalar kapatıldığında ve vardiya sayımı yapıldığında Z Raporu üretilir.
-                </p>
               </div>
               <Button
                 variant="primary"
@@ -186,18 +144,19 @@ export const CashierModule: React.FC = () => {
               </Button>
             </div>
 
-            <div className="receipt-paper p-4 rounded-lg border text-xs space-y-3">
-              <div className="text-center pb-2 border-b border-dashed border-gray-400">
-                <div className="font-bold text-sm">KASAM360 GÜN SONU RAPORU</div>
+            <div className="receipt-paper text-sm space-y-3">
+              <div className="text-center pb-2 border-b border-dashed border-[var(--border-strong)]">
+                <div className="font-bold text-sm">{lastZReport?.tenantName || 'Gün Sonu Raporu'}</div>
                 <div className="font-bold text-xs mt-1">
                   {lastZReport ? 'Gün sonu raporu (kapanış)' : 'Gün sonu raporu (ön izleme)'}
                 </div>
-                <div className="text-xs text-gray-600">
-                  {lastZReport?.tenantName ?? ''} · Rapor No: {lastZReport?.reportNumber ?? 'Ön izleme'} · Tarih: {formatDateTime(lastZReport?.closedAt)}
+                <div className="text-xs text-[var(--text-secondary)]">
+                  Rapor No: {lastZReport?.reportNumber ?? 'Ön izleme'} · Tarih: {formatDateTime(lastZReport?.closedAt)}
+                  {lastZReport?.cashierName ? ` · Kasiyer: ${lastZReport.cashierName}` : ''}
                 </div>
               </div>
 
-              <div className="space-y-1.5 py-2 border-b border-dashed border-gray-400">
+              <div className="space-y-1.5 py-2 border-b border-dashed border-[var(--border-strong)]">
                 <div className="flex justify-between">
                   <span>Açılış Kasa Nakiti:</span>
                   <span className="font-bold tabular-nums">
@@ -233,9 +192,16 @@ export const CashierModule: React.FC = () => {
                     <div className="flex justify-between"><span>İndirim:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.discountTotalCents)}</span></div>
                     <div className="flex justify-between"><span>İptal:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.voidTotalCents)}</span></div>
                     <div className="flex justify-between"><span>İade:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.refundTotalCents)}</span></div>
+                    <div className="flex justify-between"><span>İkram:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.compTotalCents)}</span></div>
+                    <div className="flex justify-between"><span>Kasa Girişleri:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.cashInCents)}</span></div>
+                    <div className="flex justify-between"><span>Kasa Çıkışları ve Giderler:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.cashOutCents)}</span></div>
                     <div className="flex justify-between"><span>KDV:</span><span className="font-bold tabular-nums">{formatMoney(lastZReport.totalVatCents)}</span></div>
                     <div className="flex justify-between"><span>Adisyon:</span><span className="font-bold tabular-nums">{formatNumber(lastZReport.orderCount)}</span></div>
-                    <div className="flex justify-between pt-1 border-t border-gray-300">
+                    <div className="flex justify-between pt-1 border-t border-[var(--border)]">
+                      <span>Kasada Olması Gereken:</span>
+                      <span className="font-bold tabular-nums">{formatMoney(lastZReport.expectedCashCents)}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span>Sayılan Kasa Nakiti:</span>
                       <span className="font-bold tabular-nums">{formatMoney(lastZReport.countedCashCents)}</span>
                     </div>
@@ -244,10 +210,10 @@ export const CashierModule: React.FC = () => {
                       <span
                         className={`font-bold tabular-nums ${
                           lastZReport.differenceCents === 0
-                            ? 'text-emerald-700'
+                            ? 'text-[var(--accent-emerald)]'
                             : lastZReport.differenceCents > 0
-                            ? 'text-blue-700'
-                            : 'text-red-700'
+                            ? 'text-[var(--accent-blue)]'
+                            : 'text-[var(--accent-red)]'
                         }`}
                       >
                         {lastZReport.differenceCents === 0 ? '0,00 ₺ (Kusursuz)' : formatMoney(lastZReport.differenceCents)}
@@ -255,7 +221,7 @@ export const CashierModule: React.FC = () => {
                     </div>
                   </>
                 ) : null}
-                <div className="flex justify-between pt-1 border-t border-gray-300 font-bold">
+                <div className="flex justify-between pt-1 border-t border-[var(--border)] font-bold">
                   <span>GENEL GÜNLÜK CİRO:</span>
                   <span className="text-sm tabular-nums">
                     {money(lastZReport?.totalRevenueCents ?? summary?.totalSalesCents)}
@@ -263,11 +229,12 @@ export const CashierModule: React.FC = () => {
                 </div>
               </div>
 
-              <div className="text-center pt-1 text-xs text-gray-500">
+              <div className="text-center pt-1 text-xs text-[var(--text-muted)]">
                 Bilgi amaçlıdır, mali belge değildir.
               </div>
             </div>
 
+            {canCloseDay ? <ShiftHistory /> : null}
             {canCloseDay ? (
               <Button variant="danger" className="w-full min-h-12" onClick={() => void handleCloseDay()}>
                 Günü Kapat
@@ -283,7 +250,7 @@ export const CashierModule: React.FC = () => {
       </div>
 
       {/* Kör Sayım Modalı */}
-      <BlindCloseModal />
+      <BlindCloseModal onShowZ={() => setActiveTab('DAY_CLOSE')} />
 
       {/* Nakit Giriş / Çıkış Modalı */}
       <CashMovementModal

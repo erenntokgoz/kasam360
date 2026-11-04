@@ -1,28 +1,32 @@
 import type { StoreApi } from 'zustand';
 import { invokeIPC } from '../services/tauriClient';
-import type { Menu360State, ModifierGroupDto, ModifierOptionDto } from '../types/menu360';
+import type { MenuState, ModifierGroupDto, ModifierOptionDto } from '../types/menu';
 
 type AuthContext = { actorRole: string; actorId: string; tenantId: string };
-type ModifierActions = Pick<Menu360State, 'createModifierGroup' | 'deleteModifierGroup' | 'addModifierOption' | 'deleteModifierOption'>;
+type ModifierActions = Pick<MenuState, 'createModifierGroup' | 'deleteModifierGroup' | 'addModifierOption' | 'deleteModifierOption'>;
 
 export function createMenuModifierActions(
-  set: StoreApi<Menu360State>['setState'],
+  set: StoreApi<MenuState>['setState'],
   getAuthContext: () => AuthContext,
 ): ModifierActions {
   return {
-    createModifierGroup: async (name, minSelections, maxSelections, isRequired) => {
+    createModifierGroup: async (name, minSelections, maxSelections, isRequired, onCreated) => {
       try {
         const { actorRole, actorId, tenantId } = getAuthContext();
+        if (!name.trim() || !Number.isSafeInteger(minSelections) || !Number.isSafeInteger(maxSelections) || minSelections < 0 || maxSelections < 1 || maxSelections < minSelections || (isRequired && minSelections < 1)) {
+          throw new Error('Grup adı ve geçerli tam sayı seçim sınırları gerekli.');
+        }
         set({ busy: true, error: null });
         const createdId = await invokeIPC<string>('create_modifier_group', {
           actorRole, actorId, tenantId, name, minSelections,
-          maxSelections: maxSelections || 1, isRequired,
+          maxSelections, isRequired,
         });
         if (typeof createdId !== 'string' || !createdId) throw new Error('Grup kimliği alınamadı.');
         const newGroup: ModifierGroupDto = {
           id: createdId, name, isRequired, minSelections, maxSelections, options: [],
         };
         set((state) => ({ modifierGroups: [...state.modifierGroups, newGroup] }));
+        onCreated?.(newGroup);
         return true;
       } catch (err: unknown) {
         set({ error: err instanceof Error ? err.message : String(err) });

@@ -3,11 +3,13 @@ import type { UserRole } from '../types/auth';
 
 const OPERATIONS: AppModule[] = ['FLOOR', 'POS', 'KDS', 'CASHIER'];
 
+// Sunucu yetkisiyle aynı harita: açılıp yetki hatası veren ekran menüde görünmez.
+// Garson mutfak durumunu izler ve siparişi masa içinden açar.
 const MODULES: Record<UserRole, AppModule[]> = {
-  MASTER: [...OPERATIONS, 'ERP', 'SETTINGS'],
-  OWNER: [...OPERATIONS, 'ERP', 'SETTINGS'],
-  MANAGER: [...OPERATIONS, 'ERP', 'SETTINGS'],
-  CASHIER: OPERATIONS,
+  MASTER: [...OPERATIONS, 'ERP', 'CATALOG', 'SETTINGS'],
+  OWNER: [...OPERATIONS, 'ERP', 'CATALOG', 'SETTINGS'],
+  MANAGER: [...OPERATIONS, 'ERP', 'CATALOG', 'SETTINGS'],
+  CASHIER: ['FLOOR', 'POS', 'CASHIER'],
   WAITER: ['FLOOR', 'POS', 'KDS'],
   KITCHEN: ['KDS'],
 };

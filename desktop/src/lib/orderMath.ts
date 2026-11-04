@@ -66,7 +66,9 @@ export function mapServerItem(wire: CartItemWire): OrderItem | null {
 /** KDV payı yaklaşık değildir: satırın sunucu payından orantılanır. */
 export function itemTaxCents(item: OrderItem): number {
   const rate = item.taxRateBp ?? 0;
-  return item.totalCents - Math.floor((item.totalCents * 10_000) / (10_000 + rate));
+  // Sunucudaki `split_inclusive_tax` ile aynı yarım yukarı yuvarlama: fiş ve defter aynı KDV'yi yazar.
+  const divisor = 10_000 + rate;
+  return item.totalCents - Math.floor((item.totalCents * 20_000 + divisor) / (divisor * 2));
 }
 
 /** Mutfağa gidecek kalemin sunucu sözleşmesi. Fiyat gönderilmez, sunucu hesaplar. */

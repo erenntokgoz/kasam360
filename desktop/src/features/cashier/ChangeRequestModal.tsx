@@ -7,21 +7,24 @@ import { Modal } from '../../ui/Modal';
 
 export interface ChangeRequestModalProps {
   orderId: string;
+  receiptLabel: string;
+  onSubmitted: () => void;
   onClose: () => void;
 }
 
 /** Kapanmış adisyon değişmez: gerekçeli talep açılır, müdür kuyruğuna düşer. */
-export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({ orderId, onClose }) => {
+export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({ orderId, receiptLabel, onSubmitted, onClose }) => {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
 
   const submit = async () => {
+    if (isSending) return;
     const { actorId, actorRole, tenantId } = sessionArgs();
     setIsSending(true);
     try {
       await invokeIPC('create_order_change_request', { orderId, reason, actorId, actorRole, tenantId });
-      onClose();
+      onSubmitted();
     } catch (caught) {
       setError(errorText(caught));
     } finally {
@@ -30,7 +33,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({ orderId,
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Değişiklik Talebi" subtitle="Müdür onayından sonra iade akışından düzeltilir." maxWidth="md">
+    <Modal isOpen onClose={() => { if (!isSending) onClose(); }} title="Değişiklik Talebi" subtitle={receiptLabel} maxWidth="md">
       <div className="space-y-3">
         <label htmlFor="change-reason" className="block text-sm font-semibold text-[var(--text-secondary)]">
           Gerekçe
@@ -45,7 +48,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({ orderId,
         />
         {error ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
         <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" size="lg" onClick={onClose}>Vazgeç</Button>
+          <Button variant="secondary" size="lg" disabled={isSending} onClick={onClose}>Vazgeç</Button>
           <Button variant="primary" size="lg" disabled={reason.trim() === ''} isLoading={isSending} onClick={() => void submit()}>
             Talep Gönder
           </Button>

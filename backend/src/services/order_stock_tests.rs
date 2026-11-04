@@ -150,3 +150,39 @@ async fn kapanis_duseni_tekrar_dusmez_eski_kalemi_bir_kez_duser() {
     drop(conn);
     assert_eq!(stock(&pool, "bat_2").await, 8.0, "eski kalem bir kez düşer");
 }
+
+#[tokio::test]
+async fn adetle_alinan_malzemenin_gram_talebi_parti_gramiyla_dusulur() {
+    let pool = pool().await;
+    // Tost reçetesi 300 g marul ister. İlk partide marul 250 g, ikincide 400 g verir.
+    sqlx::raw_sql(
+        "INSERT INTO products (id, tenant_id, category_id, name, price_cents, stock_unit, is_raw, is_active)
+            VALUES ('prd_marul', 'tnt_a', 'cat_1', 'Marul', 0, 'adet', 1, 0);
+         INSERT INTO inventory_batches (id, tenant_id, product_id, initial_quantity, remaining_quantity,
+                                        unit_cost_cents, usable_grams_per_unit, received_at)
+            VALUES ('bat_m1', 'tnt_a', 'prd_marul', 2, 2, 1500, 250, '2026-01-01'),
+                   ('bat_m2', 'tnt_a', 'prd_marul', 5, 5, 2000, 400, '2026-02-01');
+         INSERT INTO recipes (id, tenant_id, product_id, name, created_by) VALUES ('rcp_1', 'tnt_a', 'prd_1', 'Tost', 'usr_1');
+         INSERT INTO recipe_items (id, tenant_id, recipe_id, component_product_id, quantity, unit)
+            VALUES ('rci_1', 'tnt_a', 'rcp_1', 'prd_marul', 300, 'g');",
+    )
+    .execute(&pool)
+    .await
+    .expect("reçete");
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    deduct_line(&mut conn, TENANT, "itm_1", "prd_1", 3, NOW)
+        .await
+        .expect("düşüm");
+    drop(conn);
+    // 900 g: ilk partiden 2 adet (500 g), ikinciden 1 adet (400 g).
+    assert_eq!(stock(&pool, "bat_m1").await, 0.0);
+    assert!((stock(&pool, "bat_m2").await - 4.0).abs() < 1e-9);
+    let cost: i64 = sqlx::query_scalar(
+        "SELECT CAST(json_extract(payload, '$.allocations[0].totalCostCents') AS INTEGER)
+           FROM events WHERE aggregate_id = 'itm_1' AND event_type = 'FIFO_STOCK_DEDUCTED'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("maliyet");
+    assert_eq!(cost, 2 * 1500 + 2000);
+}

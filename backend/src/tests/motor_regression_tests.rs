@@ -362,7 +362,7 @@ async fn close_shift_beklenen_bakiye_ve_farki_dogru_hesaplar() {
 }
 
 #[tokio::test]
-async fn kds_aktif_biletler_iptal_edilen_kalemi_gostermez() {
+async fn kds_aktif_biletler_iptal_edilen_kalemi_iptal_olarak_gosterir() {
     let pool = setup_test_db().await;
     let mut conn = pool.acquire().await.expect("conn");
     let tenant = "t_kds_void";
@@ -425,6 +425,7 @@ async fn kds_aktif_biletler_iptal_edilen_kalemi_gostermez() {
         ],
         notes: Some("KDS test adisyonu".into()),
         waiter_id: Some("usr_garson".into()),
+        guest_count: Some(2),
     };
 
     let (order_id, _) = execute_submit_order(&mut conn, tenant, &payload, Some("usr_garson"))
@@ -472,15 +473,27 @@ async fn kds_aktif_biletler_iptal_edilen_kalemi_gostermez() {
     let void_res = execute_void_order_item(&mut conn, &audit_lock, tenant, &void_payload).await;
     void_res.expect("Kola kalemi başarıyla iptal edilmeli");
 
-    // 5. get_active_tickets sorgulandığında iptal edilen kolanın KDS'ten düşmesi
+    // 5. İptal edilen kola mutfakta sessizce kaybolmaz: hazırlanıyorsa durdurulsun
+    // diye fişte "Cancelled" durumuyla kalır, fişin aşamasını etkilemez.
     let tickets_after = execute_get_active_tickets(&mut conn, tenant)
         .await
         .expect("kds biletleri");
     assert_eq!(tickets_after.len(), 1, "Bilet hala aktif kalmalı");
     assert_eq!(
         tickets_after[0].items.len(),
-        1,
-        "İptal edilen kalem KDS listesinden düşmeli, yalnız 1 kalem kalmalı"
+        2,
+        "İptal kalemi fişte kalmalı"
     );
-    assert_eq!(tickets_after[0].items[0]["name"], "Pizza");
+    let kola_after = tickets_after[0]
+        .items
+        .iter()
+        .find(|it| it["name"] == "Kola")
+        .expect("iptal edilen kola");
+    assert_eq!(
+        kola_after["status"]
+            .as_str()
+            .map(str::to_uppercase)
+            .as_deref(),
+        Some("CANCELLED")
+    );
 }

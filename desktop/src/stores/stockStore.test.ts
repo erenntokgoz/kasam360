@@ -44,4 +44,20 @@ describe('stok satın alma akışı', () => {
     expect(useStockStore.getState().products).toEqual([]);
     expect(useStockStore.getState().error).toContain('sahibi');
   });
+
+  it('oluşturulan tedarikçiyi kimliğiyle üst işleme döndürür', async () => {
+    const created = vi.fn();
+    expect(await useStockStore.getState().createSupplier('Akış Tedarikçisi', created)).toBe(true);
+    expect(created).toHaveBeenCalledWith(expect.objectContaining({ name: 'Akış Tedarikçisi', id: expect.any(String) }));
+    const selected = created.mock.calls[0][0];
+    expect(useStockStore.getState().suppliers.find((supplier) => supplier.id === selected.id)?.name).toBe('Akış Tedarikçisi');
+  });
+
+  it('hızlı girişte geçersiz tedarikçiyi başka tedarikçiyle değiştirmez', async () => {
+    await useStockStore.getState().load();
+    const previous = useStockStore.getState().orders.length;
+    const product = useStockStore.getState().products[0];
+    expect(await useStockStore.getState().quickReceive(product.id, 1, 100, 'missing')).toBe(false);
+    expect(useStockStore.getState().orders).toHaveLength(previous);
+  });
 });

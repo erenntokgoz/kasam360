@@ -60,6 +60,25 @@ pub(crate) fn require_tenant_id(tenant_id: Option<&str>) -> Result<String, Strin
 
 /// `order_items.modifiers` JSON'unu hem `Vec<String>` hem de `Vec<serde_json::Value>`
 /// formatında destekleyerek ayrıştırır.
+/// Mutfak ekranı için yalnız seçenek adları. Neden: mutfak fiyatla değil içerikle
+/// çalışır; "+15.00 TL" gibi yerelleştirilmemiş tutar ekranı kirletiyordu.
+pub fn order_item_modifier_names(modifiers_raw: Option<&str>) -> Vec<String> {
+    let Some(raw) = modifiers_raw else {
+        return Vec::new();
+    };
+    match serde_json::from_str::<serde_json::Value>(raw) {
+        Ok(serde_json::Value::Array(arr)) => arr
+            .into_iter()
+            .filter_map(|item| match item {
+                serde_json::Value::String(s) => Some(s),
+                serde_json::Value::Object(obj) => Some(obj.get("name")?.as_str()?.to_string()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 pub fn parse_order_item_modifiers(modifiers_raw: Option<&str>) -> Vec<String> {
     let Some(raw) = modifiers_raw else {
         return Vec::new();

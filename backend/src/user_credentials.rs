@@ -210,6 +210,23 @@ pub async fn ensure_pin_unique_after_write(
     Ok(())
 }
 
+/// Otomatik girişin beklediği hane sayısı; PIN'in kendisi hakkında başka bilgi vermez.
+pub async fn record_pin_length(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+    user_id: &str,
+    pin: &str,
+) -> Result<(), String> {
+    sqlx::query("UPDATE users SET pin_length = ? WHERE id = ? AND tenant_id = ?")
+        .bind(pin.len() as i64)
+        .bind(user_id)
+        .bind(tenant_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

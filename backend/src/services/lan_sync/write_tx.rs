@@ -12,6 +12,8 @@
 use super::capture::{self, RowChange};
 use super::op_log::{intent_hash, LogOp, Operation};
 use super::runtime::LanSync;
+use super::store;
+use crate::services::device_identity::ensure_local_device;
 use sqlx::{Sqlite, SqliteConnection, SqlitePool, Transaction};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -118,25 +120,43 @@ impl WritePool for SqlitePool {
             .begin_with("BEGIN IMMEDIATE")
             .await
             .map_err(|e| e.to_string())?;
-        let Some(sync) = registered(self).filter(LanSync::replicates_writes) else {
+        let Some(sync) = registered(self) else {
             return Ok(WriteTx {
                 tx,
                 replication: None,
             });
         };
+        // Ekran önbelleği üyeliğin gerisinde kalabilir; yazma yolu kilit altındaki diske bakar.
+        let Some(row) = store::load_cluster(&mut tx).await? else {
+            return Ok(WriteTx {
+                tx,
+                replication: None,
+            });
+        };
+        if store::has_pending_membership(&mut tx, &row.tenant_id).await? {
+            return Err(
+                "SYNC_RETRY: cihaz üyeliği onaylanıyor; işlem yeniden denenmeli".to_string(),
+            );
+        }
+        let members = store::current_members(&mut tx, &row).await?;
+        let me = ensure_local_device(&mut tx, &row.tenant_id).await?;
+        if members.len() == 1 && members[0].device_id == me {
+            return Ok(WriteTx {
+                tx,
+                replication: None,
+            });
+        }
         // Kapı transaction'ın içindedir: diğer bağlantılar görmez, iz bırakmaz.
         sqlx::query("INSERT INTO sync_write_gate (mode) VALUES ('CAPTURE')")
             .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
-        let base_state: i64 =
-            sqlx::query_scalar("SELECT COALESCE((SELECT state_index FROM sync_cluster), 0)")
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(|e| e.to_string())?;
         Ok(WriteTx {
             tx,
-            replication: Some(Replication { sync, base_state }),
+            replication: Some(Replication {
+                sync,
+                base_state: row.state_index,
+            }),
         })
     }
 }

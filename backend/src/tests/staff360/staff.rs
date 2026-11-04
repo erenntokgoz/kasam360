@@ -132,10 +132,10 @@ async fn izin_cakismasi_reddedilir() {
         end_date: "2026-03-15".into(),
         reason: None,
     };
-    staff_service::request_leave(&p, "tenant_a", &talep)
+    staff_service::request_leave(&p, "tenant_a", &talep, None)
         .await
         .expect("ilk talep");
-    let cakisma = staff_service::request_leave(&p, "tenant_a", &talep).await;
+    let cakisma = staff_service::request_leave(&p, "tenant_a", &talep, None).await;
     assert!(
         cakisma.is_err(),
         "çakışan ikinci izin talebi kabul edilmemeli"
@@ -156,6 +156,7 @@ async fn kendi_iznini_kendin_onaylayamazsin() {
             end_date: "2026-03-12".into(),
             reason: None,
         },
+        None,
     )
     .await
     .expect("talep");
@@ -347,5 +348,35 @@ async fn dogum_gunu_ufes_yil_dahil_yalniz_bir_kez_listelenir() {
     assert!(
         dogum.year() == su_an.year() || dogum.year() == su_an.year() + 1,
         "beklenmeyen yıl: {tarih}"
+    );
+}
+
+#[tokio::test]
+async fn patronun_girdigi_izin_onayli_baslar_ve_duzenlenir() {
+    let p = pool().await;
+    kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
+    let mut girdi = crate::services::staff360::staff_types::LeaveInput {
+        user_id: "usr_1".into(),
+        kind: "YILLIK".into(),
+        start_date: "2026-03-10".into(),
+        end_date: "2026-03-12".into(),
+        reason: None,
+    };
+    let id = staff_service::request_leave(&p, "tenant_a", &girdi, Some("usr_patron"))
+        .await
+        .expect("izin");
+    girdi.end_date = "2026-03-20".into();
+    staff_service::update_leave(&p, "tenant_a", &id, &girdi)
+        .await
+        .expect("kendisiyle çakışmaz");
+    let (durum, bitis): (String, String) =
+        sqlx::query_as("SELECT status, end_date FROM leave_requests WHERE id = ?")
+            .bind(&id)
+            .fetch_one(&p)
+            .await
+            .expect("izin okunur");
+    assert_eq!(
+        (durum.as_str(), bitis.as_str()),
+        ("Onaylandi", "2026-03-20")
     );
 }

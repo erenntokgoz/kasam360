@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, Lock, Moon, Settings, ShoppingBag, Sun, Tv, Wallet, BarChart3 } from 'lucide-react';
+import { BookOpen, LayoutGrid, Lock, Moon, Settings, ShoppingBag, Sun, Tv, Wallet, BarChart3 } from 'lucide-react';
 import { useUIStore, type AppModule } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useKdsStore } from '../../stores/kdsStore';
@@ -29,7 +29,7 @@ export const SidebarNav: React.FC = () => {
     visible: boolean;
   }> = [
     { id: 'FLOOR', label: 'Salon', icon: LayoutGrid, visible: canOpenModule(user?.role, 'FLOOR') },
-    { id: 'POS', label: 'Sipariş', icon: ShoppingBag, visible: canOpenModule(user?.role, 'POS') },
+    { id: 'POS', label: 'Sipariş', icon: ShoppingBag, visible: user?.role !== 'WAITER' && canOpenModule(user?.role, 'POS') },
     {
       id: 'KDS',
       label: 'Mutfak',
@@ -39,6 +39,7 @@ export const SidebarNav: React.FC = () => {
     },
     { id: 'CASHIER', label: 'Kasa', icon: Wallet, visible: canOpenModule(user?.role, 'CASHIER') },
     { id: 'ERP', label: 'Yönetim', icon: BarChart3, visible: canOpenModule(user?.role, 'ERP') },
+    { id: 'CATALOG', label: 'Menü', icon: BookOpen, visible: canOpenModule(user?.role, 'CATALOG') },
     { id: 'SETTINGS', label: 'Ayarlar', icon: Settings, visible: canOpenModule(user?.role, 'SETTINGS') },
   ];
 
@@ -74,7 +75,8 @@ export const SidebarNav: React.FC = () => {
       </nav>
 
       <div className="mt-auto flex flex-col">
-        {isShiftOpen ? null : (
+        {/* Kasa vardiyasını yalnız kasaya girebilen açar; mutfağa ve garsona gösterilmez. */}
+        {isShiftOpen || !canOpenModule(user?.role, 'CASHIER') ? null : (
           <button type="button" onClick={() => openModal('shiftGate')} className="side-tool !text-[var(--accent-amber)]">
             <span className="text-center">Vardiya kapalı</span>
           </button>
@@ -84,7 +86,9 @@ export const SidebarNav: React.FC = () => {
           <ThemeIcon className="w-5 h-5" />
           <span>{theme === 'dark' ? 'Açık' : 'Koyu'}</span>
         </button>
-        <button type="button" onClick={lock} className="side-tool" title={user?.name}>
+        {/* Kasada kimin çalıştığı görünür: ad yalnız fare ipucundaydı. */}
+        <span className="px-1 pt-2 text-xs font-bold text-center break-words text-[var(--text-primary)]">{user?.name?.split(' ')[0]}</span>
+        <button type="button" onClick={lock} className="side-tool">
           <Lock className="w-5 h-5" />
           <span>Kilitle</span>
         </button>

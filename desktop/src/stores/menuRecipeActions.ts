@@ -1,6 +1,6 @@
 import type { StoreApi } from 'zustand';
 import { invokeIPC } from '../services/tauriClient';
-import type { Menu360State } from '../types/menu360';
+import type { MenuState } from '../types/menu';
 
 type AuthContext = {
   actorRole: string;
@@ -8,11 +8,11 @@ type AuthContext = {
   tenantId: string;
   activeModules: string[];
 };
-type RecipeActions = Pick<Menu360State, 'createRecipe' | 'deactivateRecipe'>;
+type RecipeActions = Pick<MenuState, 'createRecipe' | 'deactivateRecipe'>;
 
 export function createMenuRecipeActions(
-  set: StoreApi<Menu360State>['setState'],
-  get: StoreApi<Menu360State>['getState'],
+  set: StoreApi<MenuState>['setState'],
+  get: StoreApi<MenuState>['getState'],
   getAuthContext: () => AuthContext,
 ): RecipeActions {
   return {

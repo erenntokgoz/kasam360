@@ -26,7 +26,8 @@ export const ReceiptsTab: React.FC<{ onRefunded: () => void }> = ({ onRefunded }
   const [receipts, setReceipts] = useState<ReceiptRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [target, setTarget] = useState<ReceiptRow | null>(null);
-  const [changeOrderId, setChangeOrderId] = useState<string | null>(null);
+  const [changeReceipt, setChangeReceipt] = useState<ReceiptRow | null>(null);
+  const [requestRevision, setRequestRevision] = useState(0);
   const canDecide = useAuthStore((state) => state.user?.role === 'OWNER' || state.user?.role === 'MANAGER');
 
   const load = useCallback(async () => {
@@ -60,18 +61,20 @@ export const ReceiptsTab: React.FC<{ onRefunded: () => void }> = ({ onRefunded }
   if (receipts.length === 0) {
     return (
       <>
-        {canDecide ? <OrderChangeRequests onRefunded={handleRefunded} /> : null}
+        {canDecide ? <OrderChangeRequests key={requestRevision} onRefunded={handleRefunded} /> : null}
         <p className="paper p-4 text-[var(--text-secondary)]">Henüz tahsilat yok.</p>
       </>
     );
   }
 
-  // Kimlik yerine masanın adı görünür; silinmiş masa düz adisyon olarak yazılır.
+  // Sunucu fişe masanın adını yazar; ad bulunamazsa kimlik gelir, kimlik ekranda gösterilmez.
   const tableNames = new Map(tables.map((table) => [table.id, table.tableNumber]));
+  const tableLabel = (raw: string) => tableNames.get(raw) ?? (raw && !/^(ord|tbl|txn)_/.test(raw) ? raw : 'Adisyon');
 
   return (
     <>
-      {canDecide ? <OrderChangeRequests onRefunded={handleRefunded} /> : null}
+      {canDecide ? <OrderChangeRequests key={requestRevision} onRefunded={handleRefunded} /> : null}
+      {requestRevision > 0 ? <p role="status" className="mb-3 text-sm font-semibold">Değişiklik talebi kaydedildi.</p> : null}
       <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
         {receipts.map((receipt) => {
           const remaining = receipt.total_cents - receipt.refunded_cents;
@@ -79,7 +82,7 @@ export const ReceiptsTab: React.FC<{ onRefunded: () => void }> = ({ onRefunded }
             <li key={receipt.transaction_id} className="flex items-center gap-3 px-4 py-2 min-h-12">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-[var(--text-primary)] truncate">
-                  {tableNames.get(receipt.table_id) ?? 'Adisyon'} · {receipt.payment_method}
+                  {tableLabel(receipt.table_id)} · {receipt.payment_method}
                 </p>
                 <p className="text-xs text-[var(--text-secondary)] tabular-nums">
                   {receipt.fiscal_receipt_no ?? receipt.transaction_id} · {formatDateTime(receipt.created_at)}
@@ -96,7 +99,7 @@ export const ReceiptsTab: React.FC<{ onRefunded: () => void }> = ({ onRefunded }
                 ) : null}
               </div>
               {receipt.order_id ? (
-                <Button variant="ghost" onClick={() => setChangeOrderId(receipt.order_id)}>
+                <Button variant="ghost" onClick={() => setChangeReceipt(receipt)}>
                   Değişiklik İste
                 </Button>
               ) : null}
@@ -113,7 +116,17 @@ export const ReceiptsTab: React.FC<{ onRefunded: () => void }> = ({ onRefunded }
           );
         })}
       </ul>
-      {changeOrderId ? <ChangeRequestModal orderId={changeOrderId} onClose={() => setChangeOrderId(null)} /> : null}
+      {changeReceipt?.order_id ? (
+        <ChangeRequestModal
+          orderId={changeReceipt.order_id}
+          receiptLabel={[tableLabel(changeReceipt.table_id), formatMoney(changeReceipt.total_cents), formatDateTime(changeReceipt.created_at)].join(' · ')}
+          onClose={() => setChangeReceipt(null)}
+          onSubmitted={() => {
+            setChangeReceipt(null);
+            setRequestRevision((revision) => revision + 1);
+          }}
+        />
+      ) : null}
       {target ? (
         <RefundModal
           target={target}

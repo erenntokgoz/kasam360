@@ -4,15 +4,23 @@
  */
 
 export function formatTime(dateInput?: string | Date | number): string {
-  const d = dateInput ? new Date(dateInput) : new Date();
+  const d = dateInput ? toDate(dateInput) : new Date();
   if (isNaN(d.getTime())) return '--:--';
   const hours = d.getHours().toString().padStart(2, '0');
   const minutes = d.getMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;
 }
 
+/** SQLite `datetime('now')` UTC yazar ama dilim eki taşımaz; yerel sanılırsa saat üç saat geri görünür. */
+function toDate(dateInput: string | Date | number): Date {
+  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(dateInput)) {
+    return new Date(`${dateInput.replace(' ', 'T')}Z`);
+  }
+  return new Date(dateInput);
+}
+
 export function formatDateTime(dateInput?: string | Date | number): string {
-  const d = dateInput ? new Date(dateInput) : new Date();
+  const d = dateInput ? toDate(dateInput) : new Date();
   if (isNaN(d.getTime())) return '--.--.---- --:--';
   const day = d.getDate().toString().padStart(2, '0');
   const month = (d.getMonth() + 1).toString().padStart(2, '0');
@@ -22,10 +30,9 @@ export function formatDateTime(dateInput?: string | Date | number): string {
   return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
-/** Sunucunun `YYYY-AA-GG SS:DD:ss` saati UTC'dir; takvim bunu yerel sanar, saat kayardı. */
+/** Sunucunun `YYYY-AA-GG SS:DD:ss` saati UTC'dir; `formatDateTime` aynı kuralı uygular. */
 export function formatServerDateTime(value: string): string {
-  const utc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(value) ? `${value.replace(' ', 'T')}Z` : value;
-  return formatDateTime(utc);
+  return formatDateTime(value);
 }
 
 export function minutesElapsed(startTime?: string): number {
@@ -37,3 +44,6 @@ export function minutesElapsed(startTime?: string): number {
   const diffMs = Math.max(0, Date.now() - start);
   return Math.floor(diffMs / 60000);
 }
+
+/** ISO tarihi gün.ay.yıl yazar; saat varsa atılır. */
+export const formatDay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('.');

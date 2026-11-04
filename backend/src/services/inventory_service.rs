@@ -4,6 +4,7 @@
 //! `inventory_batches` üzerinden en eski partiden başlanarak düşülür.
 
 use crate::commands::CartItemDto;
+use crate::services::inventory360::batch_demand::component_demand;
 use crate::services::inventory360::quantity_cost::line_cost_cents;
 use crate::services::inventory360::units::convert_stock_quantity;
 use sqlx::Row;
@@ -123,20 +124,12 @@ impl InventoryService {
                     .await
                     .map_err(|e| e.to_string())?;
                     let recipe_demand = (comp_qty / waste_factor) * recipe_scale;
-                    let mut comp_remaining_demand = convert_stock_quantity(
-                        conn,
-                        tenant_id,
-                        &recipe_unit,
-                        &stock_unit,
-                        recipe_demand,
-                    )
-                    .await?;
+                    let mut demand =
+                        component_demand(conn, tenant_id, &recipe_unit, &stock_unit, recipe_demand)
+                            .await?;
 
                     let batch_rows = sqlx::query(
-                        "SELECT id, remaining_quantity, unit_cost_cents \
-                         FROM inventory_batches \
-                         WHERE tenant_id = ? AND product_id = ? AND remaining_quantity > 0 \
-                         ORDER BY received_at ASC, id ASC",
+                        "SELECT id, remaining_quantity, unit_cost_cents, usable_grams_per_unit                          FROM inventory_batches                          WHERE tenant_id = ? AND product_id = ? AND remaining_quantity > 0                          ORDER BY received_at ASC, id ASC",
                     )
                     .bind(tenant_id)
                     .bind(&comp_product_id)
@@ -144,8 +137,9 @@ impl InventoryService {
                     .await
                     .map_err(|e| e.to_string())?;
 
+                    let mut last_grams_per_unit: Option<f64> = None;
                     for b in batch_rows {
-                        if comp_remaining_demand <= 0.0 {
+                        if !demand.is_open() {
                             break;
                         }
                         let b_id: String = b.try_get("id").map_err(|e| e.to_string())?;
@@ -153,17 +147,24 @@ impl InventoryService {
                             b.try_get("remaining_quantity").map_err(|e| e.to_string())?;
                         let b_cost: i64 =
                             b.try_get("unit_cost_cents").map_err(|e| e.to_string())?;
+                        let grams_per_unit: Option<f64> = b
+                            .try_get("usable_grams_per_unit")
+                            .map_err(|e| e.to_string())?;
+                        if grams_per_unit.is_some() {
+                            last_grams_per_unit = grams_per_unit;
+                        }
 
-                        let take = comp_remaining_demand.min(b_rem);
+                        let take = demand.take(b_rem, grams_per_unit);
+                        if take <= 0.0 {
+                            continue;
+                        }
                         let cost = line_cost_cents(b_cost, take)?;
                         item_cogs_cents = item_cogs_cents
                             .checked_add(cost)
                             .ok_or_else(|| "OVERFLOW: satış maliyeti taştı".to_string())?;
-                        comp_remaining_demand -= take;
 
                         sqlx::query(
-                            "UPDATE inventory_batches SET remaining_quantity = remaining_quantity - ? \
-                             WHERE tenant_id = ? AND id = ?",
+                            "UPDATE inventory_batches SET remaining_quantity = remaining_quantity - ?                              WHERE tenant_id = ? AND id = ?",
                         )
                         .bind(take)
                         .bind(tenant_id)
@@ -181,12 +182,28 @@ impl InventoryService {
                         }));
                     }
 
-                    if comp_remaining_demand > 0.0 {
-                        total_deficit += comp_remaining_demand;
+                    if demand.is_open() {
+                        // Gram açığı stok biriminde (adet) yazılır; hareket defteri adetle
+                        // tutulur. Hiç gram bilgisi yoksa adet karşılığı bilinemez.
+                        let (missing, missing_grams) = if demand.is_grams() {
+                            let grams = demand.remaining();
+                            (
+                                last_grams_per_unit.map_or(0.0, |per_unit| grams / per_unit),
+                                Some(grams),
+                            )
+                        } else {
+                            (demand.remaining(), None)
+                        };
+                        total_deficit += if missing > 0.0 {
+                            missing
+                        } else {
+                            demand.remaining()
+                        };
                         batch_allocations.push(serde_json::json!({
                             "componentProductId": comp_product_id,
                             "batchId": "UNTRACKED_DEFICIT",
-                            "quantity": comp_remaining_demand,
+                            "quantity": missing,
+                            "missingGrams": missing_grams,
                             "unitCostCents": null,
                             "totalCostCents": null,
                             "reason": "Reçete bileşeni için parti girişi yok; gerçek maliyet bilinmiyor."

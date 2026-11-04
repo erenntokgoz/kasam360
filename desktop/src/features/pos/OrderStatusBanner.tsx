@@ -8,7 +8,7 @@ const SYNC_MESSAGE: Partial<Record<SyncState, string>> = {
   SYNCING: 'Cihazlar eşitleniyor. İşlem birkaç saniye gecikebilir.',
   VERIFYING: 'Son işlemin sonucu doğrulanıyor. Aynı işlemi tekrar başlatmayın.',
   NO_CONNECTION: 'Diğer cihazla bağlantı koptu. Sipariş ve tahsilat yazılmıyor; taslak bu cihazda duruyor.',
-  INTERVENTION: 'Eşitleme durdu, müdahale gerekiyor. Üst çubuktaki durumdan cihazları kontrol edin.',
+  INTERVENTION: 'Eşitleme durdu. Sol menüdeki uyarıya dokunun; ayrıntı orada yazar.',
 };
 
 /** Bağlantı ve ikinci cihaz durumu işlem ekranında söylenir; üst çubuk gözden kaçar. */

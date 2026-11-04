@@ -8,82 +8,16 @@
 
 use crate::services::lan_sync::WritePool;
 use crate::services::staff360::payroll_deductions;
+#[cfg(test)]
+pub use crate::services::staff360::payroll_period::period_range;
+use crate::services::staff360::payroll_period::{self, period_window, PeriodWindow};
 use sqlx::Row;
 use sqlx::SqlitePool;
 
-use crate::services::staff360::payroll_types::{
-    PayrollAmounts, PayrollRule, PayrollRuleInput, PayrollRun,
-};
+use crate::services::staff360::payroll_types::{PayrollAmounts, PayrollRule, PayrollRun};
 use crate::services::staff360::tip_service;
 
-/// Maaş kuralını yazar (UPSERT). Model doğrulanır: bilinmeyen model
-/// bordroyu sessizce sıfır bırakırdı.
-pub async fn set_rule(
-    pool: &SqlitePool,
-    tenant_id: &str,
-    input: &PayrollRuleInput,
-) -> Result<(), String> {
-    let mut tx = pool.begin_write().await?;
-    const MODELLER: [&str; 5] = ["FIXED", "COMMISSION", "TIP", "HOURLY", "PROFIT_SHARE"];
-    if !MODELLER.contains(&input.model.as_str()) {
-        return Err(format!("gecersiz maas modeli: {}", input.model));
-    }
-    if input.base_salary_cents < 0
-        || input.commission_percent < 0
-        || input.hourly_rate_cents < 0
-        || input.profit_share_percent < 0
-    {
-        return Err("maas bilesenleri negatif olamaz".to_string());
-    }
-    if input.commission_percent > 100 || input.profit_share_percent > 100 {
-        return Err("yuzde 100'u gecemez".to_string());
-    }
-    if input.tip_multiplier_percent > 500 {
-        return Err("bahsis katsayisi 500'u gecemez".to_string());
-    }
-    let var: Option<i64> = sqlx::query_scalar(
-        "SELECT 1 FROM users WHERE tenant_id = ?1 AND id = ?2 AND is_active = 1",
-    )
-    .bind(tenant_id)
-    .bind(&input.user_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-    if var.is_none() {
-        return Err(format!("calisan bulunamadi: {}", input.user_id));
-    }
-
-    sqlx::query(
-        "INSERT INTO payroll_rules
-             (id, tenant_id, user_id, model, base_salary_cents, commission_percent,
-              hourly_rate_cents, tip_multiplier_percent, profit_share_percent, active,
-              created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1,
-                 strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-         ON CONFLICT (tenant_id, user_id)
-         DO UPDATE SET model = excluded.model,
-                       base_salary_cents = excluded.base_salary_cents,
-                       commission_percent = excluded.commission_percent,
-                       hourly_rate_cents = excluded.hourly_rate_cents,
-                       tip_multiplier_percent = excluded.tip_multiplier_percent,
-                       profit_share_percent = excluded.profit_share_percent,
-                       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-    )
-    .bind(crate::id_generator::generate_id("prl"))
-    .bind(tenant_id)
-    .bind(&input.user_id)
-    .bind(&input.model)
-    .bind(input.base_salary_cents)
-    .bind(input.commission_percent)
-    .bind(input.hourly_rate_cents)
-    .bind(input.tip_multiplier_percent)
-    .bind(input.profit_share_percent)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-    tx.commit().await?;
-    Ok(())
-}
+pub use crate::services::staff360::payroll_rules::{delete_rule, set_rule};
 
 pub async fn list_rules(
     pool: &SqlitePool,
@@ -92,7 +26,8 @@ pub async fn list_rules(
 ) -> Result<Vec<PayrollRule>, String> {
     let rows = sqlx::query(
         "SELECT pr.user_id, u.name, pr.model, pr.base_salary_cents, pr.commission_percent,
-                pr.hourly_rate_cents, pr.tip_multiplier_percent, pr.profit_share_percent, pr.active
+                pr.hourly_rate_cents, pr.tip_multiplier_percent, pr.profit_share_percent, pr.pay_period,
+                pr.active
            FROM payroll_rules pr
            JOIN users u ON u.id = pr.user_id AND u.tenant_id = pr.tenant_id
           WHERE pr.tenant_id = ?1
@@ -129,66 +64,37 @@ pub async fn list_rules(
             profit_share_percent: r
                 .try_get("profit_share_percent")
                 .map_err(|e| e.to_string())?,
+            pay_period: r.try_get("pay_period").map_err(|e| e.to_string())?,
             active: r.try_get::<i64, _>("active").map_err(|e| e.to_string())? != 0,
         });
     }
     Ok(out)
 }
 
-/// `YYYY-MM` dönemini `[baslangic, bitis]` aralığına çevirir.
-/// Geçersiz dönem hata verir; sessizce tüm zaman aralığına düşmez.
-pub fn period_range(period: &str) -> Result<(String, String), String> {
-    let parcalar: Vec<&str> = period.split('-').collect();
-    if parcalar.len() != 2 || parcalar[0].len() != 4 || parcalar[1].len() != 2 {
-        return Err(format!("donem YYYY-MM olmali: {period}"));
-    }
-    let yil: i32 = parcalar[0]
-        .parse()
-        .map_err(|_| format!("donem yili gecersiz: {period}"))?;
-    let ay: u32 = parcalar[1]
-        .parse()
-        .map_err(|_| format!("donem ayi gecersiz: {period}"))?;
-    if !(1..=12).contains(&ay) {
-        return Err(format!("donem ayi 1-12 olmali: {period}"));
-    }
-    let ilk = format!("{yil:04}-{ay:02}-01");
-    // Ay uzunluğu: 31'e `31 - gün` farkı eklenir. Şubat artık yılda 29, normal
-    // yılda 28 gündür; hata burada bordro dönemini bir gün kaydırır.
-    let son_gun = 31u8
-        - match ay {
-            4 | 6 | 9 | 11 => 2,
-            2 => {
-                if (yil % 4 == 0 && yil % 100 != 0) || yil % 400 == 0 {
-                    2
-                } else {
-                    3
-                }
-            }
-            _ => 0,
-        };
-    // Aralık için ayrı dal YOKTUR. Önceden `yil+1-01-31` üreten dal vardı ve
-    // 2026-12 dönemini 2027-01-31'e kadar uzatıyordu: Aralıkta çalışan
-    // personelin Ocak satışı Aralık bordrosuna girer, Ocak bordrosuna da
-    // girmezdi. Aralık 31 gündür, `_ => 0` dalı zaten doğru sonucu verir.
-    let son = format!("{yil:04}-{ay:02}-{son_gun}");
-    Ok((ilk, format!("{son}T23:59:59")))
-}
-
-/// Dönemin bordrosunu hesaplar ve `payroll_runs` tablosuna yazar.
-/// Aynı dönem yeniden hesaplanırsa satırlar güncellenir (UPSERT): maaş
-/// hesabı tekrarlanabilir olmalıdır, aksi halde ay sonunda "hangi rakam
-/// doğru?" sorusu cevapsız kalır.
+/// Dönemin bordrosunu hesaplar ve `payroll_runs` tablosuna yazar. Aynı dönem yeniden
+/// hesaplanırsa satır güncellenir: "hangi rakam doğru?" sorusu cevapsız kalmamalı.
 pub async fn run_payroll(
     pool: &SqlitePool,
     tenant_id: &str,
+    pay_period: &str,
     period: &str,
     can_see_amounts: bool,
 ) -> Result<Vec<PayrollRun>, String> {
     let mut tx = pool.begin_write().await?;
-    let (baslangic, bitis) = period_range(period)?;
-    let rules = list_rules(pool, tenant_id, can_see_amounts).await?;
+    let window = period_window(pay_period, period)?;
+    let PeriodWindow {
+        key: donem,
+        from: baslangic,
+        to: bitis,
+        days: donem_gunu,
+    } = window;
+    let rules: Vec<PayrollRule> = list_rules(pool, tenant_id, can_see_amounts)
+        .await?
+        .into_iter()
+        .filter(|rule| rule.pay_period == pay_period)
+        .collect();
     if rules.is_empty() {
-        return Err("bu isletmede tanimli maas kurali yok".to_string());
+        return Err("bu hakedis donemiyle tanimli maas kurali yok".to_string());
     }
 
     // PROFIT_SHARE modeli icin donem net kararini bir kez hesapla.
@@ -209,7 +115,19 @@ pub async fn run_payroll(
         }
 
         let bahsis = if kural.model == "TIP" {
-            tip_service::tip_for_user(pool, tenant_id, &kural.user_id, period).await?
+            // Bahşiş aylık dağıtılır: kısa dönemde dağıtım tarihi esas alınır, tekrar yazılmaz.
+            if pay_period == payroll_period::MONTHLY {
+                tip_service::tip_for_user(pool, tenant_id, &kural.user_id, period).await?
+            } else {
+                payroll_deductions::tips_between(
+                    &mut tx,
+                    tenant_id,
+                    &kural.user_id,
+                    &baslangic,
+                    &bitis,
+                )
+                .await?
+            }
         } else {
             0
         };
@@ -255,6 +173,7 @@ pub async fn run_payroll(
             &baslangic,
             &bitis,
             kural.base_salary_cents,
+            donem_gunu,
         )
         .await?;
         let net = brut - kesinti.total_cents();
@@ -299,7 +218,7 @@ pub async fn run_payroll(
         .bind(&id)
         .bind(tenant_id)
         .bind(&kural.user_id)
-        .bind(period)
+        .bind(&donem)
         .bind(&kural.model)
         .bind(kural.base_salary_cents)
         .bind(komisyon)
@@ -328,7 +247,7 @@ pub async fn run_payroll(
             user_id: kural.user_id.clone(),
             full_name: kural.full_name.clone(),
             role,
-            period: period.to_string(),
+            period: donem.clone(),
             model: kural.model.clone(),
             amounts: if can_see_amounts {
                 Some(PayrollAmounts {

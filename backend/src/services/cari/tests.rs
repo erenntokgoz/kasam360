@@ -398,3 +398,39 @@ async fn hareketsiz_kart_silinir_hareketli_kart_silinmez() {
     run(&p, TENANT, &unused).await.expect("silinir");
     assert!(run(&p, TENANT, &unused).await.is_err());
 }
+
+#[tokio::test]
+async fn acik_kayit_duzelir_silinir_siparis_ve_odemeli_kayit_korunur() {
+    let pool = pool().await;
+    seed_debt(&pool).await;
+    let edit = CariOp::EditDebt(EditDebtInput {
+        debt_id: "dbt_1".to_string(),
+        amount_cents: 5_000,
+        due_date: None,
+        description: None,
+    });
+    assert!(
+        run(&pool, TENANT, &edit).await.is_err(),
+        "sipariş kaydı değişmez"
+    );
+
+    exec(&pool, "UPDATE debts SET order_id = NULL WHERE id = 'dbt_1'").await;
+    run(&pool, TENANT, &edit).await.expect("düzeltilir");
+    let (total, remaining): (i64, i64) =
+        sqlx::query_as("SELECT total_amount_cents, remaining_amount_cents FROM debts")
+            .fetch_one(&pool)
+            .await
+            .expect("borç");
+    assert_eq!((total, remaining), (5_000, 5_000));
+
+    run(&pool, TENANT, &payment("pay_1", 1_000, 0, "BANK_TRANSFER"))
+        .await
+        .expect("ödeme");
+    let delete = CariOp::DeleteDebt {
+        debt_id: "dbt_1".to_string(),
+    };
+    assert!(
+        run(&pool, TENANT, &delete).await.is_err(),
+        "ödemeli kayıt silinmez"
+    );
+}

@@ -100,7 +100,7 @@ pub(crate) async fn list_pos_products(
     }
     let rows = sqlx::query(
         "SELECT p.id, p.sku, p.barcode, p.name, p.price_cents, p.tax_rate_bp, \
-                c.name as category_name, p.category_id, c.default_station, p.description, \
+                c.name as category_name, p.category_id, COALESCE(p.station, c.default_station) AS default_station, p.description, \
                 p.color, p.image_url, p.is_active, p.is_86, p.stockout_reason, \
                 CAST(COALESCE(b.current_stock, 0) AS REAL) AS current_stock, \
                 COALESCE(b.batch_count, 0) AS batch_count \
@@ -110,8 +110,8 @@ pub(crate) async fn list_pos_products(
                            COUNT(*) AS batch_count FROM inventory_batches \
                     WHERE product_id IS NOT NULL GROUP BY tenant_id, product_id) b \
            ON b.product_id = p.id AND b.tenant_id = p.tenant_id \
-         WHERE p.tenant_id = ? \
-         ORDER BY p.name ASC",
+         WHERE p.tenant_id = ? AND p.is_raw = 0 \
+         ORDER BY p.display_order ASC, p.name ASC",
     )
     .bind(tenant_id)
     .fetch_all(&mut *conn)

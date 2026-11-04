@@ -1,6 +1,6 @@
 use sqlx::{Row, SqliteConnection};
 
-use super::tariffs::{active_tariff, apply_percent};
+use super::tariffs::{apply_percent, tariff_at};
 use super::windows::active_service_window;
 use super::{EffectivePrice, PriceSource};
 use crate::services::inventory360::optional_text;
@@ -122,8 +122,8 @@ pub async fn effective_price(
         });
     }
 
-    // 2) Elle açılmış tarife: patronun o anki kararı saat kuralını geçer.
-    if let Some(tariff) = active_tariff(conn, tenant_id).await? {
+    // 2) Tarife: patronun kararı dinamik kuralı geçer.
+    if let Some(tariff) = tariff_at(conn, tenant_id, simdi).await? {
         let covers =
             tariff.product_ids.is_empty() || tariff.product_ids.iter().any(|id| id == product_id);
         if covers {

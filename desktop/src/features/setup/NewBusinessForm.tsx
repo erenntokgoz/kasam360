@@ -19,12 +19,18 @@ const PIN_MAX = 8;
 const PIN_MIN = 4;
 const PASSWORD_MIN = 8;
 
-export const NewBusinessForm: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+interface NewBusinessFormProps {
+  onBack: () => void;
+  /** Sitede doğrulanan şifre; aynı şifre bu cihazda da geçerli olur. */
+  verifiedPassword?: string;
+}
+
+export const NewBusinessForm: React.FC<NewBusinessFormProps> = ({ onBack, verifiedPassword }) => {
   const { draft, saveProgress, completeNew } = useSetupStore();
   const [form, setForm] = useState<SetupDraft>(draft);
   const [step, setStep] = useState<'INFO' | 'PIN' | 'CONFIRM'>('INFO');
   // Şifre taslağa yazılmaz: yarım kalan kurulum diskte sır bırakmaz.
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(verifiedPassword ?? '');
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +87,7 @@ export const NewBusinessForm: React.FC<{ onBack: () => void }> = ({ onBack }) =>
 
       {step === 'INFO' ? (
         <>
-          <div className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {FIELDS.map(({ key, label, required }) => (
               <div key={key}>
                 <label htmlFor={`setup-${key}`} className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
@@ -97,12 +103,14 @@ export const NewBusinessForm: React.FC<{ onBack: () => void }> = ({ onBack }) =>
                 />
               </div>
             ))}
-            <div>
-              <label htmlFor="setup-password" className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
-                Şifre (en az {PASSWORD_MIN} karakter) *
-              </label>
-              <Input id="setup-password" type="password" className="min-h-12" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
-            </div>
+            {verifiedPassword ? null : (
+              <div>
+                <label htmlFor="setup-password" className="block text-xs font-medium mb-1 text-[var(--text-secondary)]">
+                  Şifre (en az {PASSWORD_MIN} karakter) *
+                </label>
+                <Input id="setup-password" type="password" className="min-h-12" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" variant="secondary" className="min-h-12" onClick={onBack}>
@@ -119,9 +127,6 @@ export const NewBusinessForm: React.FC<{ onBack: () => void }> = ({ onBack }) =>
             <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">
               {step === 'PIN' ? 'Sahip PIN kodunu belirleyin' : 'PIN kodunu tekrar girin'}
             </h2>
-            <p className="text-xs mt-1 text-[var(--text-secondary)]">
-              4-8 hane. Aynı rakamın tekrarı kabul edilmez.
-            </p>
           </div>
           <div aria-label="Girilen hane sayısı" className="h-12 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] flex items-center justify-center text-xl font-bold tracking-[0.4em] text-[var(--text-primary)]">
             {'•'.repeat(entry.length)}

@@ -33,7 +33,14 @@ export const Modal: React.FC<ModalProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       // İç içe pencerede Esc yalnız en üsttekini kapatır.
       const dialogs = document.querySelectorAll('[role="dialog"]');
-      if (e.key === 'Escape' && dialogs[dialogs.length - 1] === panelRef.current?.parentElement) onClose();
+      if (e.key !== 'Escape' || dialogs[dialogs.length - 1] !== panelRef.current?.parentElement) return;
+      // Yazı alanındayken Esc yalnız alandan çıkar; formu kapatıp girileni silmez.
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement) {
+        active.blur();
+        return;
+      }
+      onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -56,7 +63,6 @@ export const Modal: React.FC<ModalProps> = ({
       role="dialog"
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 overflow-y-auto"
-      onClick={onClose}
     >
       <div
         ref={panelRef}
@@ -66,7 +72,6 @@ export const Modal: React.FC<ModalProps> = ({
           'outline-none w-full paper border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
           maxWidthClasses
         )}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 pt-5 pb-3 border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0">
           <div>

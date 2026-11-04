@@ -50,6 +50,9 @@ pub struct ProductDto {
     pub stockout_reason: Option<String>,
     #[serde(default)]
     pub stock_unit: String,
+    /// Hammadde satış kataloğunda görünmez; stok ve reçetede kullanılır.
+    #[serde(default)]
+    pub is_raw: bool,
 }
 
 #[tauri::command]
@@ -62,7 +65,7 @@ pub async fn get_management_products(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason, stock_unit FROM products WHERE tenant_id = ? ORDER BY name ASC")
+    let rows = sqlx::query("SELECT id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason, stock_unit, is_raw FROM products WHERE tenant_id = ? ORDER BY name ASC")
         .bind(&tenant_id)
         .fetch_all(&mut *conn)
         .await
@@ -91,6 +94,9 @@ pub async fn get_management_products(
             is_86: row.try_get::<bool, _>("is_86").unwrap_or(false),
             stockout_reason: row.try_get("stockout_reason").ok(),
             stock_unit: row.try_get("stock_unit").map_err(|e| e.to_string())?,
+            is_raw: row
+                .try_get::<bool, _>("is_raw")
+                .map_err(|e| e.to_string())?,
         });
     }
     Ok(res)
@@ -113,6 +119,7 @@ pub async fn create_product(
     is_86: Option<bool>,
     stockout_reason: Option<String>,
     stock_unit: Option<String>,
+    is_raw: Option<bool>,
     actor_id: Option<String>,
     tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -123,6 +130,9 @@ pub async fn create_product(
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
     let tenant_id = require_tenant(tenant_id.as_deref())?;
+    let is_raw = is_raw.unwrap_or(false);
+    // Hammadde satılamaz: satışa açık hammadde POS'a sıfır fiyatla düşerdi.
+    let is_active = is_active && !is_raw;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let is_86_val = is_86.unwrap_or(false);
     let tax_rate_val = tax_rate_bp.unwrap_or(1000);
@@ -135,7 +145,7 @@ pub async fn create_product(
         // Kategori kimliği başka işletmeye aitse ürün o işletmenin menüsünde
         // görünür. INSERT öncesi sınanır.
         ensure_owned(&mut conn, "categories", &category_id, &tenant_id).await?;
-        sqlx::query("INSERT INTO products (id, tenant_id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason, stock_unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO products (id, tenant_id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason, stock_unit, is_raw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&id)
             .bind(&tenant_id)
             .bind(&category_id)
@@ -151,6 +161,7 @@ pub async fn create_product(
             .bind(is_86_val)
             .bind(&stockout_reason)
             .bind(&stock_unit)
+            .bind(is_raw)
             .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
@@ -168,6 +179,7 @@ pub async fn create_product(
                 "barcode": barcode,
                 "taxRateBp": tax_rate_val,
                 "stockUnit": stock_unit,
+                "isRaw": is_raw,
             }),
         ).await?;
 
@@ -186,6 +198,7 @@ pub async fn create_product(
             is_86: is_86_val,
             stockout_reason,
             stock_unit,
+            is_raw,
         })
     }.await;
 
@@ -212,6 +225,7 @@ pub async fn update_product(
     is_86: Option<bool>,
     stockout_reason: Option<String>,
     stock_unit: Option<String>,
+    is_raw: Option<bool>,
     actor_id: Option<String>,
     tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -246,6 +260,16 @@ pub async fn update_product(
             .map(|(_, _, _, unit)| unit.as_str())
             .ok_or_else(|| "NOT_FOUND: ürün bulunamadı".to_string())?;
         let stock_unit = stock_unit.as_deref().unwrap_or(previous_unit).to_string();
+        // Gönderilmeyen hammadde bayrağı korunur: eski istemci ürünü kataloğa sızdırmaz.
+        let previous_raw: bool =
+            sqlx::query_scalar("SELECT is_raw FROM products WHERE id = ? AND tenant_id = ?")
+                .bind(&id)
+                .bind(&tenant_id)
+                .fetch_one(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
+        let is_raw = is_raw.unwrap_or(previous_raw);
+        let is_active = is_active && !is_raw;
         valid_stock_unit(&stock_unit)?;
         if stock_unit != previous_unit && previous_unit != "belirsiz" {
             let reference_count: i64 = sqlx::query_scalar(
@@ -268,7 +292,7 @@ pub async fn update_product(
             }
         }
 
-        sqlx::query("UPDATE products SET category_id = ?, name = ?, price_cents = ?, image_url = ?, is_active = ?, sku = ?, barcode = ?, tax_rate_bp = ?, description = ?, color = ?, is_86 = ?, stockout_reason = ?, stock_unit = ? WHERE id = ? AND tenant_id = ?")
+        sqlx::query("UPDATE products SET category_id = ?, name = ?, price_cents = ?, image_url = ?, is_active = ?, sku = ?, barcode = ?, tax_rate_bp = ?, description = ?, color = ?, is_86 = ?, stockout_reason = ?, stock_unit = ?, is_raw = ? WHERE id = ? AND tenant_id = ?")
             .bind(&category_id)
             .bind(&name)
             .bind(price_cents)
@@ -282,6 +306,7 @@ pub async fn update_product(
             .bind(is_86_val)
             .bind(&stockout_reason)
             .bind(&stock_unit)
+            .bind(is_raw)
             .bind(&id)
             .bind(&tenant_id)
             .execute(&mut *conn)
@@ -302,6 +327,7 @@ pub async fn update_product(
                     "priceCents": { "old": previous_price, "new": price_cents },
                     "isActive": { "old": previous_active, "new": is_active },
                     "stockUnit": { "old": previous_unit, "new": stock_unit },
+                    "isRaw": { "old": previous_raw, "new": is_raw },
                 }
             }),
         ).await?;
@@ -321,6 +347,7 @@ pub async fn update_product(
             is_86: is_86_val,
             stockout_reason,
             stock_unit,
+            is_raw,
         })
     }.await;
 
@@ -355,6 +382,16 @@ pub async fn update_product_status(
             .map_err(|e| e.to_string())?;
 
     let result: Result<(), String> = async {
+        let is_raw: bool =
+            sqlx::query_scalar("SELECT is_raw FROM products WHERE id = ? AND tenant_id = ?")
+                .bind(&id)
+                .bind(&tenant_id)
+                .fetch_one(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
+        if is_active && is_raw {
+            return Err("STOCK: hammadde satışa açılamaz; önce satış ürününe çevirin".into());
+        }
         sqlx::query("UPDATE products SET is_active = ? WHERE id = ? AND tenant_id = ?")
             .bind(is_active)
             .bind(&id)

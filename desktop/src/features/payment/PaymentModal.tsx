@@ -264,8 +264,14 @@ export const PaymentModal: React.FC = () => {
       setErrorMsg('Tutar kalan bakiyeden büyük olamaz.');
     } else if (channel === 'VERESIYE' && !selectedDirectoryId) {
       setErrorMsg('Cari müşteri seçin.');
+    } else if (plan.shortCents > 0 && splitMode === 'FULL' && plan.receivedCents > 0) {
+      // Müşteri nakdin bir kısmını verdi: alınan nakit parça ödeme olarak hazırlanır,
+      // girilen tutar silinmez; kalan için yöntem seçilir.
+      setSplitMode('PARTIAL');
+      setPartialText(receivedText);
+      setErrorMsg(`${formatMoney(plan.receivedCents)} nakit alınacak, ${formatMoney(plan.shortCents)} masada kalacak. Onaylamak için yeniden basın.`);
     } else if (plan.shortCents > 0) {
-      setErrorMsg(`${formatMoney(plan.shortCents)} eksik. Parça ödeme için Tutara Göre sekmesini seçin.`);
+      setErrorMsg(`${formatMoney(plan.shortCents)} eksik.`);
     } else {
       void execute();
     }
@@ -279,12 +285,7 @@ export const PaymentModal: React.FC = () => {
       }}
       title={`${activeTableName} Tahsilatı`}
       maxWidth="5xl"
-      headerActions={
-        <Button variant="ghost" size="sm" onClick={() => setIsTipOpen(true)}>
-          <HandCoins className="w-5 h-5" />
-          <span>Bahşiş</span>
-        </Button>
-      }
+
     >
       <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-4">
         <div className="space-y-4 min-w-0">
@@ -310,8 +311,12 @@ export const PaymentModal: React.FC = () => {
             </p>
           ) : null}
 
+          <Button variant="secondary" className="w-full justify-start" disabled={isProcessing || isUnresolved} onClick={() => setIsTipOpen(true)}>
+            <HandCoins className="w-5 h-5" />
+            Bahşiş Gir
+          </Button>
           {tipNotice ? (
-            <p className="rounded-lg bg-[var(--accent-emerald-soft)] px-4 py-3 text-sm font-semibold">{tipNotice}</p>
+            <p role="status" className="rounded-lg bg-[var(--accent-emerald-soft)] px-4 py-3 text-sm font-semibold">{tipNotice}</p>
           ) : null}
 
           {errorMsg ? (
@@ -427,7 +432,7 @@ export const PaymentModal: React.FC = () => {
               Tahsilat Sonucunu Sorgula
             </Button>
           ) : (
-            <Button variant="success" size="xl" onClick={handleExecutePayment} isLoading={isProcessing} className="w-full">
+            <Button variant="success" size="xl" onClick={handleExecutePayment} isLoading={isProcessing} disabled={payNowCents <= 0} className="w-full">
               <Check className="w-5 h-5" />
               <span>{formatMoney(payNowCents)} Tahsil Et</span>
             </Button>

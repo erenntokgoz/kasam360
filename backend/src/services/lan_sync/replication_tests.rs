@@ -334,7 +334,20 @@ async fn ayni_kalemi_iki_kasa_ayni_anda_tahsil_edemez() {
         .iter()
         .filter(|ok| **ok)
         .count();
-    assert_eq!(accepted, 1, "{first:?} {second:?}");
+    assert_eq!(
+        accepted, 1,
+        "yanıtlar={first:?}/{second:?}; satış={}/{}; stok={}/{}; sürüm={}/{}; durum={:?}/{:?}; dosyalar={:?}/{:?}",
+        sales(&devices[0].pool).await,
+        sales(&devices[1].pool).await,
+        stock(&devices[0].pool).await,
+        stock(&devices[1].pool).await,
+        state_index(&devices[0].pool).await,
+        state_index(&devices[1].pool).await,
+        devices[0].sync.status().state,
+        devices[1].sync.status().state,
+        devices[0].pool.connect_options().get_filename(),
+        devices[1].pool.connect_options().get_filename(),
+    );
 
     for device in &devices {
         for _ in 0..200 {

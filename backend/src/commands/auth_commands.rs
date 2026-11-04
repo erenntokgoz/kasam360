@@ -336,6 +336,15 @@ pub async fn auth_login(
     crate::services::device_session::require_signed_in(&pool).await?;
     let effective_tenant = tenant_id.or(tenantId);
     let user = authenticate_by_pin(&pool, &pin, effective_tenant.as_deref()).await?;
+    // Eski hesaplar burada öğrenilir. Yazılamazsa giriş bozulmaz, yalnız otomatik giriş bekler.
+    if let Ok(mut tx) = pool.begin_write().await {
+        let saved =
+            crate::user_credentials::record_pin_length(&mut tx, &user.tenant_id, &user.id, &pin)
+                .await;
+        if saved.is_ok() {
+            let _ = tx.commit().await;
+        }
+    }
     state
         .staff_session
         .set(crate::services::staff_session::StaffSession {
@@ -345,6 +354,32 @@ pub async fn auth_login(
             locked: false,
         })?;
     Ok(user)
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PinLengths {
+    lengths: Vec<i64>,
+    has_unknown: bool,
+}
+
+/// Tuş takımının bekleyeceği hane sayıları. Giriş öncesi çalışır; kimlik veya PIN içermez.
+#[tauri::command]
+pub async fn get_pin_lengths(pool: tauri::State<'_, DbPool>) -> Result<PinLengths, String> {
+    let tenant = crate::db::merkez_tenant_id(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let rows: Vec<Option<i64>> = sqlx::query_scalar(
+        "SELECT DISTINCT pin_length FROM users WHERE tenant_id = ? AND is_active = 1",
+    )
+    .bind(&tenant)
+    .fetch_all(&*pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(PinLengths {
+        has_unknown: rows.iter().any(Option::is_none),
+        lengths: rows.into_iter().flatten().collect(),
+    })
 }
 
 /// Kilit ekranı: oturum sahibi PIN girene kadar sunucu komut çalıştırmaz.
@@ -412,6 +447,7 @@ pub(crate) async fn pin_degisim_tx(
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+    crate::user_credentials::record_pin_length(&mut *tx, &tenant_id, user_id, new_pin).await?;
 
     // PIN değişince ilk giriş zorlaması biter.
     // Aynı transaction içinde yazılır: PIN değişmiş,

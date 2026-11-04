@@ -18,7 +18,11 @@ export function newOperationId(): string {
 /** Backend hata kodunu ayırır; kullanıcıya gerekçe metni kalır. */
 export function errorText(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
-  return text.replace(/^[A-Z_]+:\s*/, '');
+  // Kod ve rol listesi kullanıcıya gösterilmez: "UNAUTHORIZED", "(izin: OWNER, ...)" destek içindir.
+  return text
+    .replace(/\b[A-Z][A-Z_]{3,}:\s*/g, '')
+    .replace(/\s*\(izin:[^)]*\)/g, '')
+    .trim();
 }
 
 export function errorCode(error: unknown): string | null {

@@ -190,6 +190,7 @@ pub async fn cash_out(
         None => None,
     };
     gate::vardiya_kabul_eder_mi(durum.as_deref())?;
+    super::summary::ensure_drawer_covers(&mut tx, &tenant_id, &shift_id, amount_cents).await?;
 
     let esik = crate::services::security360::threshold::esik_oku(&mut tx, &tenant_id).await?;
     if gate::onay_gerekli_mi(amount_cents, esik) {

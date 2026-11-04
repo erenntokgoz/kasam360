@@ -12,6 +12,37 @@ use crate::services::lan_sync::WritePool;
 use crate::services::setup;
 
 const ACCOUNT_ROLES: [Role; 2] = [Role::Owner, Role::Manager];
+// Geliştirme sürümü yerel siteye gider; yayındaki adres henüz denenen kodu taşımayabilir.
+const SITE_URL: &str = if cfg!(debug_assertions) {
+    "http://localhost:3000"
+} else {
+    "https://kasam360.com.tr"
+};
+
+/// Tarayıcıya yalnız bilinen sayfalar gider; IPC'den gelen metin komut satırına ulaşamaz.
+fn site_page_url(path: &str) -> Result<String, String> {
+    let is_link_code = path
+        .strip_prefix("/api/desktop-link/")
+        .and_then(|rest| rest.strip_suffix("/google"))
+        .is_some_and(|code| {
+            code.len() == 36 && code.chars().all(|c| c == '-' || c.is_ascii_hexdigit())
+        });
+    if is_link_code || matches!(path, "/kvkk" | "/kullanim-sartlari") {
+        return Ok(format!("{SITE_URL}{path}"));
+    }
+    Err("Bu sayfa açılamaz.".to_string())
+}
+
+/// Google girişi ve yasal metinler sistem tarayıcısında açılır.
+#[tauri::command]
+pub fn open_site_page(path: String) -> Result<(), String> {
+    let url = site_page_url(&path)?;
+    std::process::Command::new("rundll32")
+        .args(["url.dll,FileProtocolHandler", &url])
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 pub async fn get_device_session(pool: tauri::State<'_, DbPool>) -> Result<DeviceSession, String> {
@@ -40,6 +71,66 @@ pub async fn account_sign_in(
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     device_session::sign_in(&mut conn, &user.id, &user.tenant_id).await?;
+    device_session::load(&mut conn).await
+}
+
+/// Google ile açılmış hesabın cihaz girişi. Kimlik uygulamaya değil sunucuya sorulur:
+/// tarayıcıda Google girişi biten tek kullanımlık kodun hesabı siteden okunur ve
+/// yalnız bu cihazda kayıtlı sahip ya da müdür e-postasıyla eşleşirse oturum açılır.
+#[tauri::command]
+pub async fn account_sign_in_link(
+    code: String,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<DeviceSession, String> {
+    let path = format!("/api/desktop-link/{code}/google");
+    // Kod biçimi `site_page_url` ile aynı kuralla denetlenir; serbest metin adrese gitmez.
+    site_page_url(&path)?;
+    // Sağlayıcı açılışta kurulur; testten ya da başka girişten çağrılırsa burada da kurulur.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|_| "Bağlantı hazırlanamadı.".to_string())?;
+    let response = client
+        .get(format!("{SITE_URL}/api/desktop-link/{code}"))
+        .send()
+        .await
+        .map_err(|_| "Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.".to_string())?;
+    if response.status().as_u16() != 200 {
+        return Err("LINK_PENDING: Google girişi henüz tamamlanmadı.".to_string());
+    }
+    let body = response
+        .text()
+        .await
+        .map_err(|_| "Sunucu yanıtı okunamadı.".to_string())?;
+    let account: serde_json::Value =
+        serde_json::from_str(&body).map_err(|_| "Sunucu yanıtı okunamadı.".to_string())?;
+    let email = account
+        .get("email")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| "Sunucu yanıtında e-posta yok.".to_string())?;
+    let email = device_session::normalize_email(email)?;
+
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    let row = sqlx::query(
+        "SELECT id, tenant_id, role FROM users
+         WHERE email = ? COLLATE NOCASE AND is_active = 1",
+    )
+    .bind(&email)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| {
+        format!(
+            "{email} bu cihazdaki işletmenin sahip ya da müdür hesabı değil. İşletmenin kayıtlı e-postasıyla girin."
+        )
+    })?;
+    use sqlx::Row;
+    let user_id: String = row.try_get("id").map_err(|e| e.to_string())?;
+    let tenant_id: String = row.try_get("tenant_id").map_err(|e| e.to_string())?;
+    let role: String = row.try_get("role").map_err(|e| e.to_string())?;
+    crate::rbac::require_any(&role, &ACCOUNT_ROLES)?;
+    device_session::sign_in(&mut conn, &user_id, &tenant_id).await?;
     device_session::load(&mut conn).await
 }
 
@@ -157,4 +248,21 @@ pub async fn set_session_policy(
     let session = device_session::load(&mut tx).await?;
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(session)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::site_page_url;
+
+    #[test]
+    fn site_sayfasi_yalniz_bilinen_yollari_acar() {
+        assert!(site_page_url("/kvkk").is_ok_and(|url| url.ends_with("/kvkk")));
+        assert!(site_page_url("/kvkk & calc").is_err());
+        assert!(
+            site_page_url("/api/desktop-link/11111111-2222-3333-4444-555555555555/google").is_ok()
+        );
+        assert!(
+            site_page_url("/api/desktop-link/11111111&calc-3333-4444-555555555555/google").is_err()
+        );
+    }
 }

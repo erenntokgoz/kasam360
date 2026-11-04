@@ -36,13 +36,14 @@ const SALE_EVENT_FILTER: &str = "aggregate_type = 'SALE' AND event_type = 'SALE_
 
 /// Ödeme yöntemini rapor/ekran diliyle döndürür.
 ///
-/// Neden eşleme: `method` alanı enum'dur (`CASH`, `CREDIT_CARD`, `SPLIT`).
+/// Neden eşleme: `method` alanı enum'dur; ödeme ekranı `CARD` ve `MEAL_CARD` da yazar.
 /// Bilinmeyen veya boş bir değerde **"Nakit" uydurmak** yanlış finansal gerçek
 /// üretirdi; bu yüzden değer neyse o yazılır, boşsa `"Belirtilmemiş"`.
 fn payment_method_label(raw: Option<&str>) -> String {
     match raw.unwrap_or("").trim().to_uppercase().as_str() {
-        "CASH" => "Nakit".to_string(),
-        "CREDIT_CARD" => "Kredi Kartı".to_string(),
+        "CASH" | "NAKIT" => "Nakit".to_string(),
+        "CREDIT_CARD" | "CARD" | "KREDI_KARTI" => "Kredi Kartı".to_string(),
+        "MEAL_CARD" | "YEMEK_KARTI" => "Yemek Kartı".to_string(),
         "SPLIT" => "Parçalı".to_string(),
         "DEBT" | "VERESIYE" => "Veresiye".to_string(),
         "" => "Belirtilmemiş".to_string(),

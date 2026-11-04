@@ -128,7 +128,7 @@ async function readServerOrder(key: string, tenantId: string | undefined) {
 }
 
 function mapProduct(wire: ProductWire): Product {
-  const station = wire.station === 'BAR' || wire.station === 'TATLI' ? wire.station : 'MUTFAK';
+  const station = wire.station ? wire.station.toLocaleUpperCase('tr-TR') : 'MUTFAK';
   return {
     id: wire.id,
     categoryId: wire.categoryId,
@@ -383,7 +383,7 @@ export const usePosStore = create<PosStore>((set, get) => ({
     set({ isSending: true, orderError: null });
     try {
       await invokeIPC('submit_order', {
-        payload: { orderId: '', tableId: key, items: draft.map(toSubmitItem), notes: null, waiterId: actorId },
+        payload: { orderId: '', tableId: key, items: draft.map(toSubmitItem), notes: null, waiterId: actorId, guestCount: state.guestCount },
         tenantId,
         actorId,
         actorRole,

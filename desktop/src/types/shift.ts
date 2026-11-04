@@ -57,6 +57,9 @@ export interface ZReportData {
   voidTotalCents: number;
   refundTotalCents: number;
   discountTotalCents: number;
+  compTotalCents: number;
+  cashInCents: number;
+  cashOutCents: number;
   orderCount: number;
   closedAt: string;
 }

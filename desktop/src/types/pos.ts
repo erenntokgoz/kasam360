@@ -26,7 +26,7 @@ export interface Product {
   unitPriceCents: number;
   vatRate: number; // örn: 10 (%10)
   taxRateBp?: number;
-  station: 'MUTFAK' | 'BAR' | 'TATLI' | 'KASA';
+  station: string;
   isAvailable: boolean;
   is86d?: boolean;
   modifierGroups?: ModifierGroup[];
@@ -46,7 +46,7 @@ export interface OrderItem {
   quantity: number;
   unitPriceCents: number;
   vatRate: number;
-  station: 'MUTFAK' | 'BAR' | 'TATLI' | 'KASA';
+  station: string;
   notes?: string;
   cookingDegree?: string;
   selectedModifiers: OrderItemModifier[];

@@ -7,6 +7,13 @@ import { errorText } from '../../lib/cariInput';
 import type { PaymentPlan } from '../../lib/paymentMath';
 import { parseCents } from '../../lib/moneyInput';
 import { Button } from '../../ui/Button';
+
+/** Kuruşu giriş alanının ham biçimine çevirir ("300" ya da "300,50"); kayan nokta kullanılmaz. */
+const centsToRaw = (cents: number) => {
+  const lira = Math.floor(cents / 100);
+  const kurus = cents % 100;
+  return kurus === 0 ? String(lira) : `${lira},${String(kurus).padStart(2, '0')}`;
+};
 import { Input } from '../../ui/Input';
 import { NumberInput } from '../../ui/NumberInput';
 import type { PinpadInfo } from '../../ui/PinpadModal';
@@ -99,10 +106,19 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
               pinpadLiveInfo={changeRow}
             />
           </div>
-          <div className="grid grid-cols-4 gap-1.5">
-            {[100, 200, 500, 1000].map((banknote) => (
-              <Button key={banknote} variant="secondary" className="tabular-nums whitespace-nowrap !px-1" onClick={() => onChangeReceived(String(banknote))}>
-                {banknote.toLocaleString('tr-TR')} ₺
+          {/* Banknotlar toplanır: müşteri 200 + 100 verince ikisine de basılır. */}
+          <div className="grid grid-cols-3 gap-1.5">
+            <Button variant="secondary" className="whitespace-nowrap !px-1" onClick={() => onChangeReceived(centsToRaw(plan.dueCents))}>
+              Tam Tutar
+            </Button>
+            {[20, 50, 100, 200, 500].map((banknote) => (
+              <Button
+                key={banknote}
+                variant="secondary"
+                className="tabular-nums whitespace-nowrap !px-1"
+                onClick={() => onChangeReceived(centsToRaw((parseCents(receivedText) ?? 0) + banknote * 100))}
+              >
+                +{banknote.toLocaleString('tr-TR')} ₺
               </Button>
             ))}
           </div>

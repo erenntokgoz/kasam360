@@ -56,3 +56,18 @@ Madde 18 yalnız cihaz gerçekten kayıpsa yapılır. Cihazlar açık ama ağ ko
 ## Sonuç yazımı
 
 Başarısız satırda ekran görüntüsü, işlem kimliği ve iki cihazın saatini not edin.
+
+## Son masaüstü kabul testleri
+
+**Durum:** Fiziksel cihazlarda bekliyor. Denemeleri ayrı test işletmesinde, test adisyonlarıyla yapın. Her satıra sürümü, cihazları, gözlenen sonucu ve tarihi yazın.
+
+| No | Adım | Beklenen | Gözlenen |
+|---|---|---|---|
+| 20 | A satışa hazırken B'yi eşleştirin. Üyelik onaylanırken A'da bir test tahsilatı deneyin | Üyelik onayı bekleniyorsa işlem reddedilir. Bu sırada yerel tahsilat, stok düşümü veya kapanmış adisyon oluşmaz. Üyelik tamamlanınca yeni deneme çalışır | |
+| 21 | A ve B hazırken aynı açık adisyonun tamamını iki kasadan eş zamanlı tahsil etmeyi birkaç kez, her seferinde yeni test adisyonuyla deneyin | Her adisyonda yalnız bir işlem başarılı olur. Her iki cihazda tek tahsilat, tek stok düşümü ve aynı kasa toplamı görünür | |
+| 22 | Modemin internet bağlantısını kesin. Yerel ağ ve iki cihazın bağlantısı açık kalsın. B'den sipariş alın ve A'dan tahsil edin | Sipariş ve ödeme yerel ağda tamamlanır. İki cihaz aynı adisyon ve kasa sonucunu gösterir | |
+| 23 | İki cihaz bağlıyken bir test tahsilatı sırasında B'nin yerel ağını kesin. Bağlantıyı açınca işlemi sorgulayın | Sonuç belirsizse önce adisyonu, tahsilat kaydını ve stok hareketini kontrol edin. İşlem tamamlanmışsa ikinci kez tahsil edilmez. Sonuç iki cihazda aynı görünür | |
+| 24 | Gerçek termal yazıcıyla bir test fişi ve vardiya sonu Z raporu basın | Türkçe karakterler, tutarlar, ödeme yöntemi ve rapor toplamları ekrandaki kayıtlarla eşleşir | |
+| 25 | Garson sipariş açsın, mutfak hazırlayıp teslim etsin, kasiyer tahsil etsin. Müdür ve patronla yetkili işlemleri ayrıca deneyin | Her rol kendi ekranından işi tamamlar. Yetkisiz işlem engellenir, gerekli onaylar ve işlem sahibi denetim kaydında görünür | |
+
+Son UI/UX düzeltmeleri bittikten sonra tam otomatik testleri ve masaüstü derlemesini çalıştırın. Saha sonuçlarını ayrıca bu dosyaya işleyin.

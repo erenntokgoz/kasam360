@@ -263,6 +263,64 @@ pub async fn create_debt(
     row_to_debt(&row)
 }
 
+/// Ödeme görmemiş cari kaydı düzeltir.
+#[tauri::command]
+pub async fn update_debt(
+    actor_role: Option<String>,
+    actor_id: Option<String>,
+    tenant_id: Option<String>,
+    operation_id: String,
+    input: crate::services::cari::EditDebtInput,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    require_ledger_write(actor_role.as_deref())?;
+    let tid = require_ledger_tenant(tenant_id.as_deref())?;
+    let intent = json!({ "debtId": input.debt_id, "amountCents": input.amount_cents });
+    let op = CariOp::EditDebt(input);
+    submit(
+        &pool,
+        &state,
+        &tid,
+        &operation_id,
+        actor_id,
+        actor_role,
+        intent,
+        op,
+    )
+    .await?;
+    Ok(())
+}
+
+/// Ödeme görmemiş cari kaydı siler.
+#[tauri::command]
+pub async fn delete_debt(
+    actor_role: Option<String>,
+    actor_id: Option<String>,
+    tenant_id: Option<String>,
+    operation_id: String,
+    debt_id: String,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    require_ledger_write(actor_role.as_deref())?;
+    let tid = require_ledger_tenant(tenant_id.as_deref())?;
+    let intent = json!({ "debtId": debt_id });
+    let op = CariOp::DeleteDebt { debt_id };
+    submit(
+        &pool,
+        &state,
+        &tid,
+        &operation_id,
+        actor_id,
+        actor_role,
+        intent,
+        op,
+    )
+    .await?;
+    Ok(())
+}
+
 /// Borç veya alacak için tahsilat/tediye kaydeder. Nakitte kasa hareketi yazar.
 #[tauri::command]
 pub async fn pay_debt(

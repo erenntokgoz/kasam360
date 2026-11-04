@@ -37,7 +37,8 @@ export const StaffLedger: React.FC = () => {
         invokeIPC<StaffMember[]>('get_staff', { actorRole, tenantId, includeInactive: true }),
         invokeIPC<ProfileRow[]>('list_staff_profiles', { actorRole, tenantId }),
       ]);
-      setStaff(rows);
+      // Patron işletmenin sahibidir; maaş, izin ve avans kaydı tutulan personel değildir.
+      setStaff(rows.filter((member) => member.role !== 'OWNER' && member.role !== 'MASTER'));
       setProfiles(Object.fromEntries(details.map((profile) => [profile.userId, profile])));
       setError(null);
     } catch (caught) {
@@ -114,8 +115,7 @@ export const StaffLedger: React.FC = () => {
       {editing ? (
         <StaffFormModal
           member={editing === 'NEW' ? null : editing}
-          phone={editingProfile?.phone ?? ''}
-          salaryCents={editingProfile?.baseSalaryCents ?? null}
+          profile={editingProfile}
           canSetSalary={isOwner}
           onClose={() => setEditing(null)}
           onSaved={() => {

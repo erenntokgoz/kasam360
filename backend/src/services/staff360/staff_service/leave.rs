@@ -60,35 +60,17 @@ pub async fn request_leave(
     pool: &SqlitePool,
     tenant_id: &str,
     input: &LeaveInput,
+    approved_by: Option<&str>,
 ) -> Result<String, String> {
     let mut tx = pool.begin_write().await?;
-    if !is_iso_date(&input.start_date) || !is_iso_date(&input.end_date) {
-        return Err("izin tarihleri YYYY-MM-DD biciminde olmali".to_string());
-    }
-    if input.end_date < input.start_date {
-        return Err("izin bitişi baslangictan once olamaz".to_string());
-    }
-    let cakisma: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM leave_requests
-          WHERE tenant_id = ?1 AND user_id = ?2 AND status IN ('Bekliyor','Onaylandi')
-            AND start_date <= ?3 AND end_date >= ?4",
-    )
-    .bind(tenant_id)
-    .bind(&input.user_id)
-    .bind(&input.end_date)
-    .bind(&input.start_date)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
-    if cakisma > 0 {
-        return Err("bu tarihlerde zaten bir izin talebi var".to_string());
-    }
+    validate_leave(&mut tx, tenant_id, input, "").await?;
 
     let id = crate::id_generator::generate_id("lve");
     sqlx::query(
         "INSERT INTO leave_requests
-             (id, tenant_id, user_id, kind, start_date, end_date, reason, status, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'Bekliyor',
+             (id, tenant_id, user_id, kind, start_date, end_date, reason, status,
+              approver_id, decided_at, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
                  strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
     )
     .bind(&id)
@@ -98,11 +80,80 @@ pub async fn request_leave(
     .bind(&input.start_date)
     .bind(&input.end_date)
     .bind(input.reason.as_deref())
+    .bind(if approved_by.is_some() {
+        "Onaylandi"
+    } else {
+        "Bekliyor"
+    })
+    .bind(approved_by)
+    .bind(approved_by.map(|_| chrono::Utc::now().to_rfc3339()))
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
     tx.commit().await?;
     Ok(id)
+}
+
+/// Eski kayıt da düzeltilebilir; bordro yeniden hesaplanınca yeni tarih geçerli olur.
+pub async fn update_leave(
+    pool: &SqlitePool,
+    tenant_id: &str,
+    leave_id: &str,
+    input: &LeaveInput,
+) -> Result<(), String> {
+    let mut tx = pool.begin_write().await?;
+    validate_leave(&mut tx, tenant_id, input, leave_id).await?;
+    let changed = sqlx::query(
+        "UPDATE leave_requests SET kind = ?3, start_date = ?4, end_date = ?5, reason = ?6
+          WHERE tenant_id = ?1 AND id = ?2 AND status != 'Iptal'",
+    )
+    .bind(tenant_id)
+    .bind(leave_id)
+    .bind(&input.kind)
+    .bind(&input.start_date)
+    .bind(&input.end_date)
+    .bind(input.reason.as_deref())
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?
+    .rows_affected();
+    if changed == 0 {
+        return Err("NOT_FOUND: izin kaydı bulunamadı".to_string());
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Tarih ve çakışma denetimi; düzenlenen kayıt kendisiyle çakışmış sayılmaz.
+async fn validate_leave(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+    input: &LeaveInput,
+    own_id: &str,
+) -> Result<(), String> {
+    if !is_iso_date(&input.start_date) || !is_iso_date(&input.end_date) {
+        return Err("izin tarihleri YYYY-MM-DD biciminde olmali".to_string());
+    }
+    if input.end_date < input.start_date {
+        return Err("izin bitişi baslangictan once olamaz".to_string());
+    }
+    let cakisma: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM leave_requests
+          WHERE tenant_id = ?1 AND user_id = ?2 AND status IN ('Bekliyor','Onaylandi')
+            AND start_date <= ?3 AND end_date >= ?4 AND id != ?5",
+    )
+    .bind(tenant_id)
+    .bind(&input.user_id)
+    .bind(&input.end_date)
+    .bind(&input.start_date)
+    .bind(own_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if cakisma > 0 {
+        return Err("bu tarihlerde zaten bir izin talebi var".to_string());
+    }
+    Ok(())
 }
 
 /// İzni iptal eder. Satır silinmez: onaylanmış iznin geçmişi kaybolmasın.

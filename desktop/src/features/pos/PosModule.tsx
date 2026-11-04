@@ -85,7 +85,6 @@ export const PosModule: React.FC = () => {
         isOpen={showBindModal}
         onClose={() => setShowBindModal(false)}
         title="Tezgah Satışını Masaya Aktar"
-        subtitle="Açık adisyonu salondaki bir masaya bağlayarak masadan takibe devam edin."
         maxWidth="sm"
       >
         <div className="space-y-4">

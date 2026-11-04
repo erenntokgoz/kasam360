@@ -4,6 +4,9 @@ import { NumberInput } from '../../ui/NumberInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { parseMoneyToCents } from '../../lib/moneyParser';
 import { useStockStore } from '../../stores/stockStore';
+import { formatDay } from '../../lib/date';
+import { StockItemPicker } from './StockItemPicker';
+import { StockSupplierPicker } from './StockSupplierPicker';
 
 interface OrderRow {
   key: string;
@@ -23,8 +26,7 @@ function parseQuantity(value: string): number {
 
 export function StockModule() {
   const { products, batches, suppliers, orders, busy, error, load,
-    createSupplier, createOrder, receiveOrder } = useStockStore();
-  const [supplierName, setSupplierName] = useState('');
+    createOrder, receiveOrder } = useStockStore();
   const [supplierId, setSupplierId] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
   const [rows, setRows] = useState<OrderRow[]>([]);
@@ -32,10 +34,6 @@ export function StockModule() {
   const [pendingReceiveId, setPendingReceiveId] = useState<string | null>(null);
 
   useEffect(() => { void load(); }, [load]);
-
-  const handleSupplier = async () => {
-    if (await createSupplier(supplierName)) setSupplierName('');
-  };
 
   const handleOrder = async () => {
     try {
@@ -66,57 +64,36 @@ export function StockModule() {
   };
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--bg-canvas)] p-5 text-[var(--text-primary)]">
+    <div className="page-fill flex-1 min-h-0 overflow-y-auto bg-[var(--bg-canvas)] p-5 text-[var(--text-primary)]">
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="print-title text-lg font-bold">Stok ve Satın Alma</h1>
-            <p className="text-xs text-[var(--text-secondary)]">Teslim alınan ürünler FIFO partisi olarak stoğa girer.</p>
           </div>
           <button type="button" disabled={busy} onClick={() => void load()} className={`${button} border border-[var(--border)] bg-[var(--bg-card)]`}>Yenile</button>
         </div>
         {error && <p role="alert" className="rounded-lg border border-[var(--accent-red-border)] bg-[var(--accent-red-soft)] p-3 text-sm text-[var(--accent-red)]">{error}</p>}
         {formError && <p role="alert" className="rounded-lg border border-[var(--accent-red-border)] bg-[var(--accent-red-soft)] p-3 text-sm text-[var(--accent-red)]">{formError}</p>}
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <section className="rounded-xl border border-[var(--border)] paper p-4 space-y-3">
-            <h2 className="print-title text-sm font-bold">Tedarikçi</h2>
-            <label className="block text-xs space-y-1"><span>Yeni Tedarikçi Adı</span>
-              <input className={field} value={supplierName} onChange={(event) => setSupplierName(event.target.value)} placeholder="Firma veya kişi adı" />
-            </label>
-            <button type="button" disabled={busy || !supplierName.trim()} onClick={() => void handleSupplier()} className={`${button} bg-[var(--brand)] text-white`}>Tedarikçi Ekle</button>
-            <div className="border-t border-[var(--border)] pt-3 text-xs text-[var(--text-secondary)]">
-              {suppliers.length === 0 ? 'Henüz tedarikçi yok.' : `${suppliers.length} tedarikçi kayıtlı`}
-            </div>
-          </section>
-
+        <div>
           <section className="rounded-xl border border-[var(--border)] paper p-4 space-y-3">
             <h2 className="print-title text-sm font-bold">Satın Alma Siparişi</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs space-y-1"><span>Tedarikçi</span>
-                <select className={field} value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
-                  <option value="">Seçin</option>
-                  {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
-                </select>
-              </label>
+              <StockSupplierPicker value={supplierId} onChange={setSupplierId} />
               <label className="block text-xs space-y-1"><span>Sipariş No</span>
                 <input className={field} value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder="Örn: ALIM-001" />
               </label>
             </div>
-            <p className="text-xs text-[var(--text-secondary)]">Miktar ve birim fiyatı ürünün kayıtlı stok birimiyle girin.</p>
             {rows.map((row) => (
-              <div key={row.key} className="grid gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-2 sm:grid-cols-[1fr_80px_110px_48px]">
-                <select aria-label="Alınacak ürün" className={field} value={row.productId} onChange={(event) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, productId: event.target.value } : item))}>
-                  <option value="">Ürün seçin</option>
-                  {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-                </select>
+              <div key={row.key} className="grid items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-2 sm:grid-cols-[1fr_80px_110px_48px]">
+                <StockItemPicker products={products} value={row.productId} onChange={(productId) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, productId } : item))} label="Alınacak ürün" />
                 <NumberInput kind="quantity" aria-label={`Alım miktarı (${products.find((product) => product.id === row.productId)?.stockUnit ?? 'birim'})`} placeholder={products.find((product) => product.id === row.productId)?.stockUnit ?? 'Miktar'} value={row.quantity} onValueChange={(text) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, quantity: text } : item))} />
                 <NumberInput aria-label="Birim alış fiyatı" placeholder="Birim TL" value={row.unitCost} onValueChange={(text) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, unitCost: text } : item))} />
                 <button type="button" aria-label="Kalemi çıkar" className={`${button} border border-[var(--border)] px-2`} onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}>×</button>
               </div>
             ))}
             <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={products.length === 0} className={`${button} border border-[var(--border)] bg-[var(--bg-card)]`} onClick={() => setRows((current) => [...current, { key: crypto.randomUUID(), productId: '', quantity: '', unitCost: '' }])}>+ Kalem Ekle</button>
+              <button type="button" className={`${button} border border-[var(--border)] bg-[var(--bg-card)]`} onClick={() => setRows((current) => [...current, { key: crypto.randomUUID(), productId: '', quantity: '', unitCost: '' }])}>+ Kalem Ekle</button>
               <button type="button" disabled={busy || rows.length === 0} className={`${button} bg-[var(--brand)] text-white`} onClick={() => void handleOrder()}>Siparişi Oluştur</button>
             </div>
           </section>
@@ -142,14 +119,14 @@ export function StockModule() {
 
         <section className="rounded-xl border border-[var(--border)] paper overflow-hidden">
           <h2 className="print-title border-b border-[var(--border)] p-4 text-sm font-bold">Mevcut FIFO Partileri ({batches.length})</h2>
-          {batches.length === 0 ? <p className="p-4 text-xs text-[var(--text-secondary)]">Henüz stok partisi yok. Sipariş teslimiyle oluşur.</p> : (
+          {batches.length === 0 ? <p className="p-4 text-xs text-[var(--text-secondary)]">Stok partisi yok.</p> : (
             <div className="divide-y divide-[var(--border)]">
               {batches.map((batch) => (
                 <div key={batch.id} className="grid gap-2 p-4 text-sm sm:grid-cols-[1fr_110px_130px_140px]">
                   <strong>{batch.productName}</strong>
                   <span className="font-mono tabular-nums">{formatNumber(batch.remainingQuantity)} {batch.stockUnit}</span>
                   <span className="font-mono tabular-nums">{formatMoney(batch.unitCostCents)} / {batch.stockUnit}</span>
-                  <span className="text-xs text-[var(--text-secondary)]">{batch.receivedAt.slice(0, 10)}</span>
+                  <span className="text-xs text-[var(--text-secondary)]">{formatDay(batch.receivedAt)}</span>
                 </div>
               ))}
             </div>

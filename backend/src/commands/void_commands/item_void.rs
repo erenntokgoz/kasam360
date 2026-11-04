@@ -306,14 +306,13 @@ pub async fn comp_order_item(
     )
     .await?;
 
+    // İkram gerekçesi mutfak notuna yazılmaz: mutfak pişirme notunu görmeli, mali
+    // gerekçe denetim defterinde (`order_item:comped`) zaten durur.
     sqlx::query(
         "UPDATE order_items \
-         SET is_comp = 1, unit_price_cents = 0, subtotal_cents = 0, tax_amount_cents = 0, total_cents = 0, \
-             notes = COALESCE(notes || ' | İkram: ' || ?, 'İkram: ' || ?) \
+         SET is_comp = 1, unit_price_cents = 0, subtotal_cents = 0, tax_amount_cents = 0, total_cents = 0 \
          WHERE id = ? AND tenant_id = ?",
     )
-    .bind(&payload.reason)
-    .bind(&payload.reason)
     .bind(&payload.item_id)
     .bind(&tenant_id)
     .execute(&mut *tx)

@@ -4,20 +4,22 @@
 import React from 'react';
 import { useLedgerStore, type ErpTab } from '../../stores/ledgerStore';
 import { Bar, BarTab } from '../../ui/Bar';
-import { CatalogTab } from './CatalogTab';
+import { CriticalLogTab } from './CriticalLogTab';
+import { BudgetTab } from './finance/BudgetTab';
+import { TariffPanel } from '../menu/TariffPanel';
 import { DebtsTab } from './DebtsTab';
-import { FinanceTab } from './finance/FinanceTab';
 import { PanoramaTab } from './panorama/PanoramaTab';
 import { ReportsTab } from './reports/ReportsTab';
 import { StaffLedger } from './staff/StaffLedger';
 
 const TABS: { id: ErpTab; label: string }[] = [
   { id: 'PANORAMA', label: 'Genel Bakış' },
-  { id: 'FINANCE', label: 'Finans' },
   { id: 'DEBTS', label: 'Cari' },
   { id: 'STAFF', label: 'Personel' },
-  { id: 'CATALOG', label: 'Menü ve Stok' },
+  { id: 'BUDGET', label: 'Bütçe' },
+  { id: 'TARIFF', label: 'Tarifeler' },
   { id: 'REPORTS', label: 'Raporlar' },
+  { id: 'AUDIT', label: 'Kritik Kayıtlar' },
 ];
 
 export const ErpModule: React.FC = () => {
@@ -34,15 +36,15 @@ export const ErpModule: React.FC = () => {
       </Bar>
 
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-        {activeErpTab === 'CATALOG' ? <CatalogTab /> : (
-          <div className="flex-1 overflow-y-auto p-4">
+        <div className="page-fill flex-1 overflow-y-auto p-4">
             {activeErpTab === 'PANORAMA' && <PanoramaTab />}
-            {activeErpTab === 'FINANCE' && <FinanceTab />}
             {activeErpTab === 'DEBTS' && <DebtsTab />}
             {activeErpTab === 'STAFF' && <StaffLedger />}
+            {activeErpTab === 'BUDGET' && <BudgetTab />}
+            {activeErpTab === 'TARIFF' && <TariffPanel />}
             {activeErpTab === 'REPORTS' && <ReportsTab />}
-          </div>
-        )}
+            {activeErpTab === 'AUDIT' && <CriticalLogTab />}
+        </div>
       </div>
     </section>
   );

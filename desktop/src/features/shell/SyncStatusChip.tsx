@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { isTauri } from '../../services/tauriClient';
 import { SYNC_STATE_LABEL, useSyncStore, type SyncState } from '../../stores/syncStore';
 import { Badge } from '../../ui/Badge';
-import { SyncDevicesModal } from './SyncDevicesModal';
 
 const POLL_MS = 2000;
 
@@ -16,12 +15,15 @@ const TONE: Record<SyncState, 'emerald' | 'amber' | 'red' | 'blue'> = {
 
 export const SyncStatusChip: React.FC = () => {
   const { status, statusError, refresh } = useSyncStore();
-  const [isOpen, setIsOpen] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
 
   useEffect(() => {
     if (!isTauri()) return undefined;
     void refresh();
-    const timer = setInterval(() => void refresh(), POLL_MS);
+    // Arka plandaki pencere durumu boşuna okumaz.
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void refresh();
+    }, POLL_MS);
     return () => clearInterval(timer);
   }, [refresh]);
 
@@ -35,17 +37,14 @@ export const SyncStatusChip: React.FC = () => {
     tone = TONE[status.state];
   }
 
+  const detail = statusError ?? status?.detail ?? null;
+  // Ayrıntı yalnız fare ipucundaydı; dokunmatik ekranda okunamıyordu.
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        title={statusError ?? status?.detail ?? undefined}
-        className="cursor-pointer min-h-12 w-full px-1 flex items-center justify-center"
-      >
+    <div className="w-full px-1 flex flex-col items-center gap-1">
+      <button type="button" className="min-h-12 flex items-center justify-center cursor-pointer" onClick={() => setShowDetail((shown) => !shown)}>
         <Badge variant={tone}>{label}</Badge>
       </button>
-      <SyncDevicesModal isOpen={isOpen} onClose={() => setIsOpen(false)} />
-    </>
+      {showDetail && detail ? <p className="text-xs text-center break-words text-[var(--text-primary)]">{detail}</p> : null}
+    </div>
   );
 };

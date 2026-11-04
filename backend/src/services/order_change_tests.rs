@@ -192,3 +192,27 @@ async fn bekleyen_ve_reddedilen_talep_kapatilamaz() {
         .await
         .is_err());
 }
+
+#[tokio::test]
+async fn onaylanmis_acik_talep_ikinci_talebi_engeller() {
+    let pool = pool().await;
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let first = create(&mut conn, "tnt_a", &request("ord_kapali", "usr_m", true))
+        .await
+        .expect("ilk talep");
+
+    assert!(
+        create(&mut conn, "tnt_a", &request("ord_kapali", "usr_m", true))
+            .await
+            .is_err()
+    );
+
+    resolve(&mut conn, "tnt_a", &first, "usr_m", NOW)
+        .await
+        .expect("talep kapandı");
+    assert!(
+        create(&mut conn, "tnt_a", &request("ord_kapali", "usr_m", true))
+            .await
+            .is_ok()
+    );
+}

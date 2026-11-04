@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
@@ -9,7 +10,7 @@ import { Panel } from '../panorama/Panel';
 import { CategorySelect } from './FinanceTab';
 
 export const BudgetPanel: React.FC = () => {
-  const { budgets, setBudget } = useExpenseStore();
+  const { budgets, setBudget, removeBudget } = useExpenseStore();
   const [category, setCategory] = useState('RENT');
   const [limit, setLimit] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +34,25 @@ export const BudgetPanel: React.FC = () => {
           <li key={row.category}>
             <div className="flex items-center justify-between gap-2 text-xs">
               <span className="font-semibold text-[var(--text-primary)]">{EXPENSE_CATEGORIES[row.category] ?? row.category}</span>
+              <span className="ml-auto flex items-center">
+                <Button
+                  variant="ghost"
+                  aria-label="Bütçeyi düzenle"
+                  onClick={() => {
+                    setCategory(row.category);
+                    setLimit((row.monthlyLimitCents / 100).toFixed(2).replace('.', ','));
+                  }}
+                >
+                  <Pencil className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  aria-label="Bütçeyi sil"
+                  onClick={() => void removeBudget(row.category).catch((caught) => setError(errorText(caught)))}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </span>
               <span className="tabular-nums text-[var(--text-secondary)]">
                 {formatMoney(row.spentCents)} / {formatMoney(row.monthlyLimitCents)}
                 <span className={row.isExceeded ? 'font-bold text-[var(--accent-red)]' : row.isNearLimit ? 'font-bold text-[var(--accent-amber)]' : ''}>

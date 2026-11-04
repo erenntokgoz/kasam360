@@ -55,14 +55,18 @@ impl StaffSessions {
 
 /// Oturum açılmadan çalışması gereken komutlar: kurulum, hesap girişi ve PIN ekranı.
 /// Liste kapalıdır: yeni komut buraya eklenmedikçe oturum ister.
-const NO_SESSION: [&str; 13] = [
+const NO_SESSION: [&str; 16] = [
     "get_setup_status",
     "save_setup_draft",
     "complete_business_setup",
     "join_existing_business",
     "restore_backup_on_setup",
     "get_device_session",
+    "open_site_page",
+    "get_pin_lengths",
     "account_sign_in",
+    // Google ile cihaz girişi personel oturumundan önce gelir; kimliği sunucu doğrular.
+    "account_sign_in_link",
     "account_create",
     "auth_login",
     "auth_logout",
@@ -153,6 +157,7 @@ mod tests {
 
     #[test]
     fn oturumsuz_komut_reddedilir_giris_komutlari_calisir() {
+        assert!(authorize(None, "open_site_page", None).is_ok());
         let body = json!({});
         assert!(authorize(None, "run_payroll", Some(&body)).is_err());
         assert!(authorize(None, "yeni_eklenen_komut", Some(&body)).is_err());

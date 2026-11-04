@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ShoppingBag, CreditCard, ArrowRight, Merge, Users, Clock } from 'lucide-react';
 import type { FloorTable } from '../../types/floor';
 import { formatMoney } from '../../lib/formatMoney';
-import { minutesElapsed } from '../../lib/date';
+import { formatTime, minutesElapsed } from '../../lib/date';
 import { Drawer } from '../../ui/Drawer';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
@@ -11,6 +11,9 @@ import { sessionArgs } from '../../stores/cariStore';
 import { mapServerItem, type CartItemWire } from '../../lib/orderMath';
 import type { OrderItem } from '../../types/pos';
 import type { OrderBalance } from '../../stores/posStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useFloorStore } from '../../stores/floorStore';
+import { errorText } from '../../lib/cariInput';
 
 export interface TableSlideOverProps {
   isOpen: boolean;
@@ -22,6 +25,8 @@ export interface TableSlideOverProps {
   onMoveTable: (sourceId: string, targetId: string) => void;
   onMergeTable: (sourceId: string, targetId: string) => void;
   onCloseReservation: (reservationId: string, action: 'ARRIVED' | 'CANCELLED') => Promise<void>;
+  /** Rezervasyon sahibi gelince masa rezervasyondaki kişi sayısıyla siparişe açılır. */
+  onSeatReservation: (table: FloorTable, guestCount: number) => void;
   onToggleBill: (tableId: string, requested: boolean) => Promise<void>;
 }
 
@@ -35,6 +40,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
   onMoveTable,
   onMergeTable,
   onCloseReservation,
+  onSeatReservation,
   onToggleBill,
 }) => {
   const [moveTargetId, setMoveTargetId] = useState<string>('');
@@ -43,6 +49,11 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
   const [showMergeBox, setShowMergeBox] = useState(false);
   const [tableItems, setTableItems] = useState<OrderItem[]>([]);
   const [balance, setBalance] = useState<OrderBalance | null>(null);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+  // Garson tahsilat yapamaz; hesap düğmeleri ona gösterilmez.
+  const canSettle = useAuthStore((state) => state.user?.role !== 'WAITER');
+  const loadFloorPlan = useFloorStore((state) => state.loadFloorPlan);
   const tableId = table?.id;
   const activeOrderId = table?.activeOrderId;
   const isOccupied = table?.status === 'OCCUPIED' || table?.status === 'BILL_REQUESTED';
@@ -68,6 +79,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
 
   if (!table) return null;
 
+  const isBillAsked = table.status === 'BILL_REQUESTED';
   const elapsed = isOccupied ? minutesElapsed(table.openedAt) : 0;
   const emptyTables = allTables.filter((t) => t.id !== table.id && t.status === 'EMPTY');
   const occupiedTables = allTables.filter((t) => t.id !== table.id && (t.status === 'OCCUPIED' || t.status === 'BILL_REQUESTED'));
@@ -76,6 +88,25 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
     if (!moveTargetId) return;
     onMoveTable(table.id, moveTargetId);
     setShowMoveBox(false);
+  };
+
+  const remainingCents = balance?.remainingCents ?? table.remainingCents ?? table.totalCents;
+  // Tamamı ikram ya da iptal edilen adisyonda tahsilat kalmaz; masa yine de kapanabilmelidir.
+  const isZeroBalance = balance !== null && remainingCents <= 0;
+
+  const handleCloseZero = async () => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    setIsClosing(true);
+    setCloseError(null);
+    try {
+      await invokeIPC('close_zero_balance_table', { tableId: table.id, tenantId, actorId, actorRole });
+      await loadFloorPlan();
+      onClose();
+    } catch (caught) {
+      setCloseError(errorText(caught));
+    } finally {
+      setIsClosing(false);
+    }
   };
 
   const handleConfirmMerge = () => {
@@ -122,17 +153,24 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
               <span>Siparişe Git</span>
             </Button>
 
-            <Button
-              variant="success"
-              size="lg"
-              onClick={() => onPayTable(table)}
-              className="w-full text-xs"
-              disabled={(table.remainingCents ?? table.totalCents) <= 0}
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>Hesap Al</span>
-            </Button>
+            {!canSettle ? null : isZeroBalance ? (
+              <Button variant="primary" size="lg" className="w-full text-xs" isLoading={isClosing} onClick={() => void handleCloseZero()}>
+                <span>Masayı Kapat</span>
+              </Button>
+            ) : (
+              <Button
+                variant="success"
+                size="lg"
+                onClick={() => onPayTable(table)}
+                className="w-full text-xs"
+                disabled={remainingCents <= 0}
+              >
+                <CreditCard className="w-4 h-4" />
+                <span>Hesap Al</span>
+              </Button>
+            )}
           </div>
+          {closeError ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{closeError}</p> : null}
         </div>
       ) : undefined}
     >
@@ -143,7 +181,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
             <span className="text-xs font-semibold text-[var(--text-secondary)]">Masa Durumu:</span>
             {isOccupied ? (
               <Badge variant="amber">{table.status === 'BILL_REQUESTED' ? 'Hesap istendi' : 'Dolu'}</Badge>
-            ) : table.status === 'RESERVED' ? (
+            ) : table.reservationId ? (
               <Badge variant="blue">Rezerve</Badge>
             ) : (
               <Badge variant="emerald">Boş</Badge>
@@ -173,6 +211,14 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
           </div>
         ) : null}
       </div>
+
+      {isOccupied && (table.trail || table.merged || isBillAsked) ? (
+        <div role="note" className="sheet rounded-lg p-3 text-sm space-y-1">
+          {table.trail ? <p className="font-semibold">{table.trail} ➭ {table.tableNumber}</p> : null}
+          {table.merged ? <p>{table.merged} bu masaya birleşti</p> : null}
+          {isBillAsked ? <p>Hesap istendi</p> : null}
+        </div>
+      ) : null}
 
       {/* Sipariş Kalemleri Önizleme */}
       {isOccupied ? (
@@ -215,13 +261,25 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
       </div>
       ) : null}
 
-      {table.status === 'RESERVED' && table.reservationId ? (
+      {!isOccupied && table.reservationId ? (
         <div className="space-y-2 pt-2 border-t border-[var(--border)]">
-          <span className="text-xs font-bold text-[var(--text-secondary)] block">
-            Rezervasyon: {table.customerName}
+          <span className="text-sm font-bold text-[var(--text-primary)] block">
+            {table.customerName}
+            {table.reservedAt ? ` · ${formatTime(table.reservedAt)}` : ''}
+            {table.reservationPartySize ? ` · ${table.reservationPartySize} kişi` : ''}
           </span>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="primary" className="min-h-12" onClick={() => void onCloseReservation(table.reservationId!, 'ARRIVED')}>
+            <Button
+              variant="primary"
+              className="min-h-12"
+              onClick={() => {
+                const reservationId = table.reservationId;
+                if (!reservationId) return;
+                void onCloseReservation(reservationId, 'ARRIVED').then(() =>
+                  onSeatReservation(table, table.reservationPartySize ?? table.capacity),
+                );
+              }}
+            >
               Müşteri Geldi
             </Button>
             <Button variant="secondary" className="min-h-12" onClick={() => void onCloseReservation(table.reservationId!, 'CANCELLED')}>
@@ -291,7 +349,9 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
                 onClick={handleConfirmMove}
                 disabled={!moveTargetId}
               >
-                Masayı Aktar
+                {moveTargetId
+                  ? `${table.tableNumber} → ${emptyTables.find((t) => t.id === moveTargetId)?.tableNumber ?? ''} masasına taşınsın`
+                  : 'Masayı Aktar'}
               </Button>
             </div>
           ) : null}
@@ -321,7 +381,10 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
                 onClick={handleConfirmMerge}
                 disabled={!mergeTargetId}
               >
-                Adisyonları Birleştir
+                {/* Birleşme geri alınmaz; hangi masanın boşalacağı düğmede yazar. */}
+                {mergeTargetId
+                  ? `${table.tableNumber} → ${occupiedTables.find((t) => t.id === mergeTargetId)?.tableNumber ?? ''} masasına katılsın`
+                  : 'Adisyonları Birleştir'}
               </Button>
             </div>
           ) : null}

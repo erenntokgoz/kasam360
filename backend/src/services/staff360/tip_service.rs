@@ -5,12 +5,13 @@
 //! sıradaki (kullanıcı kimliğine göre) son kişiye verilir ve sonra doğrulanır.
 
 use crate::services::lan_sync::WritePool;
-use sqlx::SqlitePool;
+use sqlx::{SqliteConnection, SqlitePool};
 
 use crate::services::staff360::payroll_types::{TipAllocation, TipAllocationInput, TipPoolSummary};
 
 /// Havuza bahşiş ekler. Yöntem kayıtta durur: kart bahşişi kasadaki nakitle
 /// karıştırılmasın, dağıtımda hangi paranın nereden geldiği görülsün.
+#[cfg(test)]
 pub async fn record_tip(
     pool: &SqlitePool,
     tenant_id: &str,
@@ -20,6 +21,27 @@ pub async fn record_tip(
     paid_at: &str,
 ) -> Result<String, String> {
     let mut tx = pool.begin_write().await?;
+    let id = insert_tip(
+        &mut tx,
+        tenant_id,
+        order_id,
+        amount_cents,
+        payment_method,
+        paid_at,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(id)
+}
+
+pub async fn insert_tip(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    order_id: Option<&str>,
+    amount_cents: i64,
+    payment_method: &str,
+    paid_at: &str,
+) -> Result<String, String> {
     if amount_cents <= 0 {
         return Err("bahsis sifirdan buyuk olmali".to_string());
     }
@@ -41,10 +63,9 @@ pub async fn record_tip(
     .bind(amount_cents)
     .bind(payment_method)
     .bind(paid_at)
-    .execute(&mut *tx)
+    .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
-    tx.commit().await?;
     Ok(id)
 }
 

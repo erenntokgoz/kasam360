@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { errorText } from '../../lib/cariInput';
 import { NumberInput } from '../../ui/NumberInput';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -26,7 +27,7 @@ export const ShiftGateModal: React.FC = () => {
     try {
       cents = parseMoneyToCents(openingLira);
     } catch (error) {
-      setInputError(error instanceof Error ? error.message : String(error));
+      setInputError(errorText(error));
       return;
     }
     setInputError(null);
@@ -47,7 +48,6 @@ export const ShiftGateModal: React.FC = () => {
         closeModal('payment');
       }}
       title="Vardiya Açılışı"
-      subtitle="Satış almak için çekmecedeki nakdi sayıp girin."
       maxWidth="md"
     >
       <form onSubmit={handleStartShift} className="space-y-4">
@@ -57,6 +57,7 @@ export const ShiftGateModal: React.FC = () => {
           </label>
           <NumberInput
             id="opening-cash"
+            pinpad={false}
             value={openingLira}
             onValueChange={setOpeningLira}
             className="!min-h-14 text-xl font-bold tabular-nums"

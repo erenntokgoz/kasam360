@@ -3,6 +3,7 @@ import { FileText } from 'lucide-react';
 import { NumberInput } from '../../ui/NumberInput';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useFloorStore } from '../../stores/floorStore';
 import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { parseCents } from '../../lib/moneyInput';
@@ -12,21 +13,23 @@ import { Button } from '../../ui/Button';
 import { Numpad } from '../../ui/Numpad';
 import type { ZReportData } from '../../types/shift';
 
-export const BlindCloseModal: React.FC = () => {
+export const BlindCloseModal: React.FC<{ onShowZ: () => void }> = ({ onShowZ }) => {
   const modals = useUIStore((state) => state.modals);
   const closeModal = useUIStore((state) => state.closeModal);
-  const openModal = useUIStore((state) => state.openModal);
   const { closeShift, explainDifference } = useShiftStore();
+  const openTables = useFloorStore((state) => state.tables.filter((table) => table.status === 'OCCUPIED' || table.status === 'BILL_REQUESTED').length);
 
   const [countedLiras, setCountedLiras] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [completedReport, setCompletedReport] = useState<ZReportData | null>(null);
+  // Mühür geri alınamaz: sayım bir kez daha gösterilip onay alınır.
+  const [pendingCents, setPendingCents] = useState<number | null>(null);
 
   if (!modals.blindClose) return null;
 
-  const handleCloseShift = async (e: React.FormEvent) => {
+  const handleCloseShift = (e: React.FormEvent) => {
     e.preventDefault();
     // Geçersiz sayım sıfır kabul edilmez: kasa farkı buradan doğar.
     const cents = parseCents(countedLiras);
@@ -34,11 +37,18 @@ export const BlindCloseModal: React.FC = () => {
       setError('Sayılan tutarı rakamla girin.');
       return;
     }
+    setError(null);
+    setPendingCents(cents);
+  };
 
+  const handleSeal = async () => {
+    if (pendingCents === null) return;
+    const cents = pendingCents;
     setIsSubmitting(true);
     setError(null);
     try {
       setCompletedReport(await closeShift(cents));
+      setPendingCents(null);
     } catch (caught) {
       setError(errorText(caught));
     } finally {
@@ -63,23 +73,47 @@ export const BlindCloseModal: React.FC = () => {
     setCountedLiras('');
     setNote('');
     closeModal('blindClose');
-    openModal('receiptPreview');
+    onShowZ();
+  };
+
+  const handleClose = () => {
+    setPendingCents(null);
+    closeModal('blindClose');
   };
 
   return (
     <Modal
       isOpen={modals.blindClose}
-      onClose={() => closeModal('blindClose')}
+      onClose={handleClose}
       title="Vardiya Kapatma (Kör Sayım)"
-      subtitle="Kasa çekmecesindeki fiziksel nakiti sayarak sisteme girin"
       maxWidth="md"
     >
-      {!completedReport ? (
-        <form onSubmit={handleCloseShift} className="space-y-4">
-          <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3 text-xs text-[var(--text-secondary)]">
-            <span className="font-semibold text-[var(--text-primary)] block">Kör Kapanış İlkesi:</span>
-            Kasiyer sistem toplamını görmeden saydığı nakit parasını girer. Sistem farkı otomatik hesaplar ve Z Raporu ile denetim defterine mühürler.
+      {pendingCents !== null && !completedReport ? (
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--text-primary)]">
+            Sayılan nakit <span className="font-bold tabular-nums">{formatMoney(pendingCents)}</span>. Vardiya mühürlenince geri açılamaz.
+          </p>
+          {openTables > 0 ? (
+            <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">
+              Salonda {openTables} açık masa var. Hesapları kapatmadan mühürlerseniz bu satışlar sonraki vardiyaya yazılır.
+            </p>
+          ) : null}
+          {error ? (
+            <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setPendingCents(null)}>
+              Sayımı Düzelt
+            </Button>
+            <Button type="button" variant="danger" className="flex-1" isLoading={isSubmitting} onClick={() => void handleSeal()}>
+              Mühürle
+            </Button>
           </div>
+        </div>
+      ) : !completedReport ? (
+        <form onSubmit={handleCloseShift} className="space-y-4">
 
           <div>
             <label className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
@@ -113,18 +147,17 @@ export const BlindCloseModal: React.FC = () => {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => closeModal('blindClose')}
+              onClick={handleClose}
               className="flex-1"
             >
               Vazgeç
             </Button>
             <Button
               type="submit"
-              variant="danger"
+              variant="primary"
               className="flex-1"
-              isLoading={isSubmitting}
             >
-              Vardiyayı Kapat ve Mühürle
+              Devam
             </Button>
           </div>
         </form>
@@ -189,7 +222,7 @@ export const BlindCloseModal: React.FC = () => {
             className="w-full"
           >
             <FileText className="w-4 h-4 mr-1.5" />
-            <span>Z Raporunu Gör ve Yazdır</span>
+            <span>Z Raporunu Göster</span>
           </Button>
         </div>
       )}

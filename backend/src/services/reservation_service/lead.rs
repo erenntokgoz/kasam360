@@ -34,6 +34,8 @@ pub fn displayed_status(
         Some(at) if stored == "RESERVED" && !is_due(at, now, lead_minutes) => {
             "AVAILABLE".to_string()
         }
+        // Kaydı kapanmış rezervasyonun bayrağı kalmış olabilir: masa kilitli görünmez.
+        None if stored == "RESERVED" => "AVAILABLE".to_string(),
         _ => stored.to_string(),
     }
 }

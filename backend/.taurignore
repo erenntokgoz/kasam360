@@ -1,0 +1,2 @@
+# Üyelik servisi masaüstü uygulamasının parçası değildir; değişince Rust yeniden derlenmez.
+api/

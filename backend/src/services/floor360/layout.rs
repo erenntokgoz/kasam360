@@ -26,7 +26,7 @@ fn require_key(anahtar: &str) -> Result<String, String> {
 /// Neden sorgu: SQLite `ALTER TABLE ADD COLUMN` ile yabancı anahtar kısıtı
 /// koyamaz, bu yüzden `tables.zone` düz metindir. Kiracı sızıntısını engelleyen
 /// tek yer burasıdır (AGENTS.md §3.3). Bölüm başka kiracınınsa hata döner.
-pub(super) async fn zone_belongs_to_tenant(
+pub(crate) async fn zone_belongs_to_tenant(
     conn: &mut SqliteConnection,
     tenant_id: &str,
     zone_id: &str,
@@ -353,6 +353,45 @@ pub async fn create_zone(
     .await
     .map_err(|e| e.to_string())?;
     Ok(id)
+}
+
+/// Bölüm adını değiştirir. Masalar kimliğe bağlı olduğu için onlara dokunulmaz.
+pub async fn rename_zone(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    zone_id: &str,
+    name: &str,
+) -> Result<(), String> {
+    let temiz = name.trim();
+    if temiz.is_empty() {
+        return Err("VALIDATION: bölüm adı boş olamaz".into());
+    }
+    let ayni_ad: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM floor_zones WHERE tenant_id = ? AND name = ? AND id != ?",
+    )
+    .bind(tenant_id)
+    .bind(temiz)
+    .bind(zone_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if ayni_ad > 0 {
+        return Err("CONFLICT: bu isimde bir bölüm zaten var".into());
+    }
+    let sonuc = sqlx::query(
+        "UPDATE floor_zones SET name = ?, updated_at = ? WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(temiz)
+    .bind(chrono::Utc::now().to_rfc3339())
+    .bind(zone_id)
+    .bind(tenant_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if sonuc.rows_affected() == 0 {
+        return Err("NOT_FOUND: bölüm bulunamadı".into());
+    }
+    Ok(())
 }
 
 /// Bölümü kaldırır. Bölüme bağlı masalar silinmez; yalnız `zone` bağlantısı

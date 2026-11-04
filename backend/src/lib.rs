@@ -26,7 +26,6 @@ use tauri::Manager;
 pub use db::{init_db, DbPool};
 
 /// Tauri tarafından yönetilen global uygulama durumu.
-///
 /// `payment_mutex` tahsilatı, `audit_mutex` denetim defteri yazımını ayrı ayrı serileştirir.
 pub struct AppState {
     pub payment_mutex: tokio::sync::Mutex<()>,
@@ -40,7 +39,6 @@ pub struct AppState {
     pub staff_session: services::staff_session::StaffSessions,
 }
 
-/// Kimlik kapısı: komutun bildirdiği rol, kiracı ve aktör oturumla aynı olmalı.
 fn authorize_invoke(invoke: &tauri::ipc::Invoke<tauri::Wry>) -> Result<(), String> {
     let webview = invoke.message.webview();
     let state = webview
@@ -54,7 +52,7 @@ fn authorize_invoke(invoke: &tauri::ipc::Invoke<tauri::Wry>) -> Result<(), Strin
     services::staff_session::authorize(session.as_ref(), invoke.message.command(), body)
 }
 
-/// Komut gövdesine girmeden önce çalışır: eşitlenmeyen yazma cihazları ayrıştırır.
+/// Komut öncesi kapı: eşitlenmeyen yazma cihazları ayrıştırır.
 fn gated(
     handler: impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static,
 ) -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
@@ -76,9 +74,8 @@ fn gated(
     }
 }
 
-/// Veritabanı yeri. Çalışma klasörüne bağlı kalırsa kısayoldan açılan uygulama başka
-/// bir boş veritabanı açar ve işletme kurulmamış görünürdü; var olan dosya korunur,
-/// yeni kurulum kullanıcı veri klasörüne yazılır.
+/// Veritabanı yeri. Çalışma klasörüne bağlı kalırsa kısayoldan açılan uygulama boş
+/// veritabanı açar; var olan dosya korunur, yeni kurulum kullanıcı klasörüne yazılır.
 fn resolve_database_url(app: &tauri::App) -> Result<String, Box<dyn std::error::Error>> {
     if let Ok(url) = std::env::var("DATABASE_URL") {
         return Ok(url);
@@ -100,7 +97,17 @@ pub fn run() {
     // Yapılandırılmış günlükleme (tracing + rolling file).
     // Loglama asla uygulamayı durdurmaz; hata olursa konsola fallback.
     crate::log::init();
+    // reqwest sağlayıcısız rustls ile derlenir; sağlayıcı kurulmadan istemci açılırsa
+    // komut panikler ve arayüz cevapsız kalır. Zaten kuruluysa hata önemsizdir.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let builder = tauri::Builder::default()
+        // İkinci açılış yeni süreç başlatmaz, açık pencereyi öne getirir.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .setup(|app| {
             tauri::async_runtime::block_on(async {
                 let database_url = resolve_database_url(app)?;
@@ -156,11 +163,9 @@ pub fn run() {
             commands::get_active_tickets,
             commands::floor_commands::plan::get_floor_plan,
             commands::floor_commands::table_ops::move_table,
-            // Kroki çizim. `get_floor_plan` ile karıştırılmamalı —
-            // o komut kart görünümünün işletim verisini verir, bunlar kroki
-            // geometrisini okur ve yazar.
             commands::floor_plan_commands::get_floor_layout,
             commands::floor_plan_commands::save_floor_layout,
+            commands::floor_plan_commands::rename_floor_zone,
             commands::floor_plan_commands::create_floor_zone,
             commands::floor_plan_commands::delete_floor_zone,
             commands::floor_plan_commands::create_floor_object,
@@ -190,12 +195,17 @@ pub fn run() {
             management_commands::product::create_product,
             management_commands::product::update_product,
             management_commands::product::update_product_status,
+            management_commands::product_extras::get_menu_extras,
+            management_commands::product_extras::set_product_extras,
+            management_commands::product_extras::set_product_order,
+            management_commands::product_extras::set_category_parent,
             management_commands::product::delete_product,
             analytics_commands::get_analytics_dashboard_data,
             analytics_commands::metrics::get_analytics_metrics,
             analytics_commands::metrics::set_monthly_target,
             analytics_commands::metrics::set_competitor_price,
             commands::auth_login,
+            commands::get_pin_lengths,
             commands::auth_commands::unlock::auth_unlock,
             commands::backup_commands::get_backup_status,
             commands::backup_commands::list_backups,
@@ -206,7 +216,9 @@ pub fn run() {
             commands::backup_commands::restore_backup_on_setup,
             commands::sync_commands::take_over_device,
             commands::account_commands::get_device_session,
+            commands::account_commands::open_site_page,
             commands::account_commands::account_sign_in,
+            commands::account_commands::account_sign_in_link,
             commands::account_commands::account_create,
             commands::account_commands::account_sign_out,
             commands::account_commands::set_session_policy,
@@ -217,13 +229,11 @@ pub fn run() {
             commands::floor_commands::table_ops::add_table,
             commands::floor_commands::table_ops::remove_table,
             commands::floor_commands::table_ops::set_bill_requested,
+            commands::floor_commands::zero_close::close_zero_balance_table,
             commands::floor_commands::table_ops::update_table_name,
             commands::floor_commands::transfer::transfer_order_item,
             commands::get_daily_summary,
             commands::get_receipts,
-            // Çift onay eşiği kiracı bazında yönetilir.
-            // Eşiği değiştirmek yalnız işletme sahibine açıktır; okuma sahip ve
-            // müdüre açıktır. Komutlar hazırdır.
             commands::threshold_commands::get_approval_threshold,
             commands::threshold_commands::set_approval_threshold,
             commands::threshold_commands::reset_approval_threshold,
@@ -235,13 +245,10 @@ pub fn run() {
             commands::create_compensation_refund,
             commands::get_audit_logs,
             commands::print_receipt,
-            // Hesap Defteri finansal hareketleri. Fiş, ayrı ekranın
-            // konusu olmaktan çıkıp harekete bağlı bağlantıya dönüştü.
             commands::get_financial_movements,
             commands::get_active_order_id,
             commands::pos_commands::queries::get_order_balance,
             commands::payment_commands::split::get_payment_status,
-            // Fiş dışı basımları keyfi JSON değil, veritabanından okunur.
             print_commands::print_z_report,
             print_commands::print_day_z_report,
             print_commands::print_cash_slip,
@@ -255,9 +262,6 @@ pub fn run() {
             branch_commands::create_branch,
             branch_commands::update_branch,
             branch_commands::archive_branch,
-            // Anlık PIN onayı. Kuyruk komutları (`request_approval`,
-            // `get_pending_approvals`, `process_approval`) kaldırıldı: onay
-            // anında PIN ile alınır, kuyrukta bekletilmez.
             approval_commands::verify_manager_pin,
             approval_commands::set_staff_approval,
             cashier_commands::cash_in,
@@ -288,8 +292,7 @@ pub fn run() {
             platform_commands::devices::get_devices,
             platform_commands::devices::record_device_heartbeat,
             platform_commands::devices::register_device,
-            // Master vault komutları da ayrı modüldedir;
-            // `generate_handler!` tam modül yolunu ister.
+            // Master vault komutları ayrı modüldedir.
             platform_commands::master_vault_commands::master_vault_configure,
             platform_commands::master_vault_commands::master_vault_unlock,
             platform_commands::master_vault_commands::master_vault_status,
@@ -343,6 +346,8 @@ pub fn run() {
             ledger_commands::get_debts,
             ledger_commands::create_debt,
             ledger_commands::pay_debt,
+            ledger_commands::update_debt,
+            ledger_commands::delete_debt,
             ledger_commands::get_expenses,
             ledger_commands::create_expense,
             ledger_commands::void_expense,
@@ -361,6 +366,7 @@ pub fn run() {
             ledger_commands::get_budget_status,
             ledger_commands::get_recurring_expenses,
             ledger_commands::set_budget_limit,
+            ledger_commands::delete_budget_limit,
             ledger_commands::save_recurring_expense,
             ledger_commands::update_recurring_expense,
             ledger_commands::deactivate_recurring_expense,
@@ -373,6 +379,7 @@ pub fn run() {
             commands::sync_commands::set_device_passive,
             ledger_commands::supplier_documents::get_awaiting_supplier_documents,
             ledger_commands::supplier_documents::approve_supplier_document,
+            ledger_commands::supplier_documents::receive_purchase,
             // Personel 360°. Maaş tutarı görmek yalnız OWNER'a açıktır;
             // kapılar `commands::staff_commands` içinde `rbac` ile uygulanır.
             commands::staff_commands::list_staff_profiles,
@@ -380,14 +387,16 @@ pub fn run() {
             commands::staff_commands::get_upcoming_birthdays,
             commands::staff_commands::list_shift_plans,
             commands::staff_commands::add_shift_plan,
-            commands::staff_commands::list_leave_requests,
-            commands::staff_commands::request_leave,
-            commands::staff_commands::decide_leave,
+            commands::leave_commands::list_leave_requests,
+            commands::leave_commands::request_leave,
+            commands::leave_commands::update_leave,
+            commands::leave_commands::decide_leave,
             commands::staff_commands::list_custody_records,
             commands::staff_commands::add_custody_record,
             commands::staff_commands::close_custody_record,
             commands::staff_commands::list_staff_incidents,
             commands::staff_commands::record_staff_incident,
+            commands::staff_commands::delete_payroll_rule,
             commands::staff_commands::get_payroll_rules,
             commands::staff_commands::set_payroll_rule,
             commands::staff_commands::run_payroll,
@@ -396,7 +405,7 @@ pub fn run() {
             commands::staff_commands::list_tip_entries,
             commands::staff_commands::delete_tip_entry,
             commands::staff_commands::update_shift_plan,
-            commands::staff_commands::delete_leave,
+            commands::leave_commands::delete_leave,
             commands::staff_commands::delete_shift_plan,
             commands::order_change_commands::create_order_change_request,
             commands::order_change_commands::list_order_change_requests,
@@ -429,6 +438,10 @@ pub fn run() {
             inventory360_commands::recipe_commands::get_recipe_cost,
             inventory360_commands::stock_commands::list_stock_batches_command,
             inventory360_commands::stock_commands::get_stock_trail,
+            commands::station_commands::get_station_settings,
+            commands::station_commands::save_station,
+            commands::station_commands::delete_station,
+            commands::station_commands::list_printers,
             inventory360_commands::tariff_commands::get_price_tariffs,
             inventory360_commands::tariff_commands::get_active_price_tariff,
             inventory360_commands::tariff_commands::save_price_tariff,

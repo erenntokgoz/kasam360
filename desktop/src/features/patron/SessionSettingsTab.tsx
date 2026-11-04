@@ -66,9 +66,6 @@ export const SessionSettingsTab: React.FC = () => {
           />
           <span>Bu cihazda hesabı açık tut</span>
         </label>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Kapalıyken uygulama her açılışta e-posta ve şifre ister.
-        </p>
         <Button variant="secondary" className="min-h-12" onClick={() => void run(signOut)}>
           Bu cihazda hesaptan çık
         </Button>
@@ -76,9 +73,6 @@ export const SessionSettingsTab: React.FC = () => {
 
       <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
         <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Personel oturumu</h2>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Personel PIN ile girer. Hareketsiz kalınca ekran kilitlenir; kalıcı oturumda kilitlenmez.
-        </p>
         <div className="grid grid-cols-2 gap-2">
           {STAFF_IDLE_OPTIONS.map(({ seconds, label }) => (
             <Button

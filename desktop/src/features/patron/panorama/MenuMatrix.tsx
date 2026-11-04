@@ -25,7 +25,7 @@ export const MenuMatrix: React.FC<{ metrics: MenuMetrics | null }> = ({ metrics 
   return (
     <Panel title="Menü Analizi">
       {!hasData ? (
-        <p className="text-sm text-[var(--text-secondary)]">Analiz için bu dönemde kapanan satış gerekiyor.</p>
+        <p className="text-sm text-[var(--text-secondary)]">Bu dönemde satış yok.</p>
       ) : (
         <div className="grid grid-cols-2 gap-2">
           {QUADRANTS.map(({ key, countKey, title, advice }) => {

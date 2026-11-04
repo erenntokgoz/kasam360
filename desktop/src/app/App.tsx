@@ -7,6 +7,7 @@ import { FloorModule } from '../features/floor/FloorModule';
 import { PosModule } from '../features/pos/PosModule';
 import { KdsModule } from '../features/kds/KdsModule';
 import { CashierModule } from '../features/cashier/CashierModule';
+import { CatalogModule } from '../features/patron/CatalogModule';
 import { ErpModule } from '../features/patron/ErpModule';
 import { SettingsTab } from '../features/patron/settings/SettingsTab';
 import { LoginOverlay } from '../features/auth/LoginOverlay';
@@ -175,6 +176,10 @@ export const App: React.FC = () => {
 
           <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'ERP' ? '' : 'hidden'}`}>
             <ErpModule />
+          </div>
+
+          <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'CATALOG' ? '' : 'hidden'}`}>
+            {canOpenModule(user?.role, 'CATALOG') ? <CatalogModule /> : null}
           </div>
 
           <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'SETTINGS' ? '' : 'hidden'}`}>

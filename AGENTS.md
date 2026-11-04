@@ -11,8 +11,8 @@
 - **Dizin Yapısı:**
   - `backend/`: Rust + Tauri 2 + SQLite (sqlx) + Argon2id. Yüksek güvenlikli çekirdek motor.
   - `desktop/`: React 18 + Vite + TypeScript + Tailwind CSS v4 + Zustand + Lucide Icons. Defter dili tasarım sistemi (bölüm 4).
-  - `web/frontend/`: Next.js + TypeScript + Tailwind CSS v4 + GSAP tanıtım sitesi. Görsel dili adisyon defteridir ve marka kılavuzunu izler; bölüm 4 yalnız POS uygulaması içindir. Dosya adlarında çerçevenin zorunlu kıldığı `page.tsx`, `layout.tsx` gibi adlar istisnadır.
-  - `web/backend/`: Hono + TypeScript API servisi. Erken erişim talebini alır; lisans, hesap ve ödeme bildirimleri buraya eklenir.
+  - `web/`: Next.js + TypeScript + Tailwind CSS v4 + GSAP tanıtım sitesi. Görsel dili adisyon defteridir ve marka kılavuzunu izler; bölüm 4 yalnız POS uygulaması içindir. Dosya adlarında çerçevenin zorunlu kıldığı `page.tsx`, `layout.tsx` gibi adlar istisnadır.
+  - `backend/api/`: Hono + TypeScript API servisi. Üyelik ve mail buradadır (PostgreSQL); lisans ve ödeme bildirimleri buraya eklenir.
   - `docs/`: Mimari ve güvenlik şartnameleri (`security-audit.md`, `offline-conflict-policy.md`).
 
 ---
@@ -76,7 +76,7 @@ Arayüz not kâğıdından türer: yüzey kâğıt, yazı mavi tükenmez kalem, 
 - Sayı girişi `ui/NumberInput`, tuş takımı `ui/PinpadModal`, silme onayı `ui/ConfirmDialog`, üst menü `ui/Bar` ile yapılır.
 - Dokunmatik hedefler en az 48px'tir (`min-h-12`); tutar ve saatler `tabular-nums` kullanır. Cam, bulanıklık, emoji ve süslü karşılama metni yoktur.
 - Kabuk: solda ayraç menü (`SidebarNav`), merkezde modül alanı. Üst durum çubuğu ve alt yazı yoktur; Ayarlar sol menüde ayrı bayraktır.
-- İlk kurulum, giriş ve PIN ekranı oturum yokken; kilit ekranı hareketsizlikte açılır ve yalnız oturum sahibinin PIN'iyle kapanır.
+- İlk kurulum, giriş ve PIN ekranı oturum yokken; kilit ekranı hareketsizlikte açılır ve kimin PIN'i girilirse ona açılır.
 
 ---
 

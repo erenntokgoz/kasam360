@@ -12,9 +12,9 @@ desktop/node_modules/
 dist/
 dist-ssr/
 desktop/dist/
-web/frontend/.next/
-web/frontend/next-env.d.ts
-web/frontend/*.tsbuildinfo
+web/.next/
+web/next-env.d.ts
+web/*.tsbuildinfo
 
 # Env
 .env
@@ -70,3 +70,6 @@ backend/backups/
 backups/
 *.db
 *.db.sha256
+
+# Test veritabanı
+backend/api/.test-db/

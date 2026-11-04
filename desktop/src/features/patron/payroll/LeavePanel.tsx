@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
+import { formatDay } from '../../../lib/date';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
@@ -32,6 +33,7 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
   const [kind, setKind] = useState('YILLIK');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [editing, setEditing] = useState<LeaveRow | null>(null);
   const [deleting, setDeleting] = useState<LeaveRow | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +60,12 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
     }
   };
 
+  const resetForm = () => {
+    setEditing(null);
+    setStart('');
+    setEnd('');
+  };
+
   const ordered = [...leaves].sort((a, b) => Number(b.status === 'Bekliyor') - Number(a.status === 'Bekliyor'));
   const { actorId, actorRole, tenantId } = sessionArgs();
 
@@ -71,7 +79,7 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
           <li key={row.id} className="flex flex-wrap items-center gap-3 min-h-12 border-b border-[var(--border)] last:border-b-0">
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold text-[var(--text-primary)] truncate">{KINDS[row.kind] ?? row.kind}</span>
-              <span className="block text-xs tabular-nums text-[var(--text-secondary)]">{row.startDate} → {row.endDate}</span>
+              <span className="block text-xs tabular-nums text-[var(--text-secondary)]">{formatDay(row.startDate)} → {formatDay(row.endDate)}</span>
             </span>
             <span className={`text-xs font-bold ${tone(row.status)}`}>{statusLabel(row.status)}</span>
             {row.status === 'Bekliyor' ? (
@@ -84,6 +92,18 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
                 </Button>
               </>
             ) : null}
+            <Button
+              variant="ghost"
+              aria-label="İzni düzenle"
+              onClick={() => {
+                setEditing(row);
+                setKind(row.kind);
+                setStart(row.startDate);
+                setEnd(row.endDate);
+              }}
+            >
+              <Pencil className="w-5 h-5" />
+            </Button>
             <Button variant="ghost" aria-label="İzni sil" onClick={() => setDeleting(row)}>
               <Trash2 className="w-5 h-5" />
             </Button>
@@ -103,19 +123,25 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
           className="min-h-12 text-sm font-bold"
           disabled={!start || !end}
           onClick={() => void run(async () => {
-            await invokeIPC('request_leave', { tenantId, actorRole, input: { userId, kind, startDate: start, endDate: end, reason: null } });
-            setStart('');
-            setEnd('');
+            const input = { userId, kind, startDate: start, endDate: end, reason: editing?.reason ?? null };
+            if (editing) await invokeIPC('update_leave', { tenantId, actorRole, leaveId: editing.id, input });
+            else await invokeIPC('request_leave', { tenantId, actorId, actorRole, input });
+            resetForm();
           })}
         >
-          İzin Ekle
+          {editing ? 'Kaydet' : 'İzin Ekle'}
         </Button>
+        {editing ? (
+          <Button variant="ghost" className="min-h-12 text-sm" onClick={resetForm}>
+            Vazgeç
+          </Button>
+        ) : null}
       </div>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
       {deleting ? (
         <ConfirmDialog
           title="İzin silinsin mi?"
-          message={`${deleting.startDate} → ${deleting.endDate}`}
+          message={`${formatDay(deleting.startDate)} → ${formatDay(deleting.endDate)}`}
           onConfirm={async () => {
             await invokeIPC('delete_leave', { tenantId, actorRole, leaveId: deleting.id });
             await load();

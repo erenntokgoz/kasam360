@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
+import { PAY_PERIODS, recentPeriods, type PayPeriod } from '../../../lib/payPeriod';
 import { invokeIPC } from '../../../services/tauriClient';
 import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
@@ -25,16 +26,6 @@ interface PayrollRun {
   warning: string | null;
 }
 
-const two = (value: number) => String(value).padStart(2, '0');
-
-/** Bu ay ve önceki iki ay: bordro çoğunlukla geçen ay için hesaplanır. */
-function recentPeriods(now = new Date()): string[] {
-  return [0, 1, 2].map((back) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - back, 1);
-    return `${date.getFullYear()}-${two(date.getMonth() + 1)}`;
-  });
-}
-
 const COLUMNS: { label: string; key: keyof Amounts }[] = [
   { label: 'Sabit', key: 'baseCents' },
   { label: 'Komisyon', key: 'commissionCents' },
@@ -47,8 +38,10 @@ const COLUMNS: { label: string; key: keyof Amounts }[] = [
 
 export const PayrollPanel: React.FC = () => {
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
-  const periods = recentPeriods();
-  const [period, setPeriod] = useState(periods[1]);
+  const [payPeriod, setPayPeriod] = useState<PayPeriod>('MONTHLY');
+  const periods = recentPeriods(payPeriod);
+  // Aylık bordro çoğunlukla geçen ay için hesaplanır; gün ve hafta içinde bulunandır.
+  const [period, setPeriod] = useState(periods[1].key);
   const [rules, setRules] = useState<PayrollRule[]>([]);
   const [runs, setRuns] = useState<PayrollRun[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +65,7 @@ export const PayrollPanel: React.FC = () => {
     setIsBusy(true);
     setError(null);
     try {
-      setRuns(await invokeIPC<PayrollRun[]>('run_payroll', { tenantId, actorRole, period }));
+      setRuns(await invokeIPC<PayrollRun[]>('run_payroll', { tenantId, actorRole, payPeriod, period }));
     } catch (caught) {
       setRuns(null);
       setError(errorText(caught));
@@ -85,19 +78,34 @@ export const PayrollPanel: React.FC = () => {
 
   return (
     <Panel title="Bordro">
-      {rules.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Maaş kuralı kişi kartından tanımlanır.</p> : null}
       <div className="flex flex-wrap items-center gap-2">
-        {periods.map((item) => (
+        {PAY_PERIODS.map((item) => (
           <Button
-            key={item}
-            variant={period === item ? 'selected' : 'secondary'}
-            className="min-h-12 text-sm tabular-nums"
+            key={item.id}
+            variant={payPeriod === item.id ? 'primary' : 'secondary'}
+            className="min-h-12 text-sm font-bold"
             onClick={() => {
-              setPeriod(item);
+              setPayPeriod(item.id);
+              setPeriod(recentPeriods(item.id)[item.id === 'MONTHLY' ? 1 : 0].key);
               setRuns(null);
             }}
           >
-            {item}
+            {item.label}
+          </Button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {periods.map((item) => (
+          <Button
+            key={item.key}
+            variant={period === item.key ? 'selected' : 'secondary'}
+            className="min-h-12 text-sm tabular-nums"
+            onClick={() => {
+              setPeriod(item.key);
+              setRuns(null);
+            }}
+          >
+            {item.label}
           </Button>
         ))}
         <Button variant="primary" className="min-h-12 text-sm font-bold" isLoading={isBusy} disabled={rules.length === 0} onClick={() => void calculate()}>

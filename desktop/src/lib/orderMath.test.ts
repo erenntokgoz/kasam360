@@ -32,7 +32,8 @@ describe('adisyon hesapları', () => {
   it('KDV dahil tutardan KDV payını çıkarır', () => {
     const item = mapServerItem(wire);
     if (!item) throw new Error('kalem yok');
-    expect(itemTaxCents(item)).toBe(28);
+    // 300 kuruş %10 dahil: KDV 27,27 kuruştur, yarım yukarı yuvarlamayla 27.
+    expect(itemTaxCents(item)).toBe(27);
   });
 
   it('gönderilen kalem fiyat taşımaz', () => {

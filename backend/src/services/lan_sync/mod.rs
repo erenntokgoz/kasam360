@@ -27,3 +27,6 @@ mod replication_fault_tests;
 
 #[cfg(test)]
 mod replication_tests;
+
+#[cfg(test)]
+mod write_tx_tests;

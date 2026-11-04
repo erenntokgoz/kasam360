@@ -1,39 +1,112 @@
-import React from 'react';
-import { useSetupStore, type SetupMode } from '../../stores/setupStore';
+import React, { useState } from 'react';
+import { EmailNotVerified, verifyWebAccount, type WebAccount } from '../../lib/webAccount';
+import { useSetupStore } from '../../stores/setupStore';
+import { Button } from '../../ui/Button';
 import { AccountLogin } from '../auth/AccountLogin';
-import { RestoreFromFile } from './RestoreFromFile';
+import { AuthShell } from '../auth/AuthShell';
+import { GoogleSetupButton } from './GoogleSetupButton';
 import { NewBusinessForm } from './NewBusinessForm';
-import { BrandMark } from '../../ui/BrandMark';
-import { JoinBusinessForm } from './JoinBusinessForm';
+import { ForgotPasswordForm, RegisterForm, VerifyCodeForm, sendEmailCode } from './WebAccountForms';
+
+type View = 'LOGIN' | 'REGISTER' | 'VERIFY' | 'FORGOT';
+
+const VIEW_TITLES: Record<View, string> = {
+  LOGIN: 'Giriş yap',
+  REGISTER: 'Kayıt ol',
+  VERIFY: 'E-postanı doğrula',
+  FORGOT: 'Şifreni yenile',
+};
 
 export const SetupWizard: React.FC = () => {
   const { mode, draft, saveProgress } = useSetupStore();
-  const choose = (next: SetupMode | null) => void saveProgress(next, draft).catch(() => undefined);
+  const [view, setView] = useState<View>('LOGIN');
+  // Şifre taslağa yazılmaz: yalnız bu ekran açıkken bellekte durur.
+  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [verifiedPassword, setVerifiedPassword] = useState<string | undefined>();
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const fillFromAccount = (account: WebAccount) =>
+    saveProgress('NEW', {
+      ...draft,
+      email: account.email,
+      ownerName: account.name,
+      businessName: account.businessName ?? draft.businessName,
+      phone: account.phone ?? draft.phone,
+    });
+
+  const signInWithWebAccount = async (email: string, password: string) => {
+    const account = await verifyWebAccount(email, password);
+    setVerifiedPassword(password);
+    await fillFromAccount(account);
+  };
+
+  const continueWithWebAccount = async (email: string, password: string) => {
+    try {
+      await signInWithWebAccount(email, password);
+    } catch (caught) {
+      if (!(caught instanceof EmailNotVerified)) throw caught;
+      const sent = await sendEmailCode(email);
+      if (!sent.ok) throw new Error(sent.error);
+      setCredentials({ email, password });
+      setView('VERIFY');
+    }
+  };
+
+  const openView = (next: View) => {
+    setNotice(null);
+    setView(next);
+  };
+
+  const back = () => {
+    setVerifiedPassword(undefined);
+    setView('LOGIN');
+    void saveProgress(null, draft).catch(() => undefined);
+  };
+
+  // Eski taslakta cihaz bağlama seçimi kalmış olabilir; o ekran artık yok, giriş açılır.
+  const isSettingUp = mode === 'NEW';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg-canvas)] p-6 select-none">
-      <div className="min-h-full flex flex-col items-center justify-center">
-        <div className="w-full max-w-[560px] paper border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-4">
-          <div className="flex items-center gap-2.5">
-            <BrandMark className="w-8 h-8" surface="paper" />
-            <h1 className="print-title font-bold text-base tracking-tight text-[var(--text-primary)]">
-              {mode === null ? 'KASAM360 Giriş' : 'KASAM360 Kurulumu'}
-            </h1>
-          </div>
+    <AuthShell title={isSettingUp ? 'İşletmeni kur' : VIEW_TITLES[view]}>
+      {!isSettingUp && view === 'LOGIN' ? (
+        <AccountLogin onNotOnDevice={continueWithWebAccount} onForgot={() => openView('FORGOT')}>
+          {notice ? <p role="status">{notice}</p> : null}
+          <GoogleSetupButton onAccount={(account) => void fillFromAccount(account).catch(() => undefined)} />
+          <Button type="button" variant="secondary" className="w-full min-h-12" onClick={() => openView('REGISTER')}>
+            Kayıt Ol
+          </Button>
+        </AccountLogin>
+      ) : null}
 
-          {mode === null ? (
-            // Web kaydı gelince `onRegister` web adresini açacak; o zamana kadar
-            // işletme bu cihazda kurulur, internet zorunlu olmaz.
-            <>
-              <AccountLogin onRegister={() => choose('NEW')} onJoinDevice={() => choose('JOIN')} />
-              <RestoreFromFile />
-            </>
-          ) : null}
+      {!isSettingUp && view === 'REGISTER' ? (
+        <RegisterForm
+          onBack={() => openView('LOGIN')}
+          onRegistered={(email, password) => {
+            setCredentials({ email, password });
+            setView('VERIFY');
+          }}
+        />
+      ) : null}
 
-          {mode === 'NEW' ? <NewBusinessForm onBack={() => choose(null)} /> : null}
-          {mode === 'JOIN' ? <JoinBusinessForm onBack={() => choose(null)} /> : null}
-        </div>
-      </div>
-    </div>
+      {!isSettingUp && view === 'VERIFY' && credentials ? (
+        <VerifyCodeForm
+          email={credentials.email}
+          onBack={() => openView('LOGIN')}
+          onVerified={() => signInWithWebAccount(credentials.email, credentials.password)}
+        />
+      ) : null}
+
+      {!isSettingUp && view === 'FORGOT' ? (
+        <ForgotPasswordForm
+          onBack={() => openView('LOGIN')}
+          onDone={() => {
+            setView('LOGIN');
+            setNotice('Şifreniz değişti.');
+          }}
+        />
+      ) : null}
+
+      {isSettingUp ? <NewBusinessForm onBack={back} verifiedPassword={verifiedPassword} /> : null}
+    </AuthShell>
   );
 };

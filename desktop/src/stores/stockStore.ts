@@ -59,7 +59,7 @@ function mapOrder(wire: OrderWire): StockPurchaseOrder {
 }
 
 export const useStockStore = create<StockState>((set, get) => ({
-  products: [], batches: [], suppliers: [], orders: [], busy: false, error: null,
+  products: [], batches: [], suppliers: [], orders: [], busy: false, error: null, pendingQuickReceipt: null,
 
   load: async () => {
     try {
@@ -85,15 +85,17 @@ export const useStockStore = create<StockState>((set, get) => ({
     }
   },
 
-  createSupplier: async (name) => {
+  createSupplier: async (name, onCreated) => {
     try {
       const auth = context();
       if (!name.trim()) throw new Error('Tedarikçi adı gerekli.');
       set({ busy: true, error: null });
-      await invokeIPC('upsert_supplier_command', {
+      const supplier = await invokeIPC<StockSupplier>('upsert_supplier_command', {
         ...auth, args: { id: null, name: name.trim() },
       });
-      await get().load();
+      if (!supplier?.id || !supplier.name) throw new Error('Tedarikçi yanıtı geçersiz.');
+      set((state) => ({ suppliers: [...state.suppliers.filter((item) => item.id !== supplier.id), supplier] }));
+      onCreated?.(supplier);
       return true;
     } catch (err: unknown) {
       set({ error: err instanceof Error ? err.message : String(err) });
@@ -103,20 +105,25 @@ export const useStockStore = create<StockState>((set, get) => ({
     }
   },
 
-  createOrder: async (supplierId, orderNumber, items) => {
+  createOrder: async (supplierId, orderNumber, items, onCreated) => {
+    if (get().busy) return false;
     try {
       const auth = context();
-      if (!supplierId || !orderNumber.trim() || items.length === 0 ||
+      if (!supplierId || !orderNumber.trim() || items.length === 0 || new Set(items.map((item) => item.productId)).size !== items.length ||
           items.some((item) => !item.productId || !Number.isFinite(item.quantity) || item.quantity <= 0 ||
             !Number.isSafeInteger(item.unitCostCents) || item.unitCostCents < 0)) {
         throw new Error('Tedarikçi, sipariş no, ürün, miktar ve alış fiyatı gerekli.');
       }
       set({ busy: true, error: null });
-      await invokeIPC('create_purchase_order_command', {
+      const wire = await invokeIPC<OrderWire>('create_purchase_order_command', {
         ...auth, args: { supplierId, orderNumber: orderNumber.trim(), expectedAt: null,
           notes: null, items },
       });
+      const order = mapOrder(wire);
+      set((state) => ({ orders: [order, ...state.orders.filter((item) => item.id !== order.id)] }));
+      onCreated?.(order);
       await get().load();
+      if (get().error) set({ error: `Sipariş kaydedildi; liste yenilenemedi: ${get().error}` });
       return true;
     } catch (err: unknown) {
       set({ error: err instanceof Error ? err.message : String(err) });
@@ -127,6 +134,7 @@ export const useStockStore = create<StockState>((set, get) => ({
   },
 
   receiveOrder: async (orderId) => {
+    if (get().busy) return false;
     try {
       const auth = context();
       set({ busy: true, error: null });
@@ -134,7 +142,12 @@ export const useStockStore = create<StockState>((set, get) => ({
         ...auth, orderId,
       });
       if (!Number.isSafeInteger(cost) || cost < 0) throw new Error('Teslim maliyeti geçersiz.');
+      set((state) => ({
+        orders: state.orders.map((order) => order.id === orderId ? { ...order, status: 'ALINDI' } : order),
+        pendingQuickReceipt: state.pendingQuickReceipt?.orderId === orderId ? null : state.pendingQuickReceipt,
+      }));
       await get().load();
+      if (get().error) set({ error: `Teslim kaydedildi; liste yenilenemedi: ${get().error}` });
       return true;
     } catch (err: unknown) {
       set({ error: err instanceof Error ? err.message : String(err) });
@@ -145,15 +158,25 @@ export const useStockStore = create<StockState>((set, get) => ({
   },
 
   // Tek adımda sipariş ve teslim: stok yine FIFO partisi olarak açılır, ayrı yol yoktur.
-  quickReceive: async (productId, quantity, unitCostCents) => {
-    let supplier = get().suppliers[0];
-    if (!supplier) {
-      if (!(await get().createSupplier('Genel Alım'))) return false;
-      supplier = get().suppliers[0];
+  quickReceive: async (productId, quantity, unitCostCents, supplierId) => {
+    if (get().busy) return false;
+    let tenantId: string;
+    try { tenantId = context().tenantId; } catch (caught) { set({ error: String(caught) }); return false; }
+    const pending = get().pendingQuickReceipt;
+    if (pending) {
+      if (pending.tenantId !== tenantId || pending.productId !== productId || pending.quantity !== quantity || pending.unitCostCents !== unitCostCents || pending.supplierId !== supplierId) {
+        set({ error: 'Önce bekleyen hızlı girişin teslimini tamamlayın.' });
+        return false;
+      }
+      return get().receiveOrder(pending.orderId);
     }
-    const orderNumber = `HZL-${Date.now()}`;
-    const created = await get().createOrder(supplier.id, orderNumber, [{ productId, quantity, unitCostCents }]);
-    const order = get().orders.find((item) => item.orderNumber === orderNumber);
-    return created && !!order && get().receiveOrder(order.id);
+    const supplier = get().suppliers.find((item) => item.id === supplierId);
+    if (!supplier) { set({ error: 'Tedarikçi seçin veya oluşturun.' }); return false; }
+    const orderNumber = `HZL-${crypto.randomUUID()}`;
+    const created = await get().createOrder(supplier.id, orderNumber, [{ productId, quantity, unitCostCents }], (order) => {
+      set({ pendingQuickReceipt: { orderId: order.id, tenantId, productId, quantity, unitCostCents, supplierId } });
+    });
+    const receipt = get().pendingQuickReceipt;
+    return created && !!receipt && get().receiveOrder(receipt.orderId);
   },
 }));

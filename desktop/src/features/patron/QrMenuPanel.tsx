@@ -33,9 +33,6 @@ export const QrMenuPanel: React.FC = () => {
   return (
     <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-2">
       <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">QR Menü Dosyası</h3>
-      <p className="text-xs text-[var(--text-secondary)]">
-        Güncel menüyü imzalı dosya olarak verir. Adres tanımlanana kadar karekod üretilmez, müşteriden sipariş alınmaz.
-      </p>
       <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void build()}>Menü Dosyasını İndir</Button>
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
     </section>

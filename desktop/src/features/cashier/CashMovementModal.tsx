@@ -45,11 +45,6 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={type === 'IN' ? 'Kasaya Nakit Girişi' : 'Kasadan Nakit Çıkışı'}
-      subtitle={
-        type === 'IN'
-          ? 'Kasaya eklenen nakit avansı veya para üstü desteğini kaydedin.'
-          : 'Bankaya yatırma veya patron çekişi. Gider için Gider Öde kullanılır.'
-      }
       maxWidth="sm"
     >
       <form onSubmit={handleSubmit} className="space-y-4">

@@ -30,6 +30,7 @@ const ITEM_STATUS: Record<string, KdsItemStatus> = {
   READY: 'READY',
   SERVED: 'SERVED',
   COMPLETED: 'SERVED',
+  CANCELLED: 'CANCELLED',
 };
 
 const WIRE_STATUS: Record<KdsItemStatus, string> = {
@@ -37,11 +38,11 @@ const WIRE_STATUS: Record<KdsItemStatus, string> = {
   PREPARING: 'Preparing',
   READY: 'Ready',
   SERVED: 'Served',
+  CANCELLED: 'Cancelled',
 };
 
-function stationOf(value?: string | null): 'MUTFAK' | 'BAR' | 'TATLI' {
-  const upper = (value ?? '').toLocaleUpperCase('tr-TR');
-  return upper === 'BAR' || upper === 'TATLI' ? upper : 'MUTFAK';
+function stationOf(value?: string | null): string {
+  return (value || 'Mutfak').toLocaleUpperCase('tr-TR');
 }
 
 const statusOf = (item: KdsItemWire): KdsItemStatus => ITEM_STATUS[(item.status ?? 'PENDING').toUpperCase()] ?? 'PENDING';
@@ -51,7 +52,8 @@ export function mapKdsOrders(orders: KdsOrderWire[]): KdsTicket[] {
   return orders.flatMap((order) => {
     // Teslim edilen kalem ekranda kalmaz: biten istasyonun fişi de kapanır.
     const open = order.items.filter((item) => statusOf(item) !== 'SERVED');
-    const stations = [...new Set(open.map((item) => stationOf(item.station)))];
+    // İptal kalemi fişte üstü çizili kalır; yalnız iptalden oluşan istasyon fişi açılmaz.
+    const stations = [...new Set(open.filter((item) => statusOf(item) !== 'CANCELLED').map((item) => stationOf(item.station)))];
     return stations.map((station) => ({
       id: `${order.id}:${station}`,
       orderId: order.id,
@@ -81,8 +83,9 @@ export type KdsTicketStage = 'PENDING' | 'PREPARING' | 'READY';
 
 /** Fişin tek düğmesi bu aşamaya göre ilerler. */
 export function ticketStage(ticket: KdsTicket): KdsTicketStage {
-  if (ticket.items.every((item) => item.status === 'READY')) return 'READY';
-  return ticket.items.some((item) => item.status !== 'PENDING') ? 'PREPARING' : 'PENDING';
+  const live = ticket.items.filter((item) => item.status !== 'CANCELLED');
+  if (live.every((item) => item.status === 'READY')) return 'READY';
+  return live.some((item) => item.status !== 'PENDING') ? 'PREPARING' : 'PENDING';
 }
 
 const NEXT_ITEM_STATUS: Record<KdsTicketStage, KdsItemStatus> = {
@@ -94,11 +97,11 @@ const NEXT_ITEM_STATUS: Record<KdsTicketStage, KdsItemStatus> = {
 interface KdsStore {
   tickets: KdsTicket[];
   hasLoaded: boolean;
-  selectedStation: 'TUMU' | 'MUTFAK' | 'BAR' | 'TATLI';
+  selectedStation: string;
   activeStations: Record<'MUTFAK' | 'BAR' | 'TATLI', boolean>;
   soundEnabled: boolean;
   loadTickets: () => Promise<void>;
-  setSelectedStation: (station: 'TUMU' | 'MUTFAK' | 'BAR' | 'TATLI') => void;
+  setSelectedStation: (station: string) => void;
   setStationActive: (station: 'MUTFAK' | 'BAR' | 'TATLI', active: boolean) => void;
   toggleItemStatus: (ticketId: string, itemId: string) => Promise<void>;
   advanceTicket: (ticketId: string) => Promise<void>;
@@ -145,9 +148,10 @@ export const useKdsStore = create<KdsStore>((set, get) => ({
       PREPARING: 'READY',
       READY: 'PREPARING',
       SERVED: 'READY',
+      CANCELLED: 'CANCELLED',
     };
     const item = get().tickets.find((t) => t.id === ticketId)?.items.find((i) => i.id === itemId);
-    if (!item) return;
+    if (!item || item.status === 'CANCELLED') return;
     const { actorRole, tenantId } = sessionArgs();
     await invokeIPC('update_kds_item_status', {
       payload: { itemId, status: WIRE_STATUS[nextStatus[item.status]] },
@@ -164,7 +168,8 @@ export const useKdsStore = create<KdsStore>((set, get) => ({
     const stage = ticketStage(ticket);
     const target = NEXT_ITEM_STATUS[stage];
     // Hazır bekleyen kalem geriye dönmesin diye yalnız bu aşamada ilerleyecekler yazılır.
-    const items = stage === 'PENDING' ? ticket.items.filter((item) => item.status === 'PENDING') : ticket.items.filter((item) => item.status !== target);
+    const live = ticket.items.filter((item) => item.status !== 'CANCELLED');
+    const items = stage === 'PENDING' ? live.filter((item) => item.status === 'PENDING') : live.filter((item) => item.status !== target);
     for (const item of items) {
       await invokeIPC('update_kds_item_status', {
         payload: { itemId: item.id, status: WIRE_STATUS[target] },

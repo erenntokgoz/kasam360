@@ -6,6 +6,8 @@ import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { AccountLogin } from './AccountLogin';
+import { AuthShell } from './AuthShell';
+import { GoogleDeviceButton } from './GoogleDeviceButton';
 
 /** Sahibi henüz hesabı olmayan eski işletme: kimliği sahip PIN'i kanıtlar. */
 const CreateAccountForm: React.FC = () => {
@@ -32,9 +34,6 @@ const CreateAccountForm: React.FC = () => {
 
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
-      <p className="text-xs text-[var(--text-secondary)]">
-        Bu işletmede hesap yok. Sahip PIN kodunuzla e-posta ve şifre belirleyin.
-      </p>
       {error ? (
         <div role="alert" className="p-3 rounded-lg text-xs font-medium border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center gap-1.5">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -56,24 +55,21 @@ export const AccountGate: React.FC = () => {
   const { session, error, load } = useDeviceSessionStore();
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg-canvas)] p-6 select-none">
-      <div className="min-h-full flex items-center justify-center">
-        <div className="w-full max-w-[400px] paper border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-4">
-          <h1 className="print-title font-bold text-base tracking-tight text-[var(--text-primary)]">KASAM360 Giriş</h1>
-          {error ? (
-            <div role="alert" className="space-y-3">
-              <p className="text-sm text-[var(--accent-red)] break-words">{error}</p>
-              <Button variant="primary" className="w-full min-h-12" onClick={() => void load()}>
-                Yeniden Dene
-              </Button>
-            </div>
-          ) : session?.accountMissing ? (
-            <CreateAccountForm />
-          ) : (
-            <AccountLogin />
-          )}
+    <AuthShell title={session?.accountMissing ? 'Hesap oluştur' : 'İşletme girişi'}>
+      {error ? (
+        <div role="alert" className="space-y-3">
+          <p className="text-sm text-[var(--accent-red)] break-words">{error}</p>
+          <Button variant="primary" className="w-full min-h-12" onClick={() => void load()}>
+            Yeniden Dene
+          </Button>
         </div>
-      </div>
-    </div>
+      ) : session?.accountMissing ? (
+        <CreateAccountForm />
+      ) : (
+        <AccountLogin>
+          <GoogleDeviceButton />
+        </AccountLogin>
+      )}
+    </AuthShell>
   );
 };

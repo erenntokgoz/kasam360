@@ -7,6 +7,7 @@
 //! (`commands/inventory360/`) yalnızca yetki sınatır ve buraya delegasyon yapar.
 //! Böylece iş mantığı testlerde komut altyapısı olmadan doğrulanabilir.
 
+pub mod batch_demand;
 pub mod pricing;
 pub(crate) mod quantity_cost;
 pub mod recipes;

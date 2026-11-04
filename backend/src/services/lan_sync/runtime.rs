@@ -216,16 +216,23 @@ impl LanSync {
     }
 
     async fn try_resume(&self) -> Result<(), String> {
-        let mut conn = self.inner.pool.acquire().await.map_err(|e| e.to_string())?;
+        // Tetikleyiciler yenilenirken başka bağlantı korumasız şemayla yazamaz.
+        let mut conn = self
+            .inner
+            .pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(|e| e.to_string())?;
         let Some(row) = store::load_cluster(&mut conn).await? else {
             // Geri yükleme kümeden ayırır; eski tetikleyici yazmaları kilitli bırakmamalı.
-            return capture::sync_triggers(&mut conn, false).await;
+            capture::sync_triggers(&mut conn, false).await?;
+            return conn.commit().await.map_err(|e| e.to_string());
         };
         let members = store::current_members(&mut conn, &row).await?;
         let me = ensure_local_device(&mut conn, &row.tenant_id).await?;
         let replicated = members.len() > 1 || !members.iter().any(|m| m.device_id == me);
         capture::sync_triggers(&mut conn, replicated).await?;
-        drop(conn);
+        conn.commit().await.map_err(|e| e.to_string())?;
         let mut status = self.status();
         status.mode = "CLUSTER";
         status.state = "SYNCING";

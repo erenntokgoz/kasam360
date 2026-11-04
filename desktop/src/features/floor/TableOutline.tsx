@@ -1,23 +1,45 @@
 import React from 'react';
 
-const MAX_SEATS = 12;
+const LEFT = 30;
+const RIGHT = 130;
+const TOP = 26;
+const BOTTOM = 74;
+const CHAIR_DEPTH = 8;
 
-/** Masa kalemle çizilir; üst ve alt kenardaki kısa çizgiler sandalyedir, süs değil kapasitedir. */
+/** Uzun kenarlar önce dolar; kısa kenar yalnız kalabalık masada kullanılır. */
+export function seatLayout(seats: number) {
+  const count = Math.max(1, seats);
+  const ends = count >= 6 ? Math.max(1, Math.round(count * 0.14)) : 0;
+  const rest = count - ends * 2;
+  return { top: Math.ceil(rest / 2), bottom: Math.floor(rest / 2), ends };
+}
+
+const along = (amount: number, from: number, to: number) =>
+  Array.from({ length: amount }, (_, index) => from + ((index + 0.5) * (to - from)) / amount);
+
+const chairLength = (amount: number, side: number) => Math.min(22, (side / amount) * 0.72);
+
+/** Sandalye sayısı kapasitedir: hepsi çizimin içinde kalır, çok kişide daralır. */
 export const TableOutline: React.FC<{ seats: number }> = ({ seats }) => {
-  const count = Math.min(Math.max(seats, 1), MAX_SEATS);
-  const top = Math.ceil(count / 2);
-  const bottom = count - top;
-  const chairs = (amount: number, y: number) =>
-    Array.from({ length: amount }, (_, index) => {
-      const x = 24 + ((index + 0.5) * 112) / amount;
-      return <path key={`${y}-${index}`} d={`M${x - 8} ${y} q8 ${y < 50 ? -3 : 3} 16 0`} />;
-    });
+  const { top, bottom, ends } = seatLayout(seats);
+  const sideLength = RIGHT - LEFT;
+  const endLength = BOTTOM - TOP;
+  const flat = (x: number, y: number, amount: number) => {
+    const width = chairLength(amount, sideLength);
+    return <rect key={`${x}-${y}`} className="table-chair" x={x - width / 2} y={y} width={width} height={CHAIR_DEPTH} rx={3.5} />;
+  };
+  const upright = (x: number, y: number) => {
+    const height = chairLength(ends, endLength);
+    return <rect key={`${x}-${y}`} className="table-chair" x={x} y={y - height / 2} width={CHAIR_DEPTH} height={height} rx={3.5} />;
+  };
 
   return (
-    <svg viewBox="0 0 160 100" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
-      <path d="M26 22 C60 19 104 21 134 20 C136 40 135 60 136 79 C100 81 58 78 25 80 C23 60 25 42 26 22 Z" />
-      {chairs(top, 12)}
-      {chairs(bottom, 89)}
+    <svg viewBox="0 0 160 100" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      {along(top, LEFT, RIGHT).map((x) => flat(x, TOP - CHAIR_DEPTH - 3, top))}
+      {along(bottom, LEFT, RIGHT).map((x) => flat(x, BOTTOM + 3, bottom))}
+      {ends > 0 ? along(ends, TOP, BOTTOM).flatMap((y) => [upright(LEFT - CHAIR_DEPTH - 3, y), upright(RIGHT + 3, y)]) : null}
+      <rect className="table-top" x={LEFT} y={TOP} width={sideLength} height={endLength} rx={10} />
+      <rect className="table-edge" x={LEFT + 4} y={TOP + 4} width={sideLength - 8} height={endLength - 8} rx={7} />
     </svg>
   );
 };

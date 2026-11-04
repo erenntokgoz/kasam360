@@ -18,12 +18,13 @@ async fn sabit_maas_modeli_temiz_hesaplanir() {
             hourly_rate_cents: 0,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await
     .expect("kural");
 
-    let runs = payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+    let runs = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
         .await
         .expect("bordro");
     assert_eq!(runs.len(), 1);
@@ -75,12 +76,13 @@ async fn komisyon_kendi_satisindan_hesaplanir() {
             hourly_rate_cents: 0,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await
     .expect("kural");
 
-    let runs = payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+    let runs = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
         .await
         .expect("bordro");
     let a = runs[0].amounts.as_ref().expect("tutar");
@@ -107,12 +109,13 @@ async fn komisyon_satis_yoksa_uyari_verir_sifir_yazmaz() {
             hourly_rate_cents: 0,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await
     .expect("kural");
 
-    let runs = payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+    let runs = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
         .await
         .expect("bordro");
     let uyari = runs[0].warning.as_ref().expect("uyari olmalı");
@@ -144,12 +147,13 @@ async fn saatlik_model_kapanmis_vardiye_saati_uzerinden_hesaplanir() {
             hourly_rate_cents: 500,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await
     .expect("kural");
 
-    let runs = payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+    let runs = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
         .await
         .expect("bordro");
     let saat = runs[0].amounts.as_ref().expect("tutar").hourly_cents;
@@ -176,6 +180,7 @@ async fn müdür_maas_tutarini_gormez() {
             hourly_rate_cents: 0,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await
@@ -192,7 +197,7 @@ async fn müdür_maas_tutarini_gormez() {
     );
     assert!(kurallar[0].base_salary_cents == 0);
 
-    let bordro = payroll_service::run_payroll(&p, "tenant_a", "2026-03", false)
+    let bordro = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", false)
         .await
         .expect("bordro");
     assert!(
@@ -219,6 +224,7 @@ async fn gecersiz_maas_modeli_reddedilir() {
             hourly_rate_cents: 0,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await;
@@ -228,7 +234,7 @@ async fn gecersiz_maas_modeli_reddedilir() {
 #[tokio::test]
 async fn bordro_olmayan_calisan_icin_hata_verir() {
     let p = pool().await;
-    let sonuc = payroll_service::run_payroll(&p, "tenant_a", "2026-03", true).await;
+    let sonuc = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true).await;
     assert!(sonuc.is_err(), "kural yokken bordro \"0 kişi\" dönmemeli");
 }
 
@@ -247,6 +253,7 @@ async fn maas_kurali_baska_kiraciya_yazilamaz() {
             hourly_rate_cents: 0,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await;
@@ -268,11 +275,12 @@ async fn ayni_donem_bordro_yeniden_hesaplanabilir() {
             hourly_rate_cents: 0,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await
     .expect("kural");
-    payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+    payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
         .await
         .expect("bordro");
     // Maaş değişti: yeniden hesapta tek satır kalmalı, ikiye katlanmamalı.
@@ -287,11 +295,12 @@ async fn ayni_donem_bordro_yeniden_hesaplanabilir() {
             hourly_rate_cents: 0,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await
     .expect("kural");
-    payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+    payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
         .await
         .expect("bordro");
 
@@ -329,6 +338,7 @@ async fn komisyon_cift_ciro_ve_acik_siparis_sayilmaz() {
             hourly_rate_cents: 0,
             tip_multiplier_percent: 100,
             profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
         },
     )
     .await
@@ -360,7 +370,7 @@ async fn komisyon_cift_ciro_ve_acik_siparis_sayilmaz() {
     )
     .await;
 
-    let runs = payroll_service::run_payroll(&p, "tenant_a", "2026-03", true)
+    let runs = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
         .await
         .expect("bordro");
 
@@ -370,4 +380,51 @@ async fn komisyon_cift_ciro_ve_acik_siparis_sayilmaz() {
     // 2x sayılmış olsaydı 40_000 -> 4000 çıkardı; IN_PROGRESS katılsaydı 7000+ çıkardı.
     assert_eq!(amounts.gross_cents, 2000, "Komisyon 20_000'in %10'u olmalı");
     assert_eq!(amounts.net_cents, 2000);
+}
+
+#[tokio::test]
+async fn haftalik_hakedis_yalniz_haftalik_kisiyi_hesaplar_avansi_tarihten_duser() {
+    let p = pool().await;
+    kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
+    kullanici(&p, "tenant_a", "usr_2", "Can", "WAITER").await;
+    for (user, period) in [("usr_1", "WEEKLY"), ("usr_2", "MONTHLY")] {
+        payroll_service::set_rule(
+            &p,
+            "tenant_a",
+            &PayrollRuleInput {
+                user_id: user.into(),
+                model: "FIXED".into(),
+                base_salary_cents: 70_000,
+                commission_percent: 0,
+                hourly_rate_cents: 0,
+                tip_multiplier_percent: 100,
+                profit_share_percent: 0,
+                pay_period: period.to_string(),
+            },
+        )
+        .await
+        .expect("kural");
+    }
+    // Aynı ayın ayrı haftalarında iki avans: yalnız kendi haftasındaki düşer.
+    for (id, day) in [("adv_1", "2026-11-03"), ("adv_2", "2026-11-12")] {
+        sqlx::query(
+            "INSERT INTO staff_advances (id, tenant_id, user_id, period, amount_cents, expense_id, actor_id, created_at)
+             VALUES (?, 'tenant_a', 'usr_1', '2026-11', 10000, 'exp', 'usr_p', ?)",
+        )
+        .bind(id)
+        .bind(day)
+        .execute(&p)
+        .await
+        .expect("avans");
+    }
+    let runs = payroll_service::run_payroll(&p, "tenant_a", "WEEKLY", "2026-11-02", true)
+        .await
+        .expect("bordro");
+    assert_eq!(runs.len(), 1, "aylık kişi haftalık hesaba girmez");
+    assert_eq!(runs[0].period, "W2026-11-02");
+    let amounts = runs[0].amounts.as_ref().expect("tutar");
+    assert_eq!(
+        (amounts.deduction_cents, amounts.net_cents),
+        (10_000, 60_000)
+    );
 }

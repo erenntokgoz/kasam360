@@ -4,13 +4,16 @@ import { formatMoney } from '../../lib/formatMoney';
 import { parseMoneyToCents } from '../../lib/moneyParser';
 import { useStockStore } from '../../stores/stockStore';
 import { Button } from '../../ui/Button';
+import { StockItemPicker } from './StockItemPicker';
+import { StockSupplierPicker } from './StockSupplierPicker';
+import { formatNumber } from '../../lib/numberText';
 
-const select = 'min-h-12 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] px-3 text-sm text-[var(--text-primary)]';
 
 /** Ürün başına eldeki miktar ve maliyet. Hızlı giriş gerçek FIFO partisi açar. */
 export function StockOverview() {
-  const { products, batches, busy, error, load, quickReceive } = useStockStore();
+  const { products, batches, busy, error, load, quickReceive, pendingQuickReceipt } = useStockStore();
   const [productId, setProductId] = useState('');
+  const [supplierId, setSupplierId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -18,6 +21,15 @@ export function StockOverview() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (pendingQuickReceipt) {
+      setProductId(pendingQuickReceipt.productId);
+      setSupplierId(pendingQuickReceipt.supplierId);
+      setQuantity(String(pendingQuickReceipt.quantity).replace('.', ','));
+      setUnitCost((pendingQuickReceipt.unitCostCents / 100).toFixed(2).replace('.', ','));
+    }
+  }, [pendingQuickReceipt]);
 
   const rows = useMemo(
     () =>
@@ -41,7 +53,7 @@ export function StockOverview() {
     const amount = Number(quantity.trim().replace(',', '.'));
     try {
       if (!productId || !Number.isFinite(amount) || amount <= 0) throw new Error('Ürün ve miktar girin.');
-      if (await quickReceive(productId, amount, parseMoneyToCents(unitCost))) {
+      if (await quickReceive(productId, amount, parseMoneyToCents(unitCost), supplierId)) {
         setQuantity('');
         setUnitCost('');
       }
@@ -51,7 +63,7 @@ export function StockOverview() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 text-[var(--text-primary)]">
+    <div className="page-fill flex-1 overflow-y-auto p-4 space-y-4 text-[var(--text-primary)]">
       {error || formError ? (
         <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
           {error ?? formError}
@@ -60,33 +72,30 @@ export function StockOverview() {
 
       <section className="rounded-xl border border-[var(--border)] paper p-4 space-y-3">
         <h2 className="print-title text-sm font-bold">Hızlı stok girişi</h2>
+        {pendingQuickReceipt ? <p role="status" className="text-sm">Sipariş oluşturuldu, teslim bekliyor. Aynı kaydın teslimi yeniden denenecek.</p> : null}
+        <fieldset disabled={busy || !!pendingQuickReceipt} className="space-y-3">
+        <StockSupplierPicker value={supplierId} onChange={setSupplierId} />
         <div className="grid gap-2 sm:grid-cols-4">
-          <select aria-label="Giriş ürünü" className={select} value={productId} onChange={(event) => setProductId(event.target.value)}>
-            <option value="">Ürün seçin</option>
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name}
-              </option>
-            ))}
-          </select>
+          <StockItemPicker products={products} value={productId} onChange={setProductId} label="Giriş ürünü" />
           <NumberInput kind="quantity" aria-label="Giriş miktarı" placeholder="Miktar" className="min-h-12" value={quantity} onValueChange={setQuantity} />
           <NumberInput aria-label="Birim alış fiyatı" placeholder="Birim alış (₺)" className="min-h-12" value={unitCost} onValueChange={setUnitCost} />
-          <Button variant="primary" className="min-h-12" disabled={busy} onClick={() => void receive()}>
-            Stoğa Ekle
-          </Button>
         </div>
+        </fieldset>
+        <Button variant="primary" className="min-h-12" disabled={busy} onClick={() => void receive()}>
+          {pendingQuickReceipt ? 'Teslimi Yeniden Dene' : 'Stoğa Ekle'}
+        </Button>
       </section>
 
       <section className="rounded-xl border border-[var(--border)] paper">
         <h2 className="print-title border-b border-[var(--border)] p-4 text-sm font-bold">Eldeki stok</h2>
-        {rows.length === 0 ? <p className="p-4 text-xs text-[var(--text-secondary)]">Henüz ürün yok. Ürünü Menü sekmesinden ekleyin.</p> : null}
+        {rows.length === 0 ? <p className="p-4 text-xs text-[var(--text-secondary)]">Ürün yok.</p> : null}
         <ul className="divide-y divide-[var(--border)]">
           {rows.map((row) => (
             <li key={row.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
               <span className="font-bold truncate">{row.name}</span>
               <span className="flex items-center gap-4 tabular-nums">
                 <span className={row.quantity > 0 ? '' : 'font-bold text-[var(--accent-red)]'}>
-                  {row.quantity > 0 ? `${row.quantity} ${row.unit}` : 'Stok yok'}
+                  {row.quantity > 0 ? `${formatNumber(row.quantity)} ${row.unit}` : 'Stok yok'}
                 </span>
                 <span className="text-xs text-[var(--text-secondary)]">{formatMoney(row.valueCents)}</span>
               </span>

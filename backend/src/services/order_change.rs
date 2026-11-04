@@ -82,17 +82,18 @@ pub async fn create(
         None => return Err("Adisyon bulunamadı.".to_string()),
     }
 
-    let pending: i64 = sqlx::query_scalar(
+    let open: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM order_change_requests
-         WHERE tenant_id = ? AND order_id = ? AND status = 'PENDING'",
+         WHERE tenant_id = ? AND order_id = ?
+           AND (status = 'PENDING' OR (status = 'APPROVED' AND resolved_at IS NULL))",
     )
     .bind(tenant_id)
     .bind(request.order_id)
     .fetch_one(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
-    if pending > 0 {
-        return Err("Bu adisyon için bekleyen bir talep var.".to_string());
+    if open > 0 {
+        return Err("Bu adisyon için açık bir talep var.".to_string());
     }
 
     let id = crate::id_generator::generate_id("ocr");

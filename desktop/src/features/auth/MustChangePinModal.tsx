@@ -38,7 +38,6 @@ export const MustChangePinModal: React.FC = () => {
       isOpen={mustChangePin}
       onClose={logout}
       title="Yeni PIN Belirleyin"
-      subtitle="İlk girişiniz olduğu için fabrika PIN kodunuzu kendi belirlediğiniz PIN ile değiştirin."
       showCloseButton={false}
       maxWidth="sm"
     >

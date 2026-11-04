@@ -2,7 +2,7 @@
 
 use crate::services::inventory360::pricing::{
     active_tariff, delete_tariff, effective_price, save_tariff, set_active_tariff, PriceSource,
-    TariffInput,
+    TariffInput, TariffSchedule,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
@@ -38,6 +38,7 @@ fn input(name: &str, kind: &str, percent: i64, products: Option<Vec<&str>>) -> T
         kind: kind.to_string(),
         percent,
         product_ids: products.map(|ids| ids.into_iter().map(str::to_string).collect()),
+        schedule: None,
     }
 }
 
@@ -199,4 +200,56 @@ async fn fiyat_dondurma_tarifeden_gucludur() {
         .expect("aç");
     drop(conn);
     assert_eq!(price(&pool, "prd_1").await, (777, PriceSource::Frozen));
+}
+
+fn at(text: &str) -> chrono::DateTime<chrono::Local> {
+    use chrono::TimeZone;
+    let naive = chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M").expect("tarih");
+    chrono::Local
+        .from_local_datetime(&naive)
+        .earliest()
+        .expect("yerel saat")
+}
+
+#[tokio::test]
+async fn zamanli_tarife_gece_yarisini_asar_ve_durdurulabilir() {
+    let pool = pool().await;
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let mut draft = input("Cuma gecesi", "OZEL", 20, None);
+    let mut plan = TariffSchedule {
+        enabled: true,
+        start_time: Some("22:00".into()),
+        end_time: Some("02:00".into()),
+        days_of_week: vec![5],
+        ..Default::default()
+    };
+    draft.schedule = Some(plan.clone());
+    let id = save_tariff(&mut conn, T, "usr_1", draft)
+        .await
+        .expect("kayıt");
+
+    // 2026-11-06 Cuma; Cumartesi 01:00 hâlâ Cuma gecesidir.
+    for (time, cents) in [
+        ("2026-11-06 21:59", 1000),
+        ("2026-11-06 23:00", 1200),
+        ("2026-11-07 01:00", 1200),
+        ("2026-11-07 23:00", 1000),
+    ] {
+        let price = effective_price(&mut conn, T, "prd_1", Some(at(time)))
+            .await
+            .expect("fiyat");
+        assert_eq!(price.final_price_cents, cents, "{time}");
+    }
+
+    plan.enabled = false;
+    let mut paused = input("Cuma gecesi", "OZEL", 20, None);
+    paused.id = Some(id);
+    paused.schedule = Some(plan);
+    save_tariff(&mut conn, T, "usr_1", paused)
+        .await
+        .expect("durdur");
+    let price = effective_price(&mut conn, T, "prd_1", Some(at("2026-11-06 23:00")))
+        .await
+        .expect("fiyat");
+    assert_eq!(price.final_price_cents, 1000);
 }

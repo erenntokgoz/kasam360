@@ -37,7 +37,7 @@ pub use price_lists::{
 pub use rules::{list_pricing_rules, upsert_pricing_rule, PricingRuleInput};
 pub use tariffs::{
     active_tariff, delete_tariff, list_tariffs, save_tariff, set_active_tariff, PriceTariff,
-    TariffInput,
+    TariffInput, TariffSchedule,
 };
 pub use windows::{
     list_service_windows, set_window_product, upsert_service_window, ServiceWindow,

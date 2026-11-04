@@ -9,7 +9,7 @@ use crate::AppState;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
-/// KDS biletini okuyan ve yazan roller.
+/// KDS bilet durumunu değiştirebilen roller.
 ///
 /// Neden garson ve kasa dışlanıyor: bilet geçişi mutfağın üretim
 /// hattıdır. Garson sipariş alır, kasa tahsilat yapar; ikisi de
@@ -239,7 +239,7 @@ pub async fn execute_get_active_tickets(
             SELECT oi.id, oi.quantity, COALESCE(p.name, 'Ürün') as product_name, oi.station, oi.modifiers, oi.notes, oi.status
             FROM order_items oi
             LEFT JOIN products p ON oi.product_id = p.id AND p.tenant_id = oi.tenant_id
-            WHERE oi.order_id = ? AND oi.tenant_id = ? AND UPPER(COALESCE(oi.status, 'PENDING')) NOT IN ('CANCELLED', 'VOID')
+            WHERE oi.order_id = ? AND oi.tenant_id = ? AND UPPER(COALESCE(oi.status, 'PENDING')) != 'VOID'
             ORDER BY oi.id ASC
         ")
         .bind(&id)
@@ -256,6 +256,7 @@ pub async fn execute_get_active_tickets(
         let mut all_completed = true;
         let mut all_ready = true;
         let mut any_preparing = false;
+        let mut has_active = false;
 
         for ir in item_rows {
             let product_name: String = ir.try_get("product_name").unwrap_or_default();
@@ -269,17 +270,27 @@ pub async fn execute_get_active_tickets(
                 .unwrap_or_else(|_| "Pending".to_string());
 
             let st_upper = status.to_uppercase();
-            if st_upper != "COMPLETED" && st_upper != "SERVED" && st_upper != "CANCELLED" {
+            // İptal edilen kalem fişte kalır: mutfak hazırlamayı bırakmalıdır. Fiş
+            // durumunu etkilemez; yalnız iptallerden oluşan fiş gösterilmez.
+            let is_cancelled = st_upper == "CANCELLED";
+            if !is_cancelled {
+                has_active = true;
+            }
+            if !is_cancelled && st_upper != "COMPLETED" && st_upper != "SERVED" {
                 all_completed = false;
             }
-            if st_upper != "READY" && st_upper != "COMPLETED" && st_upper != "SERVED" {
+            if !is_cancelled
+                && st_upper != "READY"
+                && st_upper != "COMPLETED"
+                && st_upper != "SERVED"
+            {
                 all_ready = false;
             }
             if st_upper == "PREPARING" || st_upper == "IN_PROGRESS" {
                 any_preparing = true;
             }
 
-            let modifiers = crate::commands::command_helpers::parse_order_item_modifiers(
+            let modifiers = crate::commands::command_helpers::order_item_modifier_names(
                 modifiers_str.as_deref(),
             );
 
@@ -296,7 +307,7 @@ pub async fn execute_get_active_tickets(
             }));
         }
 
-        if all_completed {
+        if all_completed || !has_active {
             continue;
         }
 
@@ -344,7 +355,15 @@ pub async fn get_active_tickets(
     actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<KdsOrderDto>, String> {
-    kds_kapisi(actor_role.as_deref())?;
+    crate::rbac::require_any_present(
+        actor_role.as_deref(),
+        &[
+            crate::rbac::Role::Owner,
+            crate::rbac::Role::Manager,
+            crate::rbac::Role::Kitchen,
+            crate::rbac::Role::Waiter,
+        ],
+    )?;
     let tenant_id = tenant_id.trim().to_string();
     if tenant_id.is_empty() {
         return Err("UNAUTHORIZED: tenant_id is required".to_string());

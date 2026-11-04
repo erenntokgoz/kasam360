@@ -18,7 +18,8 @@ pub const GRID: i64 = 20;
 /// Döndürme adımı (derece). `rotation % ROTATION_STEP != 0` reddedilir.
 pub const ROTATION_STEP: i64 = 15;
 /// Sandalye sayıları. Katalog dışı değer reddedilir.
-pub const ALLOWED_SEATS: [i64; 4] = [2, 4, 6, 8];
+pub const MIN_SEATS: i64 = 1;
+pub const MAX_SEATS: i64 = 30;
 
 /// Mimari obje türleri. `floor_objects.kind` CHECK kısıtıyla aynı küme.
 pub const OBJECT_KINDS: [&str; 4] = ["DOOR", "BAR", "WALL", "COLUMN"];
@@ -166,14 +167,13 @@ pub fn validate_rotation(rotation: i64) -> Result<(), String> {
     Ok(())
 }
 
-/// Sandalye doğrulaması. Katalog 2/4/6/8; aradaki değerler kasıtlı olarak
-/// yoktur (yarım sandalye fiziksel olarak mümkün değildir).
+/// Kişi sayısı doğrulaması. Masa ekleme ekranıyla aynı aralıktır.
 pub fn validate_seats(seats: i64) -> Result<(), String> {
-    if ALLOWED_SEATS.contains(&seats) {
+    if (MIN_SEATS..=MAX_SEATS).contains(&seats) {
         Ok(())
     } else {
         Err(format!(
-            "VALIDATION: sandalye sayısı 2, 4, 6 veya 8 olmalı ({seats})"
+            "VALIDATION: kişi sayısı {MIN_SEATS}-{MAX_SEATS} olmalı ({seats})"
         ))
     }
 }

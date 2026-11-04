@@ -32,6 +32,9 @@ pub struct ZReportDto {
     pub void_total_cents: i64,
     pub refund_total_cents: i64,
     pub discount_total_cents: i64,
+    pub comp_total_cents: i64,
+    pub cash_in_cents: i64,
+    pub cash_out_cents: i64,
     pub order_count: i64,
     pub closed_at: String,
 }
@@ -110,6 +113,20 @@ pub async fn build_z_report(
     .await
     .map_err(text_error)?;
 
+    // İkram satış değildir ama gün sonunda görünmelidir: kayıp radarı ve sayım bunu ister.
+    let comp_total_cents: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(CAST(json_extract(payload, '$.originalAmountCents') AS INTEGER)), 0)
+         FROM audit_ledger
+         WHERE tenant_id = ? AND action = 'order_item:comped'
+           AND datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?)",
+    )
+    .bind(tenant_id)
+    .bind(&opened_at)
+    .bind(&closed_at)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(text_error)?;
+
     let suffix: String = shift_id
         .chars()
         .rev()
@@ -137,6 +154,9 @@ pub async fn build_z_report(
         void_total_cents,
         refund_total_cents: calc.total_refunds,
         discount_total_cents: calc.total_discounts,
+        comp_total_cents,
+        cash_in_cents: calc.total_cash_in,
+        cash_out_cents: calc.total_cash_out,
         order_count: orders.try_get("order_count").map_err(text_error)?,
         closed_at,
     })

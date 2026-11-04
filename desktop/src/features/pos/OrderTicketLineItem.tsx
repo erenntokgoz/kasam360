@@ -48,6 +48,11 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
             <span className="hand text-xl leading-6 block">
               {item.name}
             </span>
+            {item.selectedModifiers.length > 0 ? (
+              <span className="text-xs text-[var(--text-secondary)] block">
+                {item.selectedModifiers.map((modifier) => modifier.name).join(', ')}
+              </span>
+            ) : null}
             {item.cookingDegree ? (
               <span className="text-xs text-[var(--text-secondary)] block">
                 {item.cookingDegree}
@@ -57,6 +62,9 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
               <span className="text-xs text-[var(--text-secondary)] italic block">
                 Not: {item.notes}
               </span>
+            ) : null}
+            {item.isComp ? (
+              <span className="text-xs font-bold text-[var(--accent-emerald)] block">İkram</span>
             ) : null}
           </div>
         </div>
@@ -92,8 +100,10 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
             </div>
           ) : null}
 
-          {/* Miktar Artır/Azalt ve Satır İşlemleri */}
+          {/* Miktar Artır/Azalt ve Satır İşlemleri. Mutfağa gitmiş kalemin adedi
+              buradan değişmez; azaltma iptal akışıyla, artırma yeni kalemle yapılır. */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            {item.isSentToKitchen ? <span /> : (
             <div className="flex items-center gap-1">
               <Button
                 variant="secondary"
@@ -104,7 +114,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
               >
                 <Minus className="w-3.5 h-3.5" />
               </Button>
-              <span className="w-8 text-center text-xs font-bold tabular-nums">
+              <span className="w-10 text-center text-lg font-bold tabular-nums">
                 {item.quantity}
               </span>
               <Button
@@ -117,6 +127,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
                 <Plus className="w-3.5 h-3.5" />
               </Button>
             </div>
+            )}
 
             <div className="flex items-center gap-1.5">
               <Button

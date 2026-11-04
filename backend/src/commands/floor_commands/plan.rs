@@ -37,11 +37,15 @@ pub struct FloorPlanData {
     pub reservation_customer_name: Option<String>,
     #[serde(rename = "reservationTime")]
     pub reservation_time: Option<String>,
+    #[serde(rename = "reservationPartySize")]
+    pub reservation_party_size: Option<i64>,
     #[serde(rename = "activeOrderId")]
     pub active_order_id: Option<String>,
     /// Masanın ödenmemiş tutarı; parça ödeme sonrası adisyon toplamından küçüktür.
     #[serde(rename = "remainingCents")]
     pub remaining_cents: Option<i64>,
+    pub trail: Option<String>,
+    pub merged: Option<String>,
 }
 
 #[tauri::command]
@@ -58,6 +62,8 @@ pub async fn get_floor_plan(
             t.opened_at, 
             t.waiter_id, 
             t.current_total,
+            t.trail,
+            t.merged,
             t.zone,
             t.seats,
             t.x,
@@ -72,7 +78,8 @@ pub async fn get_floor_plan(
             END AS idle_minutes,
             res.id AS reservation_id,
             res.customer_name AS reservation_customer_name,
-            res.reserved_at AS reservation_time
+            res.reserved_at AS reservation_time,
+            res.party_size AS reservation_party_size
         FROM tables t
         LEFT JOIN users u ON u.id = t.waiter_id AND u.tenant_id = t.tenant_id
         LEFT JOIN (
@@ -87,7 +94,7 @@ pub async fn get_floor_plan(
             GROUP BY o.table_id
         ) o_agg ON o_agg.table_id = t.id
         LEFT JOIN (
-            SELECT id, table_id, customer_name, reserved_at
+            SELECT id, table_id, customer_name, reserved_at, party_size
             FROM reservations
             WHERE tenant_id = ? AND status = 'ACTIVE'
             GROUP BY table_id
@@ -167,8 +174,14 @@ pub async fn get_floor_plan(
             idle_minutes: row.try_get::<Option<i64>, _>("idle_minutes").ok().flatten(),
             reservation_customer_name: row.try_get("reservation_customer_name").ok(),
             reservation_time,
+            reservation_party_size: row
+                .try_get::<Option<i64>, _>("reservation_party_size")
+                .ok()
+                .flatten(),
             active_order_id: open_order.as_ref().map(|order| order.0.clone()),
             remaining_cents: open_order.map(|order| order.1),
+            trail: row.try_get("trail").map_err(|e| e.to_string())?,
+            merged: row.try_get("merged").map_err(|e| e.to_string())?,
         });
     }
     Ok(res)

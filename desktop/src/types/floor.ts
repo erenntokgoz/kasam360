@@ -32,9 +32,12 @@ export interface FloorTable {
   remainingCents?: number;
   openedAt?: string;
   waiterName?: string;
+  trail?: string;
+  merged?: string;
   reservedAt?: string;
   customerName?: string;
   reservationId?: string;
+  reservationPartySize?: number;
   // Kroki koordinatları (2D blueprint geometry)
   posX: number;
   posY: number;

@@ -18,6 +18,8 @@ interface DeviceSessionStore {
   error: string | null;
   load: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  /** Google girişi biten tek kullanımlık kodla açar; giriş sürüyorsa `false` döner. */
+  signInWithLink: (code: string) => Promise<boolean>;
   createAccount: (email: string, password: string, ownerPin: string) => Promise<void>;
   signOut: () => Promise<void>;
   setPolicy: (keepSignedIn: boolean, staffIdleSeconds: number) => Promise<void>;
@@ -45,6 +47,16 @@ export const useDeviceSessionStore = create<DeviceSessionStore>((set) => {
 
     signIn: async (email, password) => {
       apply(await invokeIPC<DeviceSessionReply>('account_sign_in', { email, password }));
+    },
+
+    signInWithLink: async (code) => {
+      try {
+        apply(await invokeIPC<DeviceSessionReply>('account_sign_in_link', { code }));
+        return true;
+      } catch (caught) {
+        if (String(caught).includes('LINK_PENDING')) return false;
+        throw caught;
+      }
     },
 
     createAccount: async (email, password, ownerPin) => {

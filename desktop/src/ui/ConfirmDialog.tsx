@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { errorText } from '../lib/cariInput';
 import { Button } from './Button';
 import { Modal } from './Modal';
@@ -15,8 +15,11 @@ interface ConfirmDialogProps {
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ title, message, confirmLabel = 'Sil', onConfirm, onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const submitting = useRef(false);
 
   const confirm = async () => {
+    if (submitting.current) return;
+    submitting.current = true;
     setIsBusy(true);
     setError(null);
     try {
@@ -25,16 +28,17 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ title, message, co
     } catch (caught) {
       setError(errorText(caught));
     } finally {
+      submitting.current = false;
       setIsBusy(false);
     }
   };
 
   return (
-    <Modal isOpen onClose={onClose} title={title} subtitle={message} maxWidth="sm">
+    <Modal isOpen onClose={() => { if (!submitting.current) onClose(); }} title={title} subtitle={message} maxWidth="sm">
       <div className="space-y-4">
         {error ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="secondary" size="lg" onClick={onClose}>Vazgeç</Button>
+          <Button variant="secondary" size="lg" disabled={isBusy} onClick={onClose}>Vazgeç</Button>
           <Button variant="danger" size="lg" isLoading={isBusy} onClick={() => void confirm()}>{confirmLabel}</Button>
         </div>
       </div>

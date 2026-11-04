@@ -190,6 +190,40 @@ pub async fn calculate_expected_shift_balance(
     })
 }
 
+/// Kasadan çıkacak nakdin çekmecede bulunduğunu doğrular.
+/// Neden: çekmecede olmayan para verilemez; eksi kasa sayımı ve Z raporunu bozar.
+pub async fn ensure_drawer_covers(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: &str,
+    shift_id: &str,
+    amount_cents: i64,
+) -> Result<(), String> {
+    let row = sqlx::query(
+        "SELECT opened_at, expected_amount_cents FROM shifts
+         WHERE id = ? AND tenant_id = ? AND status = 'OPEN'",
+    )
+    .bind(shift_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| "SHIFT_REQUIRED: açık vardiya bulunamadı.".to_string())?;
+    let opened_at: String = row.try_get("opened_at").map_err(|e| e.to_string())?;
+    let opening: i64 = row
+        .try_get("expected_amount_cents")
+        .map_err(|e| e.to_string())?;
+    let calc =
+        calculate_expected_shift_balance(conn, tenant_id, shift_id, &opened_at, None, opening)
+            .await?;
+    if amount_cents > calc.expected_balance {
+        return Err(format!(
+            "INSUFFICIENT_CASH: çekmecede {} kuruş var, {} kuruş çıkarılamaz.",
+            calc.expected_balance, amount_cents
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn get_shift_summary(
     shift_id: String,

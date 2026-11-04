@@ -7,8 +7,7 @@ use super::super::layout;
 use super::super::objects;
 use super::super::templates;
 use super::super::types::{
-    CreateObjectInput, ALLOWED_SEATS, CANVAS_HEIGHT, CANVAS_WIDTH, GRID, OBJECT_KINDS,
-    ROTATION_STEP,
+    CreateObjectInput, CANVAS_HEIGHT, CANVAS_WIDTH, GRID, OBJECT_KINDS, ROTATION_STEP,
 };
 use super::*;
 
@@ -57,7 +56,7 @@ async fn her_sablon_masalarini_izgaraya_oturtur() {
                 sablon.id
             );
             assert!(
-                ALLOWED_SEATS.contains(&masa.seats),
+                super::super::types::validate_seats(masa.seats).is_ok(),
                 "{} şablonunda sandalye sayısı katalog dışı",
                 sablon.id
             );

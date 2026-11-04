@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
@@ -6,6 +6,9 @@ import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { useStockStore } from '../../stores/stockStore';
 import { Button } from '../../ui/Button';
+import { StockItemPicker } from './StockItemPicker';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { formatNumber } from '../../lib/numberText';
 
 interface CountLine {
   product_id: string;
@@ -57,10 +60,13 @@ export function StockCountPanel() {
   const [wasteQuantity, setWasteQuantity] = useState('');
   const [reason, setReason] = useState(WASTE_REASONS[0][0]);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const actionInFlight = useRef(false);
+  const [confirmClose, setConfirmClose] = useState(false);
 
   const load = useCallback(async () => {
-    const { actorRole, tenantId } = sessionArgs();
     try {
+      const { actorRole, tenantId } = sessionArgs();
       const [counts, waste] = await Promise.all([
         invokeIPC<StockCount[]>('list_stock_counts_command', { actorRole, tenantId }),
         invokeIPC<WasteRow[]>('list_waste_records_command', { actorRole, tenantId, limit: 20 }),
@@ -83,12 +89,18 @@ export function StockCountPanel() {
   }, [load, loadStock]);
 
   const run = async (action: () => Promise<unknown>) => {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setBusy(true);
     setError(null);
     try {
       await action();
       await Promise.all([load(), loadStock()]);
     } catch (caught) {
       setError(errorText(caught));
+    } finally {
+      actionInFlight.current = false;
+      setBusy(false);
     }
   };
 
@@ -128,14 +140,8 @@ export function StockCountPanel() {
     });
   };
 
-  const productOptions = products.map((product) => (
-    <option key={product.id} value={product.id}>
-      {product.name}
-    </option>
-  ));
-
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="page-fill flex-1 overflow-y-auto p-4 space-y-4">
       {error ? (
         <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
           {error}
@@ -147,19 +153,17 @@ export function StockCountPanel() {
         {!isOpen ? (
           <Button
             variant="primary"
+            disabled={busy}
             className="min-h-12"
             onClick={() => void run(() => invokeIPC('open_stock_count_command', { ...session(), args: {} }))}
           >
             Yeni Sayım Başlat
           </Button>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <select aria-label="Sayılan ürün" className={select} value={productId} onChange={(event) => setProductId(event.target.value)}>
-              <option value="">Ürün seçin</option>
-              {productOptions}
-            </select>
-            <NumberInput kind="quantity" aria-label="Sayılan miktar" placeholder="Sayılan" className="min-h-12" value={quantity} onValueChange={setQuantity} />
-            <Button variant="secondary" className="min-h-12" onClick={addLine}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 items-start gap-2">
+            <StockItemPicker disabled={busy} products={products} value={productId} onChange={setProductId} label="Sayılan ürün" />
+            <NumberInput disabled={busy} kind="quantity" aria-label="Sayılan miktar" placeholder="Sayılan" className="min-h-12" value={quantity} onValueChange={setQuantity} />
+            <Button variant="secondary" disabled={busy} className="min-h-12" onClick={addLine}>
               Satırı Kaydet
             </Button>
           </div>
@@ -171,8 +175,8 @@ export function StockCountPanel() {
               <li key={line.product_id} className="flex justify-between gap-3 py-2 text-sm text-[var(--text-primary)]">
                 <span className="truncate">{line.product_name}</span>
                 <span className="tabular-nums">
-                  {line.counted_quantity}
-                  {line.variance_quantity != null ? ` (Fark: ${line.variance_quantity})` : ''}
+                  {formatNumber(line.counted_quantity)}
+                  {line.variance_quantity != null ? ` (Fark: ${formatNumber(line.variance_quantity)})` : ''}
                   {line.variance_cost_cents != null ? ` · ${formatMoney(line.variance_cost_cents)}` : ''}
                 </span>
               </li>
@@ -183,15 +187,9 @@ export function StockCountPanel() {
         {isOpen ? (
           <Button
             variant="danger"
+            disabled={busy || !count.lines.length}
             className="w-full min-h-12"
-            onClick={() =>
-              void run(() =>
-                invokeIPC('close_stock_count_command', {
-                  ...session(),
-                  args: { stockCountId: count.id, applyAdjustment: true },
-                }),
-              )
-            }
+            onClick={() => setConfirmClose(true)}
           >
             Sayımı Kapat ve Stoğa Uygula
           </Button>
@@ -200,20 +198,17 @@ export function StockCountPanel() {
 
       <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
         <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Fire kaydı</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-          <select aria-label="Fire ürünü" className={select} value={wasteProductId} onChange={(event) => setWasteProductId(event.target.value)}>
-            <option value="">Ürün seçin</option>
-            {productOptions}
-          </select>
-          <select aria-label="Fire nedeni" className={select} value={reason} onChange={(event) => setReason(event.target.value)}>
+        <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
+          <StockItemPicker disabled={busy} products={products} value={wasteProductId} onChange={setWasteProductId} label="Fire ürünü" />
+          <select disabled={busy} aria-label="Fire nedeni" className={select} value={reason} onChange={(event) => setReason(event.target.value)}>
             {WASTE_REASONS.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
-          <NumberInput kind="quantity" aria-label="Fire miktarı" placeholder="Miktar" className="min-h-12" value={wasteQuantity} onValueChange={setWasteQuantity} />
-          <Button variant="secondary" className="min-h-12" onClick={addWaste}>
+          <NumberInput disabled={busy} kind="quantity" aria-label="Fire miktarı" placeholder="Miktar" className="min-h-12" value={wasteQuantity} onValueChange={setWasteQuantity} />
+          <Button variant="secondary" disabled={busy} className="min-h-12" onClick={addWaste}>
             Fire Yaz
           </Button>
         </div>
@@ -221,7 +216,7 @@ export function StockCountPanel() {
           {wastes.map((row) => (
             <li key={row.id} className="flex justify-between gap-3 py-2 text-sm text-[var(--text-primary)]">
               <span className="truncate">
-                {row.product_name} · {row.quantity}
+                {row.product_name} · {formatNumber(row.quantity)}
               </span>
               <span className="tabular-nums">
                 {row.total_cost_cents != null ? formatMoney(row.total_cost_cents) : 'Maliyet bilinmiyor'}
@@ -230,6 +225,16 @@ export function StockCountPanel() {
           ))}
         </ul>
       </section>
+      {confirmClose && count ? <ConfirmDialog
+        title="Sayımı kapat ve stoğa uygula"
+        message={`${count.lines.length} kayıtlı kalemin sayımı stoğa uygulanacak. Girilmemiş ürünler sayılmış kabul edilmez.`}
+        confirmLabel="Sayımı Uygula"
+        onClose={() => setConfirmClose(false)}
+        onConfirm={async () => {
+          await invokeIPC('close_stock_count_command', { ...session(), args: { stockCountId: count.id, applyAdjustment: true } });
+          await Promise.all([load(), loadStock()]);
+        }}
+      /> : null}
     </div>
   );
 }

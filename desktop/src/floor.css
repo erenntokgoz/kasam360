@@ -1,0 +1,181 @@
+
+/* Filtre ve görünüm şeridi: iki görünümde de aynı yerde durur. */
+.floor-tools {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--desk);
+}
+.floor-tools button {
+  min-height: 48px;
+  padding: 0 14px;
+  color: var(--ink);
+  font-weight: 700;
+  background: var(--sheet-cream);
+  border-radius: 6px;
+}
+.floor-tools button[aria-pressed="true"] {
+  background: var(--marker);
+}
+.floor-views {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--desk);
+}
+.floor-views > div {
+  position: relative;
+  height: 100%;
+}
+/* Gizli görünüm de ölçülür: masa buradan kayarak çıkar. */
+.floor-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.floor-view[data-active="false"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Kartlar birbirinden boşlukla ayrılır; kroki odasıyla aynı kâğıttır. */
+.table-grid {
+  grid-auto-rows: 176px;
+  gap: 12px;
+  border: 0;
+}
+.table-cell {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.table-cell .table-spot {
+  width: 100%;
+  height: 100%;
+}
+.table-spot {
+  color: var(--ink);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  background: var(--sheet-cream);
+  border-radius: 8px;
+  box-shadow: 0 2px 0 var(--desk-line);
+}
+.table-spot .table-top {
+  fill: var(--sheet);
+}
+.table-spot .table-edge {
+  stroke-width: 0.8;
+  opacity: 0.45;
+}
+.table-chair {
+  fill: var(--sheet-blue);
+}
+.table-spot[data-state="bill"] .table-chair {
+  fill: var(--sheet-orange);
+}
+.table-spot[data-state="busy"] .table-chair {
+  fill: var(--marker);
+}
+/* Kareli defter yalnız düzenlemede: masa konumu kılavuza oturur. */
+.kroki-mat[data-edit="false"] {
+  background-image: none;
+}
+/* Görünümde oda zemini kalkar ama sınırı kesik çizgiyle kalır: masanın hangi bölgede
+   olduğu okunur. Başlık masa zemininin yazı rengini alır; sabit krem açık temada kayboluyordu. */
+.kroki-mat[data-edit="false"] .kroki-room {
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  box-shadow: none;
+}
+.kroki-mat[data-edit="false"] .kroki-room-head {
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+}
+.table-spot-waiter {
+  position: relative;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.table-spot .table-top {
+  transition: fill 600ms ease;
+}
+.table-spot[data-state="busy"] .table-top,
+.kroki-room .table-spot[data-state="busy"] .table-top {
+  fill: color-mix(in srgb, var(--accent-red) calc(var(--age, 0) * 60%), var(--sheet));
+}
+
+/* Masa kâğıttır: iki temada ve iki görünümde aynı renktedir. */
+.table-spot,
+.table-spot[data-state="busy"],
+.table-spot[data-state="bill"],
+.table-spot[data-state="reserved"],
+.table-spot .table-spot-name,
+.table-spot .table-spot-note {
+  color: var(--ink);
+  opacity: 1;
+}
+.table-spot[data-state="reserved"] .table-top {
+  fill: var(--sheet-blue);
+}
+.table-spot[data-state="bill"] .table-top {
+  fill: var(--sheet-orange);
+}
+
+/* Krokide masalar sık durabilir: kâğıt zemin komşu masanın üstüne binmesin. */
+.kroki-room .table-spot {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Kutular içeriği kadar yer kaplar. Önceki kural her kutuyu ekranın altına kadar
+   uzatıyordu: tek satırlık formlar dev boş kâğıda, sekme şeritleri 170px banda dönüşüyordu.
+   Yalnız düz sarmalayıcı kutular arası boşluk alır; kendi düzeni olan kutuya dokunulmaz. */
+.page-fill > div:not(.paper):not([class*="flex"]):not([class*="grid"]) {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page-fill > div:not(.paper):not([class*="flex"]):not([class*="grid"]) > * + * {
+  margin-top: 0;
+}
+/* Düğme düz köşeli kutudur; kalem gölgesi basılabilir olduğunu gösterir. */
+.tactile-btn,
+.bar-actions > .bar-item {
+  border-width: 1.5px;
+  box-shadow: 2px 2px 0 var(--ink);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.tactile-btn:active:not(:disabled),
+.bar-actions > .bar-item:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.bar-item {
+  font-weight: 600;
+}
+
+/* Dolu masada üç satır yazı çizime sığmalı: ad küçülür, tutar öne çıkar. */
+.table-spot[data-state="busy"] .table-spot-name,
+.table-spot[data-state="bill"] .table-spot-name {
+  font-size: 1.0625rem;
+  line-height: 1.1;
+}
+.table-spot[data-state="busy"] .table-spot-amount,
+.table-spot[data-state="bill"] .table-spot-amount {
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+/* Yerel onay kutusu Windows mavisiyle gelmez; kalem rengini ve dokunulabilir boyu alır. */
+input[type="checkbox"] {
+  accent-color: var(--ink);
+  width: 20px;
+  height: 20px;
+}

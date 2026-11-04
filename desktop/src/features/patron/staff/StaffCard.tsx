@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
-import { NumberInput } from '../../../ui/NumberInput';
 import { errorText, localDate } from '../../../lib/cariInput';
+import { formatDay } from '../../../lib/date';
 import { formatMoney } from '../../../lib/formatMoney';
 import { formatNumber } from '../../../lib/numberText';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { ConfirmDialog } from '../../../ui/ConfirmDialog';
-import { Input } from '../../../ui/Input';
 import { AdvanceForm } from '../payroll/AdvanceForm';
 import { LeavePanel } from '../payroll/LeavePanel';
 import { RuleEditor, type PayrollRule } from '../payroll/RuleEditor';
@@ -65,16 +64,12 @@ const month = () => localDate(new Date()).slice(0, 7);
 /** Kişiye ait her şey tek kartta. Tutar ve kimlik sekmeleri müdürde hiç açılmaz. */
 export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, onEdit, onChanged }) => {
   const [tab, setTab] = useState<CardTab>('PROFILE');
-  const [hireDate, setHireDate] = useState(profile?.hireDate ?? '');
-  const [nationalId, setNationalId] = useState(profile?.nationalId ?? '');
-  const [address, setAddress] = useState(profile?.address ?? '');
-  const [emergency, setEmergency] = useState(profile?.emergencyContact ?? '');
   const [kpi, setKpi] = useState<Kpi | null>(null);
   const [money, setMoney] = useState<MoneySummary | null>(null);
   const [rules, setRules] = useState<PayrollRule[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [deletingAdvance, setDeletingAdvance] = useState<MoneySummary['advances'][number] | null>(null);
+  const [editingAdvance, setEditingAdvance] = useState<MoneySummary['advances'][number] | null>(null);
 
   const loadRules = useCallback(async () => {
     const { actorRole, tenantId } = sessionArgs();
@@ -100,28 +95,11 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
     if (tab === 'ADVANCE' || tab === 'TIPS') loadMoney().catch(fail);
   }, [tab, member.id, loadRules, loadMoney]);
 
-  const saveProfile = async () => {
+  const toggleApproval = async () => {
     const { actorId, actorRole, tenantId } = sessionArgs();
     setError(null);
-    setNotice(null);
     try {
-      await invokeIPC('save_staff_profile', {
-        tenantId,
-        actorId,
-        actorRole,
-        input: {
-          userId: member.id,
-          fullName: member.name,
-          birthDate: profile?.birthDate ?? null,
-          hireDate: hireDate || null,
-          phone: profile?.phone ?? null,
-          nationalId: isOwner ? nationalId || null : null,
-          address: isOwner ? address || null : null,
-          emergencyContact: isOwner ? emergency || null : null,
-          notes: profile?.notes ?? null,
-        },
-      });
-      setNotice('Kaydedildi.');
+      await invokeIPC('set_staff_approval', { staffId: member.id, canApprove: !member.can_approve, actorId, actorRole, tenantId });
       await onChanged();
     } catch (caught) {
       setError(errorText(caught));
@@ -166,22 +144,23 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
           <dl className="grid grid-cols-2 gap-3">
             <Fact label="Rol" value={ROLE_LABEL[member.role] ?? member.role} />
             <Fact label="Telefon" value={profile?.phone || 'Girilmedi'} />
-          </dl>
-          <div className="flex flex-wrap gap-2 items-end">
-            <label className="flex flex-col gap-1 text-xs text-[var(--text-secondary)]">
-              İşe giriş
-              <Input aria-label="İşe giriş" type="date" className="min-h-12 !w-44" value={hireDate} onChange={(event) => setHireDate(event.target.value)} />
-            </label>
+            <Fact label="İşe giriş" value={profile?.hireDate ? formatDay(profile.hireDate) : 'Girilmedi'} />
             {isOwner ? (
               <>
-                <NumberInput aria-label="T.C. kimlik no" kind="digits" maxLength={11} placeholder="T.C. kimlik no" className="!w-52" value={nationalId} onValueChange={setNationalId} />
-                <Input aria-label="Adres" placeholder="Adres" className="min-h-12 !w-56" value={address} onChange={(event) => setAddress(event.target.value)} />
-                <Input aria-label="Acil durum kişisi" placeholder="Acil durum kişisi" className="min-h-12 !w-48" value={emergency} onChange={(event) => setEmergency(event.target.value)} />
+                <Fact label="T.C. kimlik no" value={profile?.nationalId || 'Girilmedi'} />
+                <Fact label="Acil durum kişisi" value={profile?.emergencyContact || 'Girilmedi'} />
+                <Fact label="Adres" value={profile?.address || 'Girilmedi'} />
               </>
             ) : null}
-            <Button variant="primary" className="min-h-12 text-sm font-bold" onClick={() => void saveProfile()}>Kaydet</Button>
-          </div>
-          {notice ? <p className="text-xs font-semibold text-[var(--accent-emerald)]">{notice}</p> : null}
+          </dl>
+          {isOwner && member.role !== 'MANAGER' ? (
+            <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] pt-3">
+              <span className="text-sm font-semibold text-[var(--text-primary)]">Onay yetkisi</span>
+              <Button variant={member.can_approve ? 'selected' : 'secondary'} className="min-h-12" onClick={() => void toggleApproval()}>
+                {member.can_approve ? 'Yetkiyi Kaldır' : 'Yetki Ver'}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -203,13 +182,25 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
 
       {tab === 'ADVANCE' ? (
         <div className="space-y-3">
-          <AdvanceForm userId={member.id} period={month()} onSaved={() => void loadMoney().catch((caught) => setError(errorText(caught)))} />
+          <AdvanceForm
+            key={editingAdvance?.id ?? 'new'}
+            userId={member.id}
+            period={month()}
+            editing={editingAdvance}
+            onCancelEdit={() => setEditingAdvance(null)}
+            onSaved={() => {
+              setEditingAdvance(null);
+              void loadMoney().catch((caught) => setError(errorText(caught)));
+            }} />
           {money && money.advances.length > 0 ? (
             <ul className="text-sm divide-y divide-[var(--border)]">
               {money.advances.map((advance) => (
                 <li key={advance.id} className="flex items-center gap-3 py-2">
-                  <span className="flex-1 text-[var(--text-secondary)]">{advance.createdAt.slice(0, 10)}</span>
+                  <span className="flex-1 text-[var(--text-secondary)]">{formatDay(advance.createdAt)}</span>
                   <span className="font-bold tabular-nums">{formatMoney(advance.amountCents)}</span>
+                  <Button variant="ghost" aria-label="Avansı düzenle" onClick={() => setEditingAdvance(advance)}>
+                    <Pencil className="w-5 h-5" />
+                  </Button>
                   <Button variant="ghost" aria-label="Avansı sil" onClick={() => setDeletingAdvance(advance)}>
                     <Trash2 className="w-5 h-5" />
                   </Button>

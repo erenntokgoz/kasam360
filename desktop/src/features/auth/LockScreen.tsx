@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { AlertCircle, Lock } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
-import { Button } from '../../ui/Button';
-import { Numpad } from '../../ui/Numpad';
+import { AuthShell } from './AuthShell';
+import { PinEntry } from './PinEntry';
 
+/** Kilit kimin PIN'i girilirse ona açılır: kasa başına geçen kişi çıkış yapmaz. */
 export const LockScreen: React.FC = () => {
-  const { user, isLocked, unlock, logout, loginError } = useAuthStore();
+  const { user, isLocked, loginWithPin, loginError } = useAuthStore();
   const resetIdleTimer = useUIStore((state) => state.resetIdleTimer);
   const [pin, setPin] = useState('');
   const [isBusy, setIsBusy] = useState(false);
@@ -16,50 +17,21 @@ export const LockScreen: React.FC = () => {
   const submit = async () => {
     if (pin.length < 4 || isBusy) return;
     setIsBusy(true);
-    const opened = await unlock(pin);
+    const opened = await loginWithPin(pin);
     setIsBusy(false);
     setPin('');
     if (opened) resetIdleTimer();
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Terminal kilitli"
-      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 bg-[var(--bg-canvas)] select-none"
-    >
-      <div className="w-full max-w-[360px] paper border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-4">
-        <div className="text-center">
-          <Lock className="w-6 h-6 mx-auto text-[var(--text-secondary)]" />
-          <h1 className="print-title text-sm font-bold mt-2 text-[var(--text-primary)]">Terminal Kilitli</h1>
-          <p className="text-xs mt-1 text-[var(--text-secondary)]">
-            {user.name} oturumu. Devam etmek için PIN kodunuzu girin.
-          </p>
+    <AuthShell title="Ekran kilitli">
+      {loginError ? (
+        <div role="alert" className="p-3 rounded-lg text-sm font-medium border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{loginError}</span>
         </div>
-        {loginError ? (
-          <div role="alert" className="p-3 rounded-lg text-xs font-medium border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center justify-center gap-1.5">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{loginError}</span>
-          </div>
-        ) : null}
-        <div aria-label="Girilen hane sayısı" className="h-12 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] flex items-center justify-center text-xl font-bold tracking-[0.4em] text-[var(--text-primary)]">
-          {'•'.repeat(pin.length)}
-        </div>
-        <Numpad
-          onDigit={(digit) => {
-            if (pin.length < 8) setPin((current) => current + digit);
-          }}
-          onClear={() => setPin('')}
-          onBackspace={() => setPin((current) => current.slice(0, -1))}
-        />
-        <Button type="button" variant="primary" size="lg" className="w-full" disabled={pin.length < 4} isLoading={isBusy} onClick={() => void submit()}>
-          Kilidi Aç
-        </Button>
-        <Button type="button" variant="secondary" className="w-full min-h-12" onClick={logout}>
-          Kullanıcı Değiştir
-        </Button>
-      </div>
-    </div>
+      ) : null}
+      <PinEntry value={pin} onChange={setPin} onSubmit={() => void submit()} isBusy={isBusy} />
+    </AuthShell>
   );
 };

@@ -1,4 +1,4 @@
-import type { ProductDto } from './menu360';
+import type { ProductDto } from './menu';
 
 export interface StockBatch {
   id: string;
@@ -37,9 +37,10 @@ export interface StockState {
   orders: StockPurchaseOrder[];
   busy: boolean;
   error: string | null;
+  pendingQuickReceipt: { orderId: string; tenantId: string; productId: string; quantity: number; unitCostCents: number; supplierId: string } | null;
   load: () => Promise<void>;
-  createSupplier: (name: string) => Promise<boolean>;
-  createOrder: (supplierId: string, orderNumber: string, items: StockOrderLineInput[]) => Promise<boolean>;
+  createSupplier: (name: string, onCreated?: (supplier: StockSupplier) => void) => Promise<boolean>;
+  createOrder: (supplierId: string, orderNumber: string, items: StockOrderLineInput[], onCreated?: (order: StockPurchaseOrder) => void) => Promise<boolean>;
   receiveOrder: (orderId: string) => Promise<boolean>;
-  quickReceive: (productId: string, quantity: number, unitCostCents: number) => Promise<boolean>;
+  quickReceive: (productId: string, quantity: number, unitCostCents: number, supplierId: string) => Promise<boolean>;
 }

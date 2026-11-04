@@ -36,7 +36,7 @@ export const RecurringPanel: React.FC = () => {
 
   return (
     <Panel title="Sabit Giderler">
-      {recurring.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Kira, fatura gibi sabit gider yok.</p> : null}
+      {recurring.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Sabit gider yok.</p> : null}
       {recurring.length > 0 ? (
         <select
           aria-label="Sabit gider ödeme şekli"

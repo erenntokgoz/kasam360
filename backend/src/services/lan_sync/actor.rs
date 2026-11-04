@@ -424,7 +424,7 @@ impl Actor {
     async fn publish(&self, now: u64) -> Result<(), String> {
         let row = self.engine.cluster().await?;
         let members = self.engine.members().await?;
-        let (last_index, _) = {
+        let (last_index, membership_pending) = {
             let mut conn = self
                 .sync
                 .inner
@@ -432,7 +432,9 @@ impl Actor {
                 .acquire()
                 .await
                 .map_err(|e| e.to_string())?;
-            store::last_position(&mut conn, &row).await?
+            let (last_index, _) = store::last_position(&mut conn, &row).await?;
+            let pending = store::has_pending_membership(&mut conn, &row.tenant_id).await?;
+            (last_index, pending)
         };
         let is_leader = self.engine.role == Role::Leader;
         let authority_alive = if is_leader {
@@ -454,7 +456,7 @@ impl Actor {
             "VERIFYING"
         } else if !authority_alive {
             "NO_CONNECTION"
-        } else if behind {
+        } else if behind || membership_pending {
             "SYNCING"
         } else {
             "READY"

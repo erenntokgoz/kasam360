@@ -1,6 +1,8 @@
 //! Cari kart ve borç açma işlemleri ile ortak uygulama girişi.
 
+use super::debt_edit::{apply_delete, apply_edit, EditDebtInput};
 use super::payment::{apply_payment, RecordPaymentInput};
+use super::purchase_receipt::{apply_receipt, ReceivePurchaseInput};
 use super::supplier_document::{apply_document, ApproveDocumentInput};
 use super::ApplyError;
 use crate::services::audit_service::{self, AuditContext, AuditLock, AuditService};
@@ -54,8 +56,13 @@ pub enum CariOp {
         directory_id: String,
     },
     OpenDebt(OpenDebtInput),
+    EditDebt(EditDebtInput),
+    DeleteDebt {
+        debt_id: String,
+    },
     RecordPayment(RecordPaymentInput),
     ApproveDocument(ApproveDocumentInput),
+    ReceivePurchase(ReceivePurchaseInput),
 }
 
 impl CariOp {
@@ -65,8 +72,11 @@ impl CariOp {
             Self::UpdateCard { .. } => "UPDATE_CARD",
             Self::DeleteCard { .. } => "DELETE_CARD",
             Self::OpenDebt(_) => "OPEN_DEBT",
+            Self::EditDebt(_) => "EDIT_DEBT",
+            Self::DeleteDebt { .. } => "DELETE_DEBT",
             Self::RecordPayment(_) => "RECORD_PAYMENT",
             Self::ApproveDocument(_) => "APPROVE_DOCUMENT",
+            Self::ReceivePurchase(_) => "RECEIVE_PURCHASE",
         }
     }
 
@@ -75,8 +85,11 @@ impl CariOp {
             Self::CreateCard { card, .. } | Self::UpdateCard { card } => &card.directory_id,
             Self::DeleteCard { directory_id } => directory_id,
             Self::OpenDebt(input) => &input.directory_id,
+            Self::EditDebt(input) => &input.debt_id,
+            Self::DeleteDebt { debt_id } => debt_id,
             Self::RecordPayment(input) => &input.debt_id,
             Self::ApproveDocument(input) => &input.purchase_order_id,
+            Self::ReceivePurchase(input) => &input.purchase_order_id,
         }
     }
 }
@@ -286,10 +299,19 @@ pub async fn apply(
             delete_card(conn, tenant_id, directory_id).await?,
         ),
         CariOp::OpenDebt(input) => ("debt:created", open_debt(conn, tenant_id, input).await?),
+        CariOp::EditDebt(input) => ("debt:edited", apply_edit(conn, tenant_id, input).await?),
+        CariOp::DeleteDebt { debt_id } => (
+            "debt:deleted",
+            apply_delete(conn, tenant_id, debt_id).await?,
+        ),
         CariOp::RecordPayment(input) => ("debt:paid", apply_payment(conn, tenant_id, input).await?),
         CariOp::ApproveDocument(input) => (
             "supplier_document:approved",
             apply_document(conn, tenant_id, input).await?,
+        ),
+        CariOp::ReceivePurchase(input) => (
+            "purchase:received",
+            apply_receipt(conn, tenant_id, input).await?,
         ),
     };
     let ctx = AuditContext::new(

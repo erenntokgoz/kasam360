@@ -59,7 +59,7 @@ export const ReceiptPreviewModal: React.FC = () => {
     setPrintError(null);
     try {
       const { actorRole, tenantId } = sessionArgs();
-      if (format === 'CUSTOMER' && lastSale) {
+      if (lastSale) {
         await invokeIPC('print_receipt', { receiptId: lastSale.transactionId, actorRole, tenantId });
       } else if (activeOrderId) {
         await invokeIPC('print_order_slip', { orderId: activeOrderId, actorRole, tenantId });
@@ -99,7 +99,7 @@ export const ReceiptPreviewModal: React.FC = () => {
         ) : null}
         {lastSale && leftCents > 0 ? (
           <p className="rounded-lg bg-[var(--bg-subtle)] px-3 py-2 text-sm font-semibold tabular-nums">
-            Masada {formatMoney(leftCents)} kaldı.
+            {formatMoney(lastSale.amountCents)} tahsil edildi · {formatMoney(leftCents)} kaldı.
           </p>
         ) : null}
 
@@ -217,7 +217,10 @@ export const ReceiptPreviewModal: React.FC = () => {
           </Button>
           {lastSale ? (
             leftCents > 0 ? (
-              <Button variant="success" size="lg" onClick={handlePayRest}>Kalanı Al</Button>
+              <>
+                <Button variant="secondary" size="lg" onClick={handleClose}>Adisyona Dön</Button>
+                <Button variant="success" size="lg" onClick={handlePayRest}>Kalanı Al</Button>
+              </>
             ) : (
               <Button variant="primary" size="lg" onClick={handleClose}>Salona Dön</Button>
             )

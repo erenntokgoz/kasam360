@@ -56,7 +56,7 @@ export function StockTrailPanel() {
   }, [productId]);
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 text-[var(--text-primary)]">
+    <div className="page-fill flex-1 overflow-y-auto p-4 space-y-4 text-[var(--text-primary)]">
       <select
         aria-label="Hareket ürünü"
         className="min-h-12 w-full max-w-sm rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] px-3 text-sm"

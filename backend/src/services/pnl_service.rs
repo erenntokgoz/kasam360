@@ -204,12 +204,12 @@ pub async fn financial_report(
         total_revenue_cents - total_refunds_cents - total_vat_cents - total_cogs_cents;
 
     // ------------------------------------------------------------------
-    // 3. Gider
+    // 3. Gider (personel avansı gider değil, personelden alacaktır; kârdan düşülmez)
     // ------------------------------------------------------------------
     let total_expenses_cents: i64 = match range {
         Some((s, e)) => sqlx::query_scalar(
             "SELECT COALESCE(SUM(amount_cents), 0) FROM general_expenses
-             WHERE tenant_id = ? AND date(expense_date) >= date(?) AND date(expense_date) <= date(?)",
+             WHERE tenant_id = ? AND category <> 'STAFF_ADVANCE' AND date(expense_date) >= date(?) AND date(expense_date) <= date(?)",
         )
         .bind(tenant_id)
         .bind(s)
@@ -218,7 +218,7 @@ pub async fn financial_report(
         .await
         .map_err(|err| format!("Genel gider toplanamadı: {}", err))?,
         None => sqlx::query_scalar(
-            "SELECT COALESCE(SUM(amount_cents), 0) FROM general_expenses WHERE tenant_id = ?",
+            "SELECT COALESCE(SUM(amount_cents), 0) FROM general_expenses WHERE tenant_id = ? AND category <> 'STAFF_ADVANCE'",
         )
         .bind(tenant_id)
         .fetch_one(&mut *conn)
@@ -257,7 +257,7 @@ pub async fn financial_report(
         Some((s, e)) => sqlx::query(
             "SELECT category, SUM(amount_cents) AS total_cents, COUNT(*) AS count
              FROM general_expenses
-             WHERE tenant_id = ? AND date(expense_date) >= date(?) AND date(expense_date) <= date(?)
+             WHERE tenant_id = ? AND category <> 'STAFF_ADVANCE' AND date(expense_date) >= date(?) AND date(expense_date) <= date(?)
              GROUP BY category ORDER BY total_cents DESC",
         )
         .bind(tenant_id)
@@ -323,7 +323,7 @@ pub async fn financial_report(
 
         let expense_cents: i64 = sqlx::query_scalar(
             "SELECT COALESCE(SUM(amount_cents), 0) FROM general_expenses
-             WHERE tenant_id = ? AND strftime('%Y-%m', expense_date) = ?",
+             WHERE tenant_id = ? AND category <> 'STAFF_ADVANCE' AND strftime('%Y-%m', expense_date) = ?",
         )
         .bind(tenant_id)
         .bind(&month)

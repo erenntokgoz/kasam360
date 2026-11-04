@@ -92,7 +92,7 @@ pub async fn run_migrations(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
 
 /// Güncellemeler uygulamaya gömülür: kurulu cihazda `migrations` klasörü yoktur, klasörden
 /// okunsaydı yükseltilen işletmenin şeması sessizce eski kalırdı.
-const MIGRATIONS: [(i64, &str, &str); 7] = [
+const MIGRATIONS: [(i64, &str, &str); 16] = [
     (
         1,
         "tax_rate_bp",
@@ -128,6 +128,51 @@ const MIGRATIONS: [(i64, &str, &str); 7] = [
         "order_change_resolution",
         include_str!("../../migrations/0007_order_change_resolution.sql"),
     ),
+    (
+        8,
+        "zone_ids",
+        include_str!("../../migrations/0008_zone_ids.sql"),
+    ),
+    (
+        9,
+        "pay_period",
+        include_str!("../../migrations/0009_pay_period.sql"),
+    ),
+    (
+        10,
+        "pin_length",
+        include_str!("../../migrations/0010_pin_length.sql"),
+    ),
+    (
+        11,
+        "tariff_schedule",
+        include_str!("../../migrations/0011_tariff_schedule.sql"),
+    ),
+    (
+        12,
+        "stations",
+        include_str!("../../migrations/0012_stations.sql"),
+    ),
+    (
+        13,
+        "table_trail",
+        include_str!("../../migrations/0013_table_trail.sql"),
+    ),
+    (
+        14,
+        "station_columns",
+        include_str!("../../migrations/0014_station_columns.sql"),
+    ),
+    (
+        15,
+        "menu_extras",
+        include_str!("../../migrations/0015_menu_extras.sql"),
+    ),
+    (
+        16,
+        "raw_and_usable_grams",
+        include_str!("../../migrations/0016_raw_and_usable_grams.sql"),
+    ),
 ];
 
 /// Version numarasına göre sıralı `(version, name, sql_content)` listesi.
@@ -145,7 +190,7 @@ mod tests {
     #[test]
     fn list_migration_files_test() {
         let files = list_migration_files();
-        assert_eq!(files.len(), 7);
+        assert_eq!(files.len(), 16);
         for (version, name, sql) in &files {
             assert!(*version > 0, "version must be positive: {}", version);
             assert!(!name.is_empty(), "name must not be empty");

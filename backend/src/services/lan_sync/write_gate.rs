@@ -8,7 +8,7 @@
 //! yazan komut açılmamalıdır. Tek cihazda kapı devre dışıdır.
 
 /// Yerel tablolara yazar veya oturumla ilgilidir; işletme verisini değiştirmez.
-const DEVICE_LOCAL: [&str; 19] = [
+const DEVICE_LOCAL: [&str; 21] = [
     "create_backup_now",
     "delete_backup",
     "set_backup_mirror",
@@ -17,6 +17,8 @@ const DEVICE_LOCAL: [&str; 19] = [
     "auth_logout",
     "auth_lock",
     "account_sign_in",
+    "account_sign_in_link",
+    "open_site_page",
     "account_sign_out",
     "set_session_policy",
     "pos_get_categories",
@@ -31,11 +33,13 @@ const DEVICE_LOCAL: [&str; 19] = [
 ];
 
 /// İşlem günlüğünden geçen veya eşitlemeyi yöneten komutlar. Kendi kapıları vardır.
-const REPLICATED: [&str; 9] = [
+const REPLICATED: [&str; 11] = [
     "create_directory",
     "update_directory",
     "delete_directory",
     "create_debt",
+    "update_debt",
+    "delete_debt",
     "pay_debt",
     "approve_supplier_document",
     "create_pairing_code",

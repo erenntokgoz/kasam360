@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import type { FloorTable, FloorZone, Reservation } from '../types/floor';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
+import { errorText } from '../lib/cariInput';
+import { settledPositions } from '../lib/krokiLayout';
+import { compareTableNames, type NewTable } from '../lib/tableBatch';
 
 interface FloorRow {
   id: string;
@@ -15,9 +18,12 @@ interface FloorRow {
   y: number;
   reservationId?: string | null;
   waiterName?: string | null;
+  trail?: string | null;
+  merged?: string | null;
   guestCount?: number | null;
   reservationCustomerName?: string | null;
   reservationTime?: string | null;
+  reservationPartySize?: number | null;
   activeOrderId?: string | null;
   remainingCents?: number | null;
 }
@@ -31,7 +37,7 @@ const STATUS: Record<string, FloorTable['status']> = {
 };
 
 /** Masa satırını ekran modeline çevirir. Bilinmeyen durum boş sayılmaz. */
-export function mapFloorRow(row: FloorRow, index: number): FloorTable {
+export function mapFloorRow(row: FloorRow): FloorTable {
   const zone = row.zone?.trim() || DEFAULT_ZONE;
   return {
     id: row.id,
@@ -39,19 +45,23 @@ export function mapFloorRow(row: FloorRow, index: number): FloorTable {
     zoneId: zone,
     zoneName: zone,
     capacity: row.seats,
-    status: STATUS[row.status] ?? 'OCCUPIED',
+    // Kaydı olmayan rezerve bayrağı boş masadır.
+    status: row.status === 'RESERVED' && !row.reservationId ? 'EMPTY' : STATUS[row.status] ?? 'OCCUPIED',
     occupiedSeats: row.guestCount ?? undefined,
     totalCents: row.currentTotal,
     remainingCents: row.remainingCents ?? undefined,
     activeOrderId: row.activeOrderId ?? undefined,
     openedAt: row.openedAt ?? undefined,
     waiterName: row.waiterName ?? undefined,
+    trail: row.trail ?? undefined,
+    merged: row.merged ?? undefined,
     reservedAt: row.reservationTime ?? undefined,
     customerName: row.reservationCustomerName ?? undefined,
     reservationId: row.reservationId ?? undefined,
-    // Yerleştirilmemiş masa (0,0) üst üste binmesin diye ızgaraya dizilir.
-    posX: row.x || row.y ? row.x : 40 + (index % 6) * 130,
-    posY: row.x || row.y ? row.y : 40 + Math.floor(index / 6) * 130,
+    reservationPartySize: row.reservationPartySize ?? undefined,
+    // Konum kısmın içindedir; (0,0) yerleştirilmemiş demektir, kroki kendisi dizer.
+    posX: row.x,
+    posY: row.y,
     width: 100,
     height: 100,
   };
@@ -68,8 +78,11 @@ interface FloorStore {
   isSlideOverOpen: boolean;
   floorError: string | null;
   loadFloorPlan: () => Promise<void>;
-  addTable: (name: string, zone: string, seats: number) => Promise<void>;
-  renameTable: (tableId: string, name: string) => Promise<void>;
+  addTables: (batch: NewTable[], zoneId: string) => Promise<void>;
+  addZone: (name: string) => Promise<string>;
+  renameZone: (zoneId: string, name: string) => Promise<void>;
+  removeZone: (zoneId: string) => Promise<void>;
+  updateTable: (tableId: string, name: string, seats: number) => Promise<void>;
   removeTable: (tableId: string) => Promise<void>;
   setBillRequested: (tableId: string, requested: boolean) => Promise<void>;
   setSelectedZoneId: (zoneId: string | null) => void;
@@ -100,37 +113,64 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
 
   loadFloorPlan: async () => {
     try {
-      const { tenantId } = sessionArgs();
-      const rows = await invokeIPC<FloorRow[]>('get_floor_plan', { tenantId });
-      const tables = rows.map(mapFloorRow);
-      const zones: FloorZone[] = [...new Set(tables.map((t) => t.zoneId))].map((zone) => ({
-        id: zone,
-        name: zone,
-        tableCount: tables.filter((t) => t.zoneId === zone).length,
+      const { tenantId, actorRole } = sessionArgs();
+      const [rows, layout] = await Promise.all([
+        invokeIPC<FloorRow[]>('get_floor_plan', { tenantId }),
+        invokeIPC<{ zones: { id: string; name: string }[] }>('get_floor_layout', { tenantId, actorRole }),
+      ]);
+      const names = new Map(layout.zones.map((zone) => [zone.id, zone.name]));
+      const tables = rows
+        .map(mapFloorRow)
+        .map((table) => ({ ...table, zoneName: names.get(table.zoneId) ?? table.zoneName }))
+        .sort((left, right) => compareTableNames(left.tableNumber, right.tableNumber));
+      // Kısmı silinmiş masa kaybolmasın: varsayılan kısımda görünür.
+      const orphanIds = [...new Set(tables.map((table) => table.zoneId))].filter((id) => !names.has(id));
+      const zones: FloorZone[] = [...layout.zones, ...orphanIds.map((id) => ({ id, name: id }))].map((zone) => ({
+        id: zone.id,
+        name: zone.name,
+        tableCount: tables.filter((table) => table.zoneId === zone.id).length,
       }));
       set({ zones, tables, floorError: null });
     } catch (error) {
-      set({ floorError: String(error) });
+      // Kilitliyken düşen okuma hatası kilit açılınca ekranda kalmaz; sonraki okuma tazeler.
+      if (!/SESSION_LOCKED/.test(String(error))) set({ floorError: errorText(error) });
     }
   },
 
-  addTable: async (name, zone, seats) => {
+  addZone: async (name) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
-    await invokeIPC('add_table', {
-      id: `tbl_${crypto.randomUUID()}`,
-      name,
-      tenantId,
-      zone,
-      seats,
-      actorId,
-      actorRole,
-    });
+    const id = await invokeIPC<string>('create_floor_zone', { name, sortOrder: get().zones.length, actorId, actorRole, tenantId });
+    await get().loadFloorPlan();
+    return id;
+  },
+
+  renameZone: async (zoneId, name) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('rename_floor_zone', { zoneId, name, actorId, actorRole, tenantId });
     await get().loadFloorPlan();
   },
 
-  renameTable: async (tableId, name) => {
+  removeZone: async (zoneId) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
-    await invokeIPC('update_table_name', { id: tableId, name, tenantId, actorId, actorRole });
+    await invokeIPC('delete_floor_zone', { zoneId, actorId, actorRole, tenantId });
+    await get().loadFloorPlan();
+  },
+
+  addTables: async (batch, zone) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    try {
+      // Sıralı yazılır: her masa denetim defterine kendi kaydıyla girer.
+      for (const { name, seats } of batch) {
+        await invokeIPC('add_table', { id: `tbl_${crypto.randomUUID()}`, name, tenantId, zone, seats, actorId, actorRole });
+      }
+    } finally {
+      await get().loadFloorPlan();
+    }
+  },
+
+  updateTable: async (tableId, name, seats) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('update_table_name', { id: tableId, name, seats, tenantId, actorId, actorRole });
     await get().loadFloorPlan();
   },
 
@@ -168,24 +208,30 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
 
   saveFloorLayout: async () => {
     const { actorId, actorRole, tenantId } = sessionArgs();
+    const settled = settledPositions(get().zones, get().tables);
+    const tables = get().tables.map((table) => {
+      const position = settled.get(table.id);
+      return position ? { ...table, posX: position.x, posY: position.y } : table;
+    });
     try {
       await invokeIPC('save_floor_layout', {
         actorRole,
         actorId,
         tenantId,
         args: {
-          tables: get().tables.map((table) => ({
+          tables: tables.map((table) => ({
             table_id: table.id,
             x: Math.round(table.posX),
             y: Math.round(table.posY),
             rotation: 0,
             seats: table.capacity,
-            zone_id: null,
+            // Kısım korunur: boş gönderilirse kayıt masaları kısımsız bırakır.
+            zone_id: get().zones.some((zone) => zone.id === table.zoneId) ? table.zoneId : null,
           })),
           objects: [],
         },
       });
-      set({ isKrokiEditMode: false, floorError: null });
+      set({ tables, isKrokiEditMode: false, floorError: null });
       return true;
     } catch (error) {
       set({ floorError: String(error) });

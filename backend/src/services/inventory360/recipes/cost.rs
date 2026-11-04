@@ -1,4 +1,5 @@
 use super::types::{ComponentCost, RecipeCost, MAX_RECIPE_DEPTH};
+use crate::services::inventory360::batch_demand::component_demand;
 use crate::services::inventory360::units::convert_stock_quantity;
 use sqlx::{Row, SqliteConnection};
 
@@ -102,14 +103,13 @@ pub(super) async fn resolve_component_cost(
             .fetch_one(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
-            let normalized =
-                convert_stock_quantity(conn, tenant_id, quantity_unit, &stock_unit, quantity)
-                    .await?;
-            let needed_micros = quantity_micros(normalized)?;
+            let mut demand =
+                component_demand(conn, tenant_id, quantity_unit, &stock_unit, quantity).await?;
             // Reçete okuması stoğu tüketmez; aynı FIFO sırasıyla maliyeti
             // hesaplar. Parti yetmezse teklif fiyatı stok maliyeti sayılmaz.
             let batches = sqlx::query(
-                "SELECT remaining_quantity, unit_cost_cents FROM inventory_batches
+                "SELECT remaining_quantity, unit_cost_cents, usable_grams_per_unit
+                   FROM inventory_batches
                   WHERE tenant_id = ? AND product_id = ? AND remaining_quantity > 0
                   ORDER BY received_at ASC, id ASC",
             )
@@ -118,32 +118,36 @@ pub(super) async fn resolve_component_cost(
             .fetch_all(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;
-            let mut remaining = needed_micros;
             let mut cost_micros = 0_i128;
             for batch in batches {
+                if !demand.is_open() {
+                    break;
+                }
                 let available: f64 = batch
                     .try_get("remaining_quantity")
                     .map_err(|e| e.to_string())?;
                 let unit_cost: i64 = batch
                     .try_get("unit_cost_cents")
                     .map_err(|e| e.to_string())?;
+                let grams_per_unit: Option<f64> = batch
+                    .try_get("usable_grams_per_unit")
+                    .map_err(|e| e.to_string())?;
                 if unit_cost < 0 {
                     return Err("VALIDATION: negatif parti maliyeti".into());
                 }
-                let consumed = remaining.min(quantity_micros(available)?);
+                let taken = demand.take(available, grams_per_unit);
+                if taken <= 0.0 {
+                    continue;
+                }
                 cost_micros = cost_micros
                     .checked_add(
-                        consumed
+                        quantity_micros(taken)?
                             .checked_mul(i128::from(unit_cost))
                             .ok_or_else(|| "OVERFLOW: maliyet hesaplaması taştı".to_string())?,
                     )
                     .ok_or_else(|| "OVERFLOW: maliyet hesaplaması taştı".to_string())?;
-                remaining -= consumed;
-                if remaining == 0 {
-                    break;
-                }
             }
-            if remaining > 0 {
+            if demand.is_open() {
                 None
             } else {
                 Some((

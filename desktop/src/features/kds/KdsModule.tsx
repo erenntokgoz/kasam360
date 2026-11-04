@@ -8,16 +8,11 @@ import { Bar, BarAction, BarTab } from '../../ui/Bar';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
 import type { KdsTicket, KdsTicketItem } from '../../types/kds';
+import { useAuthStore } from '../../stores/authStore';
+import { stationKey, useStationStore } from '../../stores/stationStore';
 
 const REFRESH_MS = 5_000;
 const URGENT_MINUTES = 15;
-
-const STATIONS = [
-  { id: 'TUMU' as const, label: 'Tümü' },
-  { id: 'MUTFAK' as const, label: 'Mutfak' },
-  { id: 'BAR' as const, label: 'Bar' },
-  { id: 'TATLI' as const, label: 'Tatlı' },
-];
 
 const STAGE_ACTION: Record<KdsTicketStage, { label: string; icon: typeof Flame; variant: 'primary' | 'success' }> = {
   PENDING: { label: 'Hazırlamaya Başla', icon: Flame, variant: 'primary' },
@@ -26,6 +21,7 @@ const STAGE_ACTION: Record<KdsTicketStage, { label: string; icon: typeof Flame; 
 };
 
 const StatusBadge: React.FC<{ status: KdsTicketItem['status'] }> = ({ status }) => {
+  if (status === 'CANCELLED') return <Badge variant="red">İptal</Badge>;
   if (status === 'READY') return <Badge variant="emerald">Hazır</Badge>;
   if (status === 'PREPARING') return <Badge variant="amber">Hazırlanıyor</Badge>;
   return <Badge variant="neutral">Bekliyor</Badge>;
@@ -33,9 +29,17 @@ const StatusBadge: React.FC<{ status: KdsTicketItem['status'] }> = ({ status }) 
 
 const TicketCard: React.FC<{
   ticket: KdsTicket;
-  onToggleItem: (itemId: string) => void;
-  onAdvance: () => void;
+  onToggleItem?: (itemId: string) => void;
+  onAdvance?: () => Promise<void>;
 }> = ({ ticket, onToggleItem, onAdvance }) => {
+  // Üç aşama aynı düğmede ilerler; çift dokunuş bir aşamayı atlamasın diye düğme
+  // işlem bitip yeni aşama ekrana gelene kadar kilitli kalır.
+  const [isAdvancing, setIsAdvancing] = useState(false);
+  const handleAdvance = () => {
+    if (isAdvancing || !onAdvance) return;
+    setIsAdvancing(true);
+    void onAdvance().finally(() => window.setTimeout(() => setIsAdvancing(false), 600));
+  };
   const isUrgent = ticket.elapsedMinutes >= URGENT_MINUTES;
   const action = STAGE_ACTION[ticketStage(ticket)];
   const ActionIcon = action.icon;
@@ -61,15 +65,16 @@ const TicketCard: React.FC<{
           <button
             type="button"
             key={item.id}
-            onClick={() => onToggleItem(item.id)}
-            className="w-full min-h-12 py-2 text-left flex items-start justify-between gap-2 cursor-pointer"
+            disabled={!onToggleItem}
+            onClick={() => onToggleItem?.(item.id)}
+            className="w-full min-h-12 py-2 text-left flex items-start justify-between gap-2 enabled:cursor-pointer"
           >
             <span className="flex items-start gap-2 min-w-0">
               <span className="w-8 h-8 rounded-lg bg-[var(--bg-card)] flex items-center justify-center font-extrabold text-base tabular-nums shrink-0">
                 {formatNumber(item.quantity)}
               </span>
               <span className="min-w-0">
-                <span className={`block text-base font-bold ${item.status === 'READY' ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
+                <span className={`block text-base font-bold ${item.status === 'READY' || item.status === 'CANCELLED' ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                   {item.productName}
                 </span>
                 {item.modifiers.length > 0 ? (
@@ -83,18 +88,24 @@ const TicketCard: React.FC<{
         ))}
       </div>
 
-      <div className="p-3 border-t border-[var(--border)]">
-        <Button variant={action.variant} className="w-full" onClick={onAdvance}>
+      {onAdvance ? <div className="p-3 border-t border-[var(--border)]">
+        <Button variant={action.variant} className="w-full" disabled={isAdvancing} onClick={handleAdvance}>
           <ActionIcon className="w-5 h-5" />
           <span>{action.label}</span>
         </Button>
-      </div>
+      </div> : null}
     </article>
   );
 };
 
 /** Fişler kendiliğinden tazelenir: mutfak ekranına kimse dokunmadan yeni sipariş düşer. */
 export const KdsModule: React.FC = () => {
+  const { stations, load: loadStations } = useStationStore();
+  const userId = useAuthStore((state) => state.user?.userId);
+  const readOnly = useAuthStore((state) => state.user?.role === 'WAITER');
+  useEffect(() => {
+    void loadStations().catch(() => undefined);
+  }, [loadStations]);
   const { tickets, selectedStation, soundEnabled, loadTickets, setSelectedStation, toggleItemStatus, advanceTicket, toggleSound } = useKdsStore();
   const isOpen = useUIStore((state) => state.activeModule === 'KDS');
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +115,8 @@ export const KdsModule: React.FC = () => {
       await action();
       setError(null);
     } catch (caught) {
-      setError(errorText(caught));
+      // Kilit sırasında düşen hata kilit açılınca ekranda kalmasın.
+      if (!/SESSION_LOCKED/.test(String(caught))) setError(errorText(caught));
     }
   }, []);
 
@@ -117,7 +129,12 @@ export const KdsModule: React.FC = () => {
     return () => clearInterval(timer);
   }, [isOpen, guarded, loadTickets]);
 
-  const visible = tickets.filter((ticket) => selectedStation === 'TUMU' || ticket.station === selectedStation);
+  // Görevli atanan kullanıcı yalnız kendi istasyonunu görür; atanmamışsa hepsini görür.
+  const own = stations.filter((station) => userId && station.userIds.includes(userId));
+  // İstasyon tanımlanmamışsa eski kategorilerin istasyonu yine sekme olarak görünür.
+  const tabs = own.length > 0 ? own : stations.length > 0 ? stations : [...new Set(tickets.map((ticket) => ticket.station))].map((name) => ({ id: name, name, printerName: null, userIds: [] }));
+  const allowed = own.length > 0 ? tickets.filter((ticket) => own.some((station) => stationKey(station.name) === ticket.station)) : tickets;
+  const visible = allowed.filter((ticket) => selectedStation === 'TUMU' || ticket.station === selectedStation);
 
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] select-none">
@@ -129,8 +146,8 @@ export const KdsModule: React.FC = () => {
           </BarAction>
         }
       >
-        {STATIONS.map((station) => {
-          const count = tickets.filter((ticket) => station.id === 'TUMU' || ticket.station === station.id).length;
+        {[{ id: 'TUMU', label: 'Tümü' }, ...tabs.map((station) => ({ id: stationKey(station.name), label: station.name }))].map((station) => {
+          const count = allowed.filter((ticket) => station.id === 'TUMU' || ticket.station === station.id).length;
           return (
             <BarTab key={station.id} active={selectedStation === station.id} onClick={() => setSelectedStation(station.id)}>
               {station.label}
@@ -154,8 +171,8 @@ export const KdsModule: React.FC = () => {
             <TicketCard
               key={ticket.id}
               ticket={ticket}
-              onToggleItem={(itemId) => void guarded(() => toggleItemStatus(ticket.id, itemId))}
-              onAdvance={() => void guarded(() => advanceTicket(ticket.id))}
+              onToggleItem={readOnly ? undefined : (itemId) => void guarded(() => toggleItemStatus(ticket.id, itemId))}
+              onAdvance={readOnly ? undefined : () => guarded(() => advanceTicket(ticket.id))}
             />
           ))
         )}

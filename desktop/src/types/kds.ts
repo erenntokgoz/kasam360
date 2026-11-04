@@ -1,11 +1,11 @@
-export type KdsItemStatus = 'PENDING' | 'PREPARING' | 'READY' | 'SERVED';
+export type KdsItemStatus = 'PENDING' | 'PREPARING' | 'READY' | 'SERVED' | 'CANCELLED';
 
 export interface KdsTicketItem {
   id: string;
   orderItemId: string;
   productName: string;
   quantity: number;
-  station: 'MUTFAK' | 'BAR' | 'TATLI' | 'KASA';
+  station: string;
   modifiers: string[];
   notes?: string;
   status: KdsItemStatus;
@@ -17,7 +17,7 @@ export interface KdsTicket {
   ticketNumber: string;
   tableName: string;
   waiterName?: string;
-  station: 'MUTFAK' | 'BAR' | 'TATLI' | 'KASA';
+  station: string;
   createdAt: string;
   elapsedMinutes: number;
   items: KdsTicketItem[];

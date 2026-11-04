@@ -10,6 +10,7 @@ describe('roleAccess', () => {
 
   it('garson sipariş alır, tahsilat yapamaz', () => {
     expect(canOpenModule('WAITER', 'POS')).toBe(true);
+    expect(canOpenModule('WAITER', 'KDS')).toBe(true);
     expect(canOpenModule('WAITER', 'CASHIER')).toBe(false);
     expect(canCollectPayment('WAITER')).toBe(false);
   });

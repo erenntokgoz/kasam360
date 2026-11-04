@@ -3,13 +3,14 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { sessionArgs, useCariStore } from '../../stores/cariStore';
 import { errorText, localDate, newOperationId } from '../../lib/cariInput';
 import { invokeIPC } from '../../services/tauriClient';
-import { formatServerDateTime } from '../../lib/date';
+import { formatDay, formatServerDateTime } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { Input } from '../../ui/Input';
 import { CariCardModal } from './CariCardModal';
+import { CariEditDebtModal } from './CariEditDebtModal';
 import { CariOpenDebtModal } from './CariOpenDebtModal';
 import { CariPaymentModal } from './CariPaymentModal';
 import type { DirectoryContact, LedgerDebt, StatementLine } from '../../types/ledger';
@@ -100,6 +101,8 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
   });
   const [to, setTo] = useState(() => localDate(new Date()));
   const [payingDebt, setPayingDebt] = useState<LedgerDebt | null>(null);
+  const [editingDebt, setEditingDebt] = useState<LedgerDebt | null>(null);
+  const [deletingDebt, setDeletingDebt] = useState<LedgerDebt | null>(null);
   const [isOpeningDebt, setIsOpeningDebt] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -172,7 +175,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
                   </div>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
                     {debt.description || linkLabel(debt) || 'Açıklama yok'}
-                    {debt.dueDate ? ` · Vade ${debt.dueDate}` : ''}
+                    {debt.dueDate ? ` · Vade ${formatDay(debt.dueDate)}` : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -187,6 +190,16 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
                   <Button variant="success" onClick={() => setPayingDebt(debt)} className="min-h-12">
                     Ödeme
                   </Button>
+                  {debt.status === 'PENDING' && !debt.orderId ? (
+                    <>
+                      <Button variant="ghost" aria-label="Kaydı düzenle" onClick={() => setEditingDebt(debt)}>
+                        <Pencil className="w-5 h-5" />
+                      </Button>
+                      <Button variant="ghost" aria-label="Kaydı sil" onClick={() => setDeletingDebt(debt)}>
+                        <Trash2 className="w-5 h-5" />
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </li>
             ))}
@@ -249,6 +262,28 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onChanged 
         ) : null}
       </section>
 
+      {editingDebt ? (
+        <CariEditDebtModal
+          debt={editingDebt}
+          onClose={() => setEditingDebt(null)}
+          onSaved={() => {
+            setEditingDebt(null);
+            handleChanged();
+          }}
+        />
+      ) : null}
+      {deletingDebt ? (
+        <ConfirmDialog
+          title="Kayıt silinsin mi?"
+          message={formatMoney(deletingDebt.totalAmountCents)}
+          onConfirm={async () => {
+            const { actorId, actorRole, tenantId } = sessionArgs();
+            await invokeIPC('delete_debt', { actorRole, actorId, tenantId, operationId: crypto.randomUUID(), debtId: deletingDebt.id });
+            handleChanged();
+          }}
+          onClose={() => setDeletingDebt(null)}
+        />
+      ) : null}
       <CariPaymentModal debt={payingDebt} onClose={() => setPayingDebt(null)} onPaid={handleChanged} />
       <CariOpenDebtModal
         card={card}

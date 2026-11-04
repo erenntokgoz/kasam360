@@ -6,6 +6,7 @@ pub mod lock;
 pub mod plan;
 pub mod table_ops;
 pub mod transfer;
+pub mod zero_close;
 
 pub use lock::{
     release_table_lock, try_acquire_table_lock, try_lock_table, unlock_table, TABLE_LOCK_TTL_MS,

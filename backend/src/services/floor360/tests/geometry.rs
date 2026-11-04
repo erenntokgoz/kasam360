@@ -3,8 +3,8 @@
 use super::super::layout;
 use super::super::objects;
 use super::super::types::{
-    CreateObjectInput, SaveLayoutInput, ALLOWED_SEATS, CANVAS_HEIGHT, CANVAS_WIDTH, GRID,
-    OBJECT_KINDS, ROTATION_STEP,
+    CreateObjectInput, SaveLayoutInput, CANVAS_HEIGHT, CANVAS_WIDTH, GRID, OBJECT_KINDS,
+    ROTATION_STEP,
 };
 use super::*;
 
@@ -83,7 +83,7 @@ async fn sandalye_sayisi_katalogla_sinirli() {
     masa_ekle(&p, "tbl_1", "tenant-a", "Masa 1").await;
     let mut c = conn(&p).await;
 
-    for adet in ALLOWED_SEATS {
+    for adet in [1, 2, 4, 5, 8, 30] {
         let sonuc = layout::save_layout(
             &mut c,
             "tenant-a",
@@ -96,7 +96,7 @@ async fn sandalye_sayisi_katalogla_sinirli() {
         assert!(sonuc.is_ok(), "{adet} sandalye reddedildi: {sonuc:?}");
     }
 
-    for adet in [0, 1, 3, 5, 7, 12, -4] {
+    for adet in [0, 31, -4] {
         let sonuc = layout::save_layout(
             &mut c,
             "tenant-a",

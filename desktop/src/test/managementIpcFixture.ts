@@ -12,7 +12,7 @@ import type {
   BulkPriceResult,
   BulkPriceChange,
   RecipeInputDto,
-} from '../types/menu360';
+} from '../types/menu';
 
 // Bellek İçi Menü Verileri
 let mockManagementProducts: ProductDto[] = SEED_PRODUCTS.map((p) => ({

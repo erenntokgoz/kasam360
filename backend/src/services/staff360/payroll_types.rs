@@ -18,6 +18,7 @@ pub struct PayrollRule {
     pub hourly_rate_cents: i64,
     pub tip_multiplier_percent: i64,
     pub profit_share_percent: i64,
+    pub pay_period: String,
     pub active: bool,
 }
 
@@ -31,6 +32,13 @@ pub struct PayrollRuleInput {
     pub hourly_rate_cents: i64,
     pub tip_multiplier_percent: i64,
     pub profit_share_percent: i64,
+    /// Eski istemci göndermezse kural aylık kalır.
+    #[serde(default = "default_pay_period")]
+    pub pay_period: String,
+}
+
+fn default_pay_period() -> String {
+    super::payroll_period::MONTHLY.to_string()
 }
 
 /// Tek bir bordro satırının tutarları. `None` = çağıran tutarı göremiyor.

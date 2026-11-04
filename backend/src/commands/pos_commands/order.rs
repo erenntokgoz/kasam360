@@ -20,6 +20,9 @@ pub struct SubmitOrderPayloadDto {
     pub notes: Option<String>,
     #[serde(rename = "waiterId", default)]
     pub waiter_id: Option<String>,
+    /// Masa açılışında seçilen kişi sayısı; yalnız yeni adisyonda yazılır.
+    #[serde(rename = "guestCount", default)]
+    pub guest_count: Option<i64>,
 }
 
 /// Seçenek snapshot'ını **veritabanı fiyatlarıyla** yeniden yazar.
@@ -186,7 +189,7 @@ pub async fn execute_submit_order(
         }
 
         let row = sqlx::query(
-            "SELECT p.tax_rate_bp, p.is_active, p.is_86, c.default_station \
+            "SELECT p.tax_rate_bp, p.is_active, p.is_86, COALESCE(p.station, c.default_station) AS default_station \
              FROM products p \
              LEFT JOIN categories c ON c.id = p.category_id AND c.tenant_id = p.tenant_id \
              WHERE p.id = ? AND p.tenant_id = ?",
@@ -197,12 +200,16 @@ pub async fn execute_submit_order(
         .await
         .map_err(|e| format!("Product not found: {}", e))?;
 
-        let is_active: bool = row.try_get("is_active").unwrap_or(true);
-        let is_86: bool = row.try_get("is_86").unwrap_or(false);
-        if !is_active || is_86 {
+        let is_active: bool = row.try_get("is_active").map_err(|e| e.to_string())?;
+        let is_86: bool = row.try_get("is_86").map_err(|e| e.to_string())?;
+        // Tükendi geçicidir, satış dışı kalıcıdır: kasiyere hangisi olduğu ayrı söylenir.
+        if is_86 {
             return Err(
                 "PRODUCT_86D: Ürün geçici olarak tükendi (86'd) ve siparişe eklenemez".to_string(),
             );
+        }
+        if !is_active {
+            return Err("PRODUCT_INACTIVE: Ürün satış dışında ve siparişe eklenemez".to_string());
         }
 
         let db_tax_rate_bp: i64 = row.try_get("tax_rate_bp").unwrap_or(1000);
@@ -275,7 +282,7 @@ pub async fn execute_submit_order(
                 payload.order_id.clone()
             };
             sqlx::query(
-                "INSERT INTO orders (id, table_id, status, total_cents, tenant_id, created_at, notes, cashier_id) VALUES (?, ?, 'IN_PROGRESS', ?, ?, datetime('now'), ?, ?)"
+                "INSERT INTO orders (id, table_id, status, total_cents, tenant_id, created_at, notes, cashier_id, guest_count) VALUES (?, ?, 'IN_PROGRESS', ?, ?, datetime('now'), ?, ?, ?)"
             )
             .bind(&ord_id)
             .bind(&table_id)
@@ -283,6 +290,7 @@ pub async fn execute_submit_order(
             .bind(tenant_id)
             .bind(&payload.notes)
             .bind(waiter_id)
+            .bind(payload.guest_count.unwrap_or(1).clamp(1, 99))
             .execute(&mut *conn)
             .await
             .map_err(|e| e.to_string())?;

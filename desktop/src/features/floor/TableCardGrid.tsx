@@ -13,7 +13,7 @@ export const TableCardGrid: React.FC<TableCardGridProps> = ({ tables, onOpenTabl
   if (tables.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 text-center">
-        <span className="text-[var(--text-secondary)]">Bu bölümde masa yok. Masalar düğmesinden ekleyin.</span>
+        <span className="text-[var(--text-secondary)]">Masa yok.</span>
       </div>
     );
   }
@@ -25,7 +25,7 @@ export const TableCardGrid: React.FC<TableCardGridProps> = ({ tables, onOpenTabl
       {zones.map((zone) => (
         <section key={zone} className="space-y-2">
           {zones.length > 1 ? <h2 className="zone-title">{zone}</h2> : null}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] auto-rows-[150px] gap-4">
+          <div className="table-grid">
             {tables
               .filter((table) => table.zoneName === zone)
               .map((table) => (

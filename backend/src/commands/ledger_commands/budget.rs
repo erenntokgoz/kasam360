@@ -192,6 +192,39 @@ pub async fn set_budget_limit(
     tx.commit().await
 }
 
+/// Kategorinin aylık sınırını kaldırır; harcanan giderler etkilenmez.
+#[tauri::command]
+pub async fn delete_budget_limit(
+    category: String,
+    actor_id: String,
+    actor_role: String,
+    tenant_id: String,
+    pool: tauri::State<'_, DbPool>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    require_ledger_write(Some(&actor_role))?;
+    let tid = require_ledger_tenant(Some(&tenant_id))?;
+    let lock = AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin_write().await?;
+    sqlx::query("DELETE FROM budget_limits WHERE tenant_id = ?1 AND category = ?2")
+        .bind(&tid)
+        .bind(&category)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    audit(
+        &mut tx,
+        &lock,
+        &tid,
+        (&actor_id, &actor_role),
+        "budget:limit_deleted",
+        &category,
+        serde_json::json!({}),
+    )
+    .await?;
+    tx.commit().await
+}
+
 /// Sabit giderin başlığını, tutarını ve gününü değiştirir. Ödenmiş aylar etkilenmez.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]

@@ -20,6 +20,7 @@ export const OrderTicket: React.FC = () => {
     activeTableName,
     activeTableId,
     ticketItems,
+    balance,
     selectedTicketItemId,
     selectTicketItem,
     updateItemQty,
@@ -122,7 +123,8 @@ export const OrderTicket: React.FC = () => {
               isSelected={selectedTicketItemId === item.id}
               onSelect={() => selectTicketItem(selectedTicketItemId === item.id ? null : item.id)}
               onUpdateQty={(delta) => updateItemQty(item.id, delta)}
-              onSetNote={(n) => setItemNote(item.id, n)}
+              // Mutfağa gitmiş kaleme yazılan not mutfağa ulaşmaz; alan yalnız taslakta açılır.
+              onSetNote={item.isSentToKitchen ? undefined : (n) => setItemNote(item.id, n)}
               onOpenTransfer={() => setTransferModalItem(item)}
               onOpenComp={() => {
                 setAuthModalItem(item);
@@ -151,8 +153,14 @@ export const OrderTicket: React.FC = () => {
       {/* Alt Toplam ve Ödeme Alanı */}
       <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-subtle)] space-y-3 shrink-0">
         <div className="space-y-1 text-xs">
+          {balance && balance.paidCents > 0 ? (
+            <div className="flex justify-between items-baseline tabular-nums">
+              <span>Tahsil Edilen</span>
+              <span>{formatMoney(balance.paidCents)}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between items-baseline pt-1">
-            <span className="text-sm font-semibold text-[var(--text-primary)]">Toplam Tutar</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">{balance && balance.paidCents > 0 ? 'Kalan Tutar' : 'Toplam Tutar'}</span>
             <span className="hand text-4xl tabular-nums">
               {formatMoney(total)}
             </span>

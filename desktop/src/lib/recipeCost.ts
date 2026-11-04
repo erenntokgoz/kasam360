@@ -1,4 +1,4 @@
-import type { RecipeCostDto } from '../types/menu360';
+import type { RecipeCostDto } from '../types/menu';
 
 interface WireComponent {
   component_product_id: string;

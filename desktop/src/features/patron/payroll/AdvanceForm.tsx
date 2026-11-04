@@ -7,6 +7,8 @@ import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 
 interface AdvanceFormProps {
+  editing?: { expenseId: string; amountCents: number } | null;
+  onCancelEdit?: () => void;
   userId: string;
   period: string;
   onSaved: () => void;
@@ -15,8 +17,8 @@ interface AdvanceFormProps {
 const fieldClass = 'min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]';
 
 /** Avans gider olarak yazılır ve seçili dönemin bordrosundan düşer. */
-export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, onSaved }) => {
-  const [amount, setAmount] = useState('');
+export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, editing, onCancelEdit, onSaved }) => {
+  const [amount, setAmount] = useState(editing ? (editing.amountCents / 100).toFixed(2).replace('.', ',') : '');
   const [method, setMethod] = useState('CASH');
   const [error, setError] = useState<string | null>(null);
   const cents = parseCents(amount);
@@ -28,6 +30,10 @@ export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, onSave
       await invokeIPC('record_staff_advance', {
         userId, period, amountCents: cents, paymentMethod: method, actorId, actorRole, tenantId,
       });
+      // Yeni avans yazılamazsa eskisi korunur; iptal bundan sonra gelir.
+      if (editing) {
+        await invokeIPC('void_expense', { expenseId: editing.expenseId, reason: 'Düzeltme', actorId, actorRole, tenantId });
+      }
       setAmount('');
       onSaved();
     } catch (caught) {
@@ -43,8 +49,13 @@ export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, onSave
         <option value="BANK_TRANSFER">Havale</option>
       </select>
       <Button variant="secondary" className="min-h-12 text-sm" disabled={cents === null || cents <= 0} onClick={() => void save()}>
-        Avans Ver
+        {editing ? 'Kaydet' : 'Avans Ver'}
       </Button>
+      {editing ? (
+        <Button variant="ghost" className="min-h-12 text-sm" onClick={onCancelEdit}>
+          Vazgeç
+        </Button>
+      ) : null}
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
     </div>
   );

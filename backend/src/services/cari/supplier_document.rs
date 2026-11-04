@@ -75,7 +75,7 @@ async fn received_total_cents(
 }
 
 /// Stok tedarikçisini cari karta kimlikle bağlar; kart yoksa açar.
-async fn resolve_card(
+pub(super) async fn resolve_card(
     conn: &mut SqliteConnection,
     tenant_id: &str,
     supplier_id: &str,

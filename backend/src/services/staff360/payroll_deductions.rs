@@ -104,6 +104,27 @@ pub async fn money_summary(
     })
 }
 
+/// Tarih aralığında dağıtılan bahşiş: günlük ve haftalık hakediş bunu okur.
+pub async fn tips_between(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    user_id: &str,
+    from: &str,
+    to: &str,
+) -> Result<i64, String> {
+    sqlx::query_scalar(
+        "SELECT COALESCE(SUM(amount_cents), 0) FROM tip_distributions
+         WHERE tenant_id = ? AND user_id = ? AND date(created_at) BETWEEN date(?) AND date(?)",
+    )
+    .bind(tenant_id)
+    .bind(user_id)
+    .bind(from)
+    .bind(to)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| format!("bahşiş okunamadı: {e}"))
+}
+
 pub async fn for_user(
     conn: &mut SqliteConnection,
     tenant_id: &str,
@@ -112,21 +133,36 @@ pub async fn for_user(
     from: &str,
     to: &str,
     base_salary_cents: i64,
+    period_days: i64,
 ) -> Result<Deductions, String> {
-    let advance_cents: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(amount_cents), 0) FROM staff_advances
-         WHERE tenant_id = ? AND user_id = ? AND period = ?",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .bind(period)
-    .fetch_one(&mut *conn)
-    .await
+    // Avans ay etiketi taşır; kısa dönemde etiket kullanılsa aynı avans her hesapta düşerdi.
+    let advance_cents: i64 = if period_days == PAYROLL_MONTH_DAYS {
+        sqlx::query_scalar(
+            "SELECT COALESCE(SUM(amount_cents), 0) FROM staff_advances
+             WHERE tenant_id = ? AND user_id = ? AND period = ?",
+        )
+        .bind(tenant_id)
+        .bind(user_id)
+        .bind(period)
+        .fetch_one(&mut *conn)
+        .await
+    } else {
+        sqlx::query_scalar(
+            "SELECT COALESCE(SUM(amount_cents), 0) FROM staff_advances
+             WHERE tenant_id = ? AND user_id = ? AND date(created_at) BETWEEN date(?) AND date(?)",
+        )
+        .bind(tenant_id)
+        .bind(user_id)
+        .bind(from)
+        .bind(to)
+        .fetch_one(&mut *conn)
+        .await
+    }
     .map_err(|e| format!("avans okunamadı: {e}"))?;
     let unpaid_days = unpaid_days(conn, tenant_id, user_id, from, to).await?;
     let unpaid_leave_cents = i64::try_from(
-        i128::from(base_salary_cents) * i128::from(unpaid_days.min(PAYROLL_MONTH_DAYS))
-            / i128::from(PAYROLL_MONTH_DAYS),
+        i128::from(base_salary_cents) * i128::from(unpaid_days.min(period_days))
+            / i128::from(period_days),
     )
     .map_err(|_| "OVERFLOW: izin kesintisi taştı".to_string())?;
     Ok(Deductions {
@@ -220,6 +256,7 @@ mod tests {
             "2026-10-01",
             "2026-10-31T23:59:59",
             3_000_000,
+            30,
         )
         .await
         .expect("kesinti");
@@ -247,6 +284,7 @@ mod tests {
             "2026-10-01",
             "2026-10-31T23:59:59",
             0,
+            30,
         )
         .await
         .expect("kesinti");

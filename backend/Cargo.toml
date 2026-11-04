@@ -1,6 +1,6 @@
 [package]
 name = "kasam360-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Kasam360 Desktop Core"
 edition = "2021"
 
@@ -23,6 +23,13 @@ tauri = { version = "2", features = [] }
 # `tauri::updater` modülü imzalı paket doğrulaması yapar; manifest URL
 # `tauri.conf.json` içindeki `updater` bloğundan okunur.
 tauri-plugin-updater = "2"
+# Tek örnek kilidi: aynı veritabanına iki süreç yazarsa eşitleme ve kasa sayımı bozulur.
+tauri-plugin-single-instance = "2"
+# Google ile cihaz girişi: tek kullanımlık bağlantı kodu sitenin sunucusundan doğrulanır.
+# Güncelleyiciyle aynı sürüm; özellikler birleşir, ikili boyutu artmaz.
+reqwest = { version = "0.13", default-features = false }
+# reqwest sağlayıcısız rustls ile gelir; ring zaten bağımlı, istemci kurulmadan önce yüklenir.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls", "uuid", "chrono"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
 serde = { version = "1", features = ["derive"] }

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
+import { formatDateTime } from '../../lib/date';
 import { formatNumber } from '../../lib/numberText';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
@@ -91,8 +92,8 @@ export const BackupPanel: React.FC = () => {
     <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-4">
       <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Yedekler</h2>
       <p className="text-xs text-[var(--text-secondary)]">
-        Değişiklik varsa saatte bir ve her gün sonunda yedek alınır. Son yedek:{' '}
-        <span className="font-semibold tabular-nums">{status?.lastBackupAt ?? 'Henüz yok'}</span>
+        Son yedek:{' '}
+        <span className="font-semibold tabular-nums">{status?.lastBackupAt ? formatDateTime(status.lastBackupAt) : 'Henüz yok'}</span>
       </p>
       <p className="text-xs text-[var(--text-secondary)] break-all">Klasör: {status?.directory ?? 'Okunamadı'}</p>
       {status?.lastError ? (

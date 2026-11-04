@@ -41,8 +41,8 @@ Paket adları ve tutarlar ilk sürümde gösterilmez.
 
 ## Teknik kararlar
 
-- `web/frontend`: Next.js, React, TypeScript, Tailwind CSS v4, GSAP. Tarayıcı `/api` isteklerini `API_ORIGIN` adresine iletir.
-- `web/backend`: Hono, TypeScript. Erken erişim talebini alır; sunucu tarafı işler burada toplanır.
+- `web`: Next.js, React, TypeScript, Tailwind CSS v4, GSAP. Tarayıcı `/api` isteklerini `API_ORIGIN` adresine iletir.
+- `backend/api`: Hono, TypeScript. Üyelik ve mail burada çalışır; sunucu tarafı işler burada toplanır.
 - Ana adres `kasam360.com.tr`. Site barındırması Vercel; API barındırması ayrıca seçilir.
 - Görsel dil adisyon defteridir: spiral, kopya nüsha renkleri, basılı form, tükenmez kalem. Logo kullanımı marka kılavuzunu izler, turuncu yalnız logonun sıfır çentiğindedir.
 - Tek orkestre hareket kalemle dolan form ve yaprak koparmadır; bölüm girişlerine ayrı animasyon eklenmez. Dar, alçak veya dokunmatik ekranda ve hareket azaltma açıkken yapraklar normal akışta alt alta durur.

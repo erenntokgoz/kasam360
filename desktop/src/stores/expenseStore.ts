@@ -57,6 +57,8 @@ interface ExpenseStore {
   load: () => Promise<void>;
   addExpense: (category: string, amountCents: number, paymentMethod: string, description: string, recurringId?: string) => Promise<void>;
   voidExpense: (id: string, reason: string) => Promise<void>;
+  editExpense: (old: Expense, category: string, amountCents: number, paymentMethod: string, description: string) => Promise<void>;
+  removeBudget: (category: string) => Promise<void>;
   setBudget: (category: string, monthlyLimitCents: number) => Promise<void>;
   addRecurring: (title: string, category: string, amountCents: number, dueDay: number) => Promise<void>;
   updateRecurring: (id: string, title: string, category: string, amountCents: number, dueDay: number) => Promise<void>;
@@ -74,11 +76,11 @@ const lastDay = (period: string) => {
 };
 
 /** Tek gider yolu: Finans ve Kasa aynı komutu kullanır. */
-export async function createExpense(category: string, amountCents: number, paymentMethod: string, description: string, recurringId?: string) {
+export async function createExpense(category: string, amountCents: number, paymentMethod: string, description: string, recurringId?: string, expenseDate?: string) {
   const { actorId, actorRole, tenantId } = sessionArgs();
   await invokeIPC('create_expense', {
     actorRole,
-    payload: { tenantId, category, amountCents, paymentMethod, actorId, description, expenseDate: today(), recurringId },
+    payload: { tenantId, category, amountCents, paymentMethod, actorId, description, expenseDate: expenseDate ?? today(), recurringId },
   });
 }
 
@@ -124,6 +126,20 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
   voidExpense: async (id, reason) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
     await invokeIPC('void_expense', { expenseId: id, reason, actorId, actorRole, tenantId });
+    await get().load();
+  },
+
+  // Para kaydı üzerine yazılmaz: önce yenisi yazılır, başarısızsa eskisi yerinde kalır.
+  editExpense: async (old, category, amountCents, paymentMethod, description) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await createExpense(category, amountCents, paymentMethod, description, old.recurringId ?? undefined, old.expenseDate);
+    await invokeIPC('void_expense', { expenseId: old.id, reason: 'Düzeltme', actorId, actorRole, tenantId });
+    await get().load();
+  },
+
+  removeBudget: async (category) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('delete_budget_limit', { category, actorId, actorRole, tenantId });
     await get().load();
   },
 

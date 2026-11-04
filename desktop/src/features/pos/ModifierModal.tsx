@@ -21,7 +21,8 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
   onClose,
   onConfirm,
 }) => {
-  const [cookingDegree, setCookingDegree] = useState('Orta Pişmiş');
+  // Pişirme derecesi seçilmeden gelir: hazır seçili değer her ürüne istenmemiş not yazıyordu.
+  const [cookingDegree, setCookingDegree] = useState('');
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
   const [selectedMods, setSelectedMods] = useState<OrderItemModifier[]>([]);
 
@@ -30,6 +31,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
   useEffect(() => {
     setSelectedMods([]);
     setSelectedNotes([]);
+    setCookingDegree('');
   }, [productId]);
 
   if (!product) return null;
@@ -69,7 +71,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
   const handleConfirm = () => {
     onConfirm({
       selectedModifiers: selectedMods,
-      cookingDegree: product.station === 'MUTFAK' ? cookingDegree : undefined,
+      cookingDegree: product.station === 'MUTFAK' && cookingDegree ? cookingDegree : undefined,
       notes: selectedNotes.length > 0 ? selectedNotes.join(', ') : undefined,
     });
     onClose();
@@ -80,7 +82,6 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={product.name}
-      subtitle="Zorunlu servis sırası, pişirme tercihi ve mutfak notu seçimi"
       maxWidth="md"
     >
       <div className="space-y-4">
@@ -97,7 +98,7 @@ export const ModifierModal: React.FC<ModifierModalProps> = ({
                   type="button"
                   variant={cookingDegree === deg ? 'selected' : 'secondary'}
                   size="sm"
-                  onClick={() => setCookingDegree(deg)}
+                  onClick={() => setCookingDegree(cookingDegree === deg ? '' : deg)}
                   className="min-h-12 text-sm font-semibold"
                 >
                   {deg}

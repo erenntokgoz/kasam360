@@ -5,13 +5,17 @@
 //! bire bir aynı satırları üretmelidir; `apply` içinde kimlik ya da saat
 //! üretilirse cihazlar ayrışır.
 
-pub mod ops;
+pub mod debt_edit;
+mod ops;
 pub mod payment;
+pub mod purchase_receipt;
 pub mod search;
 pub mod supplier_document;
 
+pub use debt_edit::EditDebtInput;
 pub use ops::{apply, CardFields, CariOp, OpenDebtInput};
 pub use payment::RecordPaymentInput;
+pub use purchase_receipt::{ReceiveLine, ReceivePurchaseInput, SETTLEMENT_TERM};
 pub use supplier_document::{awaiting_documents, ApproveDocumentInput, AwaitingDocument};
 
 /// İşlemin neden uygulanmadığını ayırır.

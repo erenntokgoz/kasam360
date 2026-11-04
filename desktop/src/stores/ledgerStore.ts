@@ -5,14 +5,14 @@ import { sessionArgs } from './cariStore';
 import { useUIStore } from './uiStore';
 import { newOperationId } from '../lib/cariInput';
 
-export type ErpTab = 'PANORAMA' | 'FINANCE' | 'DEBTS' | 'STAFF' | 'CATALOG' | 'REPORTS';
+export type ErpTab = 'PANORAMA' | 'FINANCE' | 'DEBTS' | 'STAFF' | 'CATALOG' | 'BUDGET' | 'TARIFF' | 'REPORTS' | 'AUDIT';
 
 /** Panorama uyarısının hedefi: bölüm ve varsa içindeki alt sayfa. */
 const ALERT_TARGETS: Record<string, [ErpTab | 'SETTINGS', string | null]> = {
   EXPENSES: ['FINANCE', null],
   PAYROLL: ['STAFF', 'PAYROLL'],
   STOCK: ['CATALOG', 'STOCK'],
-  LOG: ['SETTINGS', 'AUDIT'],
+  LOG: ['AUDIT', null],
   SETTINGS: ['SETTINGS', 'BACKUP'],
   DEBTS: ['DEBTS', null],
 };
@@ -50,7 +50,10 @@ export const useLedgerStore = create<LedgerStore>((set) => ({
       set({ erpSection });
       useUIStore.getState().setActiveModule('SETTINGS');
     } else {
-      set({ activeErpTab: tab, erpSection });
+      // Gider Kasa'da, stok Menü bölümünde yaşar; uyarı kaydın evine götürür.
+      set({ activeErpTab: tab === 'CATALOG' ? 'PANORAMA' : tab, erpSection });
+      if (tab === 'FINANCE') useUIStore.getState().setActiveModule('CASHIER');
+      if (tab === 'CATALOG') useUIStore.getState().setActiveModule('CATALOG');
     }
   },
 

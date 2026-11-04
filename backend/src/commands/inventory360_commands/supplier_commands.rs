@@ -205,6 +205,8 @@ pub async fn create_purchase_order_command(
     Ok(deger)
 }
 
+/// Eski teslim girişi: artık stok ve tedarikçi borcunu birlikte, vadeli olarak yazar.
+/// Borçsuz stok girişi yolu bırakılmaz; aksi halde cari bakiye alımı hiç görmez.
 #[tauri::command]
 pub async fn receive_purchase_order_command(
     actor_role: String,
@@ -214,37 +216,26 @@ pub async fn receive_purchase_order_command(
     pool: State<'_, DbPool>,
     app_state: State<'_, crate::AppState>,
 ) -> Result<i64, String> {
-    rbac::require_any(&actor_role, &[Role::Owner])?;
-
-    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
-    let tenant_id = require_tenant(tenant_id.as_deref())?;
-    let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
-
-    let mut conn = pool.begin_write().await?;
-    let result: Result<i64, String> = async {
-        let alinan_maliyet =
-            suppliers::receive_purchase_order(&mut conn, &tenant_id, &order_id, &actor_id).await?;
-
-        record_audit(
-            &mut conn,
-            &lock,
-            &tenant_id,
-            &actor_id,
-            &actor_role,
-            category::FINANS,
-            "satinalma:order_received",
-            &order_id,
-            serde_json::json!({ "receivedCostCents": alinan_maliyet }),
-        )
-        .await?;
-
-        Ok(alinan_maliyet)
-    }
-    .await;
-
-    let deger = result?;
-    conn.commit().await?;
-    Ok(deger)
+    let (actor_id, _) = audit_actor(actor_id, &actor_role);
+    let result = crate::ledger_commands::supplier_documents::submit_receipt(
+        &pool,
+        &app_state,
+        Some(actor_role),
+        crate::ledger_commands::supplier_documents::ReceivePurchasePayload {
+            operation_id: crate::id_generator::generate_id("opr"),
+            tenant_id,
+            actor_id,
+            purchase_order_id: order_id,
+            settlement: crate::services::cari::SETTLEMENT_TERM.to_string(),
+            due_date: None,
+            document_no: None,
+            usable_grams: Vec::new(),
+        },
+    )
+    .await?;
+    result["receivedTotalCents"]
+        .as_i64()
+        .ok_or_else(|| "INTERNAL: kabul tutarı okunamadı".to_string())
 }
 
 #[tauri::command]

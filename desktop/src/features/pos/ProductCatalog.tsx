@@ -55,7 +55,6 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="max-w-md">
           <h2 className="auth-title !text-5xl">Önce masa seçin.</h2>
-          <p className="mt-3 text-lg text-[var(--text-secondary)]">Sipariş bir masaya ya da tezgaha yazılır.</p>
           <div className="mt-6 grid grid-cols-2 gap-2">
             <Button variant="primary" size="lg" onClick={() => setActiveModule('FLOOR')}>
               Salonu Aç

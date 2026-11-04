@@ -113,6 +113,10 @@ pub async fn record_allocations(
         }
     }
     for (target, quantity, is_component) in totals {
+        // Adet karşılığı bilinmeyen gram açığı sıfır satırla deftere karışmaz.
+        if quantity <= 0.0 {
+            continue;
+        }
         record(
             conn,
             tenant_id,

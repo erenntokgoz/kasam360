@@ -7,6 +7,7 @@
 
 pub mod category;
 pub mod product;
+pub mod product_extras;
 pub mod staff;
 
 pub use category::{create_category, delete_category, get_management_categories, update_category};

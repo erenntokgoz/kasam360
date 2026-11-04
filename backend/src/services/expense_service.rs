@@ -74,14 +74,17 @@ pub async fn insert_expense(
     let id = generate_id("exp");
     let shift_id = open_shift(conn, tenant_id).await?;
     if expense.payment_method == "CASH" {
-        let reason = format!(
-            "İşletme Gideri ({}): {}",
-            expense.category,
-            expense.description.unwrap_or("-")
-        );
+        let reason = format!("Gider: {}", expense.description.unwrap_or("-"));
         let shift = shift_id
             .as_deref()
             .ok_or_else(|| "SHIFT_REQUIRED: nakit gider için açık vardiya gerekir.".to_string())?;
+        crate::commands::cashier_commands::ensure_drawer_covers(
+            conn,
+            tenant_id,
+            shift,
+            expense.amount_cents,
+        )
+        .await?;
         cash_movement(
             conn,
             tenant_id,

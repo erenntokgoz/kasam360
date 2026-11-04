@@ -1,4 +1,4 @@
-import type { BulkPriceResult, CategoryDto, PriceListDto, ProductDto } from '../types/menu360';
+import type { BulkPriceResult, CategoryDto, PriceListDto, ProductDto } from '../types/menu';
 
 interface WireProduct {
   id: string;

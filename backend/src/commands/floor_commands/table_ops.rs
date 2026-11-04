@@ -84,7 +84,13 @@ pub async fn add_table(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    crate::services::floor360::types::validate_seats(seats.unwrap_or(4))?;
     let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
+
+    if let Some(zone_id) = &zone {
+        crate::services::floor360::layout::zone_belongs_to_tenant(&mut tx, &tenant_id, zone_id)
+            .await?;
+    }
 
     let seats_val = seats.unwrap_or(4);
     sqlx::query(
@@ -169,6 +175,7 @@ pub async fn remove_table(
 pub async fn update_table_name(
     id: String,
     name: String,
+    seats: Option<i64>,
     tenant_id: String,
     actor_id: Option<String>,
     actor_role: Option<String>,
@@ -176,6 +183,9 @@ pub async fn update_table_name(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    if let Some(count) = seats {
+        crate::services::floor360::types::validate_seats(count)?;
+    }
     let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 
     let previous_name: Option<String> =
@@ -186,20 +196,24 @@ pub async fn update_table_name(
             .await
             .map_err(|e| e.to_string())?;
 
-    sqlx::query("UPDATE tables SET name = ? WHERE id = ? AND tenant_id = ?")
-        .bind(&name)
-        .bind(&id)
-        .bind(&tenant_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
+    sqlx::query(
+        "UPDATE tables SET name = ?, seats = COALESCE(?, seats) WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(&name)
+    .bind(seats)
+    .bind(&id)
+    .bind(&tenant_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
 
     let now_iso = chrono::Utc::now().to_rfc3339();
     let (actor_id, actor_role) = audit_actor(actor_id, actor_role);
     let payload = serde_json::json!({
         "tableId": id,
         "changes": {
-            "name": { "old": previous_name, "new": name }
+            "name": { "old": previous_name, "new": name },
+            "seats": seats
         }
     });
     let ctx = crate::services::audit_service::AuditContext::new(
@@ -283,15 +297,21 @@ pub async fn execute_move_table(
     }
 
     // Kaynak masanın garson ve açılış bilgilerini al
-    let source_info: Option<(Option<String>, Option<String>)> =
-        sqlx::query_as("SELECT waiter_id, opened_at FROM tables WHERE id = ? AND tenant_id = ?")
-            .bind(from_id)
-            .bind(tenant)
-            .fetch_optional(&mut *conn)
-            .await
-            .map_err(|e| e.to_string())?;
+    let source_info: Option<SourceTable> = sqlx::query_as(
+        "SELECT waiter_id, opened_at, name, trail FROM tables WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(from_id)
+    .bind(tenant)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
 
-    let (src_waiter, src_opened) = source_info.unwrap_or((None, None));
+    let (src_waiter, src_opened, src_name, src_trail) =
+        source_info.unwrap_or((None, None, String::new(), None));
+    let trail = match src_trail {
+        Some(earlier) => format!("{earlier} ➭ {src_name}"),
+        None => src_name,
+    };
 
     // Siparişleri aktar
     sqlx::query(
@@ -309,11 +329,13 @@ pub async fn execute_move_table(
     sqlx::query(
         "UPDATE tables \
          SET status = 'OCCUPIED', \
+             trail = ?, \
              waiter_id = COALESCE(?, waiter_id), \
              opened_at = COALESCE(?, opened_at, datetime('now')), \
              current_total = (SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE table_id = ? AND tenant_id = ? AND status IN ('OPEN', 'IN_PROGRESS')) \
          WHERE id = ? AND tenant_id = ?",
     )
+    .bind(&trail)
     .bind(&src_waiter)
     .bind(&src_opened)
     .bind(to_id)
@@ -338,6 +360,9 @@ pub async fn execute_move_table(
 
     Ok(())
 }
+
+/// Garson, açılış, ad ve önceki masalar.
+type SourceTable = (Option<String>, Option<String>, String, Option<String>);
 
 #[tauri::command]
 pub async fn merge_tables(
@@ -367,6 +392,20 @@ pub async fn merge_tables(
     )
     .bind(&target_id)
     .bind(&source_id)
+    .bind(&tenant)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Birleşen masa adı kaynak boşalmadan hedefin notuna yazılır.
+    sqlx::query(
+        "UPDATE tables SET merged = trim(COALESCE(merged || ', ', '') || \
+             (SELECT name FROM tables WHERE id = ? AND tenant_id = ?)) \
+         WHERE id = ? AND tenant_id = ?",
+    )
+    .bind(&source_id)
+    .bind(&tenant)
+    .bind(&target_id)
     .bind(&tenant)
     .execute(&mut *tx)
     .await

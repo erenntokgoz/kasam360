@@ -82,6 +82,16 @@ impl std::ops::Sub for Cents {
     }
 }
 
+/// KDV dahil tutarı matrah ve KDV'ye ayırır. Toplam değişmez.
+/// Neden yarım yukarı yuvarlama: aşağı kesmek KDV'yi her satırda bir kuruş
+/// şişiriyordu (200 TL %10 → 18,19); ÖKC ve e-Arşiv olağan yuvarlamayı kullanır.
+pub fn split_inclusive_tax(gross_cents: i64, tax_rate_bp: i64) -> (i64, i64) {
+    let divisor = 10_000 + tax_rate_bp as i128;
+    let net = (gross_cents as i128 * 10_000 * 2 + divisor) / (divisor * 2);
+    let net = net as i64;
+    (net, gross_cents - net)
+}
+
 /// Kontrollü finansal toplama.
 ///
 /// Neden bu fonksiyon: AGENTS.md §3.4 "finansal toplamlarda unwrap_or(0) YASAK"
@@ -89,13 +99,6 @@ impl std::ops::Sub for Cents {
 /// `Err` dönüşü yukarı taşınır ve komut `Err` döner. `Cents + Cents`
 /// operatörü wrapping yapar (Rust default), bu yüzden büyük toplamarda
 /// dogrulama gereklidir — bu fonksiyon o dogrulamayı tek yerde sağlar.
-/// KDV dahil tutarı matrah ve KDV'ye ayırır. Toplam değişmez, kuruş KDV'de kalır.
-pub fn split_inclusive_tax(gross_cents: i64, tax_rate_bp: i64) -> (i64, i64) {
-    let net = (gross_cents as i128 * 10_000) / (10_000 + tax_rate_bp as i128);
-    let net = net as i64;
-    (net, gross_cents - net)
-}
-
 pub fn checked_add(a: Cents, b: Cents) -> Result<Cents, String> {
     a.0.checked_add(b.0)
         .map(Cents)

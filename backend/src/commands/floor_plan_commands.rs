@@ -217,6 +217,40 @@ pub async fn create_floor_zone(
     kapat(conn, sonuc).await
 }
 
+/// Salon bölümünün adını değiştirir.
+#[tauri::command]
+pub async fn rename_floor_zone(
+    actor_role: String,
+    actor_id: Option<String>,
+    tenant_id: Option<String>,
+    zone_id: String,
+    name: String,
+    pool: State<'_, DbPool>,
+    app_state: State<'_, AppState>,
+) -> Result<(), String> {
+    rbac::require_any(&actor_role, &WRITE_ROLES)?;
+
+    let aktor = Aktör::coz(actor_id, &actor_role, tenant_id.as_deref())?;
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    let mut conn = pool.begin_write().await?;
+
+    let sonuc: Result<(), String> = async {
+        layout::rename_zone(&mut conn, aktor.tenant(), &zone_id, &name).await?;
+        record_audit(
+            &mut conn,
+            &lock,
+            &aktor,
+            "floor:zone_renamed",
+            &zone_id,
+            serde_json::json!({ "name": name }),
+        )
+        .await
+    }
+    .await;
+
+    kapat(conn, sonuc).await
+}
+
 /// Salon bölümünü kaldırır. Bölüme bağlı masalar silinmez, yalnız
 /// bağlantıları düşer.
 #[tauri::command]

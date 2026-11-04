@@ -158,7 +158,8 @@ CREATE TABLE IF NOT EXISTS categories (
     name TEXT NOT NULL,
     display_order INTEGER NOT NULL DEFAULT 0,
     icon TEXT,
-    default_station TEXT DEFAULT 'Sıcak'
+    default_station TEXT DEFAULT 'Sıcak',
+    parent_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS products (
@@ -187,6 +188,11 @@ CREATE TABLE IF NOT EXISTS products (
     stockout_reason TEXT,
     stockout_at TEXT,
     stockout_by TEXT,
+    station TEXT,
+    on_web INTEGER NOT NULL DEFAULT 0,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    -- Hammadde satış kataloğunda görünmez; yalnız stok ve reçetede kullanılır.
+    is_raw INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (category_id) REFERENCES categories(id)
 );
 CREATE INDEX IF NOT EXISTS idx_products_tenant_86
@@ -194,6 +200,8 @@ CREATE INDEX IF NOT EXISTS idx_products_tenant_86
 
 CREATE TABLE IF NOT EXISTS tables (
     id TEXT NOT NULL PRIMARY KEY,
+    trail TEXT,
+    merged TEXT,
     -- Neden varsayılan YOK: `DEFAULT 'DEFAULT_TENANT'` kalsaydı `tenant_id`
     -- bind etmeyen bir INSERT sessizce ortak havuza düşer ve kiracı izolasyonu
     -- delinirdi (AGENTS.md §3.3). Tenant çağırandan gelir.
@@ -352,6 +360,7 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     credential_hash TEXT,
     pin_hash TEXT,
+    pin_length INTEGER,
     login_identifier TEXT,
     email TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
@@ -527,6 +536,9 @@ CREATE TABLE IF NOT EXISTS inventory_batches (
     initial_quantity REAL NOT NULL,
     remaining_quantity REAL NOT NULL,
     unit_cost_cents INTEGER NOT NULL DEFAULT 0,
+    -- Adetle alınıp gramla tüketilen üründe (marul) bu partinin bir adedinden
+    -- çıkan kullanılabilir gram. Boşsa parti gram talebini karşılamaz.
+    usable_grams_per_unit REAL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_inv_batches_prod ON inventory_batches(product_id, received_at ASC);
@@ -593,8 +605,17 @@ CREATE TABLE IF NOT EXISTS stations (
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
     name TEXT NOT NULL,
     description TEXT,
+    printer_name TEXT,
+    user_ids TEXT NOT NULL DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+
+CREATE TRIGGER IF NOT EXISTS trg_tables_clear_trail
+AFTER UPDATE OF status ON tables
+WHEN NEW.status = 'AVAILABLE' AND (NEW.trail IS NOT NULL OR NEW.merged IS NOT NULL)
+BEGIN
+    UPDATE tables SET trail = NULL, merged = NULL WHERE id = NEW.id;
+END;
 
 -- ORDER ITEMS (notes column for KDS visibility)
 CREATE TABLE IF NOT EXISTS order_items (
@@ -866,6 +887,8 @@ CREATE TABLE IF NOT EXISTS payroll_rules (
     tip_multiplier_percent INTEGER NOT NULL DEFAULT 100,
     -- Kar payi yuzdesi (net kara karsi)
     profit_share_percent INTEGER NOT NULL DEFAULT 0,
+    -- DAILY | WEEKLY | MONTHLY: taban tutar bu döneme aittir
+    pay_period TEXT NOT NULL DEFAULT 'MONTHLY',
     active INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1341,6 +1364,12 @@ CREATE TABLE IF NOT EXISTS pos_gateway_settings (
 -- `product_ids` boşsa tüm ürünlere uygulanır.
 CREATE TABLE IF NOT EXISTS price_tariffs (
     id TEXT PRIMARY KEY,
+    schedule_on INTEGER NOT NULL DEFAULT 0,
+    start_time TEXT,
+    end_time TEXT,
+    days_of_week TEXT,
+    valid_from TEXT,
+    valid_to TEXT,
     tenant_id TEXT NOT NULL,
     name TEXT NOT NULL,
     kind TEXT NOT NULL CHECK (kind IN ('GUNDUZ', 'GECE', 'CANLI_MUZIK', 'OZEL')),

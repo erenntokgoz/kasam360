@@ -2,6 +2,8 @@
 
 pub mod kpi_service;
 pub mod payroll_deductions;
+pub mod payroll_period;
+pub mod payroll_rules;
 pub mod payroll_service;
 pub mod payroll_types;
 pub mod staff_service;
