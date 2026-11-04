@@ -19,7 +19,10 @@ interface LeaveRow {
   status: string;
 }
 
-const KINDS: Record<string, string> = { YILLIK: 'Yıllık', HASTALIK: 'Hastalık', MAZERET: 'Mazeret', UCRETSIZ: 'Ücretsiz' };
+/** Ücretli izin bordrodan kesilmez; yalnız ücretsiz izin taban/30 × gün keser. */
+const PAID_KINDS: Record<string, string> = { YILLIK: 'Yıllık', HASTALIK: 'Hastalık', MAZERET: 'Mazeret' };
+const UNPAID = 'UCRETSIZ';
+const kindLabel = (kind: string) => (kind === UNPAID ? 'Ücretsiz izin' : `${PAID_KINDS[kind] ?? kind} · Ücretli`);
 const fieldClass = 'min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]';
 
 const tone = (status: string) =>
@@ -78,7 +81,7 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
         {ordered.slice(0, 12).map((row) => (
           <li key={row.id} className="flex flex-wrap items-center gap-3 min-h-12 border-b border-[var(--border)] last:border-b-0">
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-[var(--text-primary)] truncate">{KINDS[row.kind] ?? row.kind}</span>
+              <span className={`block text-sm font-semibold truncate ${row.kind === UNPAID ? 'text-[var(--accent-amber)]' : 'text-[var(--text-primary)]'}`}>{kindLabel(row.kind)}</span>
               <span className="block text-xs tabular-nums text-[var(--text-secondary)]">{formatDay(row.startDate)} → {formatDay(row.endDate)}</span>
             </span>
             <span className={`text-xs font-bold ${tone(row.status)}`}>{statusLabel(row.status)}</span>
@@ -111,11 +114,19 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
         ))}
       </ul>
       <div className="flex flex-wrap gap-2 mt-auto">
-        <select aria-label="İzin türü" className={fieldClass} value={kind} onChange={(event) => setKind(event.target.value)}>
-          {Object.entries(KINDS).map(([id, label]) => (
-            <option key={id} value={id}>{label}</option>
-          ))}
-        </select>
+        <Button variant={kind !== UNPAID ? 'selected' : 'secondary'} className="min-h-12 text-sm" onClick={() => setKind('YILLIK')}>
+          Ücretli
+        </Button>
+        <Button variant={kind === UNPAID ? 'selected' : 'secondary'} className="min-h-12 text-sm" onClick={() => setKind(UNPAID)}>
+          Ücretsiz
+        </Button>
+        {kind !== UNPAID ? (
+          <select aria-label="Ücretli izin türü" className={fieldClass} value={kind} onChange={(event) => setKind(event.target.value)}>
+            {Object.entries(PAID_KINDS).map(([id, label]) => (
+              <option key={id} value={id}>{label}</option>
+            ))}
+          </select>
+        ) : null}
         <Input aria-label="Başlangıç" type="date" className="min-h-12 !w-40" value={start} onChange={(event) => setStart(event.target.value)} />
         <Input aria-label="Bitiş" type="date" className="min-h-12 !w-40" value={end} onChange={(event) => setEnd(event.target.value)} />
         <Button

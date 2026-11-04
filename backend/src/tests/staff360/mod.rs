@@ -6,6 +6,7 @@
 
 mod kpi;
 mod payroll;
+mod payroll_rights;
 mod radar;
 mod regression;
 mod staff;

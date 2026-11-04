@@ -4,7 +4,7 @@ import { invokeIPC } from '../../../services/tauriClient';
 import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { useLedgerStore } from '../../../stores/ledgerStore';
-import { BarAction } from '../../../ui/Bar';
+import { Button } from '../../../ui/Button';
 import { PayrollPanel } from '../payroll/PayrollPanel';
 import { SectionTabs, type SectionTab } from '../SectionTabs';
 import { ROLE_LABEL, StaffFormModal, type StaffMember } from '../StaffFormModal';
@@ -67,14 +67,17 @@ export const StaffLedger: React.FC = () => {
         tabs={SECTIONS}
         active={section}
         onChange={setSection}
-        actions={<BarAction tone="primary" onClick={() => setEditing('NEW')}>Personel Ekle</BarAction>}
       />
 
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">Personel okunamadı: {error}</p> : null}
 
       {section === 'PEOPLE' ? (
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-          <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)] self-start">
+          <div className="space-y-2 self-start">
+          <Button variant="primary" className="w-full min-h-12 text-sm font-bold" onClick={() => setEditing('NEW')}>
+            Personel Ekle
+          </Button>
+          <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
             {(staff ?? []).map((member) => (
               <li key={member.id}>
                 <button
@@ -91,6 +94,7 @@ export const StaffLedger: React.FC = () => {
               </li>
             ))}
           </ul>
+          </div>
           {selected ? (
             <StaffCard
               key={selected.id}

@@ -226,6 +226,11 @@ pub async fn record_staff_advance(
     if amount_cents <= 0 {
         return Err("VALIDATION: avans tutarı 0'dan büyük olmalıdır.".to_string());
     }
+    // Havale kasadan çıkmaz; bilinmeyen yöntem de kasaya dokunmadan geçerdi ve
+    // çekmece açığı nereden geldiği bilinmeden büyürdü.
+    if !matches!(payment_method, "CASH" | "BANK_TRANSFER") {
+        return Err("VALIDATION: avans nakit veya havale olmalıdır.".to_string());
+    }
     let name: String = sqlx::query_scalar("SELECT name FROM users WHERE tenant_id = ? AND id = ?")
         .bind(tenant_id)
         .bind(user_id)
@@ -266,6 +271,41 @@ pub async fn record_staff_advance(
     .await
     .map_err(text_error)?;
     Ok(id)
+}
+
+/// Avansı düzeltir: eskisini iptal edip yenisini aynı işlemde yazar. Önceden arayüz
+/// iki ayrı çağrı yapıyordu; iptal başarısız olursa iki avans birden bordrodan düşerdi.
+pub async fn correct_staff_advance(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    expense_id: &str,
+    period: &str,
+    amount_cents: i64,
+    payment_method: &str,
+    actor_id: &str,
+    expense_date: &str,
+) -> Result<String, String> {
+    let user_id: String = sqlx::query_scalar(
+        "SELECT user_id FROM staff_advances WHERE tenant_id = ? AND expense_id = ?",
+    )
+    .bind(tenant_id)
+    .bind(expense_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(text_error)?
+    .ok_or_else(|| "NOT_FOUND: avans bulunamadı".to_string())?;
+    void_expense(conn, tenant_id, expense_id, actor_id, "Avans düzeltmesi").await?;
+    record_staff_advance(
+        conn,
+        tenant_id,
+        &user_id,
+        period,
+        amount_cents,
+        payment_method,
+        actor_id,
+        expense_date,
+    )
+    .await
 }
 
 /// Sütun sonradan geldi: eski kurulumda sabit gider ödemesi başlıkla eşleşiyordu.

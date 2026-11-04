@@ -160,10 +160,8 @@ export const StaffFormModal: React.FC<StaffFormModalProps> = ({
             userId,
             model: rule?.model ?? 'FIXED',
             baseSalaryCents: isHourly ? 0 : baseSalaryCents,
-            commissionPercent: rule?.commissionPercent ?? 0,
             hourlyRateCents: rule?.hourlyRateCents ?? 0,
             tipMultiplierPercent: rule?.tipMultiplierPercent ?? 100,
-            profitSharePercent: rule?.profitSharePercent ?? 0,
             payPeriod,
           },
         });

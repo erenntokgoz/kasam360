@@ -6,20 +6,20 @@ import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 
+export type AdvanceMethod = 'CASH' | 'BANK_TRANSFER';
+
 interface AdvanceFormProps {
-  editing?: { expenseId: string; amountCents: number } | null;
+  editing?: { expenseId: string; amountCents: number; paymentMethod: string } | null;
   onCancelEdit?: () => void;
   userId: string;
   period: string;
   onSaved: () => void;
 }
 
-const fieldClass = 'min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]';
-
-/** Avans gider olarak yazılır ve seçili dönemin bordrosundan düşer. */
+/** Avans gider olarak yazılır ve seçili dönemin bordrosundan düşer. Nakit kasadan çıkar. */
 export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, editing, onCancelEdit, onSaved }) => {
   const [amount, setAmount] = useState(editing ? (editing.amountCents / 100).toFixed(2).replace('.', ',') : '');
-  const [method, setMethod] = useState('CASH');
+  const [method, setMethod] = useState<AdvanceMethod>(editing?.paymentMethod === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : 'CASH');
   const [error, setError] = useState<string | null>(null);
   const cents = parseCents(amount);
 
@@ -27,12 +27,15 @@ export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, editin
     const { actorId, actorRole, tenantId } = sessionArgs();
     setError(null);
     try {
-      await invokeIPC('record_staff_advance', {
-        userId, period, amountCents: cents, paymentMethod: method, actorId, actorRole, tenantId,
-      });
-      // Yeni avans yazılamazsa eskisi korunur; iptal bundan sonra gelir.
+      // Düzeltme tek komuttur: iptal ve yeni kayıt birlikte yazılır, biri kalırsa çift kesinti olurdu.
       if (editing) {
-        await invokeIPC('void_expense', { expenseId: editing.expenseId, reason: 'Düzeltme', actorId, actorRole, tenantId });
+        await invokeIPC('correct_staff_advance', {
+          expenseId: editing.expenseId, period, amountCents: cents, paymentMethod: method, actorId, actorRole, tenantId,
+        });
+      } else {
+        await invokeIPC('record_staff_advance', {
+          userId, period, amountCents: cents, paymentMethod: method, actorId, actorRole, tenantId,
+        });
       }
       setAmount('');
       onSaved();
@@ -44,11 +47,13 @@ export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, editin
   return (
     <div className="flex flex-wrap items-center gap-2">
       <NumberInput aria-label="Avans tutarı" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-32" value={amount} onValueChange={setAmount} />
-      <select aria-label="Avans ödeme şekli" className={fieldClass} value={method} onChange={(event) => setMethod(event.target.value)}>
-        <option value="CASH">Nakit</option>
-        <option value="BANK_TRANSFER">Havale</option>
-      </select>
-      <Button variant="secondary" className="min-h-12 text-sm" disabled={cents === null || cents <= 0} onClick={() => void save()}>
+      <Button variant={method === 'CASH' ? 'selected' : 'secondary'} className="min-h-12 text-sm" onClick={() => setMethod('CASH')}>
+        Nakit
+      </Button>
+      <Button variant={method === 'BANK_TRANSFER' ? 'selected' : 'secondary'} className="min-h-12 text-sm" onClick={() => setMethod('BANK_TRANSFER')}>
+        Havale
+      </Button>
+      <Button variant="primary" className="min-h-12 text-sm font-bold" disabled={cents === null || cents <= 0} onClick={() => void save()}>
         {editing ? 'Kaydet' : 'Avans Ver'}
       </Button>
       {editing ? (
@@ -56,7 +61,7 @@ export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, editin
           Vazgeç
         </Button>
       ) : null}
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <p role="alert" className="w-full text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
     </div>
   );
 };

@@ -36,95 +36,6 @@ async fn sabit_maas_modeli_temiz_hesaplanir() {
 }
 
 #[tokio::test]
-async fn komisyon_kendi_satisindan_hesaplanir() {
-    let p = pool().await;
-    kasa(&p, "tenant_a", "tbl_1").await;
-    urun(&p, "tenant_a", "a").await;
-    kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
-    kullanici(&p, "tenant_a", "usr_k", "Kasiyer", "CASHIER").await;
-    siparis(
-        &p,
-        "tenant_a",
-        "ord_1",
-        "usr_k",
-        "usr_1",
-        20_000,
-        "PAID",
-        "2026-03-10 12:00:00",
-    )
-    .await;
-    siparis(
-        &p,
-        "tenant_a",
-        "ord_2",
-        "usr_k",
-        "usr_1",
-        10_000,
-        "PAID",
-        "2026-03-11 12:00:00",
-    )
-    .await;
-
-    payroll_service::set_rule(
-        &p,
-        "tenant_a",
-        &PayrollRuleInput {
-            user_id: "usr_1".into(),
-            model: "COMMISSION".into(),
-            base_salary_cents: 0,
-            commission_percent: 10,
-            hourly_rate_cents: 0,
-            tip_multiplier_percent: 100,
-            profit_share_percent: 0,
-            pay_period: "MONTHLY".to_string(),
-        },
-    )
-    .await
-    .expect("kural");
-
-    let runs = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
-        .await
-        .expect("bordro");
-    let a = runs[0].amounts.as_ref().expect("tutar");
-    // 30.000 kuruş satışın %10'u = 3.000 kuruş.
-    assert_eq!(
-        a.commission_cents, 3_000,
-        "komisyon yanlış tabandan hesaplandı"
-    );
-    assert_eq!(a.gross_cents, 3_000);
-}
-
-#[tokio::test]
-async fn komisyon_satis_yoksa_uyari_verir_sifir_yazmaz() {
-    let p = pool().await;
-    kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
-    payroll_service::set_rule(
-        &p,
-        "tenant_a",
-        &PayrollRuleInput {
-            user_id: "usr_1".into(),
-            model: "COMMISSION".into(),
-            base_salary_cents: 0,
-            commission_percent: 10,
-            hourly_rate_cents: 0,
-            tip_multiplier_percent: 100,
-            profit_share_percent: 0,
-            pay_period: "MONTHLY".to_string(),
-        },
-    )
-    .await
-    .expect("kural");
-
-    let runs = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
-        .await
-        .expect("bordro");
-    let uyari = runs[0].warning.as_ref().expect("uyari olmalı");
-    assert!(uyari.contains("satış kaydı yok"), "uyari metni: {uyari}");
-    // Tutar 0 çünkü gerçekten satış yok; ama ekranda "hesaplanmadı" yazar.
-    assert_eq!(runs[0].amounts.as_ref().expect("tutar").commission_cents, 0);
-}
-
-#[tokio::test]
 async fn saatlik_model_kapanmis_vardiye_saati_uzerinden_hesaplanir() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "CASHIER").await;
@@ -321,68 +232,6 @@ async fn ayni_donem_bordro_yeniden_hesaplanabilir() {
 }
 
 #[tokio::test]
-async fn komisyon_cift_ciro_ve_acik_siparis_sayilmaz() {
-    let p = pool().await;
-    kasa(&p, "tenant_a", "tbl_1").await;
-    urun(&p, "tenant_a", "a").await;
-    kullanici(&p, "tenant_a", "usr_comm", "Garson Ali", "WAITER").await;
-
-    payroll_service::set_rule(
-        &p,
-        "tenant_a",
-        &PayrollRuleInput {
-            user_id: "usr_comm".into(),
-            model: "COMMISSION".into(),
-            base_salary_cents: 0,
-            commission_percent: 10,
-            hourly_rate_cents: 0,
-            tip_multiplier_percent: 100,
-            profit_share_percent: 0,
-            pay_period: "MONTHLY".to_string(),
-        },
-    )
-    .await
-    .expect("kural");
-
-    // 1. Sipariş: PAID, 20_000 kuruş (cashier_id == waiter_id == usr_comm)
-    siparis(
-        &p,
-        "tenant_a",
-        "ord_p1",
-        "usr_comm",
-        "usr_comm",
-        20_000,
-        "PAID",
-        "2026-03-10 12:00:00",
-    )
-    .await;
-
-    // 2. Sipariş: IN_PROGRESS, 50_000 kuruş - ciroya katılmamalı
-    siparis(
-        &p,
-        "tenant_a",
-        "ord_p2",
-        "usr_comm",
-        "usr_comm",
-        50_000,
-        "IN_PROGRESS",
-        "2026-03-11 12:00:00",
-    )
-    .await;
-
-    let runs = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
-        .await
-        .expect("bordro");
-
-    assert_eq!(runs.len(), 1);
-    let amounts = runs[0].amounts.as_ref().expect("tutarlar");
-    // Satış tam 20_000 olmalı; %10 komisyon = 2000 kuruş.
-    // 2x sayılmış olsaydı 40_000 -> 4000 çıkardı; IN_PROGRESS katılsaydı 7000+ çıkardı.
-    assert_eq!(amounts.gross_cents, 2000, "Komisyon 20_000'in %10'u olmalı");
-    assert_eq!(amounts.net_cents, 2000);
-}
-
-#[tokio::test]
 async fn haftalik_hakedis_yalniz_haftalik_kisiyi_hesaplar_avansi_tarihten_duser() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
@@ -426,5 +275,98 @@ async fn haftalik_hakedis_yalniz_haftalik_kisiyi_hesaplar_avansi_tarihten_duser(
     assert_eq!(
         (amounts.deduction_cents, amounts.net_cents),
         (10_000, 60_000)
+    );
+}
+
+#[tokio::test]
+async fn komisyon_ve_kar_payi_modeli_reddedilir() {
+    let p = pool().await;
+    kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
+    for model in ["COMMISSION", "PROFIT_SHARE"] {
+        let sonuc = payroll_service::set_rule(
+            &p,
+            "tenant_a",
+            &PayrollRuleInput {
+                user_id: "usr_1".into(),
+                model: model.into(),
+                base_salary_cents: 1_000,
+                commission_percent: 0,
+                hourly_rate_cents: 0,
+                tip_multiplier_percent: 100,
+                profit_share_percent: 0,
+                pay_period: "MONTHLY".to_string(),
+            },
+        )
+        .await;
+        assert!(sonuc.is_err(), "{model} artık kabul edilmemeli");
+    }
+    // Eski istemcinin gönderdiği yüzde sabit modelde de sessizce yutulmaz.
+    let sonuc = payroll_service::set_rule(
+        &p,
+        "tenant_a",
+        &PayrollRuleInput {
+            user_id: "usr_1".into(),
+            model: "FIXED".into(),
+            base_salary_cents: 1_000,
+            commission_percent: 10,
+            hourly_rate_cents: 0,
+            tip_multiplier_percent: 100,
+            profit_share_percent: 0,
+            pay_period: "MONTHLY".to_string(),
+        },
+    )
+    .await;
+    assert!(sonuc.is_err(), "komisyon yüzdesi reddedilmeli");
+}
+
+#[tokio::test]
+async fn eski_komisyon_kurali_satis_okumadan_sabit_hesaplanir() {
+    let p = pool().await;
+    kasa(&p, "tenant_a", "tbl_1").await;
+    urun(&p, "tenant_a", "a").await;
+    kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
+    siparis(
+        &p,
+        "tenant_a",
+        "ord_1",
+        "usr_1",
+        "usr_1",
+        20_000,
+        "PAID",
+        "2026-03-10 12:00:00",
+    )
+    .await;
+    // Yükseltme öncesi kural: komisyon %10 ve kâr payı %5.
+    sqlx::query(
+        "INSERT INTO payroll_rules (id, tenant_id, user_id, model, base_salary_cents,
+             commission_percent, profit_share_percent)
+         VALUES ('prl_1', 'tenant_a', 'usr_1', 'COMMISSION', 25000, 10, 5)",
+    )
+    .execute(&p)
+    .await
+    .expect("eski kural");
+    sqlx::raw_sql(include_str!(
+        "../../../migrations/0017_fixed_instead_of_commission.sql"
+    ))
+    .execute(&p)
+    .await
+    .expect("0017");
+    let kural: (String, i64, i64, i64) = sqlx::query_as(
+        "SELECT model, base_salary_cents, commission_percent, profit_share_percent
+           FROM payroll_rules WHERE tenant_id = 'tenant_a' AND user_id = 'usr_1'",
+    )
+    .fetch_one(&p)
+    .await
+    .expect("kural");
+    assert_eq!(kural, ("FIXED".to_string(), 25_000, 0, 0));
+
+    let runs = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
+        .await
+        .expect("bordro");
+    let a = runs[0].amounts.as_ref().expect("tutar");
+    assert_eq!((a.commission_cents, a.profit_share_cents), (0, 0));
+    assert_eq!(
+        a.gross_cents, 25_000,
+        "satış bordroya prim olarak girmemeli"
     );
 }

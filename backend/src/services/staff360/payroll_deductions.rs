@@ -61,6 +61,8 @@ pub struct StaffAdvance {
     pub id: String,
     pub expense_id: String,
     pub amount_cents: i64,
+    /// Düzeltmede yöntem korunur: havale avansı nakit sanılıp kasadan düşmesin.
+    pub payment_method: String,
     pub created_at: String,
 }
 
@@ -70,9 +72,11 @@ pub async fn money_summary(
     user_id: &str,
     period: &str,
 ) -> Result<StaffMoneySummary, String> {
-    let rows: Vec<(String, String, i64, String)> = sqlx::query_as(
-        "SELECT id, expense_id, amount_cents, created_at FROM staff_advances
-         WHERE tenant_id = ? AND user_id = ? AND period = ? ORDER BY created_at DESC",
+    let rows: Vec<(String, String, i64, String, String)> = sqlx::query_as(
+        "SELECT a.id, a.expense_id, a.amount_cents, e.payment_method, a.created_at
+           FROM staff_advances a
+           JOIN general_expenses e ON e.id = a.expense_id AND e.tenant_id = a.tenant_id
+          WHERE a.tenant_id = ? AND a.user_id = ? AND a.period = ? ORDER BY a.created_at DESC",
     )
     .bind(tenant_id)
     .bind(user_id)
@@ -93,12 +97,15 @@ pub async fn money_summary(
     Ok(StaffMoneySummary {
         advances: rows
             .into_iter()
-            .map(|(id, expense_id, amount_cents, created_at)| StaffAdvance {
-                id,
-                expense_id,
-                amount_cents,
-                created_at,
-            })
+            .map(
+                |(id, expense_id, amount_cents, payment_method, created_at)| StaffAdvance {
+                    id,
+                    expense_id,
+                    amount_cents,
+                    payment_method,
+                    created_at,
+                },
+            )
             .collect(),
         tip_cents,
     })

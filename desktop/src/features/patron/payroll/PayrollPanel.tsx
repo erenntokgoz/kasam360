@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
-import { PAY_PERIODS, recentPeriods, type PayPeriod } from '../../../lib/payPeriod';
+import { PAY_PERIODS, hoursText, recentPeriods, type PayPeriod } from '../../../lib/payPeriod';
 import { invokeIPC } from '../../../services/tauriClient';
 import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
@@ -11,10 +11,8 @@ import type { PayrollRule } from './RuleEditor';
 
 interface Amounts {
   baseCents: number;
-  commissionCents: number;
   tipCents: number;
   hourlyCents: number;
-  profitShareCents: number;
   deductionCents: number;
   netCents: number;
 }
@@ -22,16 +20,16 @@ interface Amounts {
 interface PayrollRun {
   id: string;
   fullName: string;
+  model: string;
+  workedSeconds: number;
   amounts: Amounts | null;
   warning: string | null;
 }
 
 const COLUMNS: { label: string; key: keyof Amounts }[] = [
   { label: 'Sabit', key: 'baseCents' },
-  { label: 'Komisyon', key: 'commissionCents' },
   { label: 'Bahşiş', key: 'tipCents' },
   { label: 'Saatlik', key: 'hourlyCents' },
-  { label: 'Kâr Payı', key: 'profitShareCents' },
   { label: 'Kesinti', key: 'deductionCents' },
   { label: 'Net', key: 'netCents' },
 ];
@@ -74,6 +72,7 @@ export const PayrollPanel: React.FC = () => {
     }
   };
 
+  const hasHourly = runs?.some((run) => run.model === 'HOURLY') ?? false;
   const total = runs?.reduce((sum, run) => sum + (run.amounts?.netCents ?? 0), 0) ?? 0;
 
   return (
@@ -125,6 +124,7 @@ export const PayrollPanel: React.FC = () => {
             <thead>
               <tr className="text-left text-xs text-[var(--text-muted)]">
                 <th className="font-medium py-2 pr-4">Personel</th>
+                {hasHourly ? <th className="font-medium py-2 pl-4 text-right">Saat</th> : null}
                 {COLUMNS.map((column) => (
                   <th key={column.key} className="font-medium py-2 pl-4 text-right">{column.label}</th>
                 ))}
@@ -137,6 +137,11 @@ export const PayrollPanel: React.FC = () => {
                     <span className="block font-semibold text-[var(--text-primary)]">{run.fullName}</span>
                     {run.warning ? <span className="block text-xs text-[var(--accent-amber)]">{run.warning}</span> : null}
                   </td>
+                  {hasHourly ? (
+                    <td className="py-2 pl-4 text-right tabular-nums whitespace-nowrap text-[var(--text-secondary)]">
+                      {run.model === 'HOURLY' ? hoursText(run.workedSeconds) : '-'}
+                    </td>
+                  ) : null}
                   {COLUMNS.map((column) => (
                     <td key={column.key} className={`py-2 pl-4 text-right tabular-nums whitespace-nowrap ${column.key === 'netCents' ? 'font-bold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                       {run.amounts ? formatMoney(run.amounts[column.key]) : 'Gizli'}

@@ -1,13 +1,15 @@
-//! Personel bordro hesabı (5 model).
+//! Personel bordro hesabı (3 model).
 //!
-//! Modeller: FIXED, COMMISSION, TIP, HOURLY, PROFIT_SHARE. Her model gerçek
-//! tablodan okur; hiçbiri tahminle çalışmaz. Hesaplanamayan bileşen
-//! `warning` ile bildirilir, sessizce 0 yazılmaz (AGENTS.md §3.4).
+//! Modeller: FIXED, TIP, HOURLY. Komisyon ve kâr payı kaldırıldı; bordro satış ve
+//! P&L okumaz, `commission_cents` ve `profit_share_cents` sütunları 0 yazılır. Her
+//! model gerçek tablodan okur; hesaplanamayan bileşen `warning` ile bildirilir,
+//! sessizce 0 yazılmaz (AGENTS.md §3.4).
 //!
 //! Gizlilik: `can_see_amounts` false ise `amounts: None` döner.
 
 use crate::services::lan_sync::WritePool;
 use crate::services::staff360::payroll_deductions;
+use crate::services::staff360::payroll_hours::{hourly_pay_cents, hours_text, worked_seconds};
 #[cfg(test)]
 pub use crate::services::staff360::payroll_period::period_range;
 use crate::services::staff360::payroll_period::{self, period_window, PeriodWindow};
@@ -17,7 +19,9 @@ use sqlx::SqlitePool;
 use crate::services::staff360::payroll_types::{PayrollAmounts, PayrollRule, PayrollRun};
 use crate::services::staff360::tip_service;
 
-pub use crate::services::staff360::payroll_rules::{delete_rule, set_rule};
+pub use crate::services::staff360::payroll_rules::{
+    delete_rule, hourly_equivalent_cents, set_rule, set_tip_multiplier,
+};
 
 pub async fn list_rules(
     pool: &SqlitePool,
@@ -25,9 +29,8 @@ pub async fn list_rules(
     can_see_amounts: bool,
 ) -> Result<Vec<PayrollRule>, String> {
     let rows = sqlx::query(
-        "SELECT pr.user_id, u.name, pr.model, pr.base_salary_cents, pr.commission_percent,
-                pr.hourly_rate_cents, pr.tip_multiplier_percent, pr.profit_share_percent, pr.pay_period,
-                pr.active
+        "SELECT pr.user_id, u.name, pr.model, pr.base_salary_cents, pr.hourly_rate_cents,
+                pr.tip_multiplier_percent, pr.pay_period, pr.active
            FROM payroll_rules pr
            JOIN users u ON u.id = pr.user_id AND u.tenant_id = pr.tenant_id
           WHERE pr.tenant_id = ?1
@@ -40,31 +43,28 @@ pub async fn list_rules(
 
     let mut out = Vec::with_capacity(rows.len());
     for r in rows {
+        let model: String = r.try_get("model").map_err(|e| e.to_string())?;
+        let pay_period: String = r.try_get("pay_period").map_err(|e| e.to_string())?;
+        let base: i64 = r.try_get("base_salary_cents").map_err(|e| e.to_string())?;
+        let rate: i64 = r.try_get("hourly_rate_cents").map_err(|e| e.to_string())?;
         // Yetkisiz çağıran için maaş ve saatlik ücret sıfırlanır: model ve
-        // oranlar görünür (yönetici planı anlamalı), tutarlar görünmez.
+        // çarpan görünür (yönetici planı anlamalı), tutarlar görünmez.
         let gizli = !can_see_amounts;
         out.push(PayrollRule {
             user_id: r.try_get("user_id").map_err(|e| e.to_string())?,
             full_name: r.try_get("name").map_err(|e| e.to_string())?,
-            model: r.try_get("model").map_err(|e| e.to_string())?,
-            base_salary_cents: if gizli {
-                0
+            hourly_equivalent_cents: if gizli {
+                None
             } else {
-                r.try_get("base_salary_cents").map_err(|e| e.to_string())?
+                Some(hourly_equivalent_cents(&model, &pay_period, base, rate)?)
             },
-            commission_percent: r.try_get("commission_percent").map_err(|e| e.to_string())?,
-            hourly_rate_cents: if gizli {
-                0
-            } else {
-                r.try_get("hourly_rate_cents").map_err(|e| e.to_string())?
-            },
+            model,
+            base_salary_cents: if gizli { 0 } else { base },
+            hourly_rate_cents: if gizli { 0 } else { rate },
             tip_multiplier_percent: r
                 .try_get("tip_multiplier_percent")
                 .map_err(|e| e.to_string())?,
-            profit_share_percent: r
-                .try_get("profit_share_percent")
-                .map_err(|e| e.to_string())?,
-            pay_period: r.try_get("pay_period").map_err(|e| e.to_string())?,
+            pay_period,
             active: r.try_get::<i64, _>("active").map_err(|e| e.to_string())? != 0,
         });
     }
@@ -80,7 +80,6 @@ pub async fn run_payroll(
     period: &str,
     can_see_amounts: bool,
 ) -> Result<Vec<PayrollRun>, String> {
-    let mut tx = pool.begin_write().await?;
     let window = period_window(pay_period, period)?;
     let PeriodWindow {
         key: donem,
@@ -88,7 +87,9 @@ pub async fn run_payroll(
         to: bitis,
         days: donem_gunu,
     } = window;
-    let rules: Vec<PayrollRule> = list_rules(pool, tenant_id, can_see_amounts)
+    // Tutarlar her zaman gerçek değerle hesaplanır ve yazılır; gizlilik yalnız
+    // yanıtta uygulanır. Müdürün başlattığı hesap sıfır maaşla kaydedilmemeli.
+    let rules: Vec<PayrollRule> = list_rules(pool, tenant_id, true)
         .await?
         .into_iter()
         .filter(|rule| rule.pay_period == pay_period)
@@ -97,22 +98,10 @@ pub async fn run_payroll(
         return Err("bu hakedis donemiyle tanimli maas kurali yok".to_string());
     }
 
-    // PROFIT_SHARE modeli icin donem net kararini bir kez hesapla.
-    let kar_aran = Some((baslangic.clone(), bitis.clone()));
-    let mut net_kar: Option<i64> = None;
-
+    let mut tx = pool.begin_write().await?;
     let mut out: Vec<PayrollRun> = Vec::with_capacity(rules.len());
     for kural in &rules {
         let mut uyari: Vec<String> = Vec::new();
-        let komisyon_taban = if kural.commission_percent > 0 {
-            own_sales_cents(pool, tenant_id, &kural.user_id, &baslangic, &bitis).await?
-        } else {
-            0
-        };
-        let komisyon = yuzde_hesapla(komisyon_taban, kural.commission_percent);
-        if kural.commission_percent > 0 && komisyon_taban == 0 {
-            uyari.push("bu donemde satış kaydı yok; komisyon hesaplanmadi".to_string());
-        }
 
         let bahsis = if kural.model == "TIP" {
             // Bahşiş aylık dağıtılır: kısa dönemde dağıtım tarihi esas alınır, tekrar yazılmaz.
@@ -145,26 +134,7 @@ pub async fn run_payroll(
             (0, 0)
         };
 
-        let kar_payi = if kural.profit_share_percent > 0 {
-            if net_kar.is_none() {
-                let rapor =
-                    crate::services::pnl_service::financial_report(pool, tenant_id, &kar_aran)
-                        .await
-                        .map_err(|e| format!("donem kari hesaplanamadi: {e}"))?;
-                net_kar = Some(rapor.net_profit_cents);
-            }
-            let kar = net_kar.unwrap_or(0);
-            if kar <= 0 {
-                uyari.push("donem net kârı sıfır veya zarar; kâr payı verilmedi".to_string());
-                0
-            } else {
-                yuzde_hesapla(kar, kural.profit_share_percent)
-            }
-        } else {
-            0
-        };
-
-        let brut = kural.base_salary_cents + komisyon + bahsis + saat_ucreti + kar_payi;
+        let brut = kural.base_salary_cents + bahsis + saat_ucreti;
         let kesinti = payroll_deductions::for_user(
             &mut tx,
             tenant_id,
@@ -184,12 +154,10 @@ pub async fn run_payroll(
         let not = with_deductions(
             basis_note(
                 &kural.model,
-                kural.commission_percent,
                 kural.base_salary_cents,
-                komisyon_taban,
+                kural.hourly_rate_cents,
                 bahsis,
                 saat,
-                kar_payi,
                 brut,
             ),
             &kesinti,
@@ -200,15 +168,15 @@ pub async fn run_payroll(
                  (id, tenant_id, user_id, period, model, base_cents, commission_cents,
                   tip_cents, hourly_cents, profit_share_cents, deduction_cents,
                   gross_cents, net_cents, input_snapshot, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?13, ?11, ?14, ?12,
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, 0, ?11, ?9, ?12, ?10,
                      strftime('%Y-%m-%dT%H:%M:%fZ','now'))
              ON CONFLICT (tenant_id, user_id, period)
              DO UPDATE SET model = excluded.model,
                            base_cents = excluded.base_cents,
-                           commission_cents = excluded.commission_cents,
+                           commission_cents = 0,
                            tip_cents = excluded.tip_cents,
                            hourly_cents = excluded.hourly_cents,
-                           profit_share_cents = excluded.profit_share_cents,
+                           profit_share_cents = 0,
                            deduction_cents = excluded.deduction_cents,
                            gross_cents = excluded.gross_cents,
                            net_cents = excluded.net_cents,
@@ -221,10 +189,8 @@ pub async fn run_payroll(
         .bind(&donem)
         .bind(&kural.model)
         .bind(kural.base_salary_cents)
-        .bind(komisyon)
         .bind(bahsis)
         .bind(saat_ucreti)
-        .bind(kar_payi)
         .bind(brut)
         .bind(&not)
         .bind(kesinti.total_cents())
@@ -252,10 +218,10 @@ pub async fn run_payroll(
             amounts: if can_see_amounts {
                 Some(PayrollAmounts {
                     base_cents: kural.base_salary_cents,
-                    commission_cents: komisyon,
+                    commission_cents: 0,
                     tip_cents: bahsis,
                     hourly_cents: saat_ucreti,
-                    profit_share_cents: kar_payi,
+                    profit_share_cents: 0,
                     deduction_cents: kesinti.total_cents(),
                     gross_cents: brut,
                     net_cents: net,
@@ -263,7 +229,9 @@ pub async fn run_payroll(
             } else {
                 None
             },
-            basis_note: not,
+            // Dayanak metni tutar içerir; müdür yanıtında boş döner.
+            basis_note: if can_see_amounts { not } else { String::new() },
+            worked_seconds: saat,
             warning: if uyari.is_empty() {
                 None
             } else {
@@ -273,78 +241,6 @@ pub async fn run_payroll(
     }
     tx.commit().await?;
     Ok(out)
-}
-
-/// Çalışanın kendi satışı: garson kalemlerinden, diğerleri kendi kapattığı
-/// siparişlerden. `order_items.waiter_id` yazılmamış eski siparişler
-/// garson satışına dahil edilmez; yanlışlıkla kasa cirosu garson primine
-/// yansımasın diye.
-async fn own_sales_cents(
-    pool: &SqlitePool,
-    tenant_id: &str,
-    user_id: &str,
-    baslangic: &str,
-    bitis: &str,
-) -> Result<i64, String> {
-    let kalem: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(oi.total_cents), 0)
-           FROM order_items oi
-           JOIN orders o ON o.id = oi.order_id AND o.tenant_id = oi.tenant_id
-          WHERE oi.tenant_id = ?1 AND oi.waiter_id = ?2
-            AND o.status = 'PAID' AND o.created_at >= ?3 AND o.created_at <= ?4",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .bind(baslangic)
-    .bind(bitis)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("calisan satis toplami okunamadi: {e}"))?;
-
-    let siparis: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(o.total_cents), 0) FROM orders o
-          WHERE o.tenant_id = ?1 AND o.cashier_id = ?2
-            AND o.status = 'PAID' AND o.created_at >= ?3 AND o.created_at <= ?4
-            AND NOT EXISTS (
-              SELECT 1 FROM order_items oi
-               WHERE oi.order_id = o.id AND oi.tenant_id = o.tenant_id
-                 AND oi.waiter_id = o.cashier_id
-            )",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .bind(baslangic)
-    .bind(bitis)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("kasa satisi toplami okunamadi: {e}"))?;
-    Ok(kalem + siparis)
-}
-
-/// Kapanmış vardiye saatleri. `shifts` kapanmamışsa saat sayılmaz: yarım
-/// kalmış vardiya saatlik ücreti eksik hesaplanırdı.
-async fn worked_seconds(
-    pool: &SqlitePool,
-    tenant_id: &str,
-    user_id: &str,
-    baslangic: &str,
-    bitis: &str,
-) -> Result<i64, String> {
-    let saniye: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(CAST(strftime('%s', closed_at) AS INTEGER)
-                           - CAST(strftime('%s', opened_at) AS INTEGER)), 0)
-           FROM shifts
-          WHERE tenant_id = ?1 AND cashier_id = ?2 AND closed_at IS NOT NULL
-            AND opened_at >= ?3 AND closed_at <= ?4",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .bind(baslangic)
-    .bind(bitis)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("vardiye saati okunamadi: {e}"))?;
-    Ok(saniye)
 }
 
 /// Patron kesintinin nereden geldiğini de görmeli.
@@ -358,59 +254,25 @@ fn with_deductions(note: String, kesinti: &payroll_deductions::Deductions) -> St
     )
 }
 
-/// Saniye üzerinden tam sayı hesap: saat ücreti float'a düşmez.
-fn hourly_pay_cents(seconds: i64, hourly_rate_cents: i64) -> Result<i64, String> {
-    let pay = (i128::from(seconds) * i128::from(hourly_rate_cents) + 1800) / 3600;
-    i64::try_from(pay).map_err(|_| "OVERFLOW: saat ücreti taştı".to_string())
-}
-
-/// Dayanak metnindeki saat: tek ondalık, yuvarlanmış.
-fn hours_text(seconds: i64) -> String {
-    let tenths = (seconds + 180) / 360;
-    format!("{}.{}", tenths / 10, tenths % 10)
-}
-
-/// Yüzde hesabı: taban × yüzde / 100, kuruş yuvarlaması ile.
-fn yuzde_hesapla(taban: i64, yuzde: i64) -> i64 {
-    ((taban as i128 * yuzde as i128) / 100) as i64
-}
-
 /// Hesabın dayanağını düz cümleyle yazar. Ekranda "tutar" yanında "bu nereden
 /// geldi" de görünür: patron rakamı sorgulayabilmelidir.
 fn basis_note(
     model: &str,
-    komisyon_yuzde: i64,
     taban_maas: i64,
-    komisyon_taban: i64,
+    saat_ucreti: i64,
     bahsis: i64,
     saat: i64,
-    kar_payi: i64,
     brut: i64,
 ) -> String {
     match model {
-        "FIXED" => format!("sabit maas {} kr", taban_maas),
-        "COMMISSION" => format!(
-            "sabit {} kr + satis {} kr × %{} = {} kr",
-            taban_maas, komisyon_taban, komisyon_yuzde, brut
-        ),
         "TIP" => format!("sabit {} kr + dagitilmis bahsis {} kr", taban_maas, bahsis),
         "HOURLY" => format!(
             "{} saat × saatlik {} kr = {} kr",
             hours_text(saat),
-            taban_maas,
+            saat_ucreti,
             brut
         ),
-        "PROFIT_SHARE" => {
-            format!("sabit {} kr + kar payi {} kr", taban_maas, kar_payi)
-        }
-        _ => format!(
-            "satis {} kr · bahsis {} kr · saat {} · kar payi {} kr · brut {} kr",
-            komisyon_taban,
-            bahsis,
-            hours_text(saat),
-            kar_payi,
-            brut
-        ),
+        _ => format!("sabit maas {} kr", taban_maas),
     }
 }
 

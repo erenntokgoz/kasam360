@@ -4,11 +4,14 @@ import { errorText, localDate } from '../../lib/cariInput';
 import { formatDateTime } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
 import { parseCents } from '../../lib/moneyInput';
+import { recentPeriods } from '../../lib/payPeriod';
+import { DEFAULT_TIP_MULTIPLIER, sharesFromMultipliers } from '../../lib/tipShares';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { Button } from '../../ui/Button';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { NumberInput } from '../../ui/NumberInput';
+import type { PayrollRule } from './payroll/RuleEditor';
 
 interface TipSummary {
   totalCents: number;
@@ -30,9 +33,15 @@ interface TipPoolPanelProps {
   staff: { id: string; name: string }[];
 }
 
+/** Havuz kayıtları alındığı aya yazılır; yeni bahşiş yalnız içinde bulunulan aya eklenir. */
+const currentMonth = () => localDate(new Date()).slice(0, 7);
+
 /** Bahşiş havuzu yüzdeyle dağıtılır; toplam tam %100 olmadan dağıtım yapılmaz. */
 export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff }) => {
-  const period = localDate(new Date()).slice(0, 7);
+  const months = recentPeriods('MONTHLY');
+  const [period, setPeriod] = useState(currentMonth());
+  const isCurrent = period === currentMonth();
+  const [multipliers, setMultipliers] = useState<Record<string, number> | null>(null);
   const [tips, setTips] = useState<TipSummary | null>(null);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<'CASH' | 'CARD'>('CASH');
@@ -56,6 +65,28 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Çarpanlar personel kartındaki maaş kuralından gelir; kuralı olmayan 1,00 sayılır.
+  useEffect(() => {
+    if (!canDistribute) return;
+    const { actorRole, tenantId } = sessionArgs();
+    invokeIPC<PayrollRule[]>('get_payroll_rules', { tenantId, actorRole })
+      .then((rules) => setMultipliers(Object.fromEntries(rules.map((rule) => [rule.userId, rule.tipMultiplierPercent]))))
+      .catch((caught) => setError(errorText(caught)));
+  }, [canDistribute]);
+
+  const byMultiplier = useCallback(() => {
+    if (!multipliers) return;
+    const shares = sharesFromMultipliers(
+      staff.map((member) => ({ id: member.id, multiplier: multipliers[member.id] ?? DEFAULT_TIP_MULTIPLIER })),
+    );
+    setPercents(Object.fromEntries(staff.map((member) => [member.id, shares[member.id] ? String(shares[member.id]) : ''])));
+  }, [multipliers, staff]);
+
+  // İlk açılışta yüzdeler çarpandan dolar; kullanıcı değiştirdiyse üzerine yazılmaz.
+  useEffect(() => {
+    if (Object.keys(percents).length === 0) byMultiplier();
+  }, [byMultiplier]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (action: () => Promise<unknown>) => {
     setError(null);
@@ -85,12 +116,7 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
   const percentOf = (id: string) => Number.parseInt(percents[id] ?? '0', 10) || 0;
   const totalPercent = useMemo(() => staff.reduce((sum, member) => sum + percentOf(member.id), 0), [staff, percents]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const splitEvenly = () => {
-    if (staff.length === 0) return;
-    const share = Math.floor(100 / staff.length);
-    const extra = 100 - share * staff.length;
-    setPercents(Object.fromEntries(staff.map((member, index) => [member.id, String(share + (index < extra ? 1 : 0))])));
-  };
+  const hasEntry = staff.some((member) => (percents[member.id] ?? '').trim() !== '');
 
   const distribute = () => {
     const allocations = staff
@@ -108,6 +134,22 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-4">
         <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Bahşiş Havuzu · {period}</h3>
+        <div className="flex flex-wrap gap-2">
+          {months.map((item) => (
+            <Button
+              key={item.key}
+              variant={period === item.key ? 'selected' : 'secondary'}
+              className="min-h-12 text-sm tabular-nums"
+              onClick={() => {
+                setPeriod(item.key);
+                setEditing(null);
+                setAmount('');
+              }}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </div>
         <div className="grid grid-cols-3 gap-3 text-sm text-[var(--text-primary)]">
           <div>
             <span className="text-sm text-[var(--text-secondary)] block">Toplanan</span>
@@ -122,29 +164,35 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
             <span className="text-lg font-bold tabular-nums">{money(tips?.leftoverCents)}</span>
           </div>
         </div>
-        <NumberInput aria-label="Bahşiş tutarı" placeholder="Bahşiş tutarı (₺)" pinpadTitle="Bahşiş Tutarı" value={amount} onValueChange={setAmount} />
-        <div className="grid grid-cols-3 gap-2">
-          <Button variant={method === 'CASH' ? 'selected' : 'secondary'} onClick={() => setMethod('CASH')}>Nakit</Button>
-          <Button variant={method === 'CARD' ? 'selected' : 'secondary'} onClick={() => setMethod('CARD')}>Kart</Button>
-          <Button variant="primary" onClick={addTip}>{editing ? 'Kaydet' : 'Havuza Ekle'}</Button>
-        </div>
+        {isCurrent ? (
+          <>
+            <NumberInput aria-label="Bahşiş tutarı" placeholder="Bahşiş tutarı (₺)" pinpadTitle="Bahşiş Tutarı" value={amount} onValueChange={setAmount} />
+            <div className="grid grid-cols-3 gap-2">
+              <Button variant={method === 'CASH' ? 'selected' : 'secondary'} onClick={() => setMethod('CASH')}>Nakit</Button>
+              <Button variant={method === 'CARD' ? 'selected' : 'secondary'} onClick={() => setMethod('CARD')}>Kart</Button>
+              <Button variant="primary" onClick={addTip}>{editing ? 'Kaydet' : 'Havuza Ekle'}</Button>
+            </div>
+          </>
+        ) : null}
         {entries.length > 0 ? (
           <ul className="divide-y divide-[var(--border)] max-h-64 overflow-y-auto">
             {entries.map((entry) => (
               <li key={entry.id} className="flex items-center gap-2 text-sm">
                 <span className="flex-1 min-w-0 truncate tabular-nums text-[var(--text-secondary)]">{formatDateTime(entry.createdAt)} · {METHOD_LABEL[entry.paymentMethod]}</span>
                 <span className="font-bold tabular-nums">{formatMoney(entry.amountCents)}</span>
-                <Button
-                  variant="ghost"
-                  aria-label="Bahşişi düzenle"
-                  onClick={() => {
-                    setEditing(entry);
-                    setMethod(entry.paymentMethod);
-                    setAmount((entry.amountCents / 100).toFixed(2).replace('.', ','));
-                  }}
-                >
-                  <Pencil className="w-4 h-4" />
-                </Button>
+                {isCurrent ? (
+                  <Button
+                    variant="ghost"
+                    aria-label="Bahşişi düzenle"
+                    onClick={() => {
+                      setEditing(entry);
+                      setMethod(entry.paymentMethod);
+                      setAmount((entry.amountCents / 100).toFixed(2).replace('.', ','));
+                    }}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                ) : null}
                 <Button variant="ghost" aria-label="Bahşişi sil" onClick={() => setDeleting(entry)}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -158,12 +206,17 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
         <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Dağıtım Yüzdeleri</h3>
-            <Button variant="secondary" onClick={splitEvenly}>Eşit Böl</Button>
+            <Button variant="secondary" disabled={!multipliers} onClick={byMultiplier}>Çarpana Göre</Button>
           </div>
           <ul className="divide-y divide-[var(--border)]">
             {staff.map((member) => (
               <li key={member.id} className="flex items-center justify-between gap-3 py-2">
-                <span className="min-w-0 flex-1 text-sm font-semibold truncate">{member.name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold truncate">{member.name}</span>
+                  <span className="block text-xs tabular-nums text-[var(--text-secondary)]">
+                    Çarpan %{multipliers?.[member.id] ?? DEFAULT_TIP_MULTIPLIER}
+                  </span>
+                </span>
                 <span className="text-sm tabular-nums text-[var(--text-secondary)]">
                   {tips ? formatMoney(Math.floor((tips.totalCents * percentOf(member.id)) / 100)) : ''}
                 </span>
@@ -180,9 +233,11 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
               </li>
             ))}
           </ul>
-          <p className={`text-sm font-bold tabular-nums ${totalPercent === 100 ? 'text-[var(--accent-emerald)]' : 'text-[var(--accent-red)]'}`}>
-            Toplam %{totalPercent}{totalPercent === 100 ? '' : ' · Toplam %100 olmalı'}
-          </p>
+          {hasEntry ? (
+            <p className={`text-sm font-bold tabular-nums ${totalPercent === 100 ? 'text-[var(--accent-emerald)]' : 'text-[var(--accent-red)]'}`}>
+              Toplam %{totalPercent}{totalPercent === 100 ? '' : ' · Toplam %100 olmalı'}
+            </p>
+          ) : null}
           <Button variant="primary" size="lg" className="w-full" disabled={totalPercent !== 100} onClick={distribute}>
             Bahşişi Dağıt
           </Button>
