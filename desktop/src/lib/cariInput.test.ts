@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { errorCode, errorText, parseCents } from './cariInput';
+import { errorCode, errorText, localDate, parseCents } from './cariInput';
 
 describe('parseCents', () => {
   it('Türkçe ve düz yazımı float kullanmadan çevirir', () => {
@@ -24,5 +24,13 @@ describe('hata metni', () => {
     expect(errorCode('CONFLICT: bakiye değişti')).toBe('CONFLICT');
     expect(errorText('CONFLICT: bakiye değişti')).toBe('bakiye değişti');
     expect(errorCode(new Error('düz hata'))).toBeNull();
+  });
+});
+
+describe('localDate', () => {
+  it('yerel gün saatini esas alır ve gece 00.00-02.59 arasında UTC dününe düşmez', () => {
+    // 5 Kasım 2026, gece saat 01:30 (yerel takvim)
+    const localNightDate = new Date(2026, 10, 5, 1, 30, 0);
+    expect(localDate(localNightDate)).toBe('2026-11-05');
   });
 });
