@@ -3,7 +3,7 @@ import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
 import { centsToText, parseCents } from '../../../lib/moneyInput';
-import { EXPENSE_CATEGORIES, useExpenseStore, type Expense } from '../../../stores/expenseStore';
+import { EXPENSE_CATEGORIES, needsDescription, useExpenseStore, type Expense } from '../../../stores/expenseStore';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Panel } from '../panorama/Panel';
@@ -23,12 +23,19 @@ const METHODS = [
   { id: 'BANK_TRANSFER', label: 'Havale' },
 ];
 
+/** Görünür etiket: yer tutucu yazı alan dolunca kaybolur, ne girildiği unutulur. */
+export const Field: React.FC<{ label: string; wide?: boolean; children: React.ReactNode }> = ({ label, wide, children }) => (
+  <label className={`flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)] ${wide ? 'col-span-2' : ''}`}>
+    {label}
+    {children}
+  </label>
+);
+
 export const CategorySelect: React.FC<{ value: string; onChange: (value: string) => void }> = ({ value, onChange }) => (
   <select
-    aria-label="Kategori"
     value={value}
     onChange={(event) => onChange(event.target.value)}
-    className="min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]"
+    className="min-h-12 w-full px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]"
   >
     {Object.entries(EXPENSE_CATEGORIES).map(([id, label]) => (
       <option key={id} value={id}>{label}</option>
@@ -36,7 +43,7 @@ export const CategorySelect: React.FC<{ value: string; onChange: (value: string)
   </select>
 );
 
-/** Gider, sabit gider, bütçe ve kâr aynı ayı gösterir; dönem tek yerden seçilir. */
+/** Dönem giderleri: ay tek yerden seçilir, toplam ve kanal kırılımı aynı listeden gelir. */
 export const FinanceTab: React.FC = () => {
   const { period, setPeriod, expenses, error, load, addExpense, voidExpense, editExpense } = useExpenseStore();
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -49,6 +56,8 @@ export const FinanceTab: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Expense | null>(null);
   const cents = parseCents(amount);
+  const missingText = needsDescription(category, note);
+  const ready = cents !== null && cents > 0 && !missingText;
 
   useEffect(() => {
     void load();
@@ -62,7 +71,7 @@ export const FinanceTab: React.FC = () => {
   };
 
   const submit = async () => {
-    if (cents === null || cents <= 0) return;
+    if (!ready || cents === null) return;
     try {
       setFormError(null);
       if (editing) await editExpense(editing, category, cents, method, note.trim());
@@ -108,7 +117,6 @@ export const FinanceTab: React.FC = () => {
             {label}
           </Button>
         ))}
-        <Button variant="primary" className="min-h-12 ml-auto" onClick={() => setIsFormOpen(true)}>Gider Ekle</Button>
       </div>
 
       <div className="paper border border-[var(--border)] rounded-xl p-4 flex flex-wrap gap-x-10 gap-y-3">
@@ -127,10 +135,18 @@ export const FinanceTab: React.FC = () => {
 
       {isFormOpen ? (
       <Modal isOpen onClose={closeForm} title={editing ? 'Gideri Düzenle' : 'Gider Ekle'} maxWidth="md">
-        <div className="flex flex-wrap gap-2">
-          <CategorySelect value={category} onChange={setCategory} />
-          <NumberInput aria-label="Tutar" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-36" value={amount} onValueChange={setAmount} />
-          <Input aria-label="Açıklama" placeholder="Açıklama" className="min-h-12 !w-auto flex-1 min-w-48" value={note} onChange={(event) => setNote(event.target.value)} />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Kategori">
+              <CategorySelect value={category} onChange={setCategory} />
+            </Field>
+            <Field label="Tutar (₺)">
+              <NumberInput className="min-h-12 tabular-nums" value={amount} onValueChange={setAmount} />
+            </Field>
+            <Field label={category === 'OTHER' ? 'Açıklama (zorunlu)' : 'Açıklama'} wide>
+              <Input className="min-h-12" error={missingText} value={note} onChange={(event) => setNote(event.target.value)} />
+            </Field>
+          </div>
           <div className="flex gap-1" role="group" aria-label="Ödeme şekli">
             {METHODS.map((item) => (
               <Button key={item.id} variant={method === item.id ? 'selected' : 'secondary'} className="min-h-12 text-sm" onClick={() => setMethod(item.id)}>
@@ -138,15 +154,36 @@ export const FinanceTab: React.FC = () => {
               </Button>
             ))}
           </div>
-          <Button variant="primary" className="min-h-12" disabled={cents === null || cents <= 0} onClick={() => void submit()}>
-            {editing ? 'Değişikliği Kaydet' : 'Kaydet'}
-          </Button>
+          {missingText ? <p className="text-xs font-semibold text-[var(--accent-red)]">"Diğer" için ne olduğunu yazın.</p> : null}
+          {formError ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{formError}</p> : null}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" className="min-h-12" onClick={closeForm}>Vazgeç</Button>
+            <Button variant="primary" className="min-h-12" disabled={!ready} onClick={() => void submit()}>
+              {editing ? 'Değişikliği Kaydet' : 'Kaydet'}
+            </Button>
+          </div>
         </div>
-        {formError ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{formError}</p> : null}
       </Modal>
       ) : null}
 
-      <Panel title="Dönem Giderleri">
+      <Panel
+        title="Dönem Giderleri"
+        aside={
+          <Button
+            variant="primary"
+            className="min-h-12 text-sm"
+            onClick={() => {
+              setEditing(null);
+              setCategory('OTHER');
+              setMethod('CASH');
+              setFormError(null);
+              setIsFormOpen(true);
+            }}
+          >
+            Gider Ekle
+          </Button>
+        }
+      >
         {expenses?.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Bu dönemde gider yok.</p> : null}
         <ul className="divide-y divide-[var(--border)]">
           {expenses?.map((item) => (

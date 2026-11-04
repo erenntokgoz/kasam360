@@ -149,7 +149,7 @@ async fn void_siparisler_ciroya_katilmaz_yalniz_void_loss_rate_gorur() {
     );
 
     // 4. monthly_target_status: Gerçekleşen ciro yalnız PAID olmalı
-    let targets = monthly_target_status(&pool, tenant, "2026-03")
+    let targets = monthly_target_status(&pool, tenant, "2026-03", 0)
         .await
         .expect("targets");
     assert_eq!(targets.len(), 1);

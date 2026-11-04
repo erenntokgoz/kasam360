@@ -12,11 +12,13 @@ const QUADRANTS = [
 ] as const;
 
 /** Menü kararını rakamdan öneriye çevirir: hangi ürüne ne yapılacağı tek bakışta görünür. */
-export const MenuMatrix: React.FC<{ metrics: MenuMetrics | null }> = ({ metrics }) => {
+export const MenuMatrix: React.FC<{ metrics: MenuMetrics | null; error: string | null }> = ({ metrics, error }) => {
   if (!metrics) {
     return (
       <Panel title="Menü Analizi">
-        <p className="text-sm text-[var(--text-secondary)]">Menü analizi okunamadı.</p>
+        <p role={error ? 'alert' : undefined} className="text-sm text-[var(--text-secondary)]">
+          {error ? `Menü analizi okunamadı: ${error}` : 'Menü analizi okunuyor…'}
+        </p>
       </Panel>
     );
   }

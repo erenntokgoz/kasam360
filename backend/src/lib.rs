@@ -202,6 +202,7 @@ pub fn run() {
             management_commands::product::delete_product,
             analytics_commands::get_analytics_dashboard_data,
             analytics_commands::metrics::get_analytics_metrics,
+            analytics_commands::metrics::get_monthly_targets,
             analytics_commands::metrics::set_monthly_target,
             analytics_commands::metrics::set_competitor_price,
             commands::auth_login,

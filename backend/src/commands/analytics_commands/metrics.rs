@@ -65,6 +65,15 @@ fn validate_month(raw: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Dünyadaki ofsetler -12:00 ile +14:00 arasındadır; dışı istemci hatasıdır.
+fn validate_offset(minutes: i32) -> Result<(), String> {
+    if (-720..=840).contains(&minutes) {
+        Ok(())
+    } else {
+        Err(format!("gecersiz UTC ofseti: {minutes}"))
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Çıktı DTO'ları (frontend kontratı — snake_case, reportTypes.ts ile birebir)
 // ---------------------------------------------------------------------------
@@ -157,7 +166,6 @@ pub struct AnalyticsMetricsDto {
     pub bcg_counts: BcgCountsDto,
     pub combinations: Vec<CombinationDto>,
     pub peak_hours: Vec<PeakBucketDto>,
-    pub monthly_targets: Vec<TargetStatusDto>,
     pub competitor_gaps: Vec<CompetitorGapDto>,
     pub void_loss: Option<VoidLossDto>,
 }
@@ -275,18 +283,6 @@ pub async fn get_analytics_metrics(
                 orders: b.orders,
             })
             .collect(),
-        monthly_targets: m
-            .monthly_targets
-            .into_iter()
-            .map(|t| TargetStatusDto {
-                month: t.month,
-                category: t.category,
-                target_cents: t.target_cents,
-                actual_cents: t.actual_cents,
-                difference_cents: t.difference_cents,
-                achieved_percent: t.achieved_percent,
-            })
-            .collect(),
         competitor_gaps: m
             .competitor_gaps
             .into_iter()
@@ -309,6 +305,36 @@ pub async fn get_analytics_metrics(
             total_orders: v.total_orders,
         }),
     })
+}
+
+/// Bu ayın hedeflerini okur. Menü analizinden ayrıdır: analiz hata verse de
+/// hedef görünür, hedef okunamazsa da hata kendi panelinde çıkar.
+///
+/// `month` istemcinin yerel ayıdır, `utc_offset_minutes` o anki ofsetidir; ay
+/// sınırı kasanın saatine göre çizilir (bkz. `monthly_target_status`).
+#[tauri::command]
+pub async fn get_monthly_targets(
+    pool: tauri::State<'_, DbPool>,
+    tenant_id: String,
+    actor_role: String,
+    month: String,
+    utc_offset_minutes: i32,
+) -> Result<Vec<TargetStatusDto>, String> {
+    require_reporting_read(&actor_role)?;
+    validate_month(&month)?;
+    validate_offset(utc_offset_minutes)?;
+    let rows = svc::monthly_target_status(&pool, &tenant_id, &month, utc_offset_minutes).await?;
+    Ok(rows
+        .into_iter()
+        .map(|t| TargetStatusDto {
+            month: t.month,
+            category: t.category,
+            target_cents: t.target_cents,
+            actual_cents: t.actual_cents,
+            difference_cents: t.difference_cents,
+            achieved_percent: t.achieved_percent,
+        })
+        .collect())
 }
 
 /// Aylık hedef ekler veya günceller (UPSERT). Aynı kiracı/ay/kategori için

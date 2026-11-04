@@ -42,6 +42,7 @@ pub async fn get_financial_report(
         total_vat_cents: report.total_vat_cents,
         total_refunds_cents: report.total_refunds_cents,
         gross_profit_cents: report.gross_profit_cents,
+        cost_missing_lines: report.cost_missing_lines,
         total_expenses_cents: report.total_expenses_cents,
         net_profit_cents: report.net_profit_cents,
         receivables_cents: report.receivables_cents,
@@ -113,7 +114,49 @@ pub async fn export_financial_report(
 
     let report = crate::services::pnl_service::financial_report(&pool, &tid, &owned).await?;
 
-    let mut rows: Vec<Vec<String>> = Vec::with_capacity(32);
+    let rows = financial_export_rows(&report, owned.as_ref());
+
+    let csv = rows
+        .iter()
+        .map(|r| r.iter().map(|c| csv_cell(c)).collect::<Vec<_>>().join(";"))
+        .collect::<Vec<_>>()
+        .join("\r\n");
+
+    Ok(FinancialExportDto {
+        csv,
+        row_count: rows.len() as i64,
+        file_name: financial_export_file_name(owned.as_ref()),
+        generated_at: chrono::Utc::now().to_rfc3339(),
+    })
+}
+
+/// Dosyanın satırları. Ekrandaki kâr hesabıyla aynı kalemler aynı sırayla
+/// yazılır; dönem ve maliyet eksikliği de dosyada durur, dosya tek başına okunur.
+fn financial_export_rows(
+    report: &crate::services::pnl_service::FinancialReport,
+    range: Option<&(String, String)>,
+) -> Vec<Vec<String>> {
+    let mut rows: Vec<Vec<String>> = Vec::with_capacity(40);
+    let (start, end) = match range {
+        Some((s, e)) => (s.clone(), e.clone()),
+        None => ("Tüm dönem".to_string(), "Tüm dönem".to_string()),
+    };
+    rows.push(vec![
+        "Dönem".into(),
+        "Başlangıç".into(),
+        start,
+        String::new(),
+    ]);
+    rows.push(vec!["Dönem".into(), "Bitiş".into(), end, String::new()]);
+    let approximate = report.cost_missing_lines > 0;
+    if approximate {
+        rows.push(vec![
+            "Uyarı".into(),
+            "Maliyet eksik".into(),
+            report.cost_missing_lines.to_string(),
+            "kalemin partisi yok; kâr yaklaşıktır".into(),
+        ]);
+    }
 
     // Başlık satırı Türkçe ve birim açık: muhasebeciye hangi sayının ne olduğunu
     // sormamak yerine dosya kendini açıklar.
@@ -123,7 +166,13 @@ pub async fn export_financial_report(
         "TutarKurus".to_string(),
         "TutarTL".to_string(),
     ]);
-
+    let profit_label = |label: &str| {
+        if approximate {
+            format!("{label} (yaklaşık, maliyet eksik)")
+        } else {
+            label.to_string()
+        }
+    };
     rows.push(summary_row(
         "Gelir",
         "Peşin satış toplamı",
@@ -140,16 +189,21 @@ pub async fn export_financial_report(
         report.total_revenue_cents,
     ));
     rows.push(summary_row(
+        "İade",
+        "Toplam İadeler",
+        report.total_refunds_cents,
+    ));
+    rows.push(summary_row("Vergi", "KDV", report.total_vat_cents));
+    rows.push(summary_row(
         "Maliyet",
         "Satılan Malın Maliyeti (COGS)",
         report.total_cogs_cents,
     ));
     rows.push(summary_row(
-        "İade",
-        "Toplam İadeler",
-        report.total_refunds_cents,
+        "Kâr",
+        &profit_label("BRÜT KÂR"),
+        report.gross_profit_cents,
     ));
-    rows.push(summary_row("Kâr", "BRÜT KÂR", report.gross_profit_cents));
     rows.push(summary_row(
         "Gider",
         "TOPLAM GİDER",
@@ -157,7 +211,7 @@ pub async fn export_financial_report(
     ));
     rows.push(summary_row(
         "Sonuç",
-        "NET KÂR / ZARAR",
+        &profit_label("NET KÂR / ZARAR"),
         report.net_profit_cents,
     ));
     rows.push(summary_row(
@@ -188,19 +242,7 @@ pub async fn export_financial_report(
             t.profit_cents,
         ));
     }
-
-    let csv = rows
-        .iter()
-        .map(|r| r.iter().map(|c| csv_cell(c)).collect::<Vec<_>>().join(";"))
-        .collect::<Vec<_>>()
-        .join("\r\n");
-
-    Ok(FinancialExportDto {
-        csv,
-        row_count: rows.len() as i64,
-        file_name: financial_export_file_name(owned.as_ref()),
-        generated_at: chrono::Utc::now().to_rfc3339(),
-    })
+    rows
 }
 
 /// Bir özet satırı üretir: bölüm, kalem, kuruş ve okunabilir TL.
@@ -237,7 +279,60 @@ fn financial_export_file_name(range: Option<&(String, String)>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{csv_cell, financial_export_file_name};
+    use super::{csv_cell, financial_export_file_name, financial_export_rows};
+    use crate::services::pnl_service::FinancialReport;
+
+    fn report(cost_missing_lines: i64) -> FinancialReport {
+        FinancialReport {
+            total_revenue_cents: 100_000,
+            total_sales_revenue_cents: 100_000,
+            total_debt_collected_cents: 0,
+            total_cogs_cents: 20_000,
+            total_refunds_cents: 0,
+            total_vat_cents: 10_000,
+            gross_profit_cents: 70_000,
+            cost_missing_lines,
+            total_expenses_cents: 5_000,
+            net_profit_cents: 65_000,
+            receivables_cents: 0,
+            payables_cents: 0,
+            expenses_by_category: Vec::new(),
+            monthly_trend: Vec::new(),
+        }
+    }
+
+    fn find<'a>(rows: &'a [Vec<String>], item: &str) -> Option<&'a Vec<String>> {
+        rows.iter().find(|row| row[1].starts_with(item))
+    }
+
+    #[test]
+    fn dosya_donemi_ve_kdv_yi_yazar() {
+        let range = ("2026-10-01".to_string(), "2026-10-31".to_string());
+        let rows = financial_export_rows(&report(0), Some(&range));
+        assert_eq!(rows[0], vec!["Dönem", "Başlangıç", "2026-10-01", ""]);
+        assert_eq!(rows[1], vec!["Dönem", "Bitiş", "2026-10-31", ""]);
+        // Brüt kâr = gelir - iade - KDV - maliyet: KDV satırı olmadan dosya tutmaz.
+        assert_eq!(find(&rows, "KDV").map(|r| r[2].as_str()), Some("10000"));
+        assert_eq!(
+            find(&rows, "BRÜT KÂR").map(|r| r[1].as_str()),
+            Some("BRÜT KÂR")
+        );
+        assert!(find(&rows, "Maliyet eksik").is_none());
+    }
+
+    #[test]
+    fn maliyet_eksikse_kar_yaklasik_yazilir() {
+        let rows = financial_export_rows(&report(3), None);
+        assert_eq!(rows[0][2], "Tüm dönem");
+        assert_eq!(
+            find(&rows, "Maliyet eksik").map(|r| r[2].as_str()),
+            Some("3")
+        );
+        assert_eq!(
+            find(&rows, "NET KÂR").map(|r| r[1].as_str()),
+            Some("NET KÂR / ZARAR (yaklaşık, maliyet eksik)")
+        );
+    }
 
     #[test]
     fn plain_cell_is_not_quoted() {

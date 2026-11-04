@@ -100,6 +100,8 @@ export interface FinancialProfitSummary {
   totalVatCents: number;
   totalRefundsCents: number;
   grossProfitCents: number;
+  /** Partisiz düşülen kalem sayısı; sıfır değilse kâr yaklaşıktır. */
+  costMissingLines: number;
   totalExpensesCents: number;
   netProfitCents: number;
   receivablesCents: number;

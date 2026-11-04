@@ -69,11 +69,17 @@ pub async fn peak_hours(
 
 /// `ALL` kategorisi tüm kategorileri toplar; kategori satırı kendi adını toplar.
 /// Gerçekleşme ciroya göre hesaplanır (`void` tutarları gider olarak kalır).
+///
+/// Ay, kasanın yerel ayıdır: hedef istemcide yerel ayla kaydedilir. Satış saati
+/// UTC tutulduğu için yerel ofset eklenmeden ay sınırı kayar; Türkiye'de ayın
+/// son gecesindeki satış ertesi aya, ilk gece 03:00 öncesi satış önceki aya düşerdi.
 pub async fn monthly_target_status(
     pool: &SqlitePool,
     tenant_id: &str,
     month: &str,
+    utc_offset_minutes: i32,
 ) -> Result<Vec<MonthlyTargetStatus>, String> {
+    let shift = format!("{utc_offset_minutes:+} minutes");
     let rows = sqlx::query(
         "SELECT t.month, t.category, t.target_cents,
                 COALESCE((
@@ -84,7 +90,7 @@ pub async fn monthly_target_status(
                       LEFT JOIN categories c ON c.id = p.category_id AND c.tenant_id = o.tenant_id
                      WHERE o.tenant_id = ?1
                        AND o.status = 'PAID'
-                       AND strftime('%Y-%m', o.created_at) = ?2
+                       AND strftime('%Y-%m', o.created_at, ?3) = ?2
                        AND (t.category = 'ALL' OR c.name = t.category)
                 ), 0) AS actual_cents
            FROM monthly_targets t
@@ -93,6 +99,7 @@ pub async fn monthly_target_status(
     )
     .bind(tenant_id)
     .bind(month)
+    .bind(&shift)
     .fetch_all(pool)
     .await
     .map_err(|e| e.to_string())?;
@@ -230,13 +237,4 @@ pub async fn void_loss_rate(
         voided_orders: r.try_get("voided_orders").map_err(|e| e.to_string())?,
         total_orders: r.try_get("total_orders").map_err(|e| e.to_string())?,
     })
-}
-
-// ---------------------------------------------------------------------------
-// Zaman yardımcısı
-// ---------------------------------------------------------------------------
-
-/// Hedefler ve rakip fiyatları ay bazında yönetilir; UTC ayı kullanılır.
-pub fn current_month() -> String {
-    chrono::Utc::now().format("%Y-%m").to_string()
 }
