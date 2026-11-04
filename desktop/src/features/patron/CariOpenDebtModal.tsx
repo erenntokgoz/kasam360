@@ -1,28 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
-import { useCariStore, type OpenDebtInput } from '../../stores/cariStore';
+import { useCariStore } from '../../stores/cariStore';
 import { newOperationId, parseCents } from '../../lib/cariInput';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
 import { OperationFeedback, useOperationSubmit } from './CariOperationForm';
-import type { DirectoryContact } from '../../types/ledger';
+import type { DirectoryContact, OpenDebtType } from '../../types/ledger';
+
+/** Pencere başlığı yapılan işlemi söyler; tür seçimi düğmede yapılmıştır. */
+const TITLES: Record<OpenDebtType, string> = {
+  GIVEN: 'Borç Yaz',
+  TAKEN: 'Alacak Yaz',
+};
 
 interface CariOpenDebtModalProps {
   card: DirectoryContact;
-  isOpen: boolean;
+  /** Boşsa pencere kapalıdır. */
+  type: OpenDebtType | null;
   onClose: () => void;
   onOpened: () => void;
 }
 
-export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({
-  card,
-  isOpen,
-  onClose,
-  onOpened,
-}) => {
+export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({ card, type, onClose, onOpened }) => {
   const { openDebt } = useCariStore();
-  const [type, setType] = useState<OpenDebtInput['type']>('GIVEN');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [description, setDescription] = useState('');
@@ -31,17 +32,17 @@ export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({
   const operation = useOperationSubmit(onOpened);
 
   useEffect(() => {
-    if (!isOpen) return;
-    setType(card.type === 'SUPPLIER' ? 'TAKEN' : 'GIVEN');
+    if (!type) return;
     setAmount('');
     setDueDate('');
     setDescription('');
     setInputError(null);
     setOperationId(newOperationId());
-  }, [isOpen, card.type]);
+  }, [type]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!type) return;
     const totalAmountCents = parseCents(amount);
     if (!totalAmountCents) {
       setInputError('Geçerli bir tutar girin.');
@@ -61,28 +62,8 @@ export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Borç / Alacak Aç" subtitle={card.name} maxWidth="sm">
+    <Modal isOpen={type !== null} onClose={onClose} title={type ? TITLES[type] : ''} subtitle={card.name} maxWidth="sm">
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant={type === 'GIVEN' ? 'selected' : 'secondary'}
-            aria-pressed={type === 'GIVEN'}
-            onClick={() => setType('GIVEN')}
-            className="min-h-12"
-          >
-            Alacağımız
-          </Button>
-          <Button
-            type="button"
-            variant={type === 'TAKEN' ? 'selected' : 'secondary'}
-            aria-pressed={type === 'TAKEN'}
-            onClick={() => setType('TAKEN')}
-            className="min-h-12"
-          >
-            Borcumuz
-          </Button>
-        </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label htmlFor="debt-amount" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
@@ -138,7 +119,7 @@ export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({
             disabled={operation.pendingOperationId !== null}
             className="flex-1 min-h-12"
           >
-            Kaydet
+            {type ? TITLES[type] : ''}
           </Button>
         </div>
       </form>

@@ -37,6 +37,8 @@ pub struct StatementLineDto {
     pub document_no: Option<String>,
     #[serde(rename = "purchaseOrderId")]
     pub purchase_order_id: Option<String>,
+    #[serde(rename = "orderNumber")]
+    pub order_number: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -82,6 +84,7 @@ impl From<StatementLine> for StatementLineDto {
             order_id: value.order_id,
             document_no: value.document_no,
             purchase_order_id: value.purchase_order_id,
+            order_number: value.order_number,
         }
     }
 }

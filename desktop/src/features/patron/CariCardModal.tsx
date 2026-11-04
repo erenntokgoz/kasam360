@@ -34,6 +34,8 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
   const [operationId, setOperationId] = useState(newOperationId);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // Müşteri kartında vergi bilgisi tutulmaz; kayıtlı değer düzenlemede korunur.
+  const isSupplier = directoryType === 'SUPPLIER';
 
   useEffect(() => {
     if (!isOpen) return;
@@ -56,8 +58,9 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
     setError(null);
     try {
       const trimmedPhone = phone.trim() || undefined;
+      const taxValue = isSupplier ? taxNo.trim() || undefined : card?.taxNo ?? undefined;
       if (card) {
-        onCreated(await updateCard(card, { name: name.trim(), phone: trimmedPhone, taxNo: taxNo.trim() || undefined, creditLimitCents }, operationId));
+        onCreated(await updateCard(card, { name: name.trim(), phone: trimmedPhone, taxNo: taxValue, creditLimitCents }, operationId));
         return;
       }
       if (!allowSimilar) {
@@ -72,7 +75,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
           name: name.trim(),
           type: directoryType,
           phone: trimmedPhone,
-          taxNo: taxNo.trim() || undefined,
+          taxNo: taxValue,
           creditLimitCents,
         },
         operationId,
@@ -115,19 +118,21 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
             autoFocus
           />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className={isSupplier ? 'grid grid-cols-2 gap-2' : ''}>
           <div>
             <label htmlFor="cari-phone" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
               Telefon
             </label>
             <NumberInput id="cari-phone" kind="digits" maxLength={15} value={phone} onValueChange={(text) => { setPhone(text); setSimilar([]); }} />
           </div>
-          <div>
-            <label htmlFor="cari-tax" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
-              Vergi No
-            </label>
-            <NumberInput id="cari-tax" kind="digits" maxLength={11} value={taxNo} onValueChange={setTaxNo} />
-          </div>
+          {isSupplier ? (
+            <div>
+              <label htmlFor="cari-tax" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
+                Vergi No
+              </label>
+              <NumberInput id="cari-tax" kind="digits" maxLength={11} value={taxNo} onValueChange={setTaxNo} />
+            </div>
+          ) : null}
         </div>
         <div>
           <label htmlFor="cari-limit" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">

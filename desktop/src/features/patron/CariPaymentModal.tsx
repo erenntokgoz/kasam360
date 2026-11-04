@@ -67,7 +67,7 @@ export const CariPaymentModal: React.FC<CariPaymentModalProps> = ({ debt, onClos
     <Modal
       isOpen={debt !== null}
       onClose={onClose}
-      title={debt?.type === 'TAKEN' ? 'Tedarikçiye Ödeme' : 'Tahsilat'}
+      title={debt?.type === 'TAKEN' ? 'Tediye' : 'Tahsilat'}
       subtitle={debt ? `Kalan: ${formatMoney(debt.remainingAmountCents)}` : undefined}
       maxWidth="sm"
     >
