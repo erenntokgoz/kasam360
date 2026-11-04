@@ -1,3 +1,4 @@
+import { useUIStore } from '../../stores/uiStore';
 import React, { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { useCariStore, type PaymentInput } from '../../stores/cariStore';
@@ -26,7 +27,10 @@ export const CariPaymentModal: React.FC<CariPaymentModalProps> = ({ debt, onClos
   const [method, setMethod] = useState<PaymentInput['paymentMethod']>('CASH');
   const [operationId, setOperationId] = useState(newOperationId);
   const [inputError, setInputError] = useState<string | null>(null);
-  const operation = useOperationSubmit(onPaid);
+  const operation = useOperationSubmit(() => {
+    useUIStore.getState().showNotice(debt?.type === 'TAKEN' ? 'Tediye kaydedildi.' : 'Tahsilat kaydedildi.');
+    onPaid();
+  });
 
   useEffect(() => {
     if (!debt) return;

@@ -1,3 +1,5 @@
+import { stockUnitLabel } from '../../lib/stockUnitLabel';
+import { capitalizeRecordName } from '../../lib/recordName';
 import { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { formatMoney } from '../../lib/formatMoney';
@@ -106,7 +108,7 @@ export function MenuRecipeTab({ product, products, cost, busy, createRecipe, dea
           <span className="text-[var(--text-secondary)] font-bold">Malzemeler ({cost.items.length})</span>
           {cost.items.map((item) => (
             <div key={item.ingredientId} className="p-2 rounded bg-[var(--bg-subtle)] border border-[var(--border)] flex justify-between gap-2">
-              <span>{item.ingredientName} · {formatNumber(item.quantity)} {item.unit}</span>
+              <span>{item.ingredientName} · {formatNumber(item.quantity)} {stockUnitLabel(item.unit)}</span>
               <span className="font-mono tabular-nums">
                 {item.lineCostCents === null ? 'Bilinmiyor' : formatMoney(item.lineCostCents)}
               </span>
@@ -133,7 +135,7 @@ export function MenuRecipeTab({ product, products, cost, busy, createRecipe, dea
       <p className="text-[var(--text-secondary)]">Reçete yok.</p>
       {error && <p role="alert" className="text-[var(--accent-red)]">{error}</p>}
       <label className="block space-y-1"><span>Reçete Adı</span>
-        <input className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded px-3 min-h-12" value={name} onChange={(event) => setName(event.target.value)} />
+        <input className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded px-3 min-h-12" value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))} onChange={(event) => setName(event.target.value)} />
       </label>
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1"><span>Üretim Miktarı (adet)</span>
@@ -153,8 +155,8 @@ export function MenuRecipeTab({ product, products, cost, busy, createRecipe, dea
           }} />
           <div className="flex gap-2">
             <NumberInput kind="quantity" aria-label="Malzeme miktarı" placeholder="Miktar" className="min-w-0 flex-1" value={row.quantity} onValueChange={(text) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, quantity: text } : item))} />
-            <select aria-label="Birim" className="w-20 min-h-12 paper border border-[var(--border)] rounded px-1" value={row.unit} onChange={(event) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, unit: event.target.value } : item))}>
-              {units.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+            <select aria-label="Birim" className="w-28 min-h-12 paper border border-[var(--border)] rounded px-1" value={row.unit} onChange={(event) => setRows((current) => current.map((item) => item.key === row.key ? { ...item, unit: event.target.value } : item))}>
+              {units.map((unit) => <option key={unit} value={unit}>{stockUnitLabel(unit)}</option>)}
             </select>
             <button type="button" aria-label="Malzemeyi çıkar" className="tactile-btn min-h-12 px-2 rounded border border-[var(--border)]" onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}>Sil</button>
           </div>

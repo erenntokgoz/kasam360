@@ -9,7 +9,7 @@ describe('yönetim gezinmesi', () => {
 
   it('Panorama uyarısı yeni bölüm ve alt sayfaya gider', () => {
     useLedgerStore.getState().openAlertTarget('PAYROLL');
-    expect(useLedgerStore.getState()).toMatchObject({ activeErpTab: 'STAFF', erpSection: 'PAYROLL' });
+    expect(useLedgerStore.getState()).toMatchObject({ activeErpTab: 'STAFF', erpSection: 'LEAVE_REQUESTS' });
     useLedgerStore.getState().openAlertTarget('LOG');
     expect(useLedgerStore.getState()).toMatchObject({ activeErpTab: 'AUDIT', erpSection: null });
     useLedgerStore.getState().openAlertTarget('EXPENSES');

@@ -1,3 +1,5 @@
+import { capitalizeRecordName } from '../../lib/recordName';
+import { stockUnitLabel } from '../../lib/stockUnitLabel';
 import { useEffect, useState } from 'react';
 import type { CategoryDto, ProductDto } from '../../types/menu';
 import { createStockCategory, createStockItem } from '../../lib/stockCreation';
@@ -82,18 +84,18 @@ export function StockItemPicker({ products, value, onChange, label = 'Ürün', d
       <Input disabled={disabled} aria-label={`${label} ara`} type="search" placeholder="Ürün ara" value={query} onChange={(event) => setQuery(event.target.value)} />
       <select disabled={disabled} aria-label={label} className={field} value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Ürün seçin</option>
-        {matches.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.stockUnit}</option>)}
+        {matches.map((product) => <option key={product.id} value={product.id}>{product.name} · {stockUnitLabel(product.stockUnit)}</option>)}
       </select>
-      {selected ? <p className="text-xs">Miktar birimi: {selected.stockUnit}</p> : null}
-      {canCreate ? <Button disabled={disabled} type="button" variant="secondary" className="w-full" onClick={() => {
+      {selected ? <p className="text-xs">Miktar birimi: {stockUnitLabel(selected.stockUnit)}</p> : null}
+      {canCreate ? <Button disabled={disabled} type="button" variant="secondary" className="ml-auto flex" onClick={() => {
         setName(query); setUnit('adet'); setCategoryId(''); setCategoryName(''); setNewCategory(false); setError(null); setOpen(true);
-      }}>Yeni stok kalemi oluştur</Button> : <p className="text-xs">Yeni kayıt için işletme sahibine başvurun.</p>}
+      }}>Yeni Stok Kalemi</Button> : <p className="text-xs">Yeni kayıt için işletme sahibine başvurun.</p>}
       <Modal isOpen={open} title="Yeni stok kalemi" onClose={() => { if (!busy) setOpen(false); }} maxWidth="sm">
         <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           {error ? <p role="alert" className="text-sm text-[var(--accent-red)]">{error}</p> : null}
-          <label className="block">Ad<Input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
+          <label className="block">Ad<Input required maxLength={120} value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))} onChange={(event) => setName(event.target.value)} /></label>
           <label className="block">Stok birimi<select className={field} value={unit} onChange={(event) => setUnit(event.target.value)}>
-            {['adet', 'g', 'kg', 'ml', 'l'].map((item) => <option key={item}>{item}</option>)}
+            {['adet', 'g', 'kg', 'ml', 'l'].map((item) => <option key={item} value={item}>{stockUnitLabel(item)}</option>)}
           </select></label>
           <label className="block">Kategori<select className={field} value={newCategory ? '__new' : categoryId} disabled={loading || busy} onChange={(event) => {
             setNewCategory(event.target.value === '__new');
@@ -103,7 +105,7 @@ export function StockItemPicker({ products, value, onChange, label = 'Ürün', d
             {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             <option value="__new">+ Yeni kategori oluştur</option>
           </select></label>
-          {newCategory ? <label className="block">Yeni kategori adı<Input required maxLength={120} value={categoryName} onChange={(event) => setCategoryName(event.target.value)} /></label> : null}
+          {newCategory ? <label className="block">Yeni kategori adı<Input required maxLength={120} value={categoryName} onBlur={(event) => setCategoryName(capitalizeRecordName(event.currentTarget.value))} onChange={(event) => setCategoryName(event.target.value)} /></label> : null}
           <div className="flex gap-2">
             <Button type="button" variant="secondary" disabled={busy} onClick={() => setOpen(false)}>Vazgeç</Button>
             <Button type="submit" variant="primary" isLoading={busy} disabled={loading || !name.trim() || (newCategory ? !categoryName.trim() : !categoryId)}>Oluştur ve Seç</Button>

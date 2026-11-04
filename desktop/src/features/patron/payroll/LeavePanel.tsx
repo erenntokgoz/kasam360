@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
-import { errorText } from '../../../lib/cariInput';
+import { errorText, localDate } from '../../../lib/cariInput';
 import { formatDay } from '../../../lib/date';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
@@ -31,11 +31,15 @@ const tone = (status: string) =>
 const statusLabel = (status: string) =>
   ({ Bekliyor: 'Bekliyor', Onaylandi: 'Onaylandı', Reddedildi: 'Reddedildi' })[status] ?? status;
 
-export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
+type LeavePanelProps =
+  | { userId: string; staff?: never }
+  | { userId?: never; staff: { id: string; name: string }[] };
+
+export const LeavePanel: React.FC<LeavePanelProps> = ({ userId, staff }) => {
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
   const [kind, setKind] = useState('YILLIK');
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
+  const [start, setStart] = useState(() => localDate(new Date()));
+  const [end, setEnd] = useState(() => localDate(new Date()));
   const [editing, setEditing] = useState<LeaveRow | null>(null);
   const [deleting, setDeleting] = useState<LeaveRow | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,23 +69,27 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
 
   const resetForm = () => {
     setEditing(null);
-    setStart('');
-    setEnd('');
+    const today = localDate(new Date());
+    setStart(today);
+    setEnd(today);
   };
 
-  const ordered = [...leaves].sort((a, b) => Number(b.status === 'Bekliyor') - Number(a.status === 'Bekliyor'));
+  const visible = userId
+    ? [...leaves].sort((a, b) => Number(b.status === 'Bekliyor') - Number(a.status === 'Bekliyor')).slice(0, 12)
+    : leaves.filter((row) => row.status === 'Bekliyor');
+  const names = new Map(staff?.map((member) => [member.id, member.name]));
   const { actorId, actorRole, tenantId } = sessionArgs();
 
   return (
     <Panel
-      title="İzinler"
+      title={userId ? 'İzinler' : 'Bekleyen İzin Talepleri'}
     >
-      {ordered.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">İzin kaydı yok.</p> : null}
+      {visible.length === 0 && !error ? <p className="text-sm text-[var(--text-secondary)]">{userId ? 'İzin kaydı yok.' : 'Bekleyen izin talebi yok.'}</p> : null}
       <ul className="flex flex-col gap-1">
-        {ordered.slice(0, 12).map((row) => (
+        {visible.map((row) => (
           <li key={row.id} className="flex flex-wrap items-center gap-3 min-h-12 border-b border-[var(--border)] last:border-b-0">
             <span className="min-w-0 flex-1">
-              <span className={`block text-sm font-semibold truncate ${row.kind === UNPAID ? 'text-[var(--accent-amber)]' : 'text-[var(--text-primary)]'}`}>{kindLabel(row.kind)}</span>
+              <span className={`block text-sm font-semibold truncate ${row.kind === UNPAID ? 'text-[var(--accent-amber)]' : 'text-[var(--text-primary)]'}`}>{!userId ? `${names.get(row.userId) ?? 'Personel'} · ` : ''}{kindLabel(row.kind)}</span>
               <span className="block text-xs tabular-nums text-[var(--text-secondary)]">{formatDay(row.startDate)} → {formatDay(row.endDate)}</span>
             </span>
             <span className={`text-xs font-bold ${tone(row.status)}`}>{statusLabel(row.status)}</span>
@@ -95,6 +103,7 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
                 </Button>
               </>
             ) : null}
+            {userId ? <>
             <Button
               variant="ghost"
               aria-label="İzni düzenle"
@@ -110,10 +119,11 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
             <Button variant="ghost" aria-label="İzni sil" onClick={() => setDeleting(row)}>
               <Trash2 className="w-5 h-5" />
             </Button>
+            </> : null}
           </li>
         ))}
       </ul>
-      <div className="flex flex-wrap gap-2 mt-auto">
+      {userId ? <div className="flex flex-wrap gap-2 mt-auto">
         <Button variant={kind !== UNPAID ? 'selected' : 'secondary'} className="min-h-12 text-sm" onClick={() => setKind('YILLIK')}>
           Ücretli
         </Button>
@@ -147,7 +157,7 @@ export const LeavePanel: React.FC<{ userId: string }> = ({ userId }) => {
             Vazgeç
           </Button>
         ) : null}
-      </div>
+      </div> : null}
       {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
       {deleting ? (
         <ConfirmDialog

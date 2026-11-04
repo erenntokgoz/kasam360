@@ -15,14 +15,24 @@ export const TIP_METHOD_LABEL: Record<TipMethod, string> = { CASH: 'Nakit', CARD
 
 interface TipDialogProps {
   info: PinpadInfo[];
-  onSaved: (amountCents: number, method: TipMethod) => void;
+  onSaved: (amountCents: number, method: TipMethod, recipient: string | null) => void;
   onClose: () => void;
 }
 
-/** Önce tutar, sonra yöntem. Bahşiş satışın parçası değildir, doğrudan havuza yazılır. */
+interface TipRecipient {
+  id: string;
+  name: string;
+}
+
+/** Bahşiş, tahsilattan bağımsız olarak seçilen alıcıya kaydedilir. */
 export const TipDialog: React.FC<TipDialogProps> = ({ info, onSaved, onClose }) => {
   const [amountCents, setAmountCents] = useState<number | null>(null);
   const [saving, setSaving] = useState<TipMethod | null>(null);
+  const [method, setMethod] = useState<TipMethod | null>(null);
+  const [recipients, setRecipients] = useState<TipRecipient[] | null>(null);
+  const [recipientId, setRecipientId] = useState('');
+  const attemptedRecipient = useRef<string | null>(null);
+  const [requestId] = useState(() => crypto.randomUUID());
   const savingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,15 +54,28 @@ export const TipDialog: React.FC<TipDialogProps> = ({ info, onSaved, onClose }) 
     );
   }
 
-  const save = async (method: TipMethod) => {
-    if (savingRef.current) return;
+  const loadRecipients = async () => {
+    setError(null);
+    try {
+      const { actorRole, tenantId } = sessionArgs();
+      setRecipients(await invokeIPC<TipRecipient[]>('list_tip_recipients', { actorRole, tenantId }));
+    } catch (caught) {
+      setError(errorText(caught));
+    }
+  };
+
+  const save = async (recipient: TipRecipient | null) => {
+    if (savingRef.current || method === null) return;
+    const target = recipient?.id ?? '';
+    if (attemptedRecipient.current !== null && attemptedRecipient.current !== target) return;
+    attemptedRecipient.current = target;
     const { actorId, actorRole, tenantId } = sessionArgs();
     savingRef.current = true;
     setSaving(method);
     setError(null);
     try {
-      await invokeIPC('record_tip_entry', { amountCents, paymentMethod: method, actorId, actorRole, tenantId });
-      onSaved(amountCents, method);
+      await invokeIPC('record_tip_entry', { amountCents, paymentMethod: method, recipientUserId: recipient?.id, requestId, actorId, actorRole, tenantId });
+      onSaved(amountCents, method, recipient?.name ?? null);
     } catch (caught) {
       setError(errorText(caught));
       savingRef.current = false;
@@ -61,18 +84,54 @@ export const TipDialog: React.FC<TipDialogProps> = ({ info, onSaved, onClose }) 
   };
 
   return (
-    <Modal isOpen onClose={() => { if (!savingRef.current) onClose(); }} title="Bahşiş Nasıl Alındı?" subtitle={`${formatMoney(amountCents)} bahşiş havuzuna yazılacak.`} maxWidth="sm">
+    <Modal
+      isOpen
+      onClose={() => { if (!savingRef.current) onClose(); }}
+      title={method ? 'Bahşiş Kime Yazılsın?' : 'Bahşiş Nasıl Alındı?'}
+      subtitle={formatMoney(amountCents)}
+      surface="work"
+      maxWidth="sm"
+    >
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" size="xl" isLoading={saving === 'CASH'} disabled={saving !== null} onClick={() => void save('CASH')}>
-            <Banknote className="w-6 h-6" />
-            <span>Nakit</span>
-          </Button>
-          <Button variant="secondary" size="xl" isLoading={saving === 'CARD'} disabled={saving !== null} onClick={() => void save('CARD')}>
-            <CreditCard className="w-6 h-6" />
-            <span>Kart</span>
-          </Button>
-        </div>
+        {method ? (
+          <>
+            <Button variant="secondary" className="w-full" isLoading={saving !== null && attemptedRecipient.current === ''}
+              disabled={saving !== null || !!attemptedRecipient.current} onClick={() => void save(null)}>Ortak Havuz</Button>
+            {recipients === null ? (
+              <Button variant="secondary" className="w-full" disabled={attemptedRecipient.current !== null}
+                onClick={() => void loadRecipients()}>Personel Seç</Button>
+            ) : (
+              <>
+                <label className="block">
+                  <span className="block text-sm font-semibold">Personel</span>
+                  <select className="w-full min-h-12" value={recipientId} disabled={attemptedRecipient.current !== null}
+                    onChange={(event) => setRecipientId(event.target.value)}>
+                    <option value="">{recipients.length ? 'Personel seçin' : 'Aktif personel yok'}</option>
+                    {recipients.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                  </select>
+                </label>
+                <Button variant="primary" className="w-full" disabled={!recipientId || saving !== null || attemptedRecipient.current === ''}
+                  isLoading={saving !== null && !!attemptedRecipient.current}
+                  onClick={() => {
+                    const recipient = recipients.find((person) => person.id === recipientId);
+                    if (recipient) void save(recipient);
+                  }}>Personele Kaydet</Button>
+              </>
+            )}
+            {attemptedRecipient.current === null ? <Button variant="ghost" onClick={() => { setMethod(null); setError(null); }}>Geri</Button> : null}
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" size="xl" onClick={() => setMethod('CASH')}>
+              <Banknote className="w-6 h-6" />
+              Nakit
+            </Button>
+            <Button variant="secondary" size="xl" onClick={() => setMethod('CARD')}>
+              <CreditCard className="w-6 h-6" />
+              Kart
+            </Button>
+          </div>
+        )}
         {error ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
       </div>
     </Modal>

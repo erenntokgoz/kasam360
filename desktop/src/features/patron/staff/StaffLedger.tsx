@@ -5,17 +5,19 @@ import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { useLedgerStore } from '../../../stores/ledgerStore';
 import { Button } from '../../../ui/Button';
+import { LeavePanel } from '../payroll/LeavePanel';
 import { PayrollPanel } from '../payroll/PayrollPanel';
 import { SectionTabs, type SectionTab } from '../SectionTabs';
 import { ROLE_LABEL, StaffFormModal, type StaffMember } from '../StaffFormModal';
 import { TipPoolPanel } from '../TipPoolPanel';
 import { StaffCard, type ProfileRow } from './StaffCard';
 
-type LedgerSection = 'PEOPLE' | 'PAYROLL' | 'TIPS';
+type LedgerSection = 'PEOPLE' | 'PAYROLL' | 'TIPS' | 'LEAVE_REQUESTS';
 
 const SECTIONS: SectionTab<LedgerSection>[] = [
   { id: 'PEOPLE', label: 'Kişiler' },
   { id: 'PAYROLL', label: 'Bordro' },
+  { id: 'LEAVE_REQUESTS', label: 'İzin Onayları' },
   { id: 'TIPS', label: 'Bahşiş Havuzu' },
 ];
 
@@ -52,7 +54,7 @@ export const StaffLedger: React.FC = () => {
   }, [load]);
 
   useEffect(() => {
-    if (erpSection === 'PAYROLL') setSection('PAYROLL');
+    if (erpSection === 'LEAVE_REQUESTS') setSection('LEAVE_REQUESTS');
   }, [erpSection]);
 
   // Sağ taraf boş bir kutu olarak kalmasın: seçim yoksa ilk kişi açık gelir.
@@ -74,7 +76,7 @@ export const StaffLedger: React.FC = () => {
       {section === 'PEOPLE' ? (
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
           <div className="space-y-2 self-start">
-          <Button variant="primary" className="w-full min-h-12 text-sm font-bold" onClick={() => setEditing('NEW')}>
+          <Button variant="primary" className="ml-auto flex min-h-12 text-sm font-bold" onClick={() => setEditing('NEW')}>
             Personel Ekle
           </Button>
           <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
@@ -111,6 +113,8 @@ export const StaffLedger: React.FC = () => {
           )}
         </div>
       ) : null}
+
+      {section === 'LEAVE_REQUESTS' ? <LeavePanel staff={staff ?? []} /> : null}
 
       {section === 'PAYROLL' ? <PayrollPanel /> : null}
 

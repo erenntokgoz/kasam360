@@ -1,3 +1,4 @@
+import { capitalizeRecordName } from '../../../lib/recordName';
 import React, { useMemo, useState } from 'react';
 import { Minus, Plus, X } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
@@ -91,7 +92,7 @@ export const AddTablesModal: React.FC<AddTablesModalProps> = ({ zones, initialZo
           <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-3">
             <div>
               <label htmlFor="batch-name" className={labelClass}>Masa adı</label>
-              <Input id="batch-name" className="min-h-12" value={name} maxLength={30} onChange={(event) => setName(event.target.value)} />
+              <Input id="batch-name" className="min-h-12" value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))} maxLength={30} onChange={(event) => setName(event.target.value)} />
             </div>
             <div>
               <label htmlFor="batch-start" className={labelClass}>Başlangıç no</label>

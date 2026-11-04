@@ -21,19 +21,22 @@ pub async fn record_tip(
     paid_at: &str,
 ) -> Result<String, String> {
     let mut tx = pool.begin_write().await?;
-    let id = insert_tip(
+    let (id, _) = insert_tip(
         &mut tx,
         tenant_id,
         order_id,
         amount_cents,
         payment_method,
         paid_at,
+        None,
+        None,
     )
     .await?;
     tx.commit().await?;
     Ok(id)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_tip(
     conn: &mut SqliteConnection,
     tenant_id: &str,
@@ -41,20 +44,55 @@ pub async fn insert_tip(
     amount_cents: i64,
     payment_method: &str,
     paid_at: &str,
-) -> Result<String, String> {
+    recipient: Option<&str>,
+    request_id: Option<&str>,
+) -> Result<(String, bool), String> {
     if amount_cents <= 0 {
         return Err("bahsis sifirdan buyuk olmali".to_string());
     }
     if !matches!(payment_method, "CASH" | "CARD") {
         return Err("VALIDATION: bahşiş yöntemi nakit veya kart olmalıdır".to_string());
     }
+    if let Some(key) = request_id {
+        let existing: Option<(String, i64, String, Option<String>)> = sqlx::query_as(
+            "SELECT id, amount_cents, payment_method, recipient_user_id FROM tip_pool_entries
+             WHERE tenant_id = ? AND request_id = ?",
+        )
+        .bind(tenant_id)
+        .bind(key)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+        if let Some((id, amount, method, user)) = existing {
+            if amount == amount_cents && method == payment_method && user.as_deref() == recipient {
+                return Ok((id, false));
+            }
+            return Err(
+                "IDEMPOTENCY_CONFLICT: Bahşiş isteği farklı bilgilerle kaydedilmiş.".into(),
+            );
+        }
+    }
+    if let Some(user_id) = recipient {
+        let active: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE tenant_id = ? AND id = ?
+              AND is_active = 1 AND role IN ('OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN'))",
+        )
+        .bind(tenant_id)
+        .bind(user_id)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+        if !active {
+            return Err("VALIDATION: Aktif personel bulunamadı.".into());
+        }
+    }
     let period = period_of(paid_at).ok_or_else(|| format!("tarih ayrıştırılamadı: {paid_at}"))?;
 
     let id = crate::id_generator::generate_id("tip");
     sqlx::query(
         "INSERT INTO tip_pool_entries
-             (id, tenant_id, period, order_id, amount_cents, payment_method, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             (id, tenant_id, period, order_id, amount_cents, payment_method, created_at, recipient_user_id, request_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     )
     .bind(&id)
     .bind(tenant_id)
@@ -63,10 +101,12 @@ pub async fn insert_tip(
     .bind(amount_cents)
     .bind(payment_method)
     .bind(paid_at)
+    .bind(recipient)
+    .bind(request_id)
     .execute(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
-    Ok(id)
+    Ok((id, true))
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -85,7 +125,7 @@ pub async fn list_entries(
 ) -> Result<Vec<TipEntry>, String> {
     let rows: Vec<(String, i64, String, String)> = sqlx::query_as(
         "SELECT id, amount_cents, payment_method, created_at FROM tip_pool_entries
-          WHERE tenant_id = ?1 AND period = ?2 ORDER BY created_at DESC",
+          WHERE tenant_id = ?1 AND period = ?2 AND recipient_user_id IS NULL ORDER BY created_at DESC",
     )
     .bind(tenant_id)
     .bind(period)
@@ -112,7 +152,7 @@ pub async fn delete_entry(
 ) -> Result<i64, String> {
     let mut tx = pool.begin_write().await?;
     let entry: Option<(String, i64)> = sqlx::query_as(
-        "SELECT period, amount_cents FROM tip_pool_entries WHERE tenant_id = ?1 AND id = ?2",
+        "SELECT period, amount_cents FROM tip_pool_entries WHERE tenant_id = ?1 AND id = ?2 AND recipient_user_id IS NULL",
     )
     .bind(tenant_id)
     .bind(entry_id)
@@ -132,7 +172,7 @@ pub async fn delete_entry(
     if distributed > 0 {
         return Err("CONFLICT: dağıtılmış dönemin bahşişi silinemez.".to_string());
     }
-    sqlx::query("DELETE FROM tip_pool_entries WHERE tenant_id = ?1 AND id = ?2")
+    sqlx::query("DELETE FROM tip_pool_entries WHERE tenant_id = ?1 AND id = ?2 AND recipient_user_id IS NULL")
         .bind(tenant_id)
         .bind(entry_id)
         .execute(&mut *tx)
@@ -147,7 +187,7 @@ pub async fn delete_entry(
 pub async fn pool_total(pool: &SqlitePool, tenant_id: &str, period: &str) -> Result<i64, String> {
     let total: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(amount_cents), 0) FROM tip_pool_entries
-          WHERE tenant_id = ?1 AND period = ?2",
+          WHERE tenant_id = ?1 AND period = ?2 AND recipient_user_id IS NULL",
     )
     .bind(tenant_id)
     .bind(period)
@@ -176,7 +216,7 @@ pub async fn pool_summary(
     use sqlx::Row;
     let distributed: i64 = row.try_get("distributed").map_err(|e| e.to_string())?;
     let havuz: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM tip_pool_entries WHERE tenant_id = ?1 AND period = ?2",
+        "SELECT COUNT(*) FROM tip_pool_entries WHERE tenant_id = ?1 AND period = ?2 AND recipient_user_id IS NULL",
     )
     .bind(tenant_id)
     .bind(period)
@@ -322,7 +362,7 @@ pub async fn tip_for_user(
     period: &str,
 ) -> Result<i64, String> {
     let toplam: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(amount_cents), 0) FROM tip_distributions
+        "SELECT COALESCE(SUM(amount_cents), 0) FROM staff_tip_earnings
           WHERE tenant_id = ?1 AND period = ?2 AND user_id = ?3",
     )
     .bind(tenant_id)

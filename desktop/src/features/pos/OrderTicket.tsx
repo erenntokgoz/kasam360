@@ -75,7 +75,7 @@ export const OrderTicket: React.FC = () => {
   };
 
   return (
-    <aside className="w-[390px] shrink-0 paper !rounded-none border-l border-[var(--border)] flex flex-col h-full select-none">
+    <aside className="w-[390px] shrink-0 work-surface !rounded-none border-l border-[var(--border)] flex flex-col h-full select-none">
       {/* Başlık Barı */}
       <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between shrink-0">
         <div>

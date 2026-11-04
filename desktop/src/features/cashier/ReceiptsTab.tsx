@@ -1,3 +1,4 @@
+import { useUIStore } from '../../stores/uiStore';
 import React, { useCallback, useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
@@ -124,6 +125,7 @@ export const ReceiptsTab: React.FC<{ onRefunded: () => void }> = ({ onRefunded }
           onSubmitted={() => {
             setChangeReceipt(null);
             setRequestRevision((revision) => revision + 1);
+            useUIStore.getState().showNotice('Adisyon değişiklik talebi kaydedildi.');
           }}
         />
       ) : null}

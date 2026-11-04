@@ -1,3 +1,4 @@
+import { capitalizeRecordName } from '../../lib/recordName';
 import React, { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { useCariStore } from '../../stores/cariStore';
@@ -108,7 +109,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
           </label>
           <Input
             id="cari-name"
-            value={name}
+            value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))}
             onChange={(event) => {
               setName(event.target.value);
               setSimilar([]);

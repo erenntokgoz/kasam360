@@ -267,3 +267,79 @@ async fn dagitilmamis_bahsis_silinir_dagitilmis_silinmez() {
         .await
         .is_err());
 }
+
+#[tokio::test]
+async fn personel_bahsisi_havuza_girmez_ve_hakediste_gorunur() {
+    let p = pool().await;
+    kullanici(&p, "tenant_a", "usr_a", "Garson", "WAITER").await;
+    let mut conn = p.acquire().await.expect("bağlantı");
+    let first = tip_service::insert_tip(
+        &mut conn,
+        "tenant_a",
+        None,
+        500,
+        "CARD",
+        "2026-03-10T12:00:00Z",
+        Some("usr_a"),
+        Some("test_key"),
+    )
+    .await
+    .expect("kişisel bahşiş");
+    let repeated = tip_service::insert_tip(
+        &mut conn,
+        "tenant_a",
+        None,
+        500,
+        "CARD",
+        "2026-03-10T12:00:00Z",
+        Some("usr_a"),
+        Some("test_key"),
+    )
+    .await
+    .expect("tekrar");
+    assert!(first.1);
+    assert_eq!(repeated, (first.0, false));
+    assert!(tip_service::insert_tip(
+        &mut conn,
+        "tenant_a",
+        None,
+        900,
+        "CARD",
+        "2026-03-10T12:00:00Z",
+        Some("usr_a"),
+        Some("test_key"),
+    )
+    .await
+    .is_err());
+    assert!(tip_service::insert_tip(
+        &mut conn,
+        "tenant_b",
+        None,
+        500,
+        "CARD",
+        "2026-03-10T12:00:00Z",
+        Some("usr_a"),
+        Some("another_key"),
+    )
+    .await
+    .is_err());
+    drop(conn);
+    assert_eq!(
+        tip_service::pool_total(&p, "tenant_a", "2026-03")
+            .await
+            .expect("havuz"),
+        0
+    );
+    assert_eq!(
+        tip_service::tip_for_user(&p, "tenant_a", "usr_a", "2026-03")
+            .await
+            .expect("hak ediş"),
+        500
+    );
+    assert_eq!(
+        tip_service::tip_for_user(&p, "tenant_b", "usr_a", "2026-03")
+            .await
+            .expect("başka işletme"),
+        0
+    );
+}

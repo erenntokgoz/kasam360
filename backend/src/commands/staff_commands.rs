@@ -350,11 +350,22 @@ pub async fn delete_tip_entry(
     Ok(())
 }
 
-/// Bahşişi alındığı yöntemle havuza yazar.
+const TIP_WRITERS: [crate::rbac::Role; 3] = [
+    crate::rbac::Role::Owner,
+    crate::rbac::Role::Manager,
+    crate::rbac::Role::Cashier,
+];
+
+pub mod tip_recipients;
+
+/// Bahşişi alındığı yöntemle seçilen alıcıya yazar.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn record_tip_entry(
     amount_cents: i64,
     payment_method: String,
+    recipient_user_id: Option<String>,
+    request_id: Option<String>,
     actor_id: String,
     actor_role: String,
     tenant_id: Option<String>,
@@ -362,27 +373,29 @@ pub async fn record_tip_entry(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<String, String> {
     state.lan_sync.require_local_write()?;
-    crate::rbac::require_any(
-        &actor_role,
-        &[
-            crate::rbac::Role::Owner,
-            crate::rbac::Role::Manager,
-            crate::rbac::Role::Cashier,
-        ],
-    )?;
+    crate::rbac::require_any(&actor_role, &TIP_WRITERS)?;
+    let request_id = request_id
+        .map(|id| uuid::Uuid::parse_str(&id).map(|key| key.to_string()))
+        .transpose()
+        .map_err(|_| "VALIDATION: Geçersiz bahşiş işlem kimliği.".to_string())?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let now = chrono::Local::now().to_rfc3339();
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut conn = pool.begin_write().await.map_err(|e| e.to_string())?;
-    let id = tip_service::insert_tip(
+    let (id, inserted) = tip_service::insert_tip(
         &mut conn,
         &tenant,
         None,
         amount_cents,
         &payment_method,
         &now,
+        recipient_user_id.as_deref(),
+        request_id.as_deref(),
     )
     .await?;
+    if !inserted {
+        return Ok(id);
+    }
     let ctx = crate::services::audit_service::AuditContext::new(
         tenant,
         actor_id,
@@ -390,7 +403,7 @@ pub async fn record_tip_entry(
         crate::services::audit_service::category::FINANS,
         "tip:recorded",
         id.clone(),
-        serde_json::json!({ "amountCents": amount_cents }),
+        serde_json::json!({ "amountCents": amount_cents, "recipientUserId": recipient_user_id, "paymentMethod": payment_method }),
         now,
     )?;
     crate::services::audit_service::AuditService::append(&mut conn, &audit_lock, &ctx).await?;

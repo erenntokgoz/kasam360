@@ -403,6 +403,7 @@ pub fn run() {
             commands::staff_commands::run_payroll,
             commands::staff_commands::get_tip_pool_summary,
             commands::staff_commands::record_tip_entry,
+            commands::staff_commands::tip_recipients::list_tip_recipients,
             commands::staff_commands::list_tip_entries,
             commands::staff_commands::delete_tip_entry,
             commands::staff_commands::update_shift_plan,

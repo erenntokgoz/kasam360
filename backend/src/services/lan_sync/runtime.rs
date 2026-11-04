@@ -110,7 +110,12 @@ pub(super) struct Inner {
     bind_host: String,
     status: RwLock<SyncStatus>,
     pub(super) commands: Mutex<Option<mpsc::Sender<Command>>>,
-    listener: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    tasks: Mutex<Option<RuntimeTasks>>,
+}
+
+struct RuntimeTasks {
+    listener: tokio::task::JoinHandle<()>,
+    actor: tokio::task::JoinHandle<()>,
 }
 
 /// Uygulama durumundaki paylaşılan eşitleme yüzü.
@@ -128,7 +133,7 @@ impl LanSync {
                 bind_host: bind_host.to_string(),
                 status: RwLock::new(SyncStatus::single()),
                 commands: Mutex::new(None),
-                listener: Mutex::new(None),
+                tasks: Mutex::new(None),
             }),
         };
         super::write_tx::register(&pool, sync.clone());
@@ -258,6 +263,10 @@ impl LanSync {
     }
 
     async fn start_with(&self, listener: TcpListener) -> Result<(), String> {
+        let mut tasks = self.inner.tasks.lock().await;
+        if tasks.is_some() {
+            return Err("CONFLICT: Eşitleme zaten çalışıyor.".into());
+        }
         let bound = listener.local_addr().map_err(|e| e.to_string())?.port();
         let mut conn = self.inner.pool.acquire().await.map_err(|e| e.to_string())?;
         let key = Arc::new(DeviceKey::load_or_create(&mut conn).await?);
@@ -308,17 +317,24 @@ impl LanSync {
             sender.clone(),
         );
         *self.inner.commands.lock().await = Some(sender.clone());
-        *self.inner.listener.lock().await = Some(listen);
         let actor = Actor::new(self.clone(), engine, key, me, bound, sender);
-        tokio::spawn(actor.run(receiver));
+        *tasks = Some(RuntimeTasks {
+            listener: listen,
+            actor: tokio::spawn(actor.run(receiver)),
+        });
         Ok(())
     }
 
     /// Testlerde cihaz kapanmasını, uygulamada kapanışı temsil eder.
     pub async fn shutdown(&self) {
+        let mut tasks = self.inner.tasks.lock().await;
         *self.inner.commands.lock().await = None;
-        if let Some(listener) = self.inner.listener.lock().await.take() {
-            listener.abort();
+        if let Some(tasks) = tasks.take() {
+            tasks.listener.abort();
+            // Açık bağlantıdan yeni kayıt onayı çıkmadan eşitleme döngüsü durmalı.
+            tasks.actor.abort();
+            let _ = tasks.listener.await;
+            let _ = tasks.actor.await;
         }
     }
 

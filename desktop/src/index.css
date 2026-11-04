@@ -188,6 +188,28 @@
   color: var(--ink);
 }
 
+/* Uzun süre açık kalan işlem yüzeyleri etkin temanın renklerini kullanır. */
+.work-surface {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+.work-surface .btn-secondary,
+.work-surface .btn-selected {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.work-surface .btn-secondary { background-color: var(--bg-card); }
+.work-surface .btn-secondary:hover { background-color: var(--bg-hover); }
+.work-surface .btn-selected { background-color: var(--accent-blue-soft); }
+.work-surface select {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  padding-inline: 0.75rem;
+}
+
 /* Not kâğıdı: üstte delikler, zeminde çizgiler. */
 .paper {
   --slip: var(--sheet);

@@ -1,3 +1,5 @@
+import { useUIStore } from '../../stores/uiStore';
+import { stockUnitLabel } from '../../lib/stockUnitLabel';
 import { useEffect, useMemo, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { formatMoney } from '../../lib/formatMoney';
@@ -64,6 +66,7 @@ export function StockOverview() {
       if (!productId || !Number.isFinite(amount) || amount <= 0) throw new Error('Ürün ve miktar girin.');
       const input = toReceiptInput(receipt, gramItems.map((item) => item.id));
       if (await quickReceive(productId, amount, parseMoneyToCents(unitCost), supplierId, input)) {
+        useUIStore.getState().showNotice('Stok girişi kaydedildi.');
         setQuantity('');
         setUnitCost('');
         setReceipt(emptyReceiptDraft());
@@ -126,7 +129,7 @@ export function StockOverview() {
               </span>
               <span className="flex items-center gap-4 tabular-nums">
                 <span className={row.quantity > 0 ? '' : 'font-bold text-[var(--accent-red)]'}>
-                  {row.quantity > 0 ? `${formatNumber(row.quantity)} ${row.unit}` : 'Stok yok'}
+                  {row.quantity > 0 ? `${formatNumber(row.quantity)} ${stockUnitLabel(row.unit)}` : 'Stok yok'}
                   {row.grams > 0 ? ` · ${formatNumber(Math.round(row.grams))} g` : ''}
                 </span>
                 <span className="text-xs text-[var(--text-secondary)]">{formatMoney(row.valueCents)}</span>

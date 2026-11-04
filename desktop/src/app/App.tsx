@@ -1,3 +1,4 @@
+import { OperationNotice } from '../ui/OperationNotice';
 import { canOpenModule, homeModule } from '../lib/roleAccess';
 import React, { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
@@ -194,6 +195,7 @@ export const App: React.FC = () => {
       <ShiftGateModal />
       <PaymentModal />
       <ReceiptPreviewModal />
+      {!isLocked ? <OperationNotice /> : null}
     </div>
     <LockScreen />
     </div>

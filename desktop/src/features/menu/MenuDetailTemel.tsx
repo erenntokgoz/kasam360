@@ -1,3 +1,5 @@
+import { capitalizeRecordName } from '../../lib/recordName';
+import { stockUnitLabel } from '../../lib/stockUnitLabel';
 // Menü Ürün Detay Paneli - Temel Bilgiler Alt Sekmesi
 // Ürün adı, kategori, KDV dahil kuruş satış fiyatı, barkod, açıklama ve durum anahtarları.
 // Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
@@ -63,7 +65,7 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
         </label>
         <input
           type="text"
-          value={name}
+          value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))}
           onChange={(e) => setName(e.target.value)}
           placeholder="Örn: Espresso Double"
           className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
@@ -111,7 +113,7 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
         <span>Stok Birimi</span>
         <select value={stockUnit} onChange={(e) => setStockUnit(e.target.value)} className="w-full min-h-12 bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md px-3 text-sm text-[var(--text-primary)]">
           {stockUnit === 'belirsiz' && <option value="belirsiz">Belirsiz — düzeltin</option>}
-          {['adet', 'g', 'kg', 'ml', 'l'].map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+          {['adet', 'g', 'kg', 'ml', 'l'].map((unit) => <option key={unit} value={unit}>{stockUnitLabel(unit)}</option>)}
         </select>
       </label>
 

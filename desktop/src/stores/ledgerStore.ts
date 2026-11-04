@@ -10,7 +10,7 @@ export type ErpTab = 'PANORAMA' | 'FINANCE' | 'DEBTS' | 'STAFF' | 'CATALOG' | 'B
 /** Panorama uyarısının hedefi: bölüm ve varsa içindeki alt sayfa. */
 const ALERT_TARGETS: Record<string, [ErpTab | 'SETTINGS', string | null]> = {
   EXPENSES: ['FINANCE', null],
-  PAYROLL: ['STAFF', 'PAYROLL'],
+  PAYROLL: ['STAFF', 'LEAVE_REQUESTS'],
   STOCK: ['CATALOG', 'STOCK'],
   LOG: ['AUDIT', null],
   SETTINGS: ['SETTINGS', 'BACKUP'],

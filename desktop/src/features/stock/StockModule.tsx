@@ -1,3 +1,5 @@
+import { useUIStore } from '../../stores/uiStore';
+import { stockUnitLabel } from '../../lib/stockUnitLabel';
 import { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { formatMoney } from '../../lib/formatMoney';
@@ -76,7 +78,10 @@ export function StockModule() {
     try {
       setFormError(null);
       const input = toReceiptInput(receipt, gramItemsOf(productIds).map((item) => item.id));
-      if (await receiveOrder(orderId, input)) setPendingReceiveId(null);
+      if (await receiveOrder(orderId, input)) {
+        setPendingReceiveId(null);
+        useUIStore.getState().showNotice('Mal kabulü kaydedildi.');
+      }
     } catch (caught: unknown) {
       setFormError(caught instanceof Error ? caught.message : String(caught));
     }
@@ -157,7 +162,7 @@ export function StockModule() {
                 <div key={batch.id} className="grid gap-2 p-4 text-sm sm:grid-cols-[1fr_110px_130px_140px]">
                   <strong>{batch.productName}</strong>
                   <span className="font-mono tabular-nums">{batchQuantityText(batch)}</span>
-                  <span className="font-mono tabular-nums">{formatMoney(batch.unitCostCents)} / {batch.stockUnit}</span>
+                  <span className="font-mono tabular-nums">{formatMoney(batch.unitCostCents)} / {stockUnitLabel(batch.stockUnit)}</span>
                   <span className="text-xs text-[var(--text-secondary)]">{formatDay(batch.receivedAt)}</span>
                 </div>
               ))}

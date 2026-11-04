@@ -85,7 +85,7 @@ pub async fn money_summary(
     .await
     .map_err(|e| format!("avans okunamadı: {e}"))?;
     let tip_cents: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(amount_cents), 0) FROM tip_distributions
+        "SELECT COALESCE(SUM(amount_cents), 0) FROM staff_tip_earnings
          WHERE tenant_id = ? AND user_id = ? AND period = ?",
     )
     .bind(tenant_id)
@@ -120,7 +120,7 @@ pub async fn tips_between(
     to: &str,
 ) -> Result<i64, String> {
     sqlx::query_scalar(
-        "SELECT COALESCE(SUM(amount_cents), 0) FROM tip_distributions
+        "SELECT COALESCE(SUM(amount_cents), 0) FROM staff_tip_earnings
          WHERE tenant_id = ? AND user_id = ? AND date(created_at) BETWEEN date(?) AND date(?)",
     )
     .bind(tenant_id)

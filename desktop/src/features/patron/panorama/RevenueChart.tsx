@@ -31,9 +31,14 @@ export const RevenueChart: React.FC<RevenueChartProps> = ({ kind, buckets }) => 
   const active = hovered === null ? null : shown[hovered];
   const label = (item: PanoramaBucket) => (kind === 'HOUR' ? `${item.label}:00` : dayLabel(item.label));
 
+  const title = kind === 'HOUR' ? 'Saatlere Göre Tahsilat' : 'Günlere Göre Tahsilat';
+  if (!shown.some((item) => item.currentCents > 0 || item.previousCents > 0)) {
+    return <Panel title={title}><p className="text-sm text-[var(--text-secondary)]">Bu dönemde tahsilat yok.</p></Panel>;
+  }
+
   return (
     <Panel
-      title={kind === 'HOUR' ? 'Saatlere Göre Tahsilat' : 'Günlere Göre Tahsilat'}
+      title={title}
       aside={
         <span className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
           <span className="flex items-center gap-1.5">

@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { parseCents } from '../../lib/moneyInput';
-import { createExpense, EXPENSE_CATEGORIES } from '../../stores/expenseStore';
+import { createExpense, EXPENSE_CATEGORIES, needsDescription } from '../../stores/expenseStore';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
+import { useUIStore } from '../../stores/uiStore';
 import { Modal } from '../../ui/Modal';
 
 interface CashExpenseModalProps {
@@ -19,12 +20,14 @@ export const CashExpenseModal: React.FC<CashExpenseModalProps> = ({ onClose, onS
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const cents = parseCents(amount);
+  const canSave = cents !== null && cents > 0 && !needsDescription(category, note);
 
   const save = async () => {
-    if (cents === null || cents <= 0) return;
+    if (!canSave) return;
     setError(null);
     try {
       await createExpense(category, cents, 'CASH', note.trim());
+      useUIStore.getState().showNotice('Kasa gideri kaydedildi.');
       onSaved();
     } catch (caught) {
       setError(errorText(caught));
@@ -32,7 +35,7 @@ export const CashExpenseModal: React.FC<CashExpenseModalProps> = ({ onClose, onS
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Kasadan Gider Öde" maxWidth="sm">
+    <Modal isOpen onClose={onClose} title="Kasadan Gider Öde" surface="work" maxWidth="sm">
       <div className="space-y-3">
         <select
           aria-label="Gider kategorisi"
@@ -45,11 +48,14 @@ export const CashExpenseModal: React.FC<CashExpenseModalProps> = ({ onClose, onS
           ))}
         </select>
         <NumberInput aria-label="Gider tutarı" placeholder="Tutar (₺)" className="min-h-12 tabular-nums" value={amount} onValueChange={setAmount} />
-        <Input aria-label="Gider açıklaması" placeholder="Açıklama" className="min-h-12" value={note} onChange={(event) => setNote(event.target.value)} />
+        <label className="block space-y-1">
+          <span className="text-sm font-semibold">{category === 'OTHER' ? 'Açıklama (zorunlu)' : 'Açıklama'}</span>
+          <Input required={category === 'OTHER'} className="min-h-12" value={note} onChange={(event) => setNote(event.target.value)} />
+        </label>
         {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
         <div className="flex gap-2">
           <Button variant="secondary" className="flex-1 min-h-12" onClick={onClose}>Vazgeç</Button>
-          <Button variant="primary" className="flex-1 min-h-12" disabled={cents === null || cents <= 0} onClick={() => void save()}>Gideri Kaydet</Button>
+          <Button variant="primary" className="flex-1 min-h-12" disabled={!canSave} onClick={() => void save()}>Gideri Kaydet</Button>
         </div>
       </div>
     </Modal>

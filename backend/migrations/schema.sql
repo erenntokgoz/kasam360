@@ -931,6 +931,8 @@ CREATE TABLE IF NOT EXISTS tip_pool_entries (
     order_id TEXT,
     amount_cents INTEGER NOT NULL DEFAULT 0,
     payment_method TEXT NOT NULL DEFAULT 'CASH',
+    recipient_user_id TEXT,
+    request_id TEXT,
     -- H_avuz = SUM(amount_cents); her calisan icin pay = katsayi * taban
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -948,6 +950,12 @@ CREATE TABLE IF NOT EXISTS tip_distributions (
     UNIQUE(tenant_id, period, user_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE VIEW IF NOT EXISTS staff_tip_earnings AS
+SELECT tenant_id, user_id, period, amount_cents, created_at FROM tip_distributions
+UNION ALL
+SELECT tenant_id, recipient_user_id, period, amount_cents, created_at
+FROM tip_pool_entries WHERE recipient_user_id IS NOT NULL;
 
 -- Vardiya planlamasi: `shifts` gerceklesen KASA hareketidir (muhasebeye bagli),
 -- planlama ayri tabloda tutulur. Iki kavram birlestirilirse tablo iki isleve

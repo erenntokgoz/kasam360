@@ -82,6 +82,7 @@ export const ReceiptPreviewModal: React.FC = () => {
       isOpen={modals.receiptPreview}
       onClose={handleClose}
       title={!lastSale ? 'Fiş Ön İzleme' : leftCents > 0 ? 'Parça Ödeme Alındı' : 'Ödeme Alındı'}
+      surface="work"
       maxWidth="md"
     >
       <div className="space-y-4">

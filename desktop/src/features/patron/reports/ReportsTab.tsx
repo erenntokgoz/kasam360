@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
 import { toLocalIso } from '../../../lib/dateRange';
-import { downloadFile } from '../../../lib/downloadFile';
+import { useUIStore } from '../../../stores/uiStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { OWNER_ONLY_REPORTS, REPORTS, type ReportKey, type ReportTable } from './reportDefinitions';
-import { reportCsv, reportFileName, type ReportFileMeta } from './reportCsv';
+import type { ReportFileMeta } from './reportCsv';
+import { exportReport } from './reportXlsx';
 
 const two = (value: number) => String(value).padStart(2, '0');
 const dayText = (date: Date) => `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
@@ -36,9 +37,11 @@ export const ReportsTab: React.FC = () => {
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const keys = (Object.keys(REPORTS) as ReportKey[]).filter((key) => isOwner || !OWNER_ONLY_REPORTS.has(key));
   const [report, setReport] = useState<ReportKey>('SALES');
-  const [from, setFrom] = useState(() => daysAgo(6));
+  const [from, setFrom] = useState(() => daysAgo(0));
   const [to, setTo] = useState(() => daysAgo(0));
   const [table, setTable] = useState<ReportTable | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rangeError = from === '' || to === '' ? 'Başlangıç ve bitiş seçin.' : from > to ? 'Başlangıç bitişten sonra olamaz.' : null;
 
@@ -109,13 +112,24 @@ export const ReportsTab: React.FC = () => {
         <Button
           variant="secondary"
           className="min-h-12 text-sm font-bold ml-auto"
-          disabled={!table || table.rows.length === 0}
-          onClick={() => table && downloadFile(reportFileName(meta), reportCsv(meta, table), 'text/csv;charset=utf-8')}
+          disabled={!table || !!rangeError || exporting}
+          isLoading={exporting}
+          onClick={() => {
+            if (!table || exporting) return;
+            setExportError(null);
+            setExporting(true);
+            void exportReport(meta, table, report)
+              .then(() => useUIStore.getState().showNotice('Excel raporu hazırlandı.'))
+              .catch((caught) => setExportError(errorText(caught)))
+              .finally(() => setExporting(false));
+          }}
         >
           <Download className="w-4 h-4 mr-1.5" />
           <span>Excel'e Aktar</span>
         </Button>
       </div>
+
+      {exportError ? <p role="alert" className="text-sm text-[var(--accent-red)]">Excel çıktısı oluşturulamadı. {exportError}</p> : null}
 
       {table?.warning ? (
         <p role="status" className="p-3 rounded-lg text-sm font-semibold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">

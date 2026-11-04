@@ -1,3 +1,4 @@
+import { capitalizeRecordName } from '../../lib/recordName';
 import React, { useState } from 'react';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
@@ -97,7 +98,7 @@ export const TariffFormModal: React.FC<TariffFormModalProps> = ({ tariff, produc
   return (
     <Modal isOpen onClose={onClose} title={tariff ? 'Tarifeyi Düzenle' : 'Tarife Ekle'} maxWidth="md">
       <div className="space-y-3">
-        <Input aria-label="Tarife adı" placeholder="Tarife adı" className="min-h-12" value={name} onChange={(event) => setName(event.target.value)} />
+        <Input aria-label="Tarife adı" placeholder="Tarife adı" className="min-h-12" value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))} onChange={(event) => setName(event.target.value)} />
         <div className="grid grid-cols-2 gap-2">
           <select aria-label="Zam veya indirim" className={field} value={direction} onChange={(event) => setDirection(event.target.value as 'UP' | 'DOWN')}>
             <option value="UP">Zam</option>

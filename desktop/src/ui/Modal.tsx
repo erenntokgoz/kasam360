@@ -11,6 +11,7 @@ export interface ModalProps {
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '5xl';
   showCloseButton?: boolean;
+  surface?: 'paper' | 'work';
   /** Kapat düğmesinin yanına gelen işlemler; biçimi Kapat ile aynıdır. */
   headerActions?: React.ReactNode;
 }
@@ -23,6 +24,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   maxWidth = 'md',
   showCloseButton = true,
+  surface = 'paper',
   headerActions,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -69,7 +71,8 @@ export const Modal: React.FC<ModalProps> = ({
         tabIndex={-1}
         aria-label={title}
         className={cn(
-          'outline-none w-full paper border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
+          'outline-none w-full border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
+          surface === 'work' ? 'work-surface' : 'paper',
           maxWidthClasses
         )}
       >

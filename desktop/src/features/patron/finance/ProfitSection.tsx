@@ -25,7 +25,7 @@ export const ProfitSection: React.FC = () => {
           Kâr ve giderler okunamadı: {error}
         </p>
       ) : null}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
         {isOwner && report ? <ProfitStatement report={report} /> : null}
         <RecurringPanel />
       </div>

@@ -102,7 +102,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
               type="button"
               disabled={soldOut}
               onClick={() => void handleProductClick(prod)}
-              className={`paper border border-[var(--border)] p-4 min-h-[124px] flex flex-col justify-between text-left shadow-sm transition-transform duration-75 ${
+              className={`work-surface border border-[var(--border)] p-4 min-h-[124px] flex flex-col justify-between text-left shadow-sm transition-transform duration-75 ${
                 soldOut ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer active:translate-y-[1px]'
               }`}
             >

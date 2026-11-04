@@ -17,6 +17,9 @@ interface ModalState {
 }
 
 interface UIStore {
+  notice: { message: string } | null;
+  showNotice: (message: string) => void;
+  clearNotice: () => void;
   activeModule: AppModule;
   theme: 'dark' | 'light';
   idleSecondsLeft: number;
@@ -58,6 +61,9 @@ const initialTheme = loadTheme();
 if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', initialTheme);
 
 export const useUIStore = create<UIStore>((set, get) => ({
+  notice: null,
+  showNotice: (message) => set({ notice: { message } }),
+  clearNotice: () => set({ notice: null }),
   activeModule: 'FLOOR',
   theme: initialTheme,
   idleSecondsLeft: 120,

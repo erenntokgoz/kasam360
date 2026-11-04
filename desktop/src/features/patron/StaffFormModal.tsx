@@ -1,6 +1,7 @@
+import { capitalizeRecordName } from '../../lib/recordName';
 import React, { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
-import { errorText } from '../../lib/cariInput';
+import { errorText, localDate } from '../../lib/cariInput';
 import { parseCents } from '../../lib/moneyInput';
 import { PAY_PERIODS, amountLabelOf, type PayPeriod } from '../../lib/payPeriod';
 import { invokeIPC } from '../../services/tauriClient';
@@ -73,7 +74,7 @@ export const StaffFormModal: React.FC<StaffFormModalProps> = ({
   const [pin, setPin] = useState('');
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [salary, setSalary] = useState(profile?.baseSalaryCents == null ? '' : (profile.baseSalaryCents / 100).toFixed(2).replace('.', ','));
-  const [hireDate, setHireDate] = useState(profile?.hireDate ?? '');
+  const [hireDate, setHireDate] = useState(() => profile?.hireDate ?? (member ? '' : localDate(new Date())));
   const [nationalId, setNationalId] = useState(profile?.nationalId ?? '');
   const [address, setAddress] = useState(profile?.address ?? '');
   const [emergency, setEmergency] = useState(profile?.emergencyContact ?? '');
@@ -179,7 +180,7 @@ export const StaffFormModal: React.FC<StaffFormModalProps> = ({
       <form onSubmit={(event) => void save(event)} className="space-y-3">
         <label className="block text-xs font-semibold text-[var(--text-secondary)]">
           Ad Soyad
-          <Input id="staff-name" className="min-h-12 mt-1" value={name} onChange={(event) => setName(event.target.value)} required />
+          <Input id="staff-name" className="min-h-12 mt-1" value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))} onChange={(event) => setName(event.target.value)} required />
         </label>
         <div className="grid grid-cols-2 gap-2">
           {ROLES.map((option) => (

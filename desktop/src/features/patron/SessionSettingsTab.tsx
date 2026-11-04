@@ -11,7 +11,7 @@ const STAFF_IDLE_OPTIONS = [
   { seconds: 120, label: '2 dakika' },
   { seconds: 300, label: '5 dakika' },
   { seconds: 900, label: '15 dakika' },
-  { seconds: 0, label: 'Kalıcı oturum' },
+  { seconds: 0, label: 'Elle Kilitle' },
 ];
 
 const LEAD_OPTIONS = [30, 45, 60, 75, 90, 105, 120].map((minutes) => {
@@ -53,9 +53,9 @@ export const SessionSettingsTab: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-      <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
-        <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">İşletme hesabı</h2>
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start max-w-5xl">
+      <section className="work-surface border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Bu Cihazdaki İşletme Hesabı</h2>
         <p className="text-xs text-[var(--text-secondary)]">{session.email}</p>
         <label className="flex items-center gap-3 min-h-12 text-sm text-[var(--text-primary)] cursor-pointer">
           <input
@@ -64,19 +64,22 @@ export const SessionSettingsTab: React.FC = () => {
             checked={session.keepSignedIn}
             onChange={(event) => void run(() => setPolicy(event.target.checked, session.staffIdleSeconds))}
           />
-          <span>Bu cihazda hesabı açık tut</span>
+          <span>İşletme hesabını bu cihazda hatırla</span>
         </label>
         <Button variant="secondary" className="min-h-12" onClick={() => void run(signOut)}>
-          Bu cihazda hesaptan çık
+          İşletme Hesabından Çık
         </Button>
+        <p className="text-sm text-[var(--text-secondary)]">Çıkış işletme oturumunu kapatır. Bu cihazdaki işletme kayıtları saklanır.</p>
       </section>
 
-      <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
-        <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Personel oturumu</h2>
+      <section className="work-surface border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Personel Ekran Kilidi</h2>
+        <p className="text-sm text-[var(--text-secondary)]">İşlem yapılmadığında ekran bu süre sonunda PIN ile kilitlenir.</p>
         <div className="grid grid-cols-2 gap-2">
           {STAFF_IDLE_OPTIONS.map(({ seconds, label }) => (
             <Button
               key={seconds}
+              aria-pressed={session.staffIdleSeconds === seconds}
               variant={session.staffIdleSeconds === seconds ? 'selected' : 'secondary'}
               className="min-h-12"
               onClick={() => void run(() => setPolicy(session.keepSignedIn, seconds))}
@@ -87,7 +90,7 @@ export const SessionSettingsTab: React.FC = () => {
         </div>
       </section>
 
-      <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
+      <section className="work-surface border border-[var(--border)] rounded-xl p-4 space-y-3">
         <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Görünüm</h2>
         <div className="grid grid-cols-2 gap-2" role="group" aria-label="Tema">
           <Button variant={theme === 'dark' ? 'selected' : 'secondary'} aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>
@@ -100,12 +103,12 @@ export const SessionSettingsTab: React.FC = () => {
       </section>
 
       {canEditLead ? (
-        <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <section className="work-surface border border-[var(--border)] rounded-xl p-4 space-y-3">
           <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Rezervasyon</h2>
           <label className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-primary)]">
-            <span>Rezerve masaları rezervasyon saatinden</span>
+            <span>Boş masayı rezervasyon saatinden</span>
             <select
-              aria-label="Masayı kapatma süresi"
+              aria-label="Rezervasyonun salon ekranında görünme süresi"
               className="min-h-12 px-4 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] text-sm font-bold tabular-nums"
               value={leadMinutes ?? 60}
               disabled={leadMinutes === null}
@@ -115,7 +118,7 @@ export const SessionSettingsTab: React.FC = () => {
                 <option key={minutes} value={minutes}>{label}</option>
               ))}
             </select>
-            <span>önce kapat.</span>
+            <span>önce rezerve olarak göster.</span>
           </label>
         </section>
       ) : null}

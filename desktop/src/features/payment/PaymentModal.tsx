@@ -159,6 +159,7 @@ export const PaymentModal: React.FC = () => {
     await Promise.all([loadActiveOrder(), loadFloorPlan(), loadShiftData()]);
     closeModal('payment');
     openModal('receiptPreview');
+    useUIStore.getState().showNotice('Tahsilat kaydedildi.');
   };
 
   // Çekim tahsilattan önce yapılır. Aynı işlem kimliğiyle yeniden deneme sağlayıcıya
@@ -284,6 +285,7 @@ export const PaymentModal: React.FC = () => {
         if (!isUnresolved && !isProcessing) closeModal('payment');
       }}
       title={`${activeTableName} Tahsilatı`}
+      surface="work"
       maxWidth="5xl"
 
     >
@@ -442,9 +444,9 @@ export const PaymentModal: React.FC = () => {
       {isTipOpen ? (
         <TipDialog
           info={pinpadInfo.slice(0, 2)}
-          onSaved={(cents, method) => {
+          onSaved={(cents, method, recipient) => {
             setIsTipOpen(false);
-            setTipNotice(`${formatMoney(cents)} bahşiş havuza yazıldı · ${TIP_METHOD_LABEL[method]}`);
+            setTipNotice(`${formatMoney(cents)} bahşiş kaydedildi · ${recipient ?? 'Ortak Havuz'} · ${TIP_METHOD_LABEL[method]}`);
           }}
           onClose={() => setIsTipOpen(false)}
         />
