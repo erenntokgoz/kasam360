@@ -7,14 +7,24 @@ import type { Pool } from 'pg';
 
 export function mountCustomerProvisioning(app: Hono, pool: Pool, secret: string) {
   const path = '/internal/labs/customers';
+  const authorized = (header: string | undefined) => {
+    const supplied = Buffer.from(header ?? '');
+    const expected = Buffer.from(`Bearer ${secret}`);
+    return secret.length >= 32 && supplied.length === expected.length && timingSafeEqual(supplied, expected);
+  };
   app.use(path, bodyLimit({ maxSize: 4096 }));
+  // Panel işletme listesini buradan okur; şifre ve oturum bilgisi dönmez.
+  app.get(path, async (context) => {
+    context.header('Cache-Control', 'no-store');
+    if (!authorized(context.req.header('authorization'))) return context.body(null, 401);
+    const { rows } = await pool.query(
+      `SELECT id,name,email,"businessName","emailVerified" FROM "user" ORDER BY "createdAt" DESC LIMIT 1000`,
+    );
+    return context.json({ accounts: rows });
+  });
   app.post(path, async (context) => {
     context.header('Cache-Control', 'no-store');
-    const supplied = Buffer.from(context.req.header('authorization') ?? '');
-    const expected = Buffer.from(`Bearer ${secret}`);
-    if (secret.length < 32 || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-      return context.body(null, 401);
-    }
+    if (!authorized(context.req.header('authorization'))) return context.body(null, 401);
     const data: unknown = await context.req.json().catch(() => null);
     if (!data || typeof data !== 'object' || !('id' in data) || typeof data.id !== 'string' ||
         !/^cus_[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(data.id) ||
