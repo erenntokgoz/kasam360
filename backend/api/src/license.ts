@@ -1,0 +1,70 @@
+import { createPrivateKey, sign, type KeyObject } from 'node:crypto';
+import type { Hono } from 'hono';
+import type { Auth } from './lib/auth.js';
+import type { SupportConfig } from './support.js';
+
+// Kasa internetsiz de çalışır; bu yüzden lisans her satışta sorulmaz. Cihaz imzalı belgeyi
+// saklar ve gömülü açık anahtarla kendisi doğrular. Tolerans belgeye yazılır ki cihaz ile
+// sunucu aynı kuralı okusun.
+const GRACE_HOURS = 72;
+const day = /^\d{4}-\d{2}-\d{2}$/;
+
+export interface LicenseClaims {
+  v: 1;
+  product: 'kasam360';
+  sub: string;
+  email: string;
+  validUntil: string | null;
+  blocked: boolean;
+  issuedAt: string;
+  graceHours: number;
+}
+
+/** Anahtar PKCS#8 DER'in base64 hâlidir; yalnız Ed25519 kabul edilir. */
+export function signingKey(raw: string): KeyObject {
+  const key = createPrivateKey({ key: Buffer.from(raw, 'base64'), format: 'der', type: 'pkcs8' });
+  if (key.asymmetricKeyType !== 'ed25519') throw new Error('LICENSE_SIGNING_KEY Ed25519 olmalı.');
+  return key;
+}
+
+export function signClaims(claims: LicenseClaims, key: KeyObject): string {
+  const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
+  return `${body}.${sign(null, Buffer.from(body), key).toString('base64url')}`;
+}
+
+// Lisans kaynağı 360 Labs'tır; ödeme sağlayıcısı ne olursa olsun yalnız bitiş günü okunur.
+export function mountLicense(app: Hono, auth: Auth, labs?: SupportConfig, key?: KeyObject) {
+  app.get('/api/license', async (context) => {
+    context.header('Cache-Control', 'no-store');
+    if (!labs || !key) return context.json({ message: 'Lisans bağlantısı şu anda kapalı.' }, 503);
+    const session = await auth.api.getSession({ headers: context.req.raw.headers });
+    if (!session) return context.json({ message: 'Lisans için giriş yapın.' }, 401);
+    if (!session.user.emailVerified) return context.json({ message: 'Önce e-postanızı doğrulayın.' }, 403);
+
+    const upstream = await fetch(new URL('/api/v1/urunler/kasam360/lisans', labs.origin), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${labs.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: session.user.email }),
+      signal: AbortSignal.timeout(8000),
+    }).catch(() => null);
+    // Lisans sorgusu yanıtsız kalırsa belge üretilmez; cihaz elindeki son belgeyle devam eder.
+    if (!upstream?.ok) return context.json({ message: 'Lisans şu anda doğrulanamadı.' }, 502);
+    const data: unknown = await upstream.json().catch(() => null);
+    if (!data || typeof data !== 'object' || !('blocked' in data) || typeof data.blocked !== 'boolean' ||
+        !('valid_until' in data) || !(data.valid_until === null ||
+        (typeof data.valid_until === 'string' && day.test(data.valid_until)))) {
+      return context.json({ message: 'Lisans şu anda doğrulanamadı.' }, 502);
+    }
+    const claims: LicenseClaims = {
+      v: 1,
+      product: 'kasam360',
+      sub: session.user.id,
+      email: session.user.email,
+      validUntil: data.valid_until,
+      blocked: data.blocked,
+      issuedAt: new Date().toISOString(),
+      graceHours: GRACE_HOURS,
+    };
+    return context.json({ token: signClaims(claims, key), claims });
+  });
+}
