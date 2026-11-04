@@ -26,6 +26,7 @@ export default function ContactPage() {
         </div>
       </div>
       <div>
+        <Link href="/destek" className="btn">Destek Talebi Aç</Link>
         <Link href="/kayit" className="btn">
           Kayıt Olun
         </Link>

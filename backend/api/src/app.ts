@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { bodyLimit } from 'hono/body-limit';
+import { mountSupport, type SupportConfig } from './support.js';
 import type { Auth } from './lib/auth.js';
 
 const LINK_CODE = /^[0-9a-f-]{36}$/;
@@ -15,7 +17,7 @@ interface DesktopLink {
 const page = (message: string) =>
   `<!doctype html><html lang="tr"><meta charset="utf-8"><title>KASAM360</title><body style="font:18px system-ui;padding:3rem;background:#fbf0b2;color:#1e2a66">${message}</body></html>`;
 
-export function createApp(auth: Auth, allowedOrigins: string[], siteUrl: string) {
+export function createApp(auth: Auth, allowedOrigins: string[], siteUrl: string, support?: SupportConfig) {
   const app = new Hono();
   // shortcut: bekleyen bağlantılar bellektedir, ikinci sunucu eklenince veritabanına taşınmalı.
   const desktopLinks = new Map<string, DesktopLink>();
@@ -70,5 +72,9 @@ export function createApp(auth: Auth, allowedOrigins: string[], siteUrl: string)
     return auth.handler(context.req.raw);
   });
 
+  const supportLimit = bodyLimit({ maxSize: 24 * 1024 });
+  app.use('/api/support', supportLimit);
+  app.use('/api/support/*', supportLimit);
+  mountSupport(app, auth, allowedOrigins, support);
   return app;
 }

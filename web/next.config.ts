@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: '/api/auth/:path*', destination: `${apiOrigin}/api/auth/:path*` },
+      { source: '/api/support/:path*', destination: `${apiOrigin}/api/support/:path*` },
       { source: '/api/desktop-link/:path*', destination: `${apiOrigin}/api/desktop-link/:path*` },
     ];
   },

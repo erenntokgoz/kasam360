@@ -4,6 +4,7 @@ import { getMigrations } from 'better-auth/db/migration';
 import EmbeddedPostgres from 'embedded-postgres';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { mountCustomerProvisioning } from './customerProvisioning.js';
 import { createApp } from './app.js';
 import { createAuth } from './lib/auth.js';
 import type { Mail } from './lib/mail.js';
@@ -81,6 +82,7 @@ beforeAll(async () => {
   });
   await (await getMigrations(auth.options)).runMigrations();
   app = createApp(auth, [SITE, DESKTOP], SITE);
+  mountCustomerProvisioning(app, pool, SECRET);
 }, 120_000);
 
 afterAll(async () => {
@@ -263,4 +265,25 @@ describe('şifre sıfırlama', () => {
     expect((await post('/sign-in/email', { email: valid.email, password: newPassword })).status).toBe(200);
     expect(await getSession(oldLogin)).toBeNull();
   });
+});
+
+it('creates a usable customer credential without verifying email or overwriting it on retry', async () => {
+  const fields = { id: 'cus_01ARZ3NDEKTSV4RRFFQ69G5FAV', email: 'provisioned@example.com', name: 'Örnek Müşteri', password: 'first-password-9' };
+  const create = (input = fields, token = SECRET) => app.request('/internal/labs/customers', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  expect((await create(fields, 'invalid')).status).toBe(401);
+  expect((await create()).status).toBe(201);
+  expect((await create()).status).toBe(200);
+  expect((await create({ ...fields, password: 'changed-password-9' })).status).toBe(409);
+  expect((await create({ ...fields, id: 'cus_01ARZ3NDEKTSV4RRFFQ69G5FAW' })).status).toBe(409);
+  const user = (await pool.query('SELECT "emailVerified","consentAt" FROM "user" WHERE email=$1', [fields.email])).rows[0];
+  expect(user).toEqual({ emailVerified: false, consentAt: null });
+  expect((await post('/sign-in/email', { email: fields.email, password: fields.password })).status).toBe(403);
+  await app.request(linkIn(mails.at(-1)));
+  const session = await post('/sign-in/email', { email: fields.email, password: fields.password });
+  expect(session.status).toBe(200);
+  expect(cookies(session)).not.toBe('');
 });

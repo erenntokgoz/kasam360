@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { PageSheet } from '@/components/PageSheet';
 import { AccountPanel } from '@/components/account/AccountPanel';
@@ -12,6 +13,7 @@ export default function AccountPage() {
     <PageSheet tone="green" copy="Patron nüshası">
       <h1 className="sheet-subtitle">Hesabım</h1>
       <AccountPanel />
+      <Link href="/destek" className="btn">Destek Taleplerim</Link>
     </PageSheet>
   );
 }
