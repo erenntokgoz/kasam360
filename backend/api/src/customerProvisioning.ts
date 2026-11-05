@@ -5,6 +5,8 @@ import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Pool } from 'pg';
 
+const PAGE = 500;
+
 export function mountCustomerProvisioning(app: Hono, pool: Pool, secret: string) {
   const path = '/internal/labs/customers';
   const authorized = (header: string | undefined) => {
@@ -13,14 +15,21 @@ export function mountCustomerProvisioning(app: Hono, pool: Pool, secret: string)
     return secret.length >= 32 && supplied.length === expected.length && timingSafeEqual(supplied, expected);
   };
   app.use(path, bodyLimit({ maxSize: 4096 }));
-  // Panel işletme listesini buradan okur; şifre ve oturum bilgisi dönmez.
+  // Panel işletme listesini buradan sayfa sayfa okur; şifre ve oturum bilgisi dönmez.
+  // Kimlikler ULID olduğundan kimlik sırası açılış sırasıdır; `next` boşsa liste bitmiştir.
   app.get(path, async (context) => {
     context.header('Cache-Control', 'no-store');
     if (!authorized(context.req.header('authorization'))) return context.body(null, 401);
+    const after = context.req.query('after') ?? '';
+    if (after && !/^[a-z]{2,4}_[0-9A-Za-z]{1,40}$/.test(after)) return context.body(null, 422);
     const { rows } = await pool.query(
-      `SELECT id,name,email,"businessName","emailVerified" FROM "user" ORDER BY "createdAt" DESC LIMIT 1000`,
+      `SELECT id,name,email,"businessName","emailVerified" FROM "user"
+       WHERE id > $1 ORDER BY id LIMIT $2`,
+      [after, PAGE + 1],
     );
-    return context.json({ accounts: rows });
+    const more = rows.length > PAGE;
+    const accounts = more ? rows.slice(0, PAGE) : rows;
+    return context.json({ accounts, next: more ? accounts[accounts.length - 1].id : null });
   });
   app.post(path, async (context) => {
     context.header('Cache-Control', 'no-store');
