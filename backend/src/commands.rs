@@ -26,6 +26,7 @@ pub mod kitchen_commands;
 pub mod leave_commands;
 pub mod ledger_commands;
 pub mod legal360_commands;
+pub mod license_commands;
 pub mod management_commands;
 pub mod modifier_commands;
 pub mod order_change_commands;

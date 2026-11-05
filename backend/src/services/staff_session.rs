@@ -55,7 +55,7 @@ impl StaffSessions {
 
 /// Oturum açılmadan çalışması gereken komutlar: kurulum, hesap girişi ve PIN ekranı.
 /// Liste kapalıdır: yeni komut buraya eklenmedikçe oturum ister.
-const NO_SESSION: [&str; 16] = [
+const NO_SESSION: [&str; 20] = [
     "get_setup_status",
     "save_setup_draft",
     "complete_business_setup",
@@ -68,6 +68,11 @@ const NO_SESSION: [&str; 16] = [
     // Google ile cihaz girişi personel oturumundan önce gelir; kimliği sunucu doğrular.
     "account_sign_in_link",
     "account_create",
+    // Lisans yokken kasa açılmaz; bağlamayı sahip web hesabıyla oturumdan önce yapar.
+    "get_license_status",
+    "refresh_license",
+    "link_license",
+    "link_license_with_google",
     "auth_login",
     "auth_logout",
     "auth_lock",

@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { bodyLimit } from 'hono/body-limit';
 import { mountSupport, type SupportConfig } from './support.js';
 import type { Auth } from './lib/auth.js';
+import type { LicenseKeys } from './desktopLicense.js';
 
 const LINK_CODE = /^[0-9a-f-]{36}$/;
 const LINK_TTL_MS = 5 * 60 * 1000;
@@ -10,6 +11,8 @@ const LINK_LIMIT = 1000;
 
 interface DesktopLink {
   account: { name: string; email: string; businessName?: string | null; phone?: string | null };
+  /** Google ile bağlanan kasanın lisans anahtarı; kod tek kullanımlık olduğu için bir kez okunur. */
+  licenseKey?: string;
   expiresAt: number;
 }
 
@@ -17,7 +20,9 @@ interface DesktopLink {
 const page = (message: string) =>
   `<!doctype html><html lang="tr"><meta charset="utf-8"><title>KASAM360</title><body style="font:18px system-ui;padding:3rem;background:#fbf0b2;color:#1e2a66">${message}</body></html>`;
 
-export function createApp(auth: Auth, allowedOrigins: string[], siteUrl: string, support?: SupportConfig) {
+export function createApp(
+  auth: Auth, allowedOrigins: string[], siteUrl: string, support?: SupportConfig, licenseKeys?: LicenseKeys,
+) {
   const app = new Hono();
   // shortcut: bekleyen bağlantılar bellektedir, ikinci sunucu eklenince veritabanına taşınmalı.
   const desktopLinks = new Map<string, DesktopLink>();
@@ -51,7 +56,9 @@ export function createApp(auth: Auth, allowedOrigins: string[], siteUrl: string,
     if (!LINK_CODE.test(code) || !session) return context.html(page('Google girişi tamamlanamadı. Uygulamadan yeniden deneyin.'), 400);
     if (desktopLinks.size >= LINK_LIMIT) desktopLinks.clear();
     const { name, email, businessName, phone } = session.user as DesktopLink['account'];
-    desktopLinks.set(code, { account: { name, email, businessName, phone }, expiresAt: Date.now() + LINK_TTL_MS });
+    const licenseKey = licenseKeys && session.user.emailVerified
+      ? await licenseKeys.create(session.user.id).catch(() => undefined) : undefined;
+    desktopLinks.set(code, { account: { name, email, businessName, phone }, licenseKey, expiresAt: Date.now() + LINK_TTL_MS });
     return context.html(page('Giriş tamam. KASAM360 uygulamasına dönebilirsiniz.'));
   });
 
@@ -60,7 +67,8 @@ export function createApp(auth: Auth, allowedOrigins: string[], siteUrl: string,
     const link = desktopLinks.get(code);
     if (!link) return context.body(null, 204);
     desktopLinks.delete(code);
-    return link.expiresAt < Date.now() ? context.body(null, 204) : context.json(link.account);
+    return link.expiresAt < Date.now()
+      ? context.body(null, 204) : context.json({ ...link.account, licenseKey: link.licenseKey });
   });
 
   app.on(['GET', 'POST'], '/api/auth/*', (context) => {

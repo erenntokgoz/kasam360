@@ -13,7 +13,7 @@ use crate::services::setup;
 
 const ACCOUNT_ROLES: [Role; 2] = [Role::Owner, Role::Manager];
 // Geliştirme sürümü yerel siteye gider; yayındaki adres henüz denenen kodu taşımayabilir.
-const SITE_URL: &str = if cfg!(debug_assertions) {
+pub(crate) const SITE_URL: &str = if cfg!(debug_assertions) {
     "http://localhost:3000"
 } else {
     "https://kasam360.com.tr"

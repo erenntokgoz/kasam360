@@ -16,6 +16,7 @@ pub mod lan_sync;
 pub mod ledger_service;
 pub mod ledger_statement;
 pub mod legal360;
+pub mod license;
 pub mod master_vault;
 pub mod modifier_service;
 pub mod order_change;

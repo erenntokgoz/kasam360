@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from './authStore';
 import { invokeIPC } from '../services/tauriClient';
 import { useFeatureStore } from './featureStore';
+import { useLicenseStore, type LicenseStatus } from './licenseStore';
 
 vi.mock('../services/tauriClient', () => ({ invokeIPC: vi.fn() }));
 
@@ -58,6 +59,7 @@ describe('oturum sınırı', () => {
   });
 
   it('özellik bayraklarını yalnız oturum yanıtından açar ve çıkışta kapatır', async () => {
+    useLicenseStore.setState({ status: license('ACTIVE', ['feat_table_order', 'feat_kds']) });
     invokeMock.mockResolvedValueOnce({
       id: 'usr_1', name: 'Ayşe', role: 'WAITER', tenant_id: 'ten_2',
       activeModules: ['feat_table_order'], mustChangePin: false,
@@ -68,4 +70,29 @@ describe('oturum sınırı', () => {
     useAuthStore.getState().logout();
     expect(useFeatureStore.getState().isEnabled('feat_table_order')).toBe(false);
   });
+
+  it('lisansta olmayan veya süresi geçmiş paketin özelliğini açmaz', async () => {
+    const login = async () => {
+      invokeMock.mockResolvedValueOnce({
+        id: 'usr_1', name: 'Ayşe', role: 'OWNER', tenant_id: 'ten_2',
+        activeModules: ['feat_table_order', 'feat_kds'], mustChangePin: false,
+      });
+      await useAuthStore.getState().loginWithPin('5555');
+    };
+    useLicenseStore.setState({ status: license('ACTIVE', ['feat_kds']) });
+    await login();
+    expect(useFeatureStore.getState().isEnabled('feat_kds')).toBe(true);
+    expect(useFeatureStore.getState().isEnabled('feat_table_order')).toBe(false);
+    useAuthStore.getState().logout();
+    useLicenseStore.setState({ status: license('EXPIRED', ['feat_kds']) });
+    await login();
+    expect(useFeatureStore.getState().isEnabled('feat_kds')).toBe(false);
+  });
 });
+
+function license(state: LicenseStatus['state'], features: string[]): LicenseStatus {
+  return {
+    state, linked: true, email: 'a@example.test', features,
+    plan: { name: 'Temel', features, deviceLimit: 1 }, validUntil: '2027-01-31', checkedAt: null, lastError: null,
+  };
+}

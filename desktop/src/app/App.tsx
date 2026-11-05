@@ -15,6 +15,9 @@ import { LoginOverlay } from '../features/auth/LoginOverlay';
 import { LockScreen } from '../features/auth/LockScreen';
 import { AccountGate } from '../features/auth/AccountGate';
 import { useDeviceSessionStore } from '../stores/deviceSessionStore';
+import { LicenseGate } from '../features/license/LicenseGate';
+import { isUsable, licensedModules, useLicenseStore } from '../stores/licenseStore';
+import { useFeatureStore } from '../stores/featureStore';
 import { SetupGate } from '../features/setup/SetupGate';
 import { useSetupStore } from '../stores/setupStore';
 import { MustChangePinModal } from '../features/auth/MustChangePinModal';
@@ -42,6 +45,22 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (setupPhase === 'COMPLETE') void loadDeviceSession();
   }, [setupPhase, loadDeviceSession]);
+
+  // Lisans önce cihazdaki belgeden okunur, sonra sunucudan yenilenir; kasa internetsizse
+  // eldeki belgeyle açılır. Açık kaldıkça altı saatte bir yenilenir.
+  const { status: license, error: licenseError, load: loadLicense, refresh: refreshLicense } = useLicenseStore();
+  const deviceSignedIn = !!deviceSession?.signedIn;
+  useEffect(() => {
+    if (!deviceSignedIn) return;
+    void loadLicense().then(() => refreshLicense());
+    const timer = window.setInterval(() => void refreshLicense(), 6 * 60 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [deviceSignedIn, loadLicense, refreshLicense]);
+
+  // Paket değişirse açık oturumun özellikleri de hemen güncellenir.
+  useEffect(() => {
+    if (user) useFeatureStore.getState().setModules(licensedModules(user.activeModules ?? [], user.role, license));
+  }, [user, license]);
 
   // Hareketsizlik sayacı ve otomatik kilit. Süre sıfırsa personel oturumu kalıcıdır.
   useEffect(() => {
@@ -120,6 +139,12 @@ export const App: React.FC = () => {
   if (!deviceSession?.signedIn) {
     if (!deviceSession && !deviceError) return <div className="h-screen w-screen bg-[var(--bg-canvas)]" aria-busy="true" />;
     return <AccountGate />;
+  }
+
+  // Geçerli lisans yoksa personel ekranı açılmaz; durum okunmadan da açık sayılmaz.
+  if (!isUsable(license) && user?.role !== 'MASTER') {
+    if (!license && !licenseError) return <div className="h-screen w-screen bg-[var(--bg-canvas)]" aria-busy="true" />;
+    return <LicenseGate />;
   }
 
   if (!isAuthenticated || mustChangePin) {

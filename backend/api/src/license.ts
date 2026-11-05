@@ -67,7 +67,70 @@ export function signClaims(claims: LicenseClaims, key: KeyObject): string {
   return `${body}.${sign(null, Buffer.from(body), key).toString('base64url')}`;
 }
 
+export interface LicenseSubject {
+  id: string;
+  email: string;
+}
+
+export interface LicenseReply {
+  status: 200 | 400 | 403 | 502 | 503;
+  body: { token: string; claims: LicenseClaims } | { message: string; device?: string };
+}
+
+/** İstekteki cihaz başlıkları okunur; kimliksiz istek belge almaz. */
+export function readDevice(header: (name: string) => string | undefined) {
+  const id = header('x-device-id') ?? '';
+  const name = [...(header('x-device-name') ?? '').trim()].slice(0, 80).join('') || 'Kasa';
+  return deviceCode.test(id) ? { id, name } : null;
+}
+
 // Lisans kaynağı 360 Labs'tır; ödeme sağlayıcısı ne olursa olsun yalnız bitiş günü okunur.
+// Web oturumu ve masaüstü lisans anahtarı aynı yoldan belge alır.
+export async function issueLicense(
+  labs: SupportConfig | undefined,
+  key: KeyObject | undefined,
+  subject: LicenseSubject,
+  device: { id: string; name: string } | null,
+): Promise<LicenseReply> {
+  if (!labs || !key) return { status: 503, body: { message: 'Lisans bağlantısı şu anda kapalı.' } };
+  if (!device) return { status: 400, body: { message: 'Cihaz kimliği geçersiz.' } };
+  const failed: LicenseReply = { status: 502, body: { message: 'Lisans şu anda doğrulanamadı.' } };
+  const upstream = await fetch(new URL('/api/v1/urunler/kasam360/lisans', labs.origin), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${labs.token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: subject.email, account: subject.id, device }),
+    signal: AbortSignal.timeout(8000),
+  }).catch(() => null);
+  // Lisans sorgusu yanıtsız kalırsa belge üretilmez; cihaz elindeki son belgeyle devam eder.
+  if (!upstream?.ok) return failed;
+  const data: unknown = await upstream.json().catch(() => null);
+  if (!data || typeof data !== 'object' || !('blocked' in data) || typeof data.blocked !== 'boolean' ||
+      !('valid_until' in data) || !(data.valid_until === null ||
+      (typeof data.valid_until === 'string' && day.test(data.valid_until)))) {
+    return failed;
+  }
+  const plan = readPlan('package' in data ? data.package : undefined);
+  if (plan === undefined) return failed;
+  const state = 'device' in data ? data.device : undefined;
+  if (state !== 'active') {
+    const message = typeof state === 'string' ? DEVICE_MESSAGES[state] : undefined;
+    return message ? { status: 403, body: { message, device: state as string } } : failed;
+  }
+  const claims: LicenseClaims = {
+    v: 1,
+    product: 'kasam360',
+    sub: subject.id,
+    email: subject.email,
+    deviceId: device.id,
+    validUntil: data.valid_until,
+    blocked: data.blocked,
+    plan,
+    issuedAt: new Date().toISOString(),
+    graceHours: GRACE_HOURS,
+  };
+  return { status: 200, body: { token: signClaims(claims, key), claims } };
+}
+
 export function mountLicense(app: Hono, auth: Auth, labs?: SupportConfig, key?: KeyObject) {
   app.get('/api/license', async (context) => {
     context.header('Cache-Control', 'no-store');
@@ -75,48 +138,7 @@ export function mountLicense(app: Hono, auth: Auth, labs?: SupportConfig, key?: 
     const session = await auth.api.getSession({ headers: context.req.raw.headers });
     if (!session) return context.json({ message: 'Lisans için giriş yapın.' }, 401);
     if (!session.user.emailVerified) return context.json({ message: 'Önce e-postanızı doğrulayın.' }, 403);
-    // Cihaz limiti için her istek cihaz kimliği taşır; kimliksiz istek belge almaz.
-    const deviceId = context.req.header('x-device-id') ?? '';
-    const deviceName = [...(context.req.header('x-device-name') ?? '').trim()].slice(0, 80).join('') || 'Kasa';
-    if (!deviceCode.test(deviceId)) return context.json({ message: 'Cihaz kimliği geçersiz.' }, 400);
-
-    const upstream = await fetch(new URL('/api/v1/urunler/kasam360/lisans', labs.origin), {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${labs.token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        email: session.user.email,
-        account: session.user.id,
-        device: { id: deviceId, name: deviceName },
-      }),
-      signal: AbortSignal.timeout(8000),
-    }).catch(() => null);
-    // Lisans sorgusu yanıtsız kalırsa belge üretilmez; cihaz elindeki son belgeyle devam eder.
-    if (!upstream?.ok) return context.json({ message: 'Lisans şu anda doğrulanamadı.' }, 502);
-    const data: unknown = await upstream.json().catch(() => null);
-    if (!data || typeof data !== 'object' || !('blocked' in data) || typeof data.blocked !== 'boolean' ||
-        !('valid_until' in data) || !(data.valid_until === null ||
-        (typeof data.valid_until === 'string' && day.test(data.valid_until)))) {
-      return context.json({ message: 'Lisans şu anda doğrulanamadı.' }, 502);
-    }
-    const plan = readPlan('package' in data ? data.package : undefined);
-    if (plan === undefined) return context.json({ message: 'Lisans şu anda doğrulanamadı.' }, 502);
-    const device = 'device' in data ? data.device : undefined;
-    if (device !== 'active') {
-      const message = typeof device === 'string' ? DEVICE_MESSAGES[device] : undefined;
-      return message ? context.json({ message, device }, 403) : context.json({ message: 'Lisans şu anda doğrulanamadı.' }, 502);
-    }
-    const claims: LicenseClaims = {
-      v: 1,
-      product: 'kasam360',
-      sub: session.user.id,
-      email: session.user.email,
-      deviceId,
-      validUntil: data.valid_until,
-      blocked: data.blocked,
-      plan,
-      issuedAt: new Date().toISOString(),
-      graceHours: GRACE_HOURS,
-    };
-    return context.json({ token: signClaims(claims, key), claims });
+    const reply = await issueLicense(labs, key, session.user, readDevice((name) => context.req.header(name)));
+    return context.json(reply.body, reply.status);
   });
 }

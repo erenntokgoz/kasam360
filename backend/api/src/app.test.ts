@@ -3,7 +3,10 @@ import { join } from 'node:path';
 import { getMigrations } from 'better-auth/db/migration';
 import EmbeddedPostgres from 'embedded-postgres';
 import { Pool } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { generateKeyPairSync } from 'node:crypto';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LICENSE_KEY_TABLE, mountDesktopLicense, pgLicenseKeys } from './desktopLicense.js';
+import { signingKey } from './license.js';
 import { mountCustomerProvisioning } from './customerProvisioning.js';
 import { createApp } from './app.js';
 import { createAuth } from './lib/auth.js';
@@ -81,8 +84,13 @@ beforeAll(async () => {
     },
   });
   await (await getMigrations(auth.options)).runMigrations();
-  app = createApp(auth, [SITE, DESKTOP], SITE);
+  await pool.query(LICENSE_KEY_TABLE);
+  const keys = pgLicenseKeys(pool);
+  app = createApp(auth, [SITE, DESKTOP], SITE, undefined, keys);
   mountCustomerProvisioning(app, pool, SECRET);
+  const { privateKey } = generateKeyPairSync('ed25519');
+  mountDesktopLicense(app, auth, keys, SITE, { origin: 'http://127.0.0.1:3600', token: 'labs' },
+    signingKey(privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64')));
 }, 120_000);
 
 afterAll(async () => {
@@ -286,4 +294,47 @@ it('creates a usable customer credential without verifying email or overwriting 
   const session = await post('/sign-in/email', { email: fields.email, password: fields.password });
   expect(session.status).toBe(200);
   expect(cookies(session)).not.toBe('');
+});
+
+describe('masaüstü lisans anahtarı', () => {
+  it('doğru şifreyle anahtar verir, anahtarla cihaz lisansı alır, web oturumu bırakmaz', async () => {
+    await registerAndVerify();
+    const keyFor = (password: string) => app.request('/api/desktop/license-key', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '10.9.0.1' },
+      body: JSON.stringify({ email: valid.email, password }),
+    });
+    expect((await keyFor('yanlis-sifre-1')).status).toBe(401);
+    const sessions = async () => (await pool.query('SELECT count(*)::int AS n FROM "session"')).rows[0].n as number;
+    const before = await sessions();
+    const created = await keyFor(valid.password);
+    expect(created.status).toBe(201);
+    const { key } = await created.json() as { key: string };
+    expect(key).toMatch(/^lk_/);
+    // Anahtar almak için açılan geçici oturum kapanır.
+    expect(await sessions()).toBe(before);
+
+    const upstream = vi.fn(async () => Response.json({
+      valid_until: '2027-01-31', blocked: false, device: 'active',
+      package: { name: 'Temel', features: ['feat_kds'], device_limit: 1 },
+    }));
+    vi.stubGlobal('fetch', upstream);
+    try {
+      const license = (bearer: string, device = 'dev_0123456789') => app.request('/api/desktop/license', {
+        headers: { authorization: `Bearer ${bearer}`, 'x-device-id': device, 'x-device-name': 'Kasa 1' },
+      });
+      expect((await license('lk_' + 'x'.repeat(43))).status).toBe(401);
+      expect((await license(key, 'x')).status).toBe(400);
+      const issued = await license(key);
+      expect(issued.status).toBe(200);
+      const { claims } = await issued.json() as { claims: Record<string, unknown> };
+      expect(claims).toMatchObject({ email: valid.email, deviceId: 'dev_0123456789', validUntil: '2027-01-31' });
+      const sent = JSON.parse(String((upstream.mock.calls[0] as unknown as [URL, RequestInit])[1].body));
+      expect(sent).toMatchObject({ email: valid.email, device: { id: 'dev_0123456789', name: 'Kasa 1' } });
+      // Hesap silinince anahtar da düşer.
+      await pool.query('DELETE FROM "user"');
+      expect((await license(key)).status).toBe(401);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

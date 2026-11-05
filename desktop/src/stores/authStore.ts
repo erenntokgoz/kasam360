@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { UserRole, UserSession } from '../types/auth';
 import { invokeIPC } from '../services/tauriClient';
 import { useFeatureStore } from './featureStore';
+import { licensedModules, useLicenseStore } from './licenseStore';
 
 interface AuthStore {
   user: UserSession | null;
@@ -52,7 +53,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       const reply = await invokeIPC<AuthReply>('auth_login', { pin });
       const session = readSession(reply);
-      useFeatureStore.getState().setModules(session.activeModules ?? []);
+      useFeatureStore.getState().setModules(
+        licensedModules(session.activeModules ?? [], session.role, useLicenseStore.getState().status));
       set({ user: session, isAuthenticated: true, isLocked: false,
         mustChangePin: !!session.mustChangePin, loginError: null });
       return true;

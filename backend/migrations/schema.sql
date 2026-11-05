@@ -2310,3 +2310,14 @@ CREATE TABLE IF NOT EXISTS order_change_requests (
 );
 
 CREATE INDEX IF NOT EXISTS idx_order_change_requests_tenant_status ON order_change_requests(tenant_id, status);
+
+-- Cihazın lisans anahtarı ve 360 Labs'tan gelen son imzalı belge. Cihaza özeldir,
+-- eşitlenmez; device_id paket cihaz limitinde bu kurulumu temsil eder.
+CREATE TABLE IF NOT EXISTS device_license (
+    slot INTEGER PRIMARY KEY CHECK (slot = 1),
+    device_id TEXT NOT NULL,
+    license_key TEXT,
+    token TEXT,
+    checked_at TEXT,
+    last_error TEXT
+);
