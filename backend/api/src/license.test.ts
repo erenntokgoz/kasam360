@@ -19,7 +19,10 @@ function appFor(account?: typeof user) {
 }
 
 it('signs only the session account and the date the admin panel returned', async () => {
-  const upstream = vi.fn(async () => Response.json({ valid_until: '2027-01-31', blocked: false }));
+  const upstream = vi.fn(async () => Response.json({
+    valid_until: '2027-01-31', blocked: false,
+    package: { name: 'Temel', features: ['feat_kds'], device_limit: 2 },
+  }));
   vi.stubGlobal('fetch', upstream);
   expect((await appFor().request('/api/license')).status).toBe(401);
   expect((await appFor({ ...user, emailVerified: false }).request('/api/license')).status).toBe(403);
@@ -35,7 +38,9 @@ it('signs only the session account and the date the admin panel returned', async
   const [body, signature] = token.split('.');
   expect(verify(null, Buffer.from(body), publicKey, Buffer.from(signature, 'base64url'))).toBe(true);
   const claims = JSON.parse(Buffer.from(body, 'base64url').toString());
-  expect(claims).toMatchObject({ sub: user.id, email: user.email, validUntil: '2027-01-31', blocked: false, graceHours: 72 });
+  expect(claims).toMatchObject({ sub: user.id, email: user.email, validUntil: '2027-01-31', blocked: false, graceHours: 72,
+    plan: { name: 'Temel', features: ['feat_kds'], deviceLimit: 2 },
+  });
   // Gövdedeki tek bayt değişse imza tutmaz.
   const forged = Buffer.from(JSON.stringify({ ...claims, validUntil: '2099-01-01' })).toString('base64url');
   expect(verify(null, Buffer.from(forged), publicKey, Buffer.from(signature, 'base64url'))).toBe(false);
@@ -46,6 +51,10 @@ it('issues nothing when the admin panel is unreachable or answers malformed data
   expect((await appFor(user).request('/api/license')).status).toBe(502);
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ valid_until: 'yarın', blocked: false })));
   expect((await appFor(user).request('/api/license')).status).toBe(502);
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+    valid_until: null, blocked: false, package: { name: 'Temel', features: ['../x'], device_limit: 2 },
+  })));
+  expect((await appFor(user).request('/api/license')).status).toBe(502);
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 401 })));
   expect((await appFor(user).request('/api/license')).status).toBe(502);
 });
@@ -53,4 +62,10 @@ it('issues nothing when the admin panel is unreachable or answers malformed data
 it('rejects a signing key that is not Ed25519', () => {
   const rsa = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
   expect(() => signingKey(rsa.export({ format: 'der', type: 'pkcs8' }).toString('base64'))).toThrow();
+});
+
+it('treats a missing package as no features, never as all features', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ valid_until: '2027-01-31', blocked: false })));
+  const { claims } = await (await appFor(user).request('/api/license')).json() as { claims: { plan: unknown } };
+  expect(claims.plan).toBeNull();
 });

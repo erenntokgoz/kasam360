@@ -9,6 +9,13 @@ import type { SupportConfig } from './support.js';
 const GRACE_HOURS = 72;
 const day = /^\d{4}-\d{2}-\d{2}$/;
 
+// Paket, cihazda hangi özelliklerin açılacağını ve kaç cihazın bağlanabileceğini söyler.
+export interface LicensePlan {
+  name: string;
+  features: string[];
+  deviceLimit: number;
+}
+
 export interface LicenseClaims {
   v: 1;
   product: 'kasam360';
@@ -16,8 +23,26 @@ export interface LicenseClaims {
   email: string;
   validUntil: string | null;
   blocked: boolean;
+  plan: LicensePlan | null;
   issuedAt: string;
   graceHours: number;
+}
+
+const featureCode = /^[a-z0-9_]{1,48}$/;
+
+// Panelden gelen paket tam doğrulanır; bozuk bir alan varsa belge hiç üretilmez.
+// Alan yoksa paket atanmamış sayılır ve cihaz hiçbir özelliği açmaz.
+export function readPlan(value: unknown): LicensePlan | null | undefined {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object') return undefined;
+  const plan = value as Record<string, unknown>;
+  const { name, features, device_limit: deviceLimit } = plan;
+  if (typeof name !== 'string' || !name || !Array.isArray(features) ||
+      !features.every((code) => typeof code === 'string' && featureCode.test(code)) ||
+      typeof deviceLimit !== 'number' || !Number.isInteger(deviceLimit) || deviceLimit < 1 || deviceLimit > 999) {
+    return undefined;
+  }
+  return { name, features: features as string[], deviceLimit };
 }
 
 /** Anahtar PKCS#8 DER'in base64 hâlidir; yalnız Ed25519 kabul edilir. */
@@ -55,6 +80,8 @@ export function mountLicense(app: Hono, auth: Auth, labs?: SupportConfig, key?: 
         (typeof data.valid_until === 'string' && day.test(data.valid_until)))) {
       return context.json({ message: 'Lisans şu anda doğrulanamadı.' }, 502);
     }
+    const plan = readPlan('package' in data ? data.package : undefined);
+    if (plan === undefined) return context.json({ message: 'Lisans şu anda doğrulanamadı.' }, 502);
     const claims: LicenseClaims = {
       v: 1,
       product: 'kasam360',
@@ -62,6 +89,7 @@ export function mountLicense(app: Hono, auth: Auth, labs?: SupportConfig, key?: 
       email: session.user.email,
       validUntil: data.valid_until,
       blocked: data.blocked,
+      plan,
       issuedAt: new Date().toISOString(),
       graceHours: GRACE_HOURS,
     };
