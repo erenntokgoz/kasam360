@@ -1,0 +1,144 @@
+name: Build KASAM360 Linux artifact
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kasam360-linux-artifact-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Check API
+        run: |
+          npm ci --prefix backend/api
+          npm test --prefix backend/api
+          npm run typecheck --prefix backend/api
+
+      - name: Check web
+        run: |
+          npm ci --prefix web
+          npm test --prefix web
+          npm run typecheck --prefix web
+
+      - name: Build Linux x86_64 images
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          API_IMAGE="kasam360-api:${SOURCE_SHA}"
+          WEB_IMAGE="kasam360-web:${SOURCE_SHA}"
+          docker build --platform linux/amd64 --build-arg "VCS_REF=${SOURCE_SHA}" \
+            --file backend/api/Dockerfile --tag "$API_IMAGE" .
+          docker build --platform linux/amd64 --build-arg "VCS_REF=${SOURCE_SHA}" \
+            --build-arg API_ORIGIN=http://api:4000 \
+            --file web/Dockerfile --tag "$WEB_IMAGE" web
+
+      - name: Smoke test API and web containers
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          network=kasam360-ci
+          api_image="kasam360-api:${SOURCE_SHA}"
+          web_image="kasam360-web:${SOURCE_SHA}"
+          docker network create "$network"
+          trap 'docker rm -f web api mongo >/dev/null 2>&1 || true; docker network rm "$network" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach --name mongo --network "$network" mongo:8.0 \
+            mongod --replSet ci-rs --bind_ip_all
+          for attempt in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '1'; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec mongo mongosh --quiet --eval \
+            'rs.initiate({ _id: "ci-rs", members: [{ _id: 0, host: "mongo:27017" }] })'
+          ready=false
+          for attempt in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -q 'true'; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+
+          auth_secret=$(openssl rand -hex 32)
+          docker run --detach --name api --network "$network" \
+            --publish 127.0.0.1:4000:4000 \
+            --env MONGODB_ACCOUNT_URI='mongodb://mongo:27017/kasam360_account_ci?replicaSet=ci-rs' \
+            --env MONGODB_ACCOUNT_DB=kasam360_account_ci \
+            --env MONGODB_BUSINESS_URI='mongodb://mongo:27017/kasam360_business_ci?replicaSet=ci-rs' \
+            --env MONGODB_BUSINESS_DB=kasam360_business_ci \
+            --env AUTH_SECRET="$auth_secret" \
+            --env SITE_URL=http://127.0.0.1:3000 \
+            --env ALLOWED_ORIGINS=http://127.0.0.1:3000 \
+            "$api_image"
+
+          api_ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4000/health >/dev/null; then
+              api_ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$api_ready" != true ]; then docker logs --tail 100 api; exit 1; fi
+
+          docker run --detach --name web --network "$network" \
+            --publish 127.0.0.1:3000:3000 "$web_image"
+          web_ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then
+              web_ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$web_ready" != true ]; then docker logs --tail 100 web; exit 1; fi
+          curl --fail --silent http://127.0.0.1:3000/api/auth/get-session
+
+      - name: Package SHA-versioned images
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          docker save --output artifact/images.tar \
+            "kasam360-api:${SOURCE_SHA}" "kasam360-web:${SOURCE_SHA}"
+          sha256sum artifact/images.tar > artifact/SHA256SUMS
+          cat > artifact/manifest.txt <<EOF
+          source_repository=erenntokgoz/kasam360
+          source_sha=${SOURCE_SHA}
+          platform=linux/amd64
+          api_image=kasam360-api:${SOURCE_SHA}
+          web_image=kasam360-web:${SOURCE_SHA}
+          web_api_origin=http://api:4000
+          EOF
+
+      - name: Upload private build artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kasam360-linux-amd64-${{ github.sha }}
+          path: artifact/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
