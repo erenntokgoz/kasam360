@@ -3,6 +3,8 @@
   position: relative;
   z-index: 10;
   width: 84px;
+  min-height: 0;
+  overflow-y: auto;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -77,6 +79,8 @@
   z-index: 5;
   display: flex;
   align-items: stretch;
+  flex-wrap: wrap;
+  min-width: 0;
   min-height: 52px;
   padding-top: 0;
   flex-shrink: 0;
@@ -103,7 +107,7 @@
 }
 .bar-tabs {
   display: flex;
-  flex: 1;
+  flex: 1 1 14rem;
   min-width: 0;
   padding: 0 8px;
   overflow-x: auto;
@@ -112,9 +116,12 @@
 .bar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  padding: 0 12px;
+  gap: 4px 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-width: 0;
+  margin-inline-start: auto;
+  padding: 4px 12px;
 }
 .bar-item {
   display: inline-flex;
@@ -183,6 +190,8 @@
   align-items: center;
   gap: 6px;
   width: 220px;
+  max-width: 100%;
+  min-width: 0;
   height: 38px;
   padding: 0 8px;
   margin: auto 0;
@@ -193,6 +202,7 @@
 }
 .bar-search input {
   width: 100%;
+  min-width: 0;
   height: 100%;
   min-height: auto;
   border: 0;

@@ -1,0 +1,65 @@
+/* KASAM360 v4: makine ve kontrol paneli.
+   Web'deki 3D makine ile desktop aynı nesne dünyasından gelir: fırçalanmış çelik yüzey,
+   basılabilir tuş, durum lambası ve gömme ekran. Turuncu (logo) akışın kendisidir:
+   sıradaki iş, mutfakta olan sipariş, para alan tuş. */
+:root {
+  --font: "Archivo", system-ui, sans-serif;
+
+  --bg: #E7E9EB;        /* gündüz: alüminyum tezgâh */
+  --panel: #F5F6F7;
+  --raised: #FFFFFF;
+  --well: #DADDE1;      /* gömme alan */
+  --ink: #14171A;
+  --ink-2: #4F5862;
+  --edge: #C4C9CF;
+  --key-side: #B9BFC6;
+  --signal: #F2541A;    /* açık zeminde 3:1 için logodan bir ton koyu */
+  --on-signal: #14171A;
+  --ok: #148A53;
+  --bad: #C8251B;
+  --glow: rgba(242, 84, 26, .35);
+  --display: #FFFFFF;
+  --display-ink: #14171A;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0E1012; --panel: #171A1E; --raised: #20242A; --well: #0A0C0E; --ink: #EEF0F2; --ink-2: #9BA4AE;
+  --edge: #2B3037; --key-side: #050607; --signal: #FF5A1F; --ok: #3DD68C; --bad: #FF6B5E;
+  --glow: rgba(255, 90, 31, .45); --display: #0B0D10; --display-ink: #EEF0F2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0E1012; --panel: #171A1E; --raised: #20242A; --well: #0A0C0E; --ink: #EEF0F2; --ink-2: #9BA4AE;
+    --edge: #2B3037; --key-side: #050607; --signal: #FF5A1F; --ok: #3DD68C; --bad: #FF6B5E;
+    --glow: rgba(255, 90, 31, .45); --display: #0B0D10; --display-ink: #EEF0F2;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+* { scrollbar-color: var(--edge) transparent; scrollbar-width: thin; }
+body { font: 400 15px/22px var(--font); font-stretch: 100%; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+.n { font-variant-numeric: tabular-nums; }
+.wide { font-stretch: 125%; }
+.cond { font-stretch: 75%; }
+
+/* Tuş: üstte ışık, altta 3px gövde. Basınca gövde kaybolur, tuş iner. */
+.key { position: relative; border: 0; border-radius: 10px; background: var(--raised); color: var(--ink); cursor: pointer;
+  box-shadow: 0 3px 0 var(--key-side), 0 0 0 1px var(--edge), inset 0 1px 0 rgba(255,255,255,.55); transition: transform .06s, box-shadow .06s; }
+:root[data-theme="dark"] .key { box-shadow: 0 3px 0 var(--key-side), 0 0 0 1px var(--edge), inset 0 1px 0 rgba(255,255,255,.06); }
+.key:active, .key[aria-pressed="true"] { transform: translateY(2px); box-shadow: 0 1px 0 var(--key-side), 0 0 0 1px var(--edge), inset 0 1px 0 rgba(255,255,255,.2); }
+.key.signal { background: var(--signal); color: var(--on-signal); box-shadow: 0 3px 0 #9E3006, 0 0 0 1px #C9430F, inset 0 1px 0 rgba(255,255,255,.35); }
+.key[aria-disabled="true"] { cursor: not-allowed; opacity: .55; }
+
+/* Lamba: yanıyorsa parlar; sönükse yalnız halka. */
+.lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+.lamp.on { background: var(--signal); box-shadow: 0 0 0 3px var(--glow); }
+.lamp.ok { background: var(--ok); box-shadow: none; }
+.lamp.bad { background: var(--bad); box-shadow: none; }
+
+/* Gömme alan: ekran, liste ve seçili durum tezgâhın içine oyulmuş gibi durur. */
+.well { background: var(--well); border-radius: 12px; box-shadow: inset 0 2px 4px rgba(0,0,0,.12); }
+.tag { display: block; padding: 3px 12px; font-size: 12px; line-height: 16px; color: var(--ink-2); text-align: center; background: var(--panel); border-bottom: 1px solid var(--edge); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

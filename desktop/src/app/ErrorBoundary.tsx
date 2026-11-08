@@ -1,3 +1,4 @@
+import { ErrorToast } from '../ui/ErrorToast';
 import React from 'react';
 
 interface ErrorBoundaryState {
@@ -16,7 +17,8 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren, Erro
     if (this.state.message === null) return this.props.children;
     return (
       <div className="h-screen w-screen flex items-center justify-center p-6 bg-[var(--bg-canvas)]">
-        <div role="alert" className="paper p-6 max-w-md w-full flex flex-col gap-3">
+        <div className="paper p-6 max-w-md w-full flex flex-col gap-3">
+          <ErrorToast message={this.state.message} />
           <h1 className="print-title text-2xl">Ekran açılamadı</h1>
           <p className="text-sm text-[var(--text-secondary)]">
             Kayıtlarınız güvende. Ekranı yeniden açın; sorun sürerse bu metni destek ekibine iletin.

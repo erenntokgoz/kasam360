@@ -1,20 +1,13 @@
-import { existsSync } from 'node:fs';
-import EmbeddedPostgres from 'embedded-postgres';
+import { mkdirSync } from 'node:fs';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 
-// Yalnız geliştirme içindir; sunucuda gerçek PostgreSQL kullanılır.
-const databaseDir = '.test-db/dev';
-const isNew = !existsSync(`${databaseDir}/PG_VERSION`);
-const database = new EmbeddedPostgres({
-  databaseDir,
-  user: 'kasam360',
-  password: 'kasam360',
-  port: 5432,
-  persistent: true,
-  // Windows'un yerel dil adı ASCII dışı karakter taşıyınca veritabanı kurulumu reddediliyor.
-  initdbFlags: ['--locale=C', '--encoding=UTF8'],
+// Yalnız geliştirme içindir; sunucuda Atlas kullanılır. Eşitleme transaction kullandığından
+// tek düğümlü kopya kümesi açılır. Veri `.test-db/dev` altında kalıcıdır.
+const dbPath = '.test-db/dev';
+mkdirSync(dbPath, { recursive: true });
+const replSet = await MongoMemoryReplSet.create({
+  replSet: { count: 1, storageEngine: 'wiredTiger' },
+  instanceOpts: [{ port: 27017, dbPath }],
 });
-
-if (isNew) await database.initialise();
-await database.start();
-if (isNew) await database.createDatabase('kasam360');
-console.log('Geliştirme veritabanı açık: 5432');
+console.log(`Geliştirme veritabanı açık: ${replSet.getUri()}`);
+console.log('.env içinde MONGODB_ACCOUNT_URI ve MONGODB_BUSINESS_URI bu adrese ayarlanabilir.');

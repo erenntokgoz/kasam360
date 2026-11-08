@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/content/pageMetadata';
 import { LegalPage } from '@/components/LegalPage';
 import { siteConfig } from '@/content/siteConfig';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'İade Koşulları',
   description: 'KASAM360 abonelik iade koşullarının durumu.',
-  alternates: { canonical: '/iade' },
-};
+  path: '/iade',
+});
 
 export default function RefundPage() {
   return (

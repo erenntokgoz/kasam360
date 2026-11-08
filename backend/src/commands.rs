@@ -13,6 +13,7 @@ pub mod auth_commands;
 pub mod backup_commands;
 pub mod branch_commands;
 pub mod cashier_commands;
+pub mod cloud_sync_commands;
 pub mod command_helpers;
 pub mod day_close_commands;
 pub mod external360_commands;

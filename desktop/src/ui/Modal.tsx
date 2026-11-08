@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { cn } from '../lib/cn';
 import { Button } from './Button';
+import { useExitGhost } from './useExitGhost';
 import { useFocusTrap } from './useFocusTrap';
 
 export interface ModalProps {
@@ -12,6 +13,7 @@ export interface ModalProps {
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '5xl';
   showCloseButton?: boolean;
   surface?: 'paper' | 'work';
+  cardFlow?: boolean;
   /** Kapat düğmesinin yanına gelen işlemler; biçimi Kapat ile aynıdır. */
   headerActions?: React.ReactNode;
 }
@@ -26,9 +28,12 @@ export const Modal: React.FC<ModalProps> = ({
   showCloseButton = true,
   surface = 'paper',
   headerActions,
+  cardFlow = false,
 }) => {
+  const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, isOpen);
+  useExitGhost(rootRef, isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -62,17 +67,20 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
+      ref={rootRef}
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 overflow-y-auto"
+      aria-label={title}
+      className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 overflow-y-auto"
     >
       <div
         ref={panelRef}
         tabIndex={-1}
-        aria-label={title}
+        data-motion-panel="dialog"
         className={cn(
-          'outline-none w-full border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
+          'motion-dialog outline-none w-full border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
           surface === 'work' ? 'work-surface' : 'paper',
+          cardFlow && 'max-h-full',
           maxWidthClasses
         )}
       >
@@ -90,7 +98,7 @@ export const Modal: React.FC<ModalProps> = ({
             ) : null}
           </div>
         </div>
-        <div className="p-5 overflow-y-auto max-h-[calc(100vh-7.5rem)]">{children}</div>
+        <div className={cn('p-5 overflow-y-auto', !cardFlow && 'max-h-[calc(100vh-7.5rem)]')}>{children}</div>
       </div>
     </div>
   );

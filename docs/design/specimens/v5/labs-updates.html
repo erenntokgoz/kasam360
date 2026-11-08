@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Güncellemeler · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script><script src="labs-shell.js" defer></script>
+<style>
+  .split { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); }
+  .rel { border-right: 1px solid var(--line); overflow: auto; }
+  .rel .h { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); font-weight: 600; }
+  .rel a { display: grid; gap: 3px; padding: 13px 16px; border-bottom: 1px solid var(--line); text-decoration: none; }
+  .rel a b { display: flex; justify-content: space-between; font-weight: 600; } .rel a small { color: var(--text-3); }
+  .rel a[aria-current] { background: var(--panel); box-shadow: inset 3px 0 0 var(--orange); }
+  .detail { overflow: auto; padding: 24px 32px 40px; max-width: 940px; }
+  .detail h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -.03em; display: flex; gap: 12px; align-items: center; }
+  .detail .meta { color: var(--text-3); margin: 6px 0 22px; }
+  h2 { margin: 0 0 10px; font-size: 15px; font-weight: 620; }
+  .dist { display: flex; height: 34px; border-radius: 9px; overflow: hidden; border: 1px solid var(--line); }
+  .dist span { display: flex; align-items: center; padding: 0 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0 26px; color: var(--text-2); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .roll { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); margin-bottom: 26px; }
+  .steps { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .steps button { min-height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-2); background: none; cursor: pointer; font-weight: 560; }
+  .steps button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .roll .acts { display: grid; gap: 6px; }
+  .notes { margin: 0; padding-left: 18px; line-height: 1.7; color: var(--text-2); }
+  .health { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 26px; }
+  .health div { padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .health small { display: block; color: var(--text-3); font-size: 12px; } .health b { font-size: 18px; font-weight: 640; }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } .rel { display: none; } .detail { padding: 20px 16px; } .roll { grid-template-columns: 1fr; } .health { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği, sabit test verisi. Dağıtım değiştirilmez.</span>
+<div class="app">
+  <aside class="rail" data-page="updates"></aside>
+  <div class="main">
+    <div class="bar"><span class="crumb">KASAM360 / Güncellemeler / <b>0.2.1</b></span>
+      <label class="search"><input placeholder="Sürüm ara" aria-label="Sürüm ara"><kbd>/</kbd></label></div>
+    <div class="split">
+      <nav class="rel" aria-label="Sürümler">
+        <div class="h">Sürümler <button class="btn btn-ink sm">Sürüm yükle</button></div>
+        <a href="#" aria-current="true"><b>0.2.1 <span class="pill warn">%25 dağıtımda</span></b><small>4 Kas 2026, 14 kasa aldı</small></a>
+        <a href="#"><b>0.2.0 <span class="pill ok">Kararlı</span></b><small>20 Eki 2026, 38 kasa</small></a>
+        <a href="#"><b>0.1.9 <span class="pill mute">Eski</span></b><small>2 Eki 2026, 6 kasa</small></a>
+        <a href="#"><b>0.1.8 <span class="pill bad">Geri çekildi</span></b><small>Fiş yazıcısı hatası, 0 kasa</small></a>
+      </nav>
+      <section class="detail">
+        <h1>0.2.1 <span class="pill warn"><span class="dot"></span>Kademeli dağıtım</span></h1>
+        <p class="meta">4 Kasım 2026'da yüklendi, imzalı. Kararlı kanal.</p>
+        <h2>Kasalar hangi sürümde</h2>
+        <div class="dist" role="img" aria-label="58 kasanın 14'ü 0.2.1, 38'i 0.2.0, 6'sı 0.1.9 sürümünde">
+          <span style="flex:14;background:var(--orange);color:var(--on-orange)">14</span>
+          <span style="flex:38;background:var(--line-2);color:var(--text)">38</span>
+          <span style="flex:6;background:var(--warn-bg);color:var(--warn)">6</span>
+        </div>
+        <div class="legend"><span><i style="background:var(--orange)"></i>0.2.1</span><span><i style="background:var(--line-2)"></i>0.2.0</span><span><i style="background:var(--warn)"></i>0.1.9</span></div>
+        <div class="roll">
+          <div><b>Dağıtım oranı</b><div class="steps" role="group" aria-label="Dağıtım oranı">
+            <button aria-pressed="false">%5</button><button aria-pressed="true">%25</button><button aria-pressed="false">%50</button><button aria-pressed="false">%100</button></div></div>
+          <div class="acts"><button class="btn btn-ink sm">%50'ye çıkar</button><button class="btn btn-danger sm">Dağıtımı durdur</button></div>
+        </div>
+        <div class="health">
+          <div><small>0.2.1'e geçen kasalarda hata</small><b class="num">0</b></div>
+          <div><small>Eşitleme başarısı</small><b class="num">14 / 14</b></div>
+          <div><small>Geri dönen</small><b class="num">0</b></div>
+        </div>
+        <h2>Sürüm notu</h2>
+        <ul class="notes"><li>Kasa kapatırken nakit ve kart farkı ayrı gösterilir.</li><li>Mutfak ekranında geciken siparişler üste çıkar.</li><li>Eşitleme kuyruğu yeniden denemede bekleme süresini artırır.</li></ul>
+      </section>
+    </div>
+  </div>
+</div>
+</body>
+</html>

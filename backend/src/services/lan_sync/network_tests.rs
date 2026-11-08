@@ -200,17 +200,24 @@ async fn iki_kurulum_eslesir_para_cogunlukla_yazilir_cihaz_kaybinda_durur() {
         "çoğunluk kaybı görüldü",
         sync_a.status().state == "NO_CONNECTION"
     );
+    // Son ACK kiralaması dolana kadar otoritenin eski çoğunluğu kullanması güvenlidir.
+    // Kaybın kesinleşmesinden sonra yazma gecikmeden reddedilmeli.
+    tokio::time::sleep(std::time::Duration::from_millis(2_100)).await;
     let refused = sync_a
         .submit(operation("op_lost", "a", payment("op_lost", 1_000, 1)))
         .await;
     assert!(
         refused
             .as_ref()
-            .err()
-            .is_some_and(|e| e.starts_with("QUORUM_LOST")),
+            .is_err_and(|error| error.starts_with("QUORUM_LOST")),
         "{refused:?}"
     );
     assert_eq!(remaining(&pool_a).await, Some(6_000));
+    assert_eq!(
+        remaining(&pool_b).await,
+        Some(6_000),
+        "kapanan cihazda da onaysız tahsilat yok"
+    );
 
     // Planlı pasife alma tek cihaz moduna güvenle döner.
     let members = sync_a.status().members;

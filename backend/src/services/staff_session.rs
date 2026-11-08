@@ -55,7 +55,7 @@ impl StaffSessions {
 
 /// Oturum açılmadan çalışması gereken komutlar: kurulum, hesap girişi ve PIN ekranı.
 /// Liste kapalıdır: yeni komut buraya eklenmedikçe oturum ister.
-const NO_SESSION: [&str; 20] = [
+const NO_SESSION: [&str; 23] = [
     "get_setup_status",
     "save_setup_draft",
     "complete_business_setup",
@@ -73,6 +73,11 @@ const NO_SESSION: [&str; 20] = [
     "refresh_license",
     "link_license",
     "link_license_with_google",
+    // Boş kasada hesapla giriş: işletme buluttan indirilir, personel henüz yoktur.
+    "cloud_restore",
+    // Boş kasada mevcut işletmeyi seçip bağlanma; ikisi de yalnız PENDING kurulumda çalışır.
+    "list_cloud_tenants",
+    "cloud_restore_tenant",
     "auth_login",
     "auth_logout",
     "auth_lock",

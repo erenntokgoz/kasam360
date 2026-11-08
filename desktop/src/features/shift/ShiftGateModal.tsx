@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { errorText } from '../../lib/cariInput';
 import { NumberInput } from '../../ui/NumberInput';
@@ -42,8 +43,10 @@ export const ShiftGateModal: React.FC = () => {
 
   return (
     <Modal
+      cardFlow
       isOpen={isOpen}
       onClose={() => {
+        if (isSubmitting) return;
         closeModal('shiftGate');
         closeModal('payment');
       }}
@@ -78,7 +81,7 @@ export const ShiftGateModal: React.FC = () => {
           <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{inputError}</p>
         ) : null}
         {shiftError ? (
-          <p role="alert" className="text-xs font-semibold text-[var(--accent-red)] break-words">{shiftError}</p>
+          <ErrorToast message={shiftError} />
         ) : null}
 
         <Button

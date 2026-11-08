@@ -40,7 +40,12 @@ pub(crate) async fn submit(
         op: LogOp::Cari(Box::new(op)),
     };
     if state.lan_sync.status().mode == "CLUSTER" {
-        return state.lan_sync.submit(operation).await?.into_result();
+        // Otorite yoksa işlem aynı kimlikle ada kaydına girer; cari işlem durmaz.
+        return state
+            .lan_sync
+            .execute(operation, &state.audit_mutex)
+            .await?
+            .into_result();
     }
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);
     execute_local(pool, &audit_lock, &operation)

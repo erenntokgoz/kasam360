@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { ErrorToast } from '../../../ui/ErrorToast';
+import React, { useRef, useState } from 'react';
 import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
@@ -9,7 +10,8 @@ import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Modal } from '../../../ui/Modal';
 import { Panel } from '../panorama/Panel';
-import { Field } from './FinanceTab';
+import { EXPENSE_METHODS, Field } from './FinanceTab';
+import { RecordCard } from '../RecordCard';
 
 interface Draft {
   id: string | null;
@@ -25,21 +27,31 @@ const EMPTY: Draft = { id: null, category: 'OTHER', description: '', amount: '',
 export const RecurringPanel: React.FC = () => {
   const { period, recurring, expenses, addRecurring, removeRecurring, updateRecurring, addExpense } = useExpenseStore();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
   const [payment, setPayment] = useState<RecurringRow | null>(null);
-  const [paying, setPaying] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const [payMethod, setPayMethod] = useState('BANK_TRANSFER');
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const run = async (action: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
     try {
       setError(null);
       await action();
     } catch (caught) {
       setError(errorText(caught));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
     }
   };
 
+  const selected = recurring.find((row) => row.id === selectedId);
   const canPayThisPeriod = period === monthKey();
   const isPaid = (row: RecurringRow) => expenses?.some((item) => item.recurringId === row.id || (item.recurringId === null && item.description === row.title)) ?? false;
 
@@ -49,7 +61,9 @@ export const RecurringPanel: React.FC = () => {
   const ready = draft !== null && !missingText && cents !== null && cents > 0 && Number.isInteger(dueDay) && dueDay >= 1 && dueDay <= 31;
 
   const save = async () => {
-    if (!draft || !ready || cents === null) return;
+    if (!draft || !ready || cents === null || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
     const title = draft.description.trim();
     try {
       setFormError(null);
@@ -59,6 +73,9 @@ export const RecurringPanel: React.FC = () => {
       useUIStore.getState().showNotice('Sabit gider kaydedildi.');
     } catch (caught) {
       setFormError(errorText(caught));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
     }
   };
 
@@ -72,78 +89,87 @@ export const RecurringPanel: React.FC = () => {
       }
     >
       {recurring.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Sabit gider yok.</p> : null}
-      <ul className="flex flex-col gap-1">
-        {recurring.map((row) => {
-          const paid = isPaid(row);
-          return (
-            <li key={row.id} className="flex items-center gap-2 min-h-12">
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-[var(--text-primary)] truncate">{row.title}</span>
-                <span className={`block text-xs ${!paid && row.isOverdue ? 'font-bold text-[var(--accent-red)]' : 'text-[var(--text-secondary)]'}`}>
-                  {EXPENSE_CATEGORIES[row.category] ?? row.category} · {paid ? 'Bu ay ödendi' : row.isOverdue ? `Ayın ${row.dueDay}. günü geçti` : `Ayın ${row.dueDay}. günü`}
-                </span>
-              </span>
-              <span className="tabular-nums text-sm font-bold text-[var(--text-primary)]">{formatMoney(row.amountCents)}</span>
-              <Button
-                variant="secondary"
-                className="min-h-12 text-sm"
-                disabled={paid || !canPayThisPeriod}
-                title={!canPayThisPeriod ? 'Ödeme için içinde bulunduğunuz ayı seçin.' : undefined}
-                onClick={() => { setError(null); setPayment(row); }}
-              >
-                Öde
-              </Button>
-              <Button
-                variant="ghost"
-                className="min-h-12 text-sm"
-                onClick={() => {
-                  setFormError(null);
-                  setDraft({ id: row.id, category: row.category, description: row.title, amount: centsToText(row.amountCents), day: String(row.dueDay) });
-                }}
-              >
-                Düzenle
-              </Button>
-              <Button variant="ghost" className="min-h-12 text-sm" onClick={() => void run(() => removeRecurring(row.id))}>
-                Kaldır
-              </Button>
-            </li>
-          );
-        })}
+      <ul className="grid gap-2 md:grid-cols-2">
+        {recurring.map((row) => (
+          <li key={row.id}>
+            <RecordCard title={row.title}
+              description={isPaid(row) ? 'Bu ay ödendi' : row.isOverdue ? `Ayın ${row.dueDay}. günü geçti` : `Ayın ${row.dueDay}. günü`}
+              value={formatMoney(row.amountCents)} onOpen={() => {
+                setError(null);
+                setRemoving(false);
+                setSelectedId(row.id);
+              }} />
+          </li>
+        ))}
       </ul>
-      {error && !payment ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
 
-      {payment ? (
-        <Modal isOpen onClose={() => { if (!paying) setPayment(null); }} title="Sabit Gideri Öde"
-          subtitle={`${payment.title} · ${formatMoney(payment.amountCents)}`} maxWidth="sm">
-          <div className="space-y-3">
-        <Field label="Ödeme şekli">
-          <select
-            value={payMethod}
-            onChange={(event) => setPayMethod(event.target.value)}
-            className="min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]"
-          >
-            <option value="BANK_TRANSFER">Havale</option>
-            <option value="CREDIT_CARD">Kart</option>
-            <option value="CASH">Nakit</option>
-          </select>
-        </Field>
-            {error ? <p role="alert" className="text-sm text-[var(--accent-red)]">{error}</p> : null}
-            <Button variant="primary" isLoading={paying} disabled={paying || !canPayThisPeriod || isPaid(payment)} onClick={() => {
-              setPaying(true);
-              void run(async () => {
-                await addExpense(payment.category, payment.amountCents, payMethod, payment.title, payment.id);
-                setPayment(null);
-                useUIStore.getState().showNotice('Sabit gider ödemesi kaydedildi.');
-              }).finally(() => setPaying(false));
-            }}>Ödemeyi Kaydet</Button>
+      {selected && !draft && !payment ? (
+        <Modal cardFlow isOpen title={selected.title} subtitle={EXPENSE_CATEGORIES[selected.category] ?? selected.category}
+          maxWidth="sm" onClose={() => { if (!inFlight.current) setSelectedId(null); }}>
+          <div className="space-y-4">
+            <div className="flex justify-between gap-3 text-sm">
+              <span>Ayın {selected.dueDay}. günü{isPaid(selected) ? ' · Ödendi' : ''}</span>
+              <strong className="tabular-nums">{formatMoney(selected.amountCents)}</strong>
+            </div>
+            {error ? <ErrorToast message={error} /> : null}
+            {removing ? (
+              <>
+                <p className="text-sm">Sabit gider kaldırılsın mı?</p>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" disabled={busy} onClick={() => { setRemoving(false); setError(null); }}>Vazgeç</Button>
+                  <Button type="button" variant="danger" isLoading={busy} onClick={() => void run(async () => {
+                    await removeRecurring(selected.id);
+                    setSelectedId(null);
+                  })}>Kaldır</Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" disabled={isPaid(selected) || !canPayThisPeriod}
+                  title={!canPayThisPeriod ? 'Ödeme için içinde bulunduğunuz ayı seçin.' : undefined}
+                  onClick={() => { setError(null); setPayMethod('BANK_TRANSFER'); setPayment(selected); }}>Öde</Button>
+                <Button type="button" onClick={() => {
+                  setFormError(null);
+                  setDraft({ id: selected.id, category: selected.category, description: selected.title, amount: centsToText(selected.amountCents), day: String(selected.dueDay) });
+                }}>Düzenle</Button>
+                <Button type="button" variant="danger" onClick={() => setRemoving(true)}>Kaldır</Button>
+              </div>
+            )}
           </div>
         </Modal>
       ) : null}
 
+      {payment ? (
+        <Modal cardFlow isOpen onClose={() => { if (!inFlight.current) { setError(null); setPayment(null); } }} title="Sabit Gideri Öde"
+          subtitle={`${payment.title} · ${formatMoney(payment.amountCents)}`} maxWidth="sm">
+          <form className="space-y-3" onSubmit={(event) => {
+            event.preventDefault();
+            if (!canPayThisPeriod || isPaid(payment)) return;
+            void run(async () => {
+              await addExpense(payment.category, payment.amountCents, payMethod, payment.title, payment.id);
+              setPayment(null);
+              useUIStore.getState().showNotice('Sabit gider ödemesi kaydedildi.');
+            });
+          }}>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Ödeme şekli">
+              {EXPENSE_METHODS.map((item) => (
+                <Button key={item.id} type="button" disabled={busy} aria-pressed={payMethod === item.id}
+                  variant={payMethod === item.id ? 'selected' : 'secondary'} onClick={() => setPayMethod(item.id)}>{item.label}</Button>
+              ))}
+            </div>
+            {error ? <ErrorToast message={error} /> : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" disabled={busy} onClick={() => { setError(null); setPayment(null); }}>Geri</Button>
+              <Button type="submit" variant="primary" isLoading={busy} disabled={!canPayThisPeriod || isPaid(payment)}>Ödemeyi Kaydet</Button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
       {draft ? (
-        <Modal isOpen onClose={() => setDraft(null)} title={draft.id ? 'Sabit Gideri Düzenle' : 'Sabit Gider Ekle'} maxWidth="md">
-          <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+        <Modal cardFlow isOpen onClose={() => { if (!inFlight.current) setDraft(null); }} title={draft.id ? 'Sabit Gideri Düzenle' : 'Sabit Gider Ekle'} maxWidth="md">
+          <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+          <fieldset disabled={busy} className="grid grid-cols-2 gap-3">
             <Field label="Tutar (₺)">
               <NumberInput className="min-h-12 tabular-nums" value={draft.amount} onValueChange={(amount) => setDraft({ ...draft, amount })} />
             </Field>
@@ -158,14 +184,14 @@ export const RecurringPanel: React.FC = () => {
                 onChange={(event) => setDraft({ ...draft, description: event.target.value })}
               />
             </Field>
-          </div>
+          </fieldset>
           {missingText ? <p className="text-xs font-semibold text-[var(--accent-red)]">Gider açıklamasını yazın.</p> : null}
-          {formError ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{formError}</p> : null}
+          {formError ? <ErrorToast message={formError} /> : null}
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" className="min-h-12" onClick={() => setDraft(null)}>Vazgeç</Button>
-            <Button variant="primary" className="min-h-12" disabled={!ready} onClick={() => void save()}>Kaydet</Button>
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => setDraft(null)}>Vazgeç</Button>
+            <Button type="submit" variant="primary" disabled={!ready} isLoading={busy}>Kaydet</Button>
           </div>
-          </div>
+          </form>
         </Modal>
       ) : null}
     </Panel>

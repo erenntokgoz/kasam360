@@ -35,7 +35,9 @@ const WRITE: &str = "INSERT INTO products (id, tenant_id, category_id, name, pri
 async fn butun_tablolara_tetikleyici_kurulur_ve_kaldirilir() {
     let pool = pool().await;
     let mut conn = pool.acquire().await.expect("bağlantı");
-    sync_triggers(&mut conn, true).await.expect("kurulum");
+    sync_triggers(&mut conn, TriggerMode::Cluster)
+        .await
+        .expect("kurulum");
     let count =
         "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'sync_cap_%'";
     let installed: i64 = sqlx::query_scalar(count)
@@ -44,7 +46,9 @@ async fn butun_tablolara_tetikleyici_kurulur_ve_kaldirilir() {
         .expect("sayım");
     assert!(installed > 100, "{installed}");
 
-    sync_triggers(&mut conn, false).await.expect("kaldırma");
+    sync_triggers(&mut conn, TriggerMode::Off)
+        .await
+        .expect("kaldırma");
     let left: i64 = sqlx::query_scalar(count)
         .fetch_one(&mut *conn)
         .await
@@ -56,7 +60,9 @@ async fn butun_tablolara_tetikleyici_kurulur_ve_kaldirilir() {
 async fn kapidan_gecmeyen_yazma_durur() {
     let pool = pool().await;
     let mut conn = pool.acquire().await.expect("bağlantı");
-    sync_triggers(&mut conn, true).await.expect("kurulum");
+    sync_triggers(&mut conn, TriggerMode::Cluster)
+        .await
+        .expect("kurulum");
     let error = sqlx::query(WRITE)
         .execute(&mut *conn)
         .await
@@ -70,7 +76,9 @@ async fn yakalanan_degisiklik_ikinci_veritabaninda_ayni_sonucu_verir() {
     let source = pool().await;
     let target = pool().await;
     let mut conn = source.acquire().await.expect("bağlantı");
-    sync_triggers(&mut conn, true).await.expect("kurulum");
+    sync_triggers(&mut conn, TriggerMode::Cluster)
+        .await
+        .expect("kurulum");
     sqlx::raw_sql(
         "BEGIN;
          INSERT INTO sync_write_gate (mode) VALUES ('CAPTURE');
@@ -122,6 +130,7 @@ async fn esitleme_durumu_agdan_gelen_satirla_degistirilemez() {
                 .clone(),
         ),
         row: None,
+        old: None,
     };
     assert!(apply_changes(&mut conn, &[change], false).await.is_err());
 }
@@ -138,6 +147,7 @@ async fn cihaza_ozel_tablo_yalniz_kaynak_cihazda_yazilir() {
         action: "I".to_string(),
         key: None,
         row: Some(row.as_object().expect("nesne").clone()),
+        old: None,
     };
     apply_changes(&mut conn, std::slice::from_ref(&change), false)
         .await

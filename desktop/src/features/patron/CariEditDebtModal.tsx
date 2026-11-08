@@ -1,3 +1,5 @@
+import { ErrorToast } from '../../ui/ErrorToast';
+import { localDate } from '../../lib/cariInput';
 import React, { useState } from 'react';
 import { centsToText, parseCents } from '../../lib/moneyInput';
 import { errorText } from '../../lib/cariInput';
@@ -23,7 +25,7 @@ interface CariEditDebtModalProps {
 
 export const CariEditDebtModal: React.FC<CariEditDebtModalProps> = ({ debt, onClose, onSaved }) => {
   const [amount, setAmount] = useState(centsToText(debt.totalAmountCents));
-  const [dueDate, setDueDate] = useState(debt.dueDate?.slice(0, 10) ?? '');
+  const [dueDate, setDueDate] = useState(() => debt.dueDate?.slice(0, 10) || localDate(new Date()));
   const [description, setDescription] = useState(debt.description ?? '');
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -49,7 +51,7 @@ export const CariEditDebtModal: React.FC<CariEditDebtModalProps> = ({ debt, onCl
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Kaydı Düzenle" maxWidth="sm">
+    <Modal cardFlow isOpen onClose={onClose} title="Kaydı Düzenle" maxWidth="sm">
       <div className="space-y-3">
         <label className="block text-xs font-semibold text-[var(--text-secondary)]">
           Tutar (₺)
@@ -63,7 +65,7 @@ export const CariEditDebtModal: React.FC<CariEditDebtModalProps> = ({ debt, onCl
           Açıklama
           <Input className="min-h-12 mt-1" value={description} onChange={(event) => setDescription(event.target.value)} />
         </label>
-        {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+        {error ? <ErrorToast message={error} /> : null}
         <Button variant="primary" className="w-full min-h-12" disabled={cents === null || cents <= 0} isLoading={isBusy} onClick={() => void save()}>
           Kaydet
         </Button>

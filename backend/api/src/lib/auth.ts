@@ -2,7 +2,8 @@ import { hash, verify } from '@node-rs/argon2';
 import { betterAuth } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { emailOTP } from 'better-auth/plugins';
-import type { Pool } from 'pg';
+import { mongodbAdapter } from 'better-auth/adapters/mongodb';
+import { removeUserData, type Databases } from './mongo.js';
 import type { SendMail } from './mail.js';
 import { prefixedId } from './prefixedId.js';
 import { validateProfile } from './profile.js';
@@ -13,7 +14,7 @@ const ONE_HOUR = 60 * 60;
 const DESKTOP_ORIGIN = /^http:\/\/(tauri\.localhost|localhost:1420)$/;
 
 export interface AuthOptions {
-  pool: Pool;
+  databases: Databases;
   secret: string;
   siteUrl: string;
   allowedOrigins: string[];
@@ -21,7 +22,7 @@ export interface AuthOptions {
   google?: { clientId: string; clientSecret: string };
 }
 
-export function createAuth({ pool, secret, siteUrl, allowedOrigins, sendMail, google }: AuthOptions) {
+export function createAuth({ databases, secret, siteUrl, allowedOrigins, sendMail, google }: AuthOptions) {
   return betterAuth({
     appName: 'KASAM360',
     plugins: [
@@ -39,7 +40,7 @@ export function createAuth({ pool, secret, siteUrl, allowedOrigins, sendMail, go
         },
       }),
     ],
-    database: pool,
+    database: mongodbAdapter(databases.account, { client: databases.accountClient }),
     secret,
     baseURL: siteUrl,
     basePath: '/api/auth',
@@ -58,7 +59,7 @@ export function createAuth({ pool, secret, siteUrl, allowedOrigins, sendMail, go
         '/sign-up/email': { window: TEN_MINUTES, max: 5 },
         '/sign-in/email': { window: TEN_MINUTES, max: 10 },
         '/request-password-reset': { window: TEN_MINUTES, max: 3 },
-        '/send-verification-email': { window: TEN_MINUTES, max: 3 },
+        '/send-verification-email': { window: TEN_MINUTES, max: 5 },
         '/email-otp/send-verification-otp': { window: TEN_MINUTES, max: 5 },
         '/email-otp/request-password-reset': { window: TEN_MINUTES, max: 3 },
         '/email-otp/verify-email': { window: TEN_MINUTES, max: 10 },
@@ -66,14 +67,38 @@ export function createAuth({ pool, secret, siteUrl, allowedOrigins, sendMail, go
       },
     },
     user: {
-      deleteUser: { enabled: true },
+      deleteUser: {
+        enabled: true,
+        // Hesap kümesindeki oturum ve kimlik kaydını kütüphane siler; lisans ve işletme verisi burada düşer.
+        afterDelete: async (user) => { await removeUserData(databases, user.id); },
+      },
       additionalFields: {
         businessName: { type: 'string', required: false },
         phone: { type: 'string', required: false },
         consentAt: { type: 'date', required: false, input: false },
       },
     },
+    // Google adresi doğrulanmış gelir; doğrulanmamış şifreli hesaba bağlanmasına izin verilir ki kullanıcı
+    // e-posta beklemeden girebilsin. Ön kayıtla hesap ele geçirmeyi önlemek için aşağıdaki kanca o şifreyi siler.
+    account: { accountLinking: { trustedProviders: ['google'], requireLocalEmailVerified: false } },
     databaseHooks: {
+      account: {
+        create: {
+          before: async (account, context) => {
+            if (account.providerId !== 'google' || !context) return;
+            const adapter = context.context.internalAdapter;
+            const user = await adapter.findUserById(account.userId);
+            if (!user || user.emailVerified) return;
+            // Doğrulanmamış hesabın şifresini adresin sahibi koymamış olabilir; Google sahipliği kanıtladığı an
+            // o şifre ve açık oturumlar geçersiz kılınır. Kullanıcı isterse şifre yenileme ile yeni şifre belirler.
+            for (const existing of await adapter.findAccounts(account.userId)) {
+              if (existing.providerId === 'credential') await adapter.deleteAccount(existing.id);
+            }
+            await adapter.deleteUserSessions(account.userId);
+            await adapter.updateUser(account.userId, { emailVerified: true });
+          },
+        },
+      },
       user: {
         create: {
           // Google ile kayıt da onay metninin altındaki düğmeden geçer; onay anı her kayıtta tutulur.
@@ -119,7 +144,8 @@ export function createAuth({ pool, secret, siteUrl, allowedOrigins, sendMail, go
     },
     emailVerification: {
       sendOnSignUp: true,
-      sendOnSignIn: true,
+      // Girişte otomatik gönderim yok: istemci son gönderimden iki dakika geçtiyse kendisi ister.
+      sendOnSignIn: false,
       autoSignInAfterVerification: true,
       expiresIn: ONE_HOUR,
       sendVerificationEmail: async ({ user, url }, request) => {

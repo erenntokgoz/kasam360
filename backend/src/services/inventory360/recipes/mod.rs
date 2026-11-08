@@ -13,6 +13,7 @@
 
 pub mod cost;
 pub mod types;
+mod validation;
 
 pub use cost::{calculate_recipe_cost, cost_for_active_recipe};
 pub use types::{

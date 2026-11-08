@@ -7,7 +7,11 @@ describe('mal kabulü seçimleri', () => {
     expect(toReceiptInput({ ...emptyReceiptDraft(), dueDate: '2026-12-01' }, [])).toEqual({
       settlement: 'TERM', dueDate: '2026-12-01', documentNo: null, usableGrams: [],
     });
-    expect(toReceiptInput(emptyReceiptDraft(), []).dueDate).toBeNull();
+    expect(toReceiptInput({ ...emptyReceiptDraft(), dueDate: '' }, []).dueDate).toBeNull();
+  });
+
+  it('vadeyi formun açıldığı yerel günle başlatır', () => {
+    expect(toReceiptInput(emptyReceiptDraft(new Date(2026, 10, 5, 0, 15)), []).dueDate).toBe('2026-11-05');
   });
 
   it('peşin alımda kanalı gönderir ve vadeyi yok sayar', () => {

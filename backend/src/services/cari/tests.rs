@@ -118,6 +118,11 @@ async fn nakit_kasaya_yazilir_kart_kasaya_dokunmaz() {
         "INSERT INTO shifts (id, tenant_id, cashier_id, status) VALUES ('shf_1', 'tnt_a', 'usr_1', 'OPEN')",
     )
     .await;
+    exec(
+        &p,
+        "INSERT INTO cash_movements (id, tenant_id, shift_id, movement_type, amount_cents, reason, actor_id) VALUES ('csh_open', 'tnt_a', 'shf_1', 'IN', 2000, 'Açılış bakiyesi', 'usr_1')",
+    )
+    .await;
     run(&p, TENANT, &payment("pmt_1", 1_000, 0, "CREDIT_CARD"))
         .await
         .expect("kart");
@@ -125,7 +130,7 @@ async fn nakit_kasaya_yazilir_kart_kasaya_dokunmaz() {
         .await
         .expect("nakit");
     let rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT movement_type, amount_cents FROM cash_movements WHERE tenant_id = 'tnt_a'",
+        "SELECT movement_type, amount_cents FROM cash_movements WHERE tenant_id = 'tnt_a' AND id != 'csh_open'",
     )
     .fetch_all(&p)
     .await

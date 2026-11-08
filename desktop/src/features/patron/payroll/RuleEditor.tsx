@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { NumberInput } from '../../../ui/NumberInput';
@@ -9,6 +10,7 @@ import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { RuleFacts } from './RuleFacts';
+import { useAuthStore } from '../../../stores/authStore';
 
 export interface PayrollRule {
   userId: string;
@@ -19,7 +21,6 @@ export interface PayrollRule {
   tipMultiplierPercent: number;
   payPeriod: PayPeriod;
   /** Tutar gizliyse null. */
-  hourlyEquivalentCents: number | null;
 }
 
 export const MODELS: Record<string, string> = {
@@ -32,6 +33,7 @@ const fieldClass = 'min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-
 
 /** Maaş kuralı yalnız patronda: rakam müdüre görünmez. */
 export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSaved: () => Promise<void> }> = ({ userId, rules, onSaved }) => {
+  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const [model, setModel] = useState('FIXED');
   const [payPeriod, setPayPeriod] = useState<PayPeriod>('MONTHLY');
   const [salary, setSalary] = useState('');
@@ -95,7 +97,7 @@ export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSave
       ) : (
         <p className="text-sm text-[var(--text-secondary)]">Bu kişi için maaş kuralı yok.</p>
       )}
-      <div className="flex flex-wrap gap-2">
+      {isOwner ? <div className="flex flex-wrap gap-2">
         <select aria-label="Maaş modeli" className={fieldClass} value={model} onChange={(event) => setModel(event.target.value)}>
           {Object.entries(MODELS).map(([id, label]) => (
             <option key={id} value={id}>{label}</option>
@@ -106,7 +108,9 @@ export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSave
             <option key={item.id} value={item.id}>{item.label}</option>
           ))}
         </select>
-        <NumberInput aria-label="Maaş" placeholder={model === 'HOURLY' ? 'Saatlik ücret (₺)' : `${amountLabelOf(payPeriod)} (₺)`} className="min-h-12 tabular-nums !w-44" value={salary} onValueChange={setSalary} />
+        <label className="flex items-center gap-2"><span className="text-sm font-semibold">{model === 'HOURLY' ? 'Saatlik ücret' : amountLabelOf(payPeriod)}</span>
+          <NumberInput aria-label="Maaş" className="min-h-12 tabular-nums !w-44" value={salary} onValueChange={setSalary} />
+        </label>
         <Button variant="secondary" className="min-h-12 text-sm font-bold" disabled={cents === null} onClick={() => void save()}>
           Kuralı Kaydet
         </Button>
@@ -115,8 +119,8 @@ export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSave
             <Trash2 className="w-5 h-5" />
           </Button>
         ) : null}
-      </div>
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      </div> : null}
+      {error ? <ErrorToast message={error} /> : null}
       {rule ? <RuleFacts rule={rule} onSaved={onSaved} /> : null}
     </div>
   );

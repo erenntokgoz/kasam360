@@ -1,0 +1,7 @@
+{
+  "identifier": "com.kasam360.mobile",
+  "build": {
+    "beforeBuildCommand": "npm --prefix mobile run build",
+    "frontendDist": "../mobile/dist"
+  }
+}

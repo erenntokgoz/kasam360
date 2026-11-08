@@ -3,6 +3,7 @@ import type { UserRole, UserSession } from '../types/auth';
 import { invokeIPC } from '../services/tauriClient';
 import { useFeatureStore } from './featureStore';
 import { licensedModules, useLicenseStore } from './licenseStore';
+import { useUIStore } from './uiStore';
 
 interface AuthStore {
   user: UserSession | null;
@@ -79,6 +80,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   lock: () => {
     // Perdeden önce sunucu kilitlenir; hata olursa perde yine iner.
     void Promise.resolve().then(() => invokeIPC('auth_lock')).catch(() => undefined);
+    // Açık tahsilat/vardiya pencereleri ve son ekran perdenin arkasında kalıp sonraki personele geçmesin.
+    useUIStore.getState().resetForLock();
     set({ isLocked: true, loginError: null });
   },
 
@@ -86,6 +89,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     // Sunucu oturumu da kapanır; hata arayüz çıkışını engellemez.
     void Promise.resolve().then(() => invokeIPC('auth_logout')).catch(() => undefined);
     useFeatureStore.getState().setModules([]);
+    useUIStore.getState().resetForLock();
     set({ user: null, isAuthenticated: false, isLocked: false,
       mustChangePin: false, loginError: null });
   },

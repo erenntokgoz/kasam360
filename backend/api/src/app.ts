@@ -4,6 +4,10 @@ import { bodyLimit } from 'hono/body-limit';
 import { mountSupport, type SupportConfig } from './support.js';
 import type { Auth } from './lib/auth.js';
 import type { LicenseKeys } from './desktopLicense.js';
+import { mountTenantMembership } from './tenantMembership.js';
+import { mountTenantCommercial, type TenantCommercialConfig } from './tenantCommercial.js';
+import { mountCatalog } from './catalog.js';
+import type { Databases } from './lib/mongo.js';
 
 const LINK_CODE = /^[0-9a-f-]{36}$/;
 const LINK_TTL_MS = 5 * 60 * 1000;
@@ -21,13 +25,19 @@ const page = (message: string) =>
   `<!doctype html><html lang="tr"><meta charset="utf-8"><title>KASAM360</title><body style="font:18px system-ui;padding:3rem;background:#fbf0b2;color:#1e2a66">${message}</body></html>`;
 
 export function createApp(
-  auth: Auth, allowedOrigins: string[], siteUrl: string, support?: SupportConfig, licenseKeys?: LicenseKeys,
+  auth: Auth, allowedOrigins: string[], siteUrl: string, support?: SupportConfig, licenseKeys?: LicenseKeys, databases?: Databases,
+  tenantCommercialConfig?: TenantCommercialConfig,
 ) {
   const app = new Hono();
+  mountCatalog(app);
   // shortcut: bekleyen bağlantılar bellektedir, ikinci sunucu eklenince veritabanına taşınmalı.
   const desktopLinks = new Map<string, DesktopLink>();
 
   app.get('/health', (context) => context.json({ ok: true }));
+  if (databases) {
+    mountTenantMembership(app, auth, databases.accountClient, databases.account);
+    mountTenantCommercial(app, auth, databases.account, tenantCommercialConfig);
+  }
   // Masaüstü penceresi site kaynağından değildir; izinli kaynaklar dışında tarayıcı yanıtı okuyamaz.
   app.use('/api/auth/*', cors({ origin: allowedOrigins }));
   app.use('/api/desktop-link/*', cors({ origin: allowedOrigins }));

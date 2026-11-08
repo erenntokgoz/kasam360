@@ -1,6 +1,6 @@
 import React from 'react';
 import { formatMoney } from '../../../lib/formatMoney';
-import type { Kpi, PanoramaData } from '../../../stores/panoramaStore';
+import type { PanoramaData } from '../../../stores/panoramaStore';
 import { useSyncStore, SYNC_STATE_LABEL } from '../../../stores/syncStore';
 import { Panel } from './Panel';
 
@@ -19,7 +19,7 @@ const duration = (minutes: number) => {
 };
 
 /** Seçilen dönemden bağımsız: patron şu anı görür. */
-export const LivePanel: React.FC<{ live: PanoramaData['live']; current: Kpi }> = ({ live, current }) => {
+export const LivePanel: React.FC<{ live: PanoramaData['live'] }> = ({ live }) => {
   const syncState = useSyncStore((state) => state.status?.state);
   const fill = live.totalTables > 0 ? Math.round((live.openTables * 100) / live.totalTables) : 0;
   return (
@@ -48,13 +48,6 @@ export const LivePanel: React.FC<{ live: PanoramaData['live']; current: Kpi }> =
         <Row label="Mutfakta bekleyen" value={`${live.kitchenWaiting} kalem`} />
         <Row label="En uzun açık hesap" value={live.openOrders > 0 ? duration(live.longestOpenMinutes) : '-'} alarm={live.longestOpenMinutes > 180} />
         {syncState ? <Row label="Cihaz eşitleme" value={SYNC_STATE_LABEL[syncState]} alarm={syncState !== 'READY'} /> : null}
-      </div>
-      <div className="mt-auto">
-        <h3 className="print-title text-xs font-bold text-[var(--text-secondary)] mb-1">Seçili dönemde kesintiler</h3>
-        <Row label="Ödenecek KDV" value={formatMoney(current.vatCents)} />
-        <Row label="İndirim" value={formatMoney(current.discountCents)} />
-        <Row label="İptal" value={formatMoney(current.voidCents)} alarm={current.voidCents > 0} />
-        <Row label="İade" value={formatMoney(current.refundCents)} alarm={current.refundCents > 0} />
       </div>
     </Panel>
   );

@@ -3,6 +3,7 @@ import { errorText } from '../lib/cariInput';
 import { invokeIPC } from '../services/tauriClient';
 import { useAuthStore } from './authStore';
 import { sessionArgs } from './cariStore';
+import { useSetupStore } from './setupStore';
 import { useUIStore } from './uiStore';
 
 interface DeviceSessionReply {
@@ -11,6 +12,13 @@ interface DeviceSessionReply {
   accountMissing: boolean;
   keepSignedIn: boolean;
   staffIdleSeconds: number;
+}
+
+interface CloudSignOutReply {
+  session: DeviceSessionReply;
+  wiped: boolean;
+  pending: number;
+  code: string | null;
 }
 
 interface DeviceSessionStore {
@@ -63,10 +71,18 @@ export const useDeviceSessionStore = create<DeviceSessionStore>((set) => {
       apply(await invokeIPC<DeviceSessionReply>('account_create', { email, password, ownerPin }));
     },
 
+    // Oturum her durumda kapanır. Yerel veri yalnız bulut her işlemi aldıysa silinir;
+    // gitmemiş işlem varsa silme internet gelince arka planda tamamlanır.
     signOut: async () => {
       const { actorId, actorRole, tenantId } = sessionArgs();
-      apply(await invokeIPC<DeviceSessionReply>('account_sign_out', { actorId, actorRole, tenantId }));
+      const reply = await invokeIPC<CloudSignOutReply>('cloud_sign_out', { actorId, actorRole, tenantId });
+      apply(reply.session);
       useAuthStore.getState().logout();
+      if (reply.wiped) {
+        await useSetupStore.getState().load();
+      } else if (reply.pending > 0) {
+        useUIStore.getState().pushNotice(`Buluta gitmemiş ${reply.pending} işlem var; gönderilince bu kasa temizlenir.`, 'warning');
+      }
     },
 
     setPolicy: async (keepSignedIn, staffIdleSeconds) => {

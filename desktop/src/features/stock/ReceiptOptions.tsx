@@ -38,7 +38,7 @@ export function ReceiptOptions({ value, onChange, gramItems, disabled = false }:
       </label>
       {gramItems.map((item) => (
         <label key={item.id} className="block text-xs space-y-1"><span>{item.name}: 1 adetten çıkan kullanılabilir gram</span>
-          <NumberInput kind="quantity" aria-label={`${item.name} 1 adet gram`} placeholder="g" value={value.grams[item.id] ?? ''} onValueChange={(text) => patch({ grams: { ...value.grams, [item.id]: text } })} />
+          <NumberInput kind="quantity" aria-label={`${item.name} 1 adet gram`} value={value.grams[item.id] ?? ''} onValueChange={(text) => patch({ grams: { ...value.grams, [item.id]: text } })} />
         </label>
       ))}
     </fieldset>

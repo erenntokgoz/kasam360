@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { ErrorToast } from '../../../ui/ErrorToast';
+import React, { useEffect, useRef, useState } from 'react';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { useStationStore, type Station } from '../../../stores/stationStore';
+import { ConfirmDialog } from '../../../ui/ConfirmDialog';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Modal } from '../../../ui/Modal';
+import { RecordCard } from '../RecordCard';
 
 interface StaffOption {
   id: string;
@@ -19,6 +22,11 @@ export const StationSettings: React.FC = () => {
   const { stations, load } = useStationStore();
   const [printers, setPrinters] = useState<string[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  const selected = stations.find((station) => station.id === selectedId);
   const [draft, setDraft] = useState<Station | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,26 +37,29 @@ export const StationSettings: React.FC = () => {
     void invokeIPC<StaffOption[]>('get_staff', { tenantId, actorRole, includeInactive: false }).then(setStaff).catch((caught) => setError(String(caught)));
   }, [load]);
 
-  const run = async (action: () => Promise<unknown>) => {
+  const save = async () => {
+    if (!draft?.name.trim() || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
     setError(null);
     try {
-      await action();
-      await load();
+      const { tenantId, actorRole } = sessionArgs();
+      await invokeIPC('save_station', { actorRole, tenantId, input: { ...draft, id: draft.id || null } });
       setDraft(null);
+      await load();
     } catch (caught) {
       setError(String(caught));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
     }
   };
 
-  const save = () => {
-    if (!draft?.name.trim()) return;
+  const remove = async (stationId: string) => {
     const { tenantId, actorRole } = sessionArgs();
-    void run(() => invokeIPC('save_station', { actorRole, tenantId, input: { ...draft, id: draft.id || null } }));
-  };
-
-  const remove = (stationId: string) => {
-    const { tenantId, actorRole } = sessionArgs();
-    void run(() => invokeIPC('delete_station', { actorRole, tenantId, stationId }));
+    await invokeIPC('delete_station', { actorRole, tenantId, stationId });
+    setSelectedId(null);
+    await load().catch((caught) => setError(String(caught)));
   };
 
   const toggleUser = (id: string, isOn: boolean) =>
@@ -58,30 +69,32 @@ export const StationSettings: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
-      <Button variant="primary" className="min-h-12" onClick={() => setDraft(EMPTY)}>İstasyon Ekle</Button>
-      <ul className="divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] paper">
-        {stations.length === 0 ? <li className="p-4 text-sm">Tanımlı istasyon yok.</li> : null}
+      {error && !draft ? <ErrorToast message={error} /> : null}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="print-title">Mutfak İstasyonları</h3>
+        <Button variant="primary" disabled={busy} onClick={() => { setError(null); setDraft(EMPTY); }}>İstasyon Ekle</Button>
+      </div>
+      {stations.length === 0 ? <p className="text-sm">Tanımlı istasyon yok.</p> : null}
+      <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {stations.map((station) => (
-          <li key={station.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
-            <span className="min-w-0">
-              <span className="block font-bold">{station.name}</span>
-              <span className="block text-xs text-[var(--text-secondary)]">
-                {station.printerName ?? 'Yazıcı yok'} · {station.userIds.length} kullanıcı
-              </span>
-            </span>
-            <span className="flex gap-2">
-              <Button variant="secondary" className="min-h-12" onClick={() => setDraft(station)}>Düzenle</Button>
-              <Button variant="secondary" className="min-h-12" onClick={() => remove(station.id)}>Sil</Button>
-            </span>
+          <li key={station.id}>
+            <RecordCard title={station.name}
+              description={`${station.printerName ?? 'Yazıcı yok'} · ${station.userIds.length} kullanıcı`}
+              onOpen={() => { setError(null); setSelectedId(station.id); }} />
           </li>
         ))}
       </ul>
 
-      {draft ? (
-        <Modal isOpen onClose={() => setDraft(null)} title={draft.id ? 'İstasyonu Düzenle' : 'İstasyon Ekle'} maxWidth="sm">
-          <div className="space-y-3">
-            <Input aria-label="İstasyon adı" placeholder="İstasyon adı" className="min-h-12" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+      {!deleting && (draft || selected) ? (
+        <Modal cardFlow isOpen onClose={() => {
+          if (!inFlight.current) { setSelectedId(null); setDraft(null); setError(null); }
+        }} title={selected?.name ?? 'İstasyon Ekle'} maxWidth="sm">
+          {draft ? (
+          <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+            <label className="block space-y-1 text-sm font-semibold">
+              <span>İstasyon adı</span>
+              <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required />
+            </label>
             <select aria-label="Yazıcı" className={field} value={draft.printerName ?? ''} onChange={(event) => setDraft({ ...draft, printerName: event.target.value || null })}>
               <option value="">Yazıcı yok</option>
               {printers.map((printer) => <option key={printer} value={printer}>{printer}</option>)}
@@ -94,12 +107,32 @@ export const StationSettings: React.FC = () => {
                 </label>
               ))}
             </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" className="flex-1 min-h-12" onClick={() => setDraft(null)}>Vazgeç</Button>
-              <Button variant="primary" className="flex-1 min-h-12" disabled={!draft.name.trim()} onClick={save}>Kaydet</Button>
+            {error ? <ErrorToast message={error} /> : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" disabled={busy} onClick={() => { setDraft(null); setError(null); }}>Vazgeç</Button>
+              <Button type="submit" variant="primary" disabled={!draft.name.trim()} isLoading={busy}>Kaydet</Button>
             </div>
-          </div>
+          </form>
+          ) : selected ? (
+            <div className="space-y-3">
+              <dl className="grid gap-2 text-sm">
+                <div><dt className="font-semibold">Yazıcı</dt><dd>{selected.printerName ?? 'Yazıcı yok'}</dd></div>
+                <div>
+                  <dt className="font-semibold">Personel</dt>
+                  <dd>{staff.filter((person) => selected.userIds.includes(person.id)).map((person) => person.name).join(', ') || 'Aktif personel yok'}</dd>
+                </div>
+              </dl>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" disabled={busy} onClick={() => setDeleting(true)}>İstasyonu Sil</Button>
+                <Button variant="primary" disabled={busy} onClick={() => setDraft(selected)}>Düzenle</Button>
+              </div>
+            </div>
+          ) : null}
         </Modal>
+      ) : null}
+      {deleting && selected ? (
+        <ConfirmDialog cardFlow title={`${selected.name} silinsin mi?`}
+          onClose={() => setDeleting(false)} onConfirm={() => remove(selected.id)} />
       ) : null}
     </div>
   );

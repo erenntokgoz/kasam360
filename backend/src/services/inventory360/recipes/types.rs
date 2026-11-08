@@ -113,7 +113,7 @@ pub struct RecipeInput {
 /// Reçete derinlik sınırı. Alt yarı mamul zinciri (kruasan → hamur → un → hamur)
 /// döngüsel tanımlanabilir; sınır sonsuz özyinelemenin veritabanını kilitlemesini
 /// engeller ve hatayı yukarı taşır.
-pub(super) const MAX_RECIPE_DEPTH: usize = 8;
+pub(crate) const MAX_RECIPE_DEPTH: usize = 8;
 
 pub async fn list_recipes(
     conn: &mut SqliteConnection,
@@ -259,6 +259,7 @@ pub async fn create_recipe(
         }
         waste_oranlari.push(waste);
     }
+    super::validation::validate_recipe_items(conn, tenant_id, &input).await?;
 
     let id = generate_id("rcp");
     sqlx::query(

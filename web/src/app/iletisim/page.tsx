@@ -1,36 +1,35 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/content/pageMetadata';
 import Link from 'next/link';
-import { PageSheet } from '@/components/PageSheet';
+import { PageShell } from '@/components/PageShell';
 import { siteConfig } from '@/content/siteConfig';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'İletişim',
-  description: 'KASAM360 iletişim bilgileri.',
-  alternates: { canonical: '/iletisim' },
-};
+  description: 'KASAM360 e-posta adresi ve destek talebi.',
+  path: '/iletisim',
+});
 
 export default function ContactPage() {
   return (
-    <PageSheet>
-      <h1 className="sheet-title">Bize yazın.</h1>
-      <div className="max-w-xl">
-        <div className="form-row grid-cols-[6rem_1fr]">
-          <span className="printed">E-posta</span>
-          <a href={`mailto:${siteConfig.contactEmail}`} className="pen break-all underline">
-            {siteConfig.contactEmail}
-          </a>
+    <PageShell title="Bize yazın." layout="split"
+      intro={
+        <div className="k-row">
+          <Link href="/destek" className="k-btn k-btn-ink k-btn-lg">Destek talebi açın</Link>
+          <Link href="/kayit" className="k-btn k-btn-line k-btn-lg">Kayıt olun</Link>
         </div>
-        <div className="form-row grid-cols-[6rem_1fr]">
-          <span className="printed">Satıcı</span>
-          <span className="pen">{siteConfig.sellerName}</span>
+      }
+    >
+      <dl className="k-dl">
+        <div>
+          <dt>E-posta</dt>
+          <dd><a href={`mailto:${siteConfig.contactEmail}`} className="k-link">{siteConfig.contactEmail}</a></dd>
         </div>
-      </div>
-      <div>
-        <Link href="/destek" className="btn">Destek Talebi Aç</Link>
-        <Link href="/kayit" className="btn">
-          Kayıt Olun
-        </Link>
-      </div>
-    </PageSheet>
+        <div>
+          <dt>Satıcı</dt>
+          <dd>{siteConfig.sellerName}</dd>
+        </div>
+      </dl>
+    </PageShell>
   );
 }

@@ -47,7 +47,11 @@ fn text_error(error: sqlx::Error) -> String {
     error.to_string()
 }
 
-/// Eski kümede kolon yoktur; sayaç sıfırdan başlar, karşılaştırma yalnız eşitliğe bakar.
+/// Eski kurulumun eşitleme tablolarını yükseltir.
+///
+/// Eski kümede `state_index` yoktur; sayaç sıfırdan başlar, karşılaştırma yalnız
+/// eşitliğe bakar. Yakalama tablosu önceki görüntüyü, kapı tablosu ada kipini
+/// tanımazdı. Kapı yalnız transaction içinde satır taşır; yeniden kurmak veri silmez.
 pub async fn ensure_state_column(pool: &sqlx::SqlitePool) -> Result<(), sqlx::Error> {
     let exists: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM pragma_table_info('sync_cluster') WHERE name = 'state_index'",
@@ -58,6 +62,31 @@ pub async fn ensure_state_column(pool: &sqlx::SqlitePool) -> Result<(), sqlx::Er
         sqlx::query("ALTER TABLE sync_cluster ADD COLUMN state_index INTEGER NOT NULL DEFAULT 0")
             .execute(pool)
             .await?;
+    }
+    let old_image: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('sync_capture') WHERE name = 'row_old'",
+    )
+    .fetch_one(pool)
+    .await?;
+    if old_image == 0 {
+        sqlx::query("ALTER TABLE sync_capture ADD COLUMN row_old TEXT")
+            .execute(pool)
+            .await?;
+    }
+    let gate: Option<String> = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sync_write_gate'",
+    )
+    .fetch_optional(pool)
+    .await?;
+    if gate.is_some_and(|sql| !sql.contains("ISLAND")) {
+        sqlx::raw_sql(
+            "DROP TABLE sync_write_gate;
+             CREATE TABLE sync_write_gate (
+                 mode TEXT NOT NULL CHECK (mode IN ('CAPTURE', 'APPLY', 'ISLAND'))
+             );",
+        )
+        .execute(pool)
+        .await?;
     }
     Ok(())
 }

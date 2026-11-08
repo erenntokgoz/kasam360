@@ -1,4 +1,3 @@
-import React, { useEffect, useState } from 'react';
 import { useLedgerStore } from '../../../stores/ledgerStore';
 import { ProfitSection } from '../finance/ProfitSection';
 import { ReportsTab } from '../reports/ReportsTab';
@@ -13,24 +12,19 @@ const SECTIONS: SectionTab<OverviewSection>[] = [
   { id: 'REPORTS', label: 'Raporlar' },
 ];
 
-const isSection = (value: string | null): value is OverviewSection =>
-  SECTIONS.some((item) => item.id === value);
-
-/** Genel Bakış: pano, aylık kâr ve raporlar aynı yerde; ayrı sekmeler dağınık kalıyordu. */
-export const PanoramaTab: React.FC = () => {
+/** Alt bölümler aynı çubukta durur ve açık sayfa gezinmede görünür. */
+export function PanoramaTab() {
   const erpSection = useLedgerStore((state) => state.erpSection);
-  const [section, setSection] = useState<OverviewSection>(isSection(erpSection) ? erpSection : 'BOARD');
-
-  useEffect(() => {
-    if (isSection(erpSection)) setSection(erpSection);
-  }, [erpSection]);
+  const setActiveErpTab = useLedgerStore((state) => state.setActiveErpTab);
+  const section = erpSection === 'PROFIT' || erpSection === 'REPORTS' ? erpSection : 'BOARD';
 
   return (
     <div className="space-y-4">
-      <SectionTabs label="Genel Bakış" tabs={SECTIONS} active={section} onChange={setSection} />
+      <SectionTabs label="Genel Bakış bölümleri" tabs={SECTIONS} active={section}
+        onChange={(next) => setActiveErpTab('PANORAMA', next === 'BOARD' ? null : next)} />
       {section === 'BOARD' ? <BoardSection /> : null}
       {section === 'PROFIT' ? <ProfitSection /> : null}
       {section === 'REPORTS' ? <ReportsTab /> : null}
     </div>
   );
-};
+}

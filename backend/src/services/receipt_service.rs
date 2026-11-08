@@ -79,20 +79,61 @@ pub fn fiscal_receipt_no(transaction_id: &str) -> Option<String> {
 }
 
 /// Tenant'ın fişlerini tek kaynaktan (tahsilat kayıtları) listeler.
+#[derive(Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiptFilter {
+    pub offset: Option<i64>,
+    pub order_id: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub search: Option<String>,
+}
+
 pub async fn list(
     conn: &mut sqlx::SqliteConnection,
     tenant_id: &str,
     limit: i64,
+    filter: ReceiptFilter,
 ) -> Result<Vec<ReceiptDto>, String> {
-    let sql = format!(
-        "SELECT event_id, aggregate_id, payload, created_at \
-         FROM events WHERE tenant_id = ? AND {} \
-         ORDER BY created_at DESC LIMIT ?",
-        SALE_EVENT_FILTER
-    );
-    let rows = sqlx::query(&sql)
-        .bind(tenant_id)
-        .bind(limit)
+    let mut query = sqlx::QueryBuilder::<sqlx::Sqlite>::new(format!(
+        "SELECT event_id, aggregate_id, payload, created_at FROM events WHERE {SALE_EVENT_FILTER} AND tenant_id = "
+    ));
+    query.push_bind(tenant_id);
+    if let Some(order_id) = filter.order_id {
+        query
+            .push(" AND json_extract(payload, '$.orderId') = ")
+            .push_bind(order_id);
+    }
+    if let Some(from) = filter.from {
+        query
+            .push(" AND substr(created_at, 1, 10) >= ")
+            .push_bind(from);
+    }
+    if let Some(to) = filter.to {
+        query
+            .push(" AND substr(created_at, 1, 10) <= ")
+            .push_bind(to);
+    }
+    if let Some(search) = filter
+        .search
+        .as_deref()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+    {
+        let search = search.strip_prefix("FISC-").unwrap_or(search);
+        query.push(" AND (instr(lower(aggregate_id), lower(").push_bind(search).push(")) > 0 OR EXISTS (
+            SELECT 1 FROM orders o JOIN tables t ON t.id = o.table_id AND t.tenant_id = o.tenant_id
+            WHERE o.tenant_id = events.tenant_id AND o.id = json_extract(events.payload, '$.orderId')
+            AND instr(lower(t.name), lower(").push_bind(search).push(")) > 0))");
+    }
+    query
+        .push(" ORDER BY created_at DESC, event_id DESC LIMIT ")
+        .push_bind(limit);
+    query
+        .push(" OFFSET ")
+        .push_bind(filter.offset.unwrap_or(0).max(0));
+    let rows = query
+        .build()
         .fetch_all(&mut *conn)
         .await
         .map_err(|e| e.to_string())?;

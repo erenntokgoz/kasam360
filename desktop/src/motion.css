@@ -1,0 +1,116 @@
+/* Arayüz hareketleri
+   Yalnız transform ve opacity oynar: yerleşim yeniden hesaplanmaz, POS'ta kare düşmez.
+   Hareket yalnız görseldir; hiçbir öğe animasyon bitene kadar tıklamayı beklemez.
+   Modül ve sekme geçişi yalnız opaklıkla yapılır: transform taşıyan ata, içindeki sabit
+   konumlu pencereleri kendi kutusuna hapsederdi. */
+
+:root {
+  --motion-ease-out: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@keyframes motion-fade-in {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+@keyframes motion-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes motion-dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes motion-drawer-in {
+  from { opacity: 0.6; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes motion-rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+/* Not kâğıdı köşeye bırakılır gibi: hafif eğik gelir, düz oturur. */
+@keyframes motion-slip-in {
+  from { opacity: 0; transform: translate(10px, 8px) rotate(-0.6deg); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes motion-slip-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateX(14px); }
+}
+@keyframes motion-bump {
+  from { transform: translateY(-3px); }
+  to { transform: none; }
+}
+@keyframes motion-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes motion-dialog-out {
+  from { transform: none; }
+  to { transform: translateY(6px) scale(0.99); }
+}
+@keyframes motion-drawer-out {
+  from { transform: none; }
+  to { transform: translateX(24px); }
+}
+
+/* Modül ve sekme değişimi: display:none'dan dönen öğe animasyonu kendiliğinden yeniden oynatır. */
+.motion-panel {
+  animation: motion-fade-in 120ms ease-out;
+}
+/* Sekme içeriği: yalnız yeni takılan alt öğe oynar, aynı sekmede yeniden çizim oynatmaz. */
+.motion-swap > * {
+  animation: motion-fade-in 120ms ease-out;
+}
+
+.motion-backdrop {
+  animation: motion-backdrop-in 140ms ease-out;
+}
+.motion-dialog {
+  animation: motion-dialog-in 180ms var(--motion-ease-out);
+}
+.motion-drawer {
+  animation: motion-drawer-in 180ms var(--motion-ease-out);
+}
+.motion-item {
+  animation: motion-rise-in 160ms var(--motion-ease-out);
+}
+
+/* Kapanış kopyası: içindeki giriş hareketleri yeniden oynamaz, yalnız bütünü söner. */
+.motion-ghost,
+.motion-ghost * {
+  animation: none !important;
+  transition: none !important;
+  pointer-events: none !important;
+}
+.motion-ghost {
+  animation: motion-fade-out 140ms var(--motion-ease-in) forwards !important;
+}
+.motion-ghost > [data-motion-panel="dialog"] {
+  animation: motion-dialog-out 140ms var(--motion-ease-in) forwards !important;
+}
+.motion-ghost > [data-motion-panel="drawer"] {
+  animation: motion-drawer-out 140ms var(--motion-ease-in) forwards !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-panel,
+  .motion-swap > *,
+  .motion-backdrop,
+  .motion-dialog,
+  .motion-drawer,
+  .motion-item,
+  .motion-ghost {
+    animation: none !important;
+  }
+  .motion-ghost {
+    display: none !important;
+  }
+}
+
+@media print {
+  .motion-ghost {
+    display: none !important;
+  }
+}

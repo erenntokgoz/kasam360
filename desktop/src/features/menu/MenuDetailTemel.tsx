@@ -4,11 +4,9 @@ import { stockUnitLabel } from '../../lib/stockUnitLabel';
 // Ürün adı, kategori, KDV dahil kuruş satış fiyatı, barkod, açıklama ve durum anahtarları.
 // Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
 
-import React, { useState } from 'react';
+import React from 'react';
 import { NumberInput } from '../../ui/NumberInput';
-import type { CategoryDto, ProductDto } from '../../types/menu';
-import { MenuCategoryModal } from './MenuCategoryModal';
-import { useAuthStore } from '../../stores/authStore';
+import type { CategoryDto } from '../../types/menu';
 
 interface MenuDetailTemelProps {
   name: string;
@@ -26,11 +24,7 @@ interface MenuDetailTemelProps {
   taxRateBp: number;
   setTaxRateBp: (val: number) => void;
   categories: CategoryDto[];
-  selectedProduct?: ProductDto;
-  detailMode: 'view' | 'new';
-  toggleProductActive: (id: string) => Promise<boolean>;
-  toggleProduct86: (id: string, is86: boolean) => Promise<boolean>;
-  onConvertToRaw?: () => void;
+  onNewCategory: () => void;
 }
 
 export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
@@ -49,25 +43,18 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
   taxRateBp,
   setTaxRateBp,
   categories,
-  selectedProduct,
-  detailMode,
-  toggleProductActive,
-  toggleProduct86,
-  onConvertToRaw,
+  onNewCategory,
 }) => {
-  const [categoryOpen, setCategoryOpen] = useState(false);
-  const canCreateCategory = useAuthStore((state) => state.user?.role === 'OWNER');
   return (
     <div className="space-y-3.5">
       <div>
-        <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1">
+        <label htmlFor="new-product-name" className="block text-xs font-bold text-[var(--text-secondary)] mb-1">
           Ürün Adı
         </label>
         <input
-          type="text"
+          id="new-product-name" type="text" required
           value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Örn: Espresso Double"
           className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
         />
       </div>
@@ -76,7 +63,7 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
         <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1">
           Kategori
         </label>
-        <select
+        <select required
           aria-label="Kategori"
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
@@ -89,8 +76,7 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
             </option>
           ))}
         </select>
-        {canCreateCategory && <button type="button" className="min-h-12 font-bold cursor-pointer" onClick={() => setCategoryOpen(true)}>Yeni kategori oluştur</button>}
-        <MenuCategoryModal isOpen={categoryOpen} onClose={() => setCategoryOpen(false)} onCreated={(category) => setCategoryId(category.id)} />
+        <button type="button" className="min-h-12 font-bold cursor-pointer" onClick={onNewCategory}>Yeni Kategori Oluştur</button>
       </div>
 
       <div>
@@ -98,7 +84,7 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
           Satış Fiyatı
         </label>
         <div className="relative">
-          <NumberInput aria-label="Satış Fiyatı" pinpadTitle="Satış Fiyatı" value={priceInput} onValueChange={setPriceInput} placeholder="0,00" />
+          <NumberInput aria-label="Satış Fiyatı" pinpadTitle="Satış Fiyatı" value={priceInput} onValueChange={setPriceInput} />
         </div>
       </div>
 
@@ -118,27 +104,27 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
       </label>
 
       <div>
-        <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1">
+        <label htmlFor="menu-product-barcode" className="block text-xs font-bold text-[var(--text-secondary)] mb-1">
           Barkod / SKU (İsteğe Bağlı)
         </label>
         <input
+          id="menu-product-barcode"
           type="text"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
-          
           className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm tabular-nums text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1">
+        <label htmlFor="menu-product-description" className="block text-xs font-bold text-[var(--text-secondary)] mb-1">
           Açıklama (İsteğe Bağlı)
         </label>
         <textarea
+          id="menu-product-description"
           rows={2}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Ürün içeriği veya menü açıklaması…"
           className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none resize-none"
         />
       </div>
@@ -147,56 +133,6 @@ export const MenuDetailTemel: React.FC<MenuDetailTemelProps> = ({
         İstasyon: {categories.find((category) => category.id === categoryId)?.defaultStation || 'Tanımlı değil'}
       </p>
 
-      {selectedProduct && detailMode !== 'new' && (
-        <div className="pt-2 space-y-2 border-t border-[var(--border)]">
-          {/* Satış dışı kalıcı karardır; tükendi gün içinde stok dönünce kalkar. */}
-          <div className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
-            <span className="text-xs font-semibold text-[var(--text-primary)]">Satış Dışı</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={!selectedProduct.isActive}
-              aria-label="Satış Dışı"
-              onClick={() => toggleProductActive(selectedProduct.id)}
-              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3.5 ${
-                !selectedProduct.isActive ? 'bg-[var(--text-muted)]' : 'bg-[var(--border)]'
-              }`}
-            >
-              <span
-                className={`block w-3.5 h-3.5 rounded-full bg-white transition-transform ${
-                  !selectedProduct.isActive ? 'translate-x-5' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
-            <span className="text-xs font-semibold text-[var(--text-primary)]">Tükendi</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={selectedProduct.is86}
-              aria-label="Tükendi"
-              onClick={() => toggleProduct86(selectedProduct.id, !selectedProduct.is86)}
-              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3.5 ${
-                selectedProduct.is86 ? 'bg-[var(--accent-red)]' : 'bg-[var(--border)]'
-              }`}
-            >
-              <span
-                className={`block w-3.5 h-3.5 rounded-full bg-white transition-transform ${
-                  selectedProduct.is86 ? 'translate-x-5' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          {onConvertToRaw ? (
-            <button type="button" className="tactile-btn w-full min-h-12 rounded-lg text-sm font-bold" onClick={onConvertToRaw}>
-              Hammaddeye Çevir
-            </button>
-          ) : null}
-        </div>
-      )}
     </div>
   );
 };

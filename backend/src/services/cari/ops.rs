@@ -304,7 +304,10 @@ pub async fn apply(
             "debt:deleted",
             apply_delete(conn, tenant_id, debt_id).await?,
         ),
-        CariOp::RecordPayment(input) => ("debt:paid", apply_payment(conn, tenant_id, input).await?),
+        CariOp::RecordPayment(input) => (
+            "debt:paid",
+            apply_payment(conn, tenant_id, input, false).await?,
+        ),
         CariOp::ApproveDocument(input) => (
             "supplier_document:approved",
             apply_document(conn, tenant_id, input).await?,

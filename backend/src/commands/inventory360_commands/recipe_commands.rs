@@ -54,6 +54,7 @@ pub async fn create_recipe_command(
     tenant_id: Option<String>,
     active_modules: Option<Vec<String>>,
     args: recipes::RecipeInput,
+    replace_recipe_id: Option<String>,
     pool: State<'_, DbPool>,
     app_state: State<'_, crate::AppState>,
 ) -> Result<recipes::Recipe, String> {
@@ -67,7 +68,34 @@ pub async fn create_recipe_command(
 
     let mut conn = pool.begin_write().await?;
     let result: Result<recipes::Recipe, String> = async {
-        let recete = recipes::create_recipe(&mut conn, &tenant_id, &actor_id, args).await?;
+        let previous_version = if let Some(id) = replace_recipe_id.as_deref() {
+            let version: i64 = sqlx::query_scalar(
+                "UPDATE recipes SET is_active = 0
+                 WHERE id = ? AND tenant_id = ? AND product_id = ? AND is_active = 1
+                 RETURNING version",
+            )
+            .bind(id)
+            .bind(&tenant_id)
+            .bind(&urun_id)
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "CONFLICT: Reçete değişti. Ürünü yeniden açın.".to_string())?;
+            Some(version)
+        } else {
+            None
+        };
+        let mut recete = recipes::create_recipe(&mut conn, &tenant_id, &actor_id, args).await?;
+        if let Some(version) = previous_version {
+            recete.version = version.checked_add(1).ok_or_else(|| "OVERFLOW: reçete sürümü".to_string())?;
+            sqlx::query("UPDATE recipes SET version = ? WHERE tenant_id = ? AND id = ?")
+                .bind(recete.version)
+                .bind(&tenant_id)
+                .bind(&recete.id)
+                .execute(&mut *conn)
+                .await
+                .map_err(|error| error.to_string())?;
+        }
 
         record_audit(
             &mut conn,
@@ -78,7 +106,7 @@ pub async fn create_recipe_command(
             category::MENU,
             "recete:created",
             &recete.id,
-            serde_json::json!({ "productId": urun_id, "version": recete.version }),
+            serde_json::json!({ "productId": urun_id, "version": recete.version, "previousRecipeId": replace_recipe_id }),
         )
         .await?;
 

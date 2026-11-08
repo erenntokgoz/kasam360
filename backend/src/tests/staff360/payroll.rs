@@ -36,16 +36,14 @@ async fn sabit_maas_modeli_temiz_hesaplanir() {
 }
 
 #[tokio::test]
-async fn saatlik_model_kapanmis_vardiye_saati_uzerinden_hesaplanir() {
+async fn saatlik_model_onayli_calisma_oturumu_uzerinden_hesaplanir() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "CASHIER").await;
     sqlx::query(
-        "INSERT INTO shifts (id, tenant_id, cashier_id, status, opened_at, closed_at, expected_amount_cents)
-         VALUES ('shf_1','tenant_a','usr_1','CLOSED', '2026-03-10 09:00:00', '2026-03-10 17:00:00', 0)",
+        "INSERT INTO staff_work_sessions (id, tenant_id, user_id, started_at, ended_at, break_minutes, status, created_by, updated_by, created_at, updated_at)
+         VALUES ('wks_1','tenant_a','usr_1','2026-03-10T09:00:00Z','2026-03-10T17:00:00Z',0,'CLOSED','usr_owner','usr_owner','2026-03-10','2026-03-10')",
     )
-    .execute(&p)
-    .await
-    .expect("vardiya");
+    .execute(&p).await.expect("çalışma oturumu");
 
     payroll_service::set_rule(
         &p,
@@ -68,8 +66,7 @@ async fn saatlik_model_kapanmis_vardiye_saati_uzerinden_hesaplanir() {
         .await
         .expect("bordro");
     let saat = runs[0].amounts.as_ref().expect("tutar").hourly_cents;
-    // 8 saatlik vardiya, saat 500 kuruş → ~4.000 kuruş. Küçük zaman farkı
-    // toleransı: yuvarlama 4.000 ± 10 aralığında olmalı.
+    // 8 saatlik onaylı çalışma oturumu × 500 kuruş = 4.000 kuruş.
     assert!(
         (3_990..=4_010).contains(&saat),
         "8 saat × 500 kuruş ≈ 4.000, gelen {saat}"
@@ -77,7 +74,7 @@ async fn saatlik_model_kapanmis_vardiye_saati_uzerinden_hesaplanir() {
 }
 
 #[tokio::test]
-async fn müdür_maas_tutarini_gormez() {
+async fn mudur_maas_tutarini_gorur_ama_ucret_kuralini_degistiremez() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
     payroll_service::set_rule(
@@ -97,25 +94,25 @@ async fn müdür_maas_tutarini_gormez() {
     .await
     .expect("kural");
 
-    // Müdür görünümü: kural ve model görünür, tutar `None`.
-    let kurallar = payroll_service::list_rules(&p, "tenant_a", false)
+    // Müdür ücret kuralını okuyabilir; yazma yetkisi OWNER'da kalır.
+    let kurallar = payroll_service::list_rules(&p, "tenant_a", true)
         .await
         .expect("kurallar");
     assert_eq!(kurallar.len(), 1, "müdür kural listesini görebilmeli");
-    assert_eq!(
-        kurallar[0].base_salary_cents, 0,
-        "gizli görünümde tutar sıfırlanır"
-    );
-    assert!(kurallar[0].base_salary_cents == 0);
+    assert_eq!(kurallar[0].base_salary_cents, 25_000);
 
-    let bordro = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", false)
+    let bordro = payroll_service::run_payroll(&p, "tenant_a", "MONTHLY", "2026-03", true)
         .await
         .expect("bordro");
-    assert!(
-        bordro[0].amounts.is_none(),
-        "müdüre maaş tutarı sızdı — `None` olmalıydı"
+    assert_eq!(
+        bordro[0]
+            .amounts
+            .as_ref()
+            .expect("müdür maaş tutarını görür")
+            .net_cents,
+        25_000
     );
-    // Kişi, model ve dönem görünür: müdür planı anlayabilmeli.
+    // Kişi, model, dönem ve tutarlar MANAGER görünümünde okunabilir.
     assert_eq!(bordro[0].full_name, "Ayşe");
     assert_eq!(bordro[0].model, "FIXED");
 }

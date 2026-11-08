@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cihazlar · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script><script src="labs-shell.js" defer></script>
+<style> .old { color: var(--warn); font-weight: 560; } </style>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği, sabit test verisi. Cihazlara komut gönderilmez.</span>
+<div class="app">
+  <aside class="rail" data-page="devices"></aside>
+  <div class="main">
+    <div class="bar"><span class="crumb">KASAM360 / <b>Cihazlar</b></span>
+      <label class="search"><input placeholder="Cihaz kimliği, işletme veya sürüm" aria-label="Cihaz ara"><kbd>/</kbd></label></div>
+    <div class="page">
+      <div class="ph"><div><h1>Cihazlar</h1><p>58 kasa, 84 kasa hakkı</p></div></div>
+      <div class="stat">
+        <div><small>Eşitlenmiş</small><b class="num">54</b></div><div class="bad"><small>Gönderemiyor</small><b class="num">2</b></div>
+        <div><small>Eski sürümde</small><b class="num">6</b></div><div><small>Boş hak</small><b class="num">26</b></div>
+      </div>
+      <div class="chips" role="group" aria-label="Filtre">
+        <button aria-pressed="false">Tümü <span class="num">58</span></button><button aria-pressed="true"><span class="warn-dot"></span>Dikkat isteyen <span class="num">5</span></button>
+        <button aria-pressed="false">Eski sürüm <span class="num">6</span></button><button aria-pressed="false">7 gündür görülmeyen <span class="num">1</span></button>
+      </div>
+      <div class="wrapx">
+        <div class="tbl"><table class="grid">
+          <thead><tr><th>Kasa</th><th>İşletme</th><th>Durum</th><th class="r">Sırada</th><th>Son eşitleme</th><th>Sürüm</th><th>Kimlik</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><b>Kasa 1</b></td><td>TEST_A Lokanta</td><td><span class="pill bad"><span class="dot"></span>Gönderemiyor</span></td><td class="r num">2</td><td class="num">Bugün 11.19</td><td class="num">0.2.0</td><td class="mono">dev_a_01</td><td><div class="row-acts"><button>Eşitleme kaydı iste</button><button>Düzenle</button><button class="del">Hakkı geri al</button></div></td></tr>
+            <tr><td><b>Kasa 2</b></td><td>TEST_F Döner</td><td><span class="pill bad"><span class="dot"></span>Lisans askıda</span></td><td class="r num">14</td><td class="num">28 Eki 21.50</td><td class="num old">0.1.9</td><td class="mono">dev_f_02</td><td><div class="row-acts"><button>Ayrıntı</button><button class="del">Hakkı geri al</button></div></td></tr>
+            <tr><td><b>Bar kasası</b></td><td>TEST_C Bar</td><td><span class="pill ok"><span class="dot"></span>Eşitlendi</span></td><td class="r num">0</td><td class="num">Az önce</td><td class="num old">0.1.9</td><td class="mono">dev_c_02</td><td><div class="row-acts"><button>Güncellemeye zorla</button><button>Düzenle</button></div></td></tr>
+            <tr><td><b>Kasa 1</b></td><td>TEST_B Kafe</td><td><span class="pill ok"><span class="dot"></span>Eşitlendi</span></td><td class="r num">0</td><td class="num">4 dk önce</td><td class="num old">0.1.9</td><td class="mono">dev_b_01</td><td><div class="row-acts"><button>Güncellemeye zorla</button><button>Düzenle</button></div></td></tr>
+            <tr><td><b>Kasa 1</b></td><td>TEST_F Döner</td><td><span class="pill mute">7 gündür görülmedi</span></td><td class="r num">—</td><td class="num">30 Eki 23.04</td><td class="num old">0.1.9</td><td class="mono">dev_f_01</td><td><div class="row-acts"><button>Ayrıntı</button><button class="del">Hakkı geri al</button></div></td></tr>
+          </tbody></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

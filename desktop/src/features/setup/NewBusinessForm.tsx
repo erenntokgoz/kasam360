@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
@@ -30,10 +31,14 @@ export const NewBusinessForm: React.FC<NewBusinessFormProps> = ({ onBack, verifi
   const [form, setForm] = useState<SetupDraft>(draft);
   const [step, setStep] = useState<'INFO' | 'PIN' | 'CONFIRM'>('INFO');
   // Şifre taslağa yazılmaz: yarım kalan kurulum diskte sır bırakmaz.
-  const [password, setPassword] = useState(verifiedPassword ?? '');
+  const [typedPassword, setPassword] = useState('');
+  // Form, hesap doğrulaması bitmeden bir an önce açılabilir; ilk değeri kopyalamak alanı gizleyip
+  // şifreyi boş bırakıyordu. Doğrulanmış şifre geldiği an doğrudan o kullanılır.
+  const password = verifiedPassword ?? typedPassword;
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
   const ready =
@@ -46,11 +51,12 @@ export const NewBusinessForm: React.FC<NewBusinessFormProps> = ({ onBack, verifi
 
   const goToPin = async () => {
     setError(null);
+    setOperationError(null);
     try {
       await saveProgress('NEW', form);
       setStep('PIN');
     } catch (caught) {
-      setError(errorText(caught));
+      setOperationError(errorText(caught));
     }
   };
 
@@ -64,10 +70,11 @@ export const NewBusinessForm: React.FC<NewBusinessFormProps> = ({ onBack, verifi
     }
     setIsBusy(true);
     setError(null);
+    setOperationError(null);
     try {
       await completeNew(form, password, pin, pinConfirm);
     } catch (caught) {
-      setError(errorText(caught));
+      setOperationError(errorText(caught));
       setPin('');
       setPinConfirm('');
       setStep('PIN');
@@ -78,6 +85,7 @@ export const NewBusinessForm: React.FC<NewBusinessFormProps> = ({ onBack, verifi
 
   return (
     <div className="flex flex-col gap-4">
+      <ErrorToast message={operationError} />
       {error ? (
         <div role="alert" className="p-3 rounded-lg text-xs font-medium border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center gap-1.5">
           <AlertCircle className="w-4 h-4 shrink-0" />

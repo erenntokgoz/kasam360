@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/content/pageMetadata';
 import { LegalPage } from '@/components/LegalPage';
 import { siteConfig } from '@/content/siteConfig';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Gizlilik',
   description: 'KASAM360 sitesinde hangi bilgilerin toplandığı ve nasıl kullanıldığı.',
-  alternates: { canonical: '/gizlilik' },
-};
+  path: '/gizlilik',
+});
 
 export default function PrivacyPage() {
   return (

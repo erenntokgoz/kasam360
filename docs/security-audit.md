@@ -1,3 +1,5 @@
+> Belge kapsamı: mevcut teknik uygulama/inceleme kaydıdır; yeni ürün kararları ve teslim sırası için [ana plan](uygulama-tamamlama-plani.md) geçerlidir. Buradaki tamamlanma ifadeleri güncel kabul testlerinin yerine geçmez.
+
 # KASAM360 — Security Audit (G7 · Item 26)
 
 Son guncelleme: 2026-10-09

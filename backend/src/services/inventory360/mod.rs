@@ -10,6 +10,7 @@
 pub mod batch_demand;
 pub mod pricing;
 pub(crate) mod quantity_cost;
+pub(crate) mod recipe_deduction;
 pub mod recipes;
 pub mod shelf_life;
 pub mod stock;

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { formatServerDateTime } from '../../lib/date';
 import { invokeIPC } from '../../services/tauriClient';
@@ -68,7 +69,7 @@ export function StockTrailPanel() {
           <option key={product.id} value={product.id}>{product.name}</option>
         ))}
       </select>
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      <ErrorToast message={error} />
       <section className="rounded-xl border border-[var(--border)] paper overflow-x-auto">
         {rows.length === 0 && !error ? <p className="p-4 text-xs text-[var(--text-secondary)]">Kayıtlı stok hareketi yok.</p> : null}
         {rows.length > 0 ? (

@@ -153,7 +153,7 @@ export interface MenuState {
 
   // Aksiyonlar
   loadCatalog: () => Promise<void>;
-  setSelectedProductId: (id: string | null) => void;
+  setSelectedProductId: (id: string | null) => Promise<void>;
   setDetailMode: (mode: 'view' | 'new') => void;
   setActiveTab: (tab: 'KATALOG' | 'FIYATLAR') => void;
   setDetailTab: (tab: 'temel' | 'modifiye' | 'fiyat' | 'recete') => void;
@@ -164,7 +164,7 @@ export interface MenuState {
   toggleFilterSatisDisi: () => void;
   clearError: () => void;
 
-  saveProduct: (productData: Partial<ProductDto>) => Promise<boolean>;
+  saveProduct: (productData: Partial<ProductDto>, productId?: string) => Promise<boolean>;
   toggleProductActive: (productId: string) => Promise<boolean>;
   toggleProduct86: (productId: string, is86: boolean, reason?: string) => Promise<boolean>;
   deleteProduct: (productId: string) => Promise<boolean>;
@@ -185,7 +185,7 @@ export interface MenuState {
   deletePriceList: (priceListId: string) => Promise<boolean>;
 
   loadProductRecipe: (productId: string) => Promise<void>;
-  createRecipe: (input: RecipeInputDto) => Promise<boolean>;
+  createRecipe: (input: RecipeInputDto, replaceRecipeId?: string) => Promise<boolean>;
   deactivateRecipe: (productId: string, recipeId: string) => Promise<boolean>;
   loadProductModifierGroupIds: (productId: string) => Promise<void>;
   setProductModifierGroupIds: (productId: string, groupIds: string[]) => Promise<boolean>;

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useRef, useState } from 'react';
 import { Banknote, CreditCard } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
@@ -132,7 +133,7 @@ export const TipDialog: React.FC<TipDialogProps> = ({ info, onSaved, onClose }) 
             </Button>
           </div>
         )}
-        {error ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
+        {error ? <ErrorToast message={error} /> : null}
       </div>
     </Modal>
   );

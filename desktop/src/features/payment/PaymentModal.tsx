@@ -1,5 +1,6 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, AlertCircle, HandCoins } from 'lucide-react';
+import { Check, HandCoins } from 'lucide-react';
 import { usePosStore } from '../../stores/posStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useLedgerStore } from '../../stores/ledgerStore';
@@ -322,10 +323,7 @@ export const PaymentModal: React.FC = () => {
           ) : null}
 
           {errorMsg ? (
-            <div role="alert" className="p-4 rounded-lg text-sm font-semibold text-center break-words bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)] flex items-center justify-center gap-1.5">
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
+            <ErrorToast message={errorMsg} />
           ) : null}
 
           <div className="grid grid-cols-3 gap-1.5 p-1.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
@@ -367,7 +365,6 @@ export const PaymentModal: React.FC = () => {
                     setPartialText(text);
                     setErrorMsg(null);
                   }}
-                  placeholder="Tutar"
                   className="flex-1"
                   pinpadTitle="Tahsil Edilecek Tutar"
                   pinpadInfo={pinpadInfo.slice(0, 2)}

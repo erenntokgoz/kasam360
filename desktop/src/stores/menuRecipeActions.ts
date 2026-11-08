@@ -16,7 +16,7 @@ export function createMenuRecipeActions(
   getAuthContext: () => AuthContext,
 ): RecipeActions {
   return {
-    createRecipe: async (input) => {
+    createRecipe: async (input, replaceRecipeId) => {
       try {
         const { actorRole, actorId, tenantId, activeModules } = getAuthContext();
         if (get().selectedProductId !== input.productId || input.items.length === 0) {
@@ -24,7 +24,7 @@ export function createMenuRecipeActions(
         }
         set({ busy: true, error: null });
         await invokeIPC('create_recipe_command', {
-          actorRole, actorId, tenantId, activeModules, args: input,
+          actorRole, actorId, tenantId, activeModules, args: input, ...(replaceRecipeId ? { replaceRecipeId } : {}),
         });
         await get().loadProductRecipe(input.productId);
         return true;

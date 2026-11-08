@@ -5,6 +5,7 @@ pub mod backup;
 pub mod branch_service;
 pub mod budget_service;
 pub mod cari;
+pub mod cloud_sync;
 pub mod device_identity;
 pub mod device_session;
 pub mod expense_service;

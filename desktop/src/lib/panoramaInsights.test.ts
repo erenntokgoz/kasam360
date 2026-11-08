@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildInsights, marginPercent, percentChange } from './panoramaInsights';
-import { reportPeriod, toLocalIso } from './dateRange';
+import { calendarMonthRange, reportPeriod, toLocalIso, validCalendarRange } from './dateRange';
 import type { Kpi, PanoramaData } from '../stores/panoramaStore';
 
 const kpi = (over: Partial<Kpi>): Kpi => ({
@@ -67,5 +67,28 @@ describe('rapor dönemi', () => {
 
   it('7 gün bugünü içerir', () => {
     expect(reportPeriod('WEEK', now).from.slice(0, 10)).toBe('2026-10-25');
+  });
+});
+
+describe('pano takvim aralığı', () => {
+  it('artık yılda ayın son gününü ve tek günlük aralığın sınırlarını doğru bulur', () => {
+    expect(calendarMonthRange('2024-02')).toEqual({ from: '2024-02-01', to: '2024-02-29' });
+    const single = reportPeriod({ from: '2024-02-29', to: '2024-02-29' });
+    expect(single.from.slice(0, 19)).toBe('2024-02-29T00:00:00');
+    expect(single.to.slice(0, 19)).toBe('2024-02-29T23:59:59');
+    expect(single.compareSeconds).toBe(86_400);
+  });
+
+  it('özel aralıkta kıyası önceki eşit döneme kaydırır', () => {
+    const period = reportPeriod({ from: '2026-10-06', to: '2026-10-08' });
+    expect(period.compareSeconds).toBe(3 * 86_400);
+    expect(period.compareLabel).toBe('önceki eşit döneme göre');
+  });
+
+  it('ters, geçersiz ve grafikte tam gösterilemeyecek aralıkları reddeder', () => {
+    expect(validCalendarRange({ from: '2026-01-01', to: '2026-04-03' })).toBe(true);
+    expect(validCalendarRange({ from: '2026-01-01', to: '2026-04-04' })).toBe(false);
+    expect(validCalendarRange({ from: '2026-02-30', to: '2026-03-01' })).toBe(false);
+    expect(validCalendarRange({ from: '2026-03-02', to: '2026-03-01' })).toBe(false);
   });
 });

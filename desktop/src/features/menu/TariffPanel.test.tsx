@@ -30,7 +30,8 @@ describe('tarife formu', () => {
 
   it('takvime bağlanmadan saat ve gün alanlarını göstermez', () => {
     const html = render(null);
-    expect(html).toContain('Takvime bağla');
+    expect(html).toContain('+ Rutin Ekle');
+    expect(html).not.toContain('type="checkbox"');
     expect(html).not.toContain('Başlangıç saati');
     expect(html).not.toContain('Pzt');
   });
@@ -39,5 +40,7 @@ describe('tarife formu', () => {
     const html = render(tarife({ schedule: takvim }));
     expect(html).toContain('Başlangıç saati');
     expect(html).toContain('Pzt');
+    expect(html).toContain('Rutin Kaldır');
+    expect(html).not.toContain('Bitiş tarihi');
   });
 });

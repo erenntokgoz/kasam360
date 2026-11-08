@@ -3,6 +3,7 @@ import { useAuthStore } from './authStore';
 import { invokeIPC } from '../services/tauriClient';
 import { useFeatureStore } from './featureStore';
 import { useLicenseStore, type LicenseStatus } from './licenseStore';
+import { useUIStore } from './uiStore';
 
 vi.mock('../services/tauriClient', () => ({ invokeIPC: vi.fn() }));
 
@@ -11,8 +12,20 @@ const initialState = useAuthStore.getState();
 
 describe('oturum sınırı', () => {
   beforeEach(() => {
+  vi.unstubAllEnvs();
     useAuthStore.getState().logout();
     invokeMock.mockReset();
+  });
+
+  it('kilitlenince açık pencereler ve son ekran sonraki personele kalmaz', () => {
+    invokeMock.mockResolvedValue(undefined);
+    useUIStore.getState().setActiveModule('CASHIER');
+    useUIStore.getState().openModal('blindClose');
+    useUIStore.getState().openModal('payment');
+    useAuthStore.getState().lock();
+    const ui = useUIStore.getState();
+    expect(Object.values(ui.modals).some(Boolean)).toBe(false);
+    expect(ui.activeModule).toBe('FLOOR');
   });
 
   it('uygulama girişsiz açılır', () => {
@@ -72,6 +85,7 @@ describe('oturum sınırı', () => {
   });
 
   it('lisansta olmayan veya süresi geçmiş paketin özelliğini açmaz', async () => {
+    vi.stubEnv('VITE_LICENSE_ENFORCED', 'true');
     const login = async () => {
       invokeMock.mockResolvedValueOnce({
         id: 'usr_1', name: 'Ayşe', role: 'OWNER', tenant_id: 'ten_2',

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { useCariStore } from '../../stores/cariStore';
-import { newOperationId, parseCents } from '../../lib/cariInput';
+import { localDate, newOperationId, parseCents } from '../../lib/cariInput';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
@@ -25,7 +25,7 @@ interface CariOpenDebtModalProps {
 export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({ card, type, onClose, onOpened }) => {
   const { openDebt } = useCariStore();
   const [amount, setAmount] = useState('');
-  const [dueDate, setDueDate] = useState('');
+  const [dueDate, setDueDate] = useState(() => localDate(new Date()));
   const [description, setDescription] = useState('');
   const [operationId, setOperationId] = useState(newOperationId);
   const [inputError, setInputError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({ card, type
   useEffect(() => {
     if (!type) return;
     setAmount('');
-    setDueDate('');
+    setDueDate(localDate(new Date()));
     setDescription('');
     setInputError(null);
     setOperationId(newOperationId());
@@ -62,7 +62,7 @@ export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({ card, type
   };
 
   return (
-    <Modal isOpen={type !== null} onClose={onClose} title={type ? TITLES[type] : ''} subtitle={card.name} maxWidth="sm">
+    <Modal cardFlow isOpen={type !== null} onClose={onClose} title={type ? TITLES[type] : ''} subtitle={card.name} maxWidth="sm">
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <div>

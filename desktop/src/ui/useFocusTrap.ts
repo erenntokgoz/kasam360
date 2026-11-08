@@ -14,6 +14,8 @@ export function useFocusTrap(panelRef: RefObject<HTMLElement | null>, isOpen: bo
 
     const keepInside = (event: KeyboardEvent) => {
       if (event.key !== 'Tab') return;
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      if (dialogs[dialogs.length - 1] !== panel.closest('[role="dialog"]')) return;
       const items = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((item) => item.offsetParent !== null);
       if (items.length === 0) {
         event.preventDefault();

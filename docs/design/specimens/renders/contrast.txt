@@ -1,0 +1,28 @@
+## light
+text / surface: 15.87 (eşik 4.5) GEÇTİ
+text / canvas: 14.41 (eşik 4.5) GEÇTİ
+text2 / surface: 6.33 (eşik 4.5) GEÇTİ
+text2 / canvas: 5.75 (eşik 4.5) GEÇTİ
+text2 / muted: 5.38 (eşik 4.5) GEÇTİ
+onbrand / brand: 7.85 (eşik 4.5) GEÇTİ
+brand / surface: 7.85 (eşik 4.5) GEÇTİ
+brand / brandsoft: 6.59 (eşik 4.5) GEÇTİ
+okf / okb: 5.67 (eşik 4.5) GEÇTİ
+wf / wb: 6.57 (eşik 4.5) GEÇTİ
+bf / bb: 6.07 (eşik 4.5) GEÇTİ
+bstrong / surface: 3.61 (eşik 3) GEÇTİ
+accent / surface: 3.72 (eşik 3) GEÇTİ
+## dark
+text / surface: 14.47 (eşik 4.5) GEÇTİ
+text / canvas: 16.48 (eşik 4.5) GEÇTİ
+text2 / surface: 8.65 (eşik 4.5) GEÇTİ
+text2 / canvas: 9.85 (eşik 4.5) GEÇTİ
+text2 / muted: 7.31 (eşik 4.5) GEÇTİ
+onbrand / brand: 10.32 (eşik 4.5) GEÇTİ
+brand / surface: 9.26 (eşik 4.5) GEÇTİ
+brand / brandsoft: 7.49 (eşik 4.5) GEÇTİ
+okf / okb: 8.78 (eşik 4.5) GEÇTİ
+wf / wb: 8.99 (eşik 4.5) GEÇTİ
+bf / bb: 7.75 (eşik 4.5) GEÇTİ
+bstrong / surface: 3.16 (eşik 3) GEÇTİ
+accent / surface: 7.90 (eşik 3) GEÇTİ

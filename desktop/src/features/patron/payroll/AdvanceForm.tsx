@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
@@ -46,7 +47,9 @@ export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, editin
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <NumberInput aria-label="Avans tutarı" placeholder="Tutar (₺)" className="min-h-12 tabular-nums !w-32" value={amount} onValueChange={setAmount} />
+      <label className="flex items-center gap-2"><span className="text-sm font-semibold">Avans tutarı</span>
+        <NumberInput aria-label="Avans tutarı" className="min-h-12 tabular-nums !w-32" value={amount} onValueChange={setAmount} />
+      </label>
       <Button variant={method === 'CASH' ? 'selected' : 'secondary'} className="min-h-12 text-sm" onClick={() => setMethod('CASH')}>
         Nakit
       </Button>
@@ -61,7 +64,7 @@ export const AdvanceForm: React.FC<AdvanceFormProps> = ({ userId, period, editin
           Vazgeç
         </Button>
       ) : null}
-      {error ? <p role="alert" className="w-full text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
     </div>
   );
 };

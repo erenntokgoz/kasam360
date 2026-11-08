@@ -6,6 +6,7 @@
 //! transaction'ında yazıldığından "uygulandı ama sonucu kayboldu" durumu olmaz.
 
 use super::capture::{self, RowChange};
+use super::island_queue::IslandBatch;
 use super::store::Member;
 use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 use crate::services::cari::{self, ApplyError, CariOp};
@@ -26,6 +27,8 @@ pub enum LogOp {
         base_state: i64,
         changes: Vec<RowChange>,
     },
+    /// Otoritesiz dönemde yerelde onaylanmış işlemler; bkz. `merge`.
+    IslandMerge(Box<IslandBatch>),
     Noop,
 }
 
@@ -35,6 +38,7 @@ impl LogOp {
             Self::Cari(op) => op.kind(),
             Self::SetMembers(_) => "SET_MEMBERS",
             Self::Changes { .. } => "CHANGES",
+            Self::IslandMerge(_) => "ISLAND_MERGE",
             Self::Noop => "NOOP",
         }
     }
@@ -42,6 +46,7 @@ impl LogOp {
     pub fn target_id(&self) -> &str {
         match self {
             Self::Cari(op) => op.target_id(),
+            Self::IslandMerge(batch) => &batch.device_id,
             Self::SetMembers(_) | Self::Changes { .. } | Self::Noop => "cluster",
         }
     }
@@ -161,8 +166,9 @@ pub async fn lookup(
     .fetch_optional(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
+    // Birleşmeyi bekleyen ada işlemi de aynı kimlikle yeniden yazılmaz.
     let Some(row) = row else {
-        return Ok(None);
+        return super::island::lookup(conn, tenant_id, operation_id, intent_sha256).await;
     };
     let stored_intent: String = row.try_get("intent_sha256").map_err(|e| e.to_string())?;
     if intent_sha256.is_some_and(|intent| intent != stored_intent) {
@@ -228,7 +234,7 @@ async fn apply_members(
 ) -> Result<(), ApplyError> {
     // Üyelikten çıkan cihaz da kapıda kalır: tek başına yazıp kümeden ayrışamaz.
     let replicated = members.len() > 1 || !members.iter().any(|m| m.device_id == device_id);
-    capture::sync_triggers(conn, replicated)
+    capture::sync_triggers(conn, capture::TriggerMode::for_cluster(replicated))
         .await
         .map_err(ApplyError::Internal)?;
     let tenant_id = operation.tenant_id.as_str();
@@ -335,6 +341,9 @@ pub(super) async fn apply_proposed(
         )
         .await
         .map(|()| Value::Null),
+        LogOp::IslandMerge(batch) => {
+            super::merge::apply_merge(&mut savepoint, audit_lock, operation, batch, device_id).await
+        }
         LogOp::Noop => Ok(Value::Null),
     };
     let (status, result, error) = match applied {

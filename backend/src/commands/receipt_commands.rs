@@ -86,6 +86,7 @@ pub async fn get_receipts(
     actor_role: Option<String>,
     tenant_id: Option<String>,
     limit: Option<i64>,
+    filter: Option<crate::services::receipt_service::ReceiptFilter>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<ReceiptDto>, String> {
     crate::rbac::require_any_present(
@@ -98,7 +99,13 @@ pub async fn get_receipts(
     )?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    crate::services::receipt_service::list(&mut conn, &tenant, clamp_receipt_limit(limit)).await
+    crate::services::receipt_service::list(
+        &mut conn,
+        &tenant,
+        clamp_receipt_limit(limit),
+        filter.unwrap_or_default(),
+    )
+    .await
 }
 
 /// Fiş limiti güvenli aralığa kırpılır: sıfır/negatif sınırsız tarama, çok büyük

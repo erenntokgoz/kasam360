@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { FileText } from 'lucide-react';
 import { NumberInput } from '../../ui/NumberInput';
@@ -22,6 +23,7 @@ export const BlindCloseModal: React.FC<{ onShowZ: () => void }> = ({ onShowZ }) 
   const [countedLiras, setCountedLiras] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [completedReport, setCompletedReport] = useState<ZReportData | null>(null);
   // Mühür geri alınamaz: sayım bir kez daha gösterilip onay alınır.
@@ -38,19 +40,21 @@ export const BlindCloseModal: React.FC<{ onShowZ: () => void }> = ({ onShowZ }) 
       return;
     }
     setError(null);
+    setOperationError(null);
     setPendingCents(cents);
   };
 
   const handleSeal = async () => {
-    if (pendingCents === null) return;
+    if (pendingCents === null || isSubmitting) return;
     const cents = pendingCents;
     setIsSubmitting(true);
     setError(null);
+    setOperationError(null);
     try {
       setCompletedReport(await closeShift(cents));
       setPendingCents(null);
     } catch (caught) {
-      setError(errorText(caught));
+      setOperationError(errorText(caught));
     } finally {
       setIsSubmitting(false);
     }
@@ -59,11 +63,11 @@ export const BlindCloseModal: React.FC<{ onShowZ: () => void }> = ({ onShowZ }) 
   const handleDone = async () => {
     if (completedReport && completedReport.differenceCents !== 0) {
       setIsSubmitting(true);
-      setError(null);
+      setOperationError(null);
       try {
         await explainDifference(completedReport.shiftId, note);
       } catch (caught) {
-        setError(errorText(caught));
+        setOperationError(errorText(caught));
         return;
       } finally {
         setIsSubmitting(false);
@@ -77,20 +81,26 @@ export const BlindCloseModal: React.FC<{ onShowZ: () => void }> = ({ onShowZ }) 
   };
 
   const handleClose = () => {
+    if (isSubmitting) return;
     setPendingCents(null);
+    setError(null);
+    setOperationError(null);
     closeModal('blindClose');
   };
 
   return (
     <Modal
+      cardFlow
       isOpen={modals.blindClose}
       onClose={handleClose}
-      title="Vardiya Kapatma (Kör Sayım)"
+      title="Vardiya Kapatma"
+      subtitle={completedReport ? '3 / 3 · Kapanış Özeti' : pendingCents !== null ? '2 / 3 · Sayımı Onayla' : '1 / 3 · Kör Sayım'}
       maxWidth="md"
     >
+      <ErrorToast message={operationError} />
       {pendingCents !== null && !completedReport ? (
         <div className="space-y-4">
-          <p className="text-sm text-[var(--text-primary)]">
+          <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-3 text-sm text-[var(--text-primary)]">
             Sayılan nakit <span className="font-bold tabular-nums">{formatMoney(pendingCents)}</span>. Vardiya mühürlenince geri açılamaz.
           </p>
           {openTables > 0 ? (
@@ -98,13 +108,8 @@ export const BlindCloseModal: React.FC<{ onShowZ: () => void }> = ({ onShowZ }) 
               Salonda {openTables} açık masa var. Hesapları kapatmadan mühürlerseniz bu satışlar sonraki vardiyaya yazılır.
             </p>
           ) : null}
-          {error ? (
-            <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
-              {error}
-            </p>
-          ) : null}
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" className="flex-1" onClick={() => setPendingCents(null)}>
+            <Button type="button" variant="secondary" className="flex-1" disabled={isSubmitting} onClick={() => setPendingCents(null)}>
               Sayımı Düzelt
             </Button>
             <Button type="button" variant="danger" className="flex-1" isLoading={isSubmitting} onClick={() => void handleSeal()}>
@@ -116,13 +121,14 @@ export const BlindCloseModal: React.FC<{ onShowZ: () => void }> = ({ onShowZ }) 
         <form onSubmit={handleCloseShift} className="space-y-4">
 
           <div>
-            <label className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
+            <label htmlFor="counted-cash" className="block text-xs font-semibold mb-1 text-[var(--text-secondary)]">
               Sayılan Fiziksel Kasa Nakiti (₺)
             </label>
             <NumberInput
+              id="counted-cash"
+              pinpad={false}
               value={countedLiras}
               onValueChange={setCountedLiras}
-              placeholder="Örn: 6350"
               className="text-lg font-bold tabular-nums"
               required
             />

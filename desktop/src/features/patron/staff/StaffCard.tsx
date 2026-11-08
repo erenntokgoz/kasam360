@@ -1,14 +1,18 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { errorText, localDate } from '../../../lib/cariInput';
 import { formatDay } from '../../../lib/date';
 import { formatMoney } from '../../../lib/formatMoney';
 import { formatNumber } from '../../../lib/numberText';
+import { NumberInput } from '../../../ui/NumberInput';
 import { recentPeriods } from '../../../lib/payPeriod';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { ConfirmDialog } from '../../../ui/ConfirmDialog';
+import { Modal } from '../../../ui/Modal';
+import { RecordCard } from '../RecordCard';
 import { AdvanceForm } from '../payroll/AdvanceForm';
 import { LeavePanel } from '../payroll/LeavePanel';
 import { RuleEditor, type PayrollRule } from '../payroll/RuleEditor';
@@ -45,10 +49,20 @@ interface MoneySummary {
 
 type CardTab = 'PROFILE' | 'PERFORMANCE' | 'SHIFTS' | 'LEAVE' | 'ADVANCE' | 'SALARY' | 'TIPS';
 
+interface WorkSession {
+  id: string;
+  userId: string;
+  startedAt: string;
+  endedAt: string | null;
+  breakMinutes: number;
+  status: 'OPEN' | 'CLOSED';
+}
+
 interface StaffCardProps {
   member: StaffMember;
   profile: ProfileRow | undefined;
   isOwner: boolean;
+  canViewPayroll: boolean;
   onEdit: () => void;
   onChanged: () => Promise<void>;
 }
@@ -64,7 +78,7 @@ const month = () => localDate(new Date()).slice(0, 7);
 const METHOD_LABEL: Record<string, string> = { CASH: 'Nakit', BANK_TRANSFER: 'Havale' };
 
 /** Kişiye ait her şey tek kartta. Tutar ve kimlik sekmeleri müdürde hiç açılmaz. */
-export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, onEdit, onChanged }) => {
+export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, canViewPayroll, onEdit, onChanged }) => {
   const [tab, setTab] = useState<CardTab>('PROFILE');
   // Avans ve bahşiş sekmeleri aynı ayı gösterir: geçmiş ayın avansı da düzeltilebilsin.
   const [moneyPeriod, setMoneyPeriod] = useState(month());
@@ -72,8 +86,12 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
   const [money, setMoney] = useState<MoneySummary | null>(null);
   const [rules, setRules] = useState<PayrollRule[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedAdvance, setSelectedAdvance] = useState<MoneySummary['advances'][number] | null>(null);
   const [deletingAdvance, setDeletingAdvance] = useState<MoneySummary['advances'][number] | null>(null);
   const [editingAdvance, setEditingAdvance] = useState<MoneySummary['advances'][number] | null>(null);
+  const [sessions, setSessions] = useState<WorkSession[]>([]);
+  const [breakMinutes, setBreakMinutes] = useState('0');
+  const [savingSession, setSavingSession] = useState(false);
 
   const loadRules = useCallback(async () => {
     const { actorRole, tenantId } = sessionArgs();
@@ -97,6 +115,10 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
     }
     if (tab === 'SALARY') loadRules().catch(fail);
     if (tab === 'ADVANCE' || tab === 'TIPS') loadMoney().catch(fail);
+    if (tab === 'SHIFTS') {
+      invokeIPC<WorkSession[]>('list_staff_work_sessions', { tenantId, actorRole, userId: member.id })
+        .then(setSessions).catch(fail);
+    }
   }, [tab, member.id, loadRules, loadMoney]);
 
   const toggleApproval = async () => {
@@ -110,18 +132,39 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
     }
   };
 
+  const saveWorkSession = async (session: WorkSession) => {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    setSavingSession(true);
+    setError(null);
+    try {
+      await invokeIPC('save_staff_work_session', {
+        tenantId, actorId, actorRole,
+        input: {
+          id: session.id, userId: member.id, startedAt: session.startedAt,
+          endedAt: session.endedAt, breakMinutes: session.breakMinutes,
+        },
+      });
+      setSessions(await invokeIPC<WorkSession[]>('list_staff_work_sessions', { tenantId, actorRole, userId: member.id }));
+      setBreakMinutes('0');
+    } catch (caught) {
+      setError(errorText(caught));
+    } finally {
+      setSavingSession(false);
+    }
+  };
+
   const tabs: SectionTab<CardTab>[] = [
     { id: 'PROFILE', label: 'Profil' },
     { id: 'PERFORMANCE', label: 'Performans' },
     { id: 'SHIFTS', label: 'Vardiya' },
     { id: 'LEAVE', label: 'İzin' },
-    ...(isOwner
+    ...(canViewPayroll
       ? ([
           { id: 'ADVANCE', label: 'Avans' },
           { id: 'SALARY', label: 'Maaş' },
-          { id: 'TIPS', label: 'Bahşiş' },
         ] as SectionTab<CardTab>[])
       : []),
+    ...(isOwner ? ([{ id: 'TIPS', label: 'Bahşiş' }] as SectionTab<CardTab>[]) : []),
   ];
 
   return (
@@ -141,7 +184,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
 
       <SectionTabs label="Personel kartı" tabs={tabs} active={tab} onChange={setTab} />
 
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
 
       {tab === 'PROFILE' ? (
         <div className="space-y-3">
@@ -181,7 +224,35 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
         ) : <p className="text-sm text-[var(--text-secondary)]">Bu ay sipariş kaydı yok.</p>
       ) : null}
 
-      {tab === 'SHIFTS' ? <ShiftPlanPanel userId={member.id} /> : null}
+      {tab === 'SHIFTS' ? (
+        <div className="space-y-4">
+          <ShiftPlanPanel userId={member.id} />
+          <div className="border-t border-[var(--border)] pt-3 space-y-3">
+            <h4 className="text-sm font-semibold">Fiili giriş ve çıkış</h4>
+            <p className="text-xs text-[var(--text-secondary)]">Planlanan vardiya hatırlatmadır; saatlik ücret yalnız kaydedilen gerçek giriş/çıkıştan hesaplanır.</p>
+            {sessions.find((session) => session.status === 'OPEN') ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="block text-xs">Mola (dakika)
+                  <NumberInput kind="integer" aria-label="Mola dakikası" className="min-h-12 mt-1" value={breakMinutes} onValueChange={setBreakMinutes} />
+                </label>
+                <Button type="button" variant="primary" isLoading={savingSession} onClick={() => {
+                  const open = sessions.find((session) => session.status === 'OPEN');
+                  if (!open) return;
+                  void saveWorkSession({ ...open, endedAt: new Date().toISOString(), breakMinutes: Number(breakMinutes) });
+                }}>Çıkış ve molayı kaydet</Button>
+              </div>
+            ) : (
+              <Button type="button" variant="primary" isLoading={savingSession} onClick={() => void saveWorkSession({
+                id: `wks_${crypto.randomUUID()}`, userId: member.id, startedAt: new Date().toISOString(),
+                endedAt: null, breakMinutes: 0, status: 'OPEN',
+              })}>Gerçek Giriş Kaydet</Button>
+            )}
+            <ul className="space-y-1 text-xs text-[var(--text-secondary)]">
+              {sessions.slice(0, 8).map((session) => <li key={session.id}>{formatDay(session.startedAt)} · {new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} → {session.endedAt ? new Date(session.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Açık'} · mola {session.breakMinutes} dk</li>)}
+            </ul>
+          </div>
+        </div>
+      ) : null}
       {tab === 'LEAVE' ? <LeavePanel userId={member.id} /> : null}
 
       {tab === 'ADVANCE' || tab === 'TIPS' ? (
@@ -215,17 +286,12 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
               void loadMoney().catch((caught) => setError(errorText(caught)));
             }} />
           {money && money.advances.length > 0 ? (
-            <ul className="text-sm divide-y divide-[var(--border)]">
+            <ul className="grid gap-2 md:grid-cols-2">
               {money.advances.map((advance) => (
-                <li key={advance.id} className="flex items-center gap-3 py-2">
-                  <span className="flex-1 text-[var(--text-secondary)] tabular-nums">{formatDay(advance.createdAt)} · {METHOD_LABEL[advance.paymentMethod] ?? advance.paymentMethod}</span>
-                  <span className="font-bold tabular-nums">{formatMoney(advance.amountCents)}</span>
-                  <Button variant="ghost" aria-label="Avansı düzenle" onClick={() => setEditingAdvance(advance)}>
-                    <Pencil className="w-5 h-5" />
-                  </Button>
-                  <Button variant="ghost" aria-label="Avansı sil" onClick={() => setDeletingAdvance(advance)}>
-                    <Trash2 className="w-5 h-5" />
-                  </Button>
+                <li key={advance.id}>
+                  <RecordCard title={METHOD_LABEL[advance.paymentMethod] ?? advance.paymentMethod}
+                    description={formatDay(advance.createdAt)} value={formatMoney(advance.amountCents)}
+                    onOpen={() => setSelectedAdvance(advance)} />
                 </li>
               ))}
             </ul>
@@ -233,8 +299,24 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
         </div>
       ) : null}
 
+      {selectedAdvance ? (
+        <Modal cardFlow isOpen title="Avans Detayı" subtitle={formatDay(selectedAdvance.createdAt)}
+          maxWidth="sm" onClose={() => setSelectedAdvance(null)}>
+          <div className="space-y-4">
+            <dl className="grid grid-cols-2 gap-3">
+              <Fact label="Ödeme Şekli" value={METHOD_LABEL[selectedAdvance.paymentMethod] ?? selectedAdvance.paymentMethod} />
+              <Fact label="Tutar" value={formatMoney(selectedAdvance.amountCents)} />
+            </dl>
+            <div className="flex justify-end gap-2">
+              <Button type="button" onClick={() => { setEditingAdvance(selectedAdvance); setSelectedAdvance(null); }}>Düzenle</Button>
+              <Button type="button" variant="danger" onClick={() => { setDeletingAdvance(selectedAdvance); setSelectedAdvance(null); }}>Sil</Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
       {deletingAdvance ? (
-        <ConfirmDialog
+        <ConfirmDialog cardFlow
           title="Avans silinsin mi?"
           message={formatMoney(deletingAdvance.amountCents)}
           onConfirm={async () => {

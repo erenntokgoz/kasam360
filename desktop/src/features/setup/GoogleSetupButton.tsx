@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useRef, useState } from 'react';
 import { readDesktopLink, type WebAccount } from '../../lib/webAccount';
 import { Button } from '../../ui/Button';
@@ -48,9 +49,7 @@ export const GoogleSetupButton: React.FC<{ onAccount: (account: WebAccount) => v
   return (
     <div className="flex flex-col gap-2">
       {error ? (
-        <p role="alert" className="text-sm font-medium text-[var(--accent-red)]">
-          {error}
-        </p>
+        <ErrorToast message={error} />
       ) : null}
       <Button type="button" variant="secondary" className="w-full min-h-12" onClick={() => (isWaiting ? stop() : void start())}>
         {isWaiting ? 'Tarayıcıda giriş bekleniyor, iptal et' : 'Google ile Devam Et'}

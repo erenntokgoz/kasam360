@@ -1,5 +1,5 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
 import { errorText, localDate } from '../../lib/cariInput';
 import { formatDateTime } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
@@ -10,6 +10,8 @@ import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { Button } from '../../ui/Button';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { Modal } from '../../ui/Modal';
+import { RecordCard } from './RecordCard';
 import { NumberInput } from '../../ui/NumberInput';
 import type { PayrollRule } from './payroll/RuleEditor';
 
@@ -47,6 +49,7 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
   const [method, setMethod] = useState<'CASH' | 'CARD'>('CASH');
   const [percents, setPercents] = useState<Record<string, string>>({});
   const [entries, setEntries] = useState<TipEntry[]>([]);
+  const [selected, setSelected] = useState<TipEntry | null>(null);
   const [deleting, setDeleting] = useState<TipEntry | null>(null);
   const [editing, setEditing] = useState<TipEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -166,7 +169,9 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
         </div>
         {isCurrent ? (
           <>
-            <NumberInput aria-label="Bahşiş tutarı" placeholder="Bahşiş tutarı (₺)" pinpadTitle="Bahşiş Tutarı" value={amount} onValueChange={setAmount} />
+            <label className="block space-y-1"><span className="text-sm font-semibold">Bahşiş tutarı</span>
+              <NumberInput aria-label="Bahşiş tutarı" pinpadTitle="Bahşiş Tutarı" value={amount} onValueChange={setAmount} />
+            </label>
             <div className="grid grid-cols-3 gap-2">
               <Button variant={method === 'CASH' ? 'selected' : 'secondary'} onClick={() => setMethod('CASH')}>Nakit</Button>
               <Button variant={method === 'CARD' ? 'selected' : 'secondary'} onClick={() => setMethod('CARD')}>Kart</Button>
@@ -175,27 +180,11 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
           </>
         ) : null}
         {entries.length > 0 ? (
-          <ul className="divide-y divide-[var(--border)] max-h-64 overflow-y-auto">
+          <ul className="grid gap-2">
             {entries.map((entry) => (
-              <li key={entry.id} className="flex items-center gap-2 text-sm">
-                <span className="flex-1 min-w-0 truncate tabular-nums text-[var(--text-secondary)]">{formatDateTime(entry.createdAt)} · {METHOD_LABEL[entry.paymentMethod]}</span>
-                <span className="font-bold tabular-nums">{formatMoney(entry.amountCents)}</span>
-                {isCurrent ? (
-                  <Button
-                    variant="ghost"
-                    aria-label="Bahşişi düzenle"
-                    onClick={() => {
-                      setEditing(entry);
-                      setMethod(entry.paymentMethod);
-                      setAmount((entry.amountCents / 100).toFixed(2).replace('.', ','));
-                    }}
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                ) : null}
-                <Button variant="ghost" aria-label="Bahşişi sil" onClick={() => setDeleting(entry)}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+              <li key={entry.id}>
+                <RecordCard title={METHOD_LABEL[entry.paymentMethod]} description={formatDateTime(entry.createdAt)}
+                  value={formatMoney(entry.amountCents)} onOpen={() => setSelected(entry)} />
               </li>
             ))}
           </ul>
@@ -244,8 +233,31 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
         </section>
       ) : null}
 
+      {selected ? (
+        <Modal cardFlow isOpen title="Bahşiş Detayı" subtitle={formatDateTime(selected.createdAt)}
+          maxWidth="sm" onClose={() => setSelected(null)}>
+          <div className="space-y-4">
+            <div className="flex justify-between gap-3 text-sm">
+              <span>{METHOD_LABEL[selected.paymentMethod]}</span>
+              <strong className="tabular-nums">{formatMoney(selected.amountCents)}</strong>
+            </div>
+            <div className="flex justify-end gap-2">
+              {isCurrent ? (
+                <Button type="button" onClick={() => {
+                  setEditing(selected);
+                  setMethod(selected.paymentMethod);
+                  setAmount((selected.amountCents / 100).toFixed(2).replace('.', ','));
+                  setSelected(null);
+                }}>Düzenle</Button>
+              ) : null}
+              <Button type="button" variant="danger" onClick={() => { setDeleting(selected); setSelected(null); }}>Sil</Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
       {deleting ? (
-        <ConfirmDialog
+        <ConfirmDialog cardFlow
           title="Bahşiş silinsin mi?"
           message={formatMoney(deleting.amountCents)}
           onConfirm={async () => {
@@ -257,7 +269,7 @@ export const TipPoolPanel: React.FC<TipPoolPanelProps> = ({ canDistribute, staff
         />
       ) : null}
 
-      {error ? <p role="alert" className="lg:col-span-2 text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
     </div>
   );
 };

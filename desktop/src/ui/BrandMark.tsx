@@ -8,7 +8,7 @@ export interface BrandMarkProps {
   surface: 'desk' | 'paper';
 }
 
-/** Kâğıt her temada açıktır; masa ise temaya göre değişir, ikon zemine göre seçilir. */
+/** İkon zemine göre seçilir: kapı ekranları ve kenar çubuğu temayla birlikte değişir. */
 export const BrandMark: React.FC<BrandMarkProps> = ({ className, surface }) => {
   const theme = useUIStore((state) => state.theme);
   const mark = surface === 'paper' || theme === 'light' ? lightMark : darkMark;

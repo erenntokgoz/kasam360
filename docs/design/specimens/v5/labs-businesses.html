@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>İşletmeler · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script><script src="labs-shell.js" defer></script>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği, sabit test verisi. Düğmeler işlem yapmaz.</span>
+<div class="app">
+  <aside class="rail" data-page="businesses"></aside>
+  <div class="main">
+    <div class="bar"><span class="crumb">KASAM360 / <b>İşletmeler</b></span>
+      <label class="search"><input placeholder="İşletme adı, sahip e-postası veya kiracı kimliği" aria-label="İşletme ara"><kbd>/</kbd></label></div>
+    <div class="page">
+      <div class="ph"><div><h1>İşletmeler</h1><p>42 işletme, 51 hesap, 58 kasa</p></div>
+        <div class="acts"><button class="btn btn-line sm">Dışa aktar</button><button class="btn btn-ink sm">Yeni işletme</button></div></div>
+      <div class="chips" role="group" aria-label="Filtre">
+        <button aria-pressed="true">Tümü <span class="num">42</span></button>
+        <button aria-pressed="false"><span class="warn-dot"></span>Sorunlu <span class="num">3</span></button>
+        <button aria-pressed="false">Deneme süresinde <span class="num">5</span></button>
+        <button aria-pressed="false">Ödeme bekliyor <span class="num">2</span></button>
+        <button aria-pressed="false">Askıda <span class="num">1</span></button>
+      </div>
+      <div class="wrapx">
+        <div class="tbl"><table class="grid">
+          <thead><tr><th>İşletme</th><th>Paket</th><th>Abonelik</th><th class="r">Kasa</th><th>Son eşitleme</th><th class="r">Açık destek</th><th>Müşteri</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table></div>
+        <div class="pager"><span class="num">1–8 / 42</span><button class="btn btn-line sm" disabled>Önceki</button><button class="btn btn-line sm">Sonraki</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const pill = { ok: ['ok', 'Aktif'], trial: ['mute', 'Deneme, 9 gün'], due: ['warn', 'Ödeme bekliyor'], hold: ['bad', 'Askıda'] };
+  const rows = [
+    ['TEST_A Lokanta', 'owner.a@kasam360.invalid', 'Test Paket', 'ok', '1 / 2', ['bad', '3 sa 12 dk önce'], 1, '14 Eki 2026'],
+    ['TEST_B Kafe', 'selin@testb.invalid', 'Test Paket', 'due', '2 / 2', ['', '4 dk önce'], 1, '2 Eki 2026'],
+    ['TEST_C Bar', 'okan@testc.invalid', 'Test Paket', 'ok', '2 / 2', ['', 'Az önce'], 1, '28 Eyl 2026'],
+    ['TEST_D Pastane', 'ece@testd.invalid', 'Test Paket', 'ok', '1 / 2', ['', '12 dk önce'], 0, '20 Eyl 2026'],
+    ['TEST_E Ocakbaşı', 'murat@teste.invalid', 'Başlangıç', 'trial', '1 / 1', ['', '1 sa önce'], 0, '1 Kas 2026'],
+    ['TEST_F Döner', 'hakan@testf.invalid', 'Test Paket', 'hold', '0 / 2', ['bad', '9 gün önce'], 0, '3 Ağu 2026'],
+    ['TEST_G Kahvaltı Evi', 'zeynep@testg.invalid', 'Test Paket', 'ok', '2 / 2', ['', '2 dk önce'], 0, '15 Tem 2026'],
+    ['TEST_H Meyhane', 'can@testh.invalid', 'Başlangıç', 'trial', '0 / 1', ['', 'Kasa bağlanmadı'], 0, '5 Kas 2026'],
+  ];
+  document.getElementById('rows').innerHTML = rows.map(([n, mail, pk, st, dev, [sc, sync], sup, since]) =>
+    `<tr><td class="cell-2"><b><a href="labs-business.html" style="text-decoration:none">${n}</a></b><small>${mail}</small></td><td>${pk}</td>
+     <td><span class="pill ${pill[st][0]}"><span class="dot"></span>${pill[st][1]}</span></td><td class="r num">${dev}</td>
+     <td class="num" style="${sc ? 'color:var(--bad);font-weight:560' : ''}">${sync}</td><td class="r num">${sup || '<span class="muted">—</span>'}</td><td class="num muted">${since}</td>
+     <td><div class="row-acts"><button>Aç</button><button>Düzenle</button><button class="del">Sil</button></div></td></tr>`).join('');
+</script>
+</body>
+</html>

@@ -2,23 +2,16 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { KeyObject } from 'node:crypto';
 import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type { Pool } from 'pg';
+import type { Db } from 'mongodb';
 import type { Auth } from './lib/auth.js';
 import { issueLicense, readDevice, type LicenseSubject } from './license.js';
 import type { SupportConfig } from './support.js';
+import type { DeviceLicenses } from './sync/deviceLicenses.js';
 
 // Masaüstü web oturumu tutmaz: personel kasada çalışırken site çerezi yoktur. Sahip hesabıyla
 // bir kez bağlanan cihaz uzun ömürlü bir lisans anahtarı alır ve yalnız lisans yenilemek için
 // kullanır. Anahtar sunucuda özet olarak durur; çalınırsa hesap silinince veya iptalle düşer.
 const KEY = /^lk_[A-Za-z0-9_-]{43}$/;
-
-export const LICENSE_KEY_TABLE = `CREATE TABLE IF NOT EXISTS desktop_license_key (
-  id TEXT PRIMARY KEY,
-  "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
-  "keyHash" TEXT NOT NULL UNIQUE,
-  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-  "lastUsedAt" TIMESTAMPTZ
-)`;
 
 export interface KeyOwner extends LicenseSubject {
   emailVerified: boolean;
@@ -31,25 +24,22 @@ export interface LicenseKeys {
 
 const digest = (key: string) => createHash('sha256').update(key).digest('hex');
 
-export function pgLicenseKeys(pool: Pool): LicenseKeys {
+export function mongoLicenseKeys(db: Db): LicenseKeys {
+  const keys = db.collection<{ _id: string; userId: string; keyHash: string; createdAt: Date; lastUsedAt: Date | null }>('desktop_license_key');
+  const users = db.collection<{ _id: string; email: string; emailVerified: boolean }>('user');
   return {
     async create(userId) {
       const key = `lk_${randomBytes(32).toString('base64url')}`;
-      await pool.query(
-        'INSERT INTO desktop_license_key (id,"userId","keyHash") VALUES ($1,$2,$3)',
-        [`lky_${randomBytes(16).toString('hex')}`, userId, digest(key)],
-      );
+      await keys.insertOne({ _id: `lky_${randomBytes(16).toString('hex')}`, userId, keyHash: digest(key), createdAt: new Date(), lastUsedAt: null });
       return key;
     },
+    // Silinmiş hesabın anahtarı geçmez: sahip kaydı yoksa anahtar bulunmamış sayılır.
     async find(key) {
       if (!KEY.test(key)) return null;
-      const { rows } = await pool.query<KeyOwner>(
-        `UPDATE desktop_license_key k SET "lastUsedAt"=now() FROM "user" u
-         WHERE k."keyHash"=$1 AND u.id=k."userId"
-         RETURNING u.id,u.email,u."emailVerified"`,
-        [digest(key)],
-      );
-      return rows[0] ?? null;
+      const stored = await keys.findOneAndUpdate({ keyHash: digest(key) }, { $set: { lastUsedAt: new Date() } });
+      if (!stored) return null;
+      const user = await users.findOne({ _id: stored.userId }, { projection: { email: 1, emailVerified: 1 } });
+      return user ? { id: user._id, email: user.email, emailVerified: user.emailVerified === true } : null;
     },
   };
 }
@@ -66,6 +56,7 @@ export function mountDesktopLicense(
   siteUrl: string,
   labs?: SupportConfig,
   signing?: KeyObject,
+  devices?: DeviceLicenses,
 ) {
   app.use('/api/desktop/license-key', bodyLimit({ maxSize: 4096 }));
 
@@ -102,7 +93,17 @@ export function mountDesktopLicense(
     const owner = await keys.find(bearer);
     if (!owner) return context.json({ message: 'Lisans anahtarı geçersiz. Cihazı yeniden bağlayın.' }, 401);
     if (!owner.emailVerified) return context.json({ message: 'Önce e-postanızı doğrulayın.' }, 403);
-    const reply = await issueLicense(labs, signing, owner, readDevice((name) => context.req.header(name)));
+    const device = readDevice((name) => context.req.header(name));
+    const reply = await issueLicense(labs, signing, owner, device);
+    // Eşitleme 360 Labs'a her istekte sormaz; cihazın son lisans sonucu burada saklanır.
+    if (devices && device) {
+      if ('claims' in reply.body) {
+        const { validUntil, blocked, plan } = reply.body.claims;
+        await devices.record(owner.id, device.id, { state: 'active', validUntil, blocked, hasPlan: plan !== null });
+      } else if (reply.status === 403 && reply.body.device) {
+        await devices.record(owner.id, device.id, { state: reply.body.device, validUntil: null, blocked: false, hasPlan: false });
+      }
+    }
     return context.json(reply.body, reply.status);
   });
 }

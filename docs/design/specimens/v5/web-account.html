@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hesabım · KASAM360</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><script src="theme.js"></script>
+<style>
+  .top { display: flex; align-items: center; gap: 16px; height: 64px; padding: 0 28px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; text-decoration: none; }
+  .brand img { width: 26px; height: 26px; } :root[data-theme="dark"] .brand img { background: #fff; border-radius: 50%; }
+  .biz { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 10px; background: none; cursor: pointer; font-weight: 560; }
+  .biz small { color: var(--text-3); font-weight: 400; }
+  .top .me { margin-left: auto; color: var(--text-2); font-size: 14px; }
+  .shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: calc(100vh - 90px); }
+  .side { border-right: 1px solid var(--line); padding: 20px 14px; display: grid; align-content: start; gap: 2px; }
+  .side a { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 42px; padding: 0 12px; border-radius: 9px; text-decoration: none; color: var(--text-2); font-weight: 520; }
+  .side a:hover { background: var(--panel-2); color: var(--text); }
+  .side a[aria-current] { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+  .side a .num { font-size: 12px; color: var(--text-3); }
+  main { padding: 32px 40px 64px; max-width: 1080px; }
+  h1 { margin: 0; font-size: 30px; font-weight: 640; letter-spacing: -.03em; }
+  .sub { margin: 6px 0 0; color: var(--text-2); }
+  h2 { margin: 0; font-size: 17px; font-weight: 620; letter-spacing: -.01em; }
+  .sec { margin-top: 36px; } .sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+  .sec-h a { color: var(--text-2); font-size: 14px; }
+  /* Cihaz yuvaları: paketin verdiği hak kadar yuva var; dolu yuva bir kasa, boş yuva bir kurulum kodu. */
+  .bay { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .slot { position: relative; border-radius: 16px; padding: 22px; min-height: 210px; display: flex; flex-direction: column; gap: 14px; background: var(--panel); border: 1px solid var(--line); }
+  .slot .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .slot .name { font-size: 22px; font-weight: 640; letter-spacing: -.02em; }
+  .slot dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
+  .slot dt { font-size: 12px; color: var(--text-3); } .slot dd { margin: 2px 0 0; font-weight: 560; }
+  .slot .acts { margin-top: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .slot.empty { border-style: dashed; border-color: var(--line-2); background: transparent; justify-content: center; }
+  .slot.empty .name { color: var(--text-2); }
+  .code { font: 500 22px/1 var(--mono); letter-spacing: .14em; padding: 12px 14px; border-radius: 10px; background: var(--panel-2); width: fit-content; }
+  .plan { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+  .plan > div { padding: 20px 22px; } .plan > div + div { border-left: 1px solid var(--line); }
+  .plan small { display: block; font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+  .plan b { font-size: 17px; font-weight: 620; }
+  .plan .big b { font-size: 22px; }
+  .fail { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px 20px; border-radius: 14px; background: var(--bad-bg); color: var(--text); }
+  .fail p { margin: 0; flex: 1 1 280px; } .fail strong { color: var(--bad); }
+  @media (max-width: 900px) {
+    .top { padding: 0 16px; } .top .me, .brand span { display: none; }
+    .shell { grid-template-columns: 1fr; }
+    .side { display: flex; gap: 4px; overflow-x: auto; padding: 10px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
+    .side a { flex: none; }
+    main { padding: 24px 16px 48px; }
+    .bay, .plan { grid-template-columns: 1fr; } .plan > div + div { border-left: 0; border-top: 1px solid var(--line); }
+    .slot dl { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<span class="specimen">Tasarım örneği, sabit test verisi. Bu sayfa işlem yapmaz.</span>
+<header class="top">
+  <a class="brand" href="web-home.html"><img src="../../../../desktop/src/assets/brand/kasam360-ikon-kucuk-renkli.svg" alt=""><span>KASAM360</span></a>
+  <button class="biz" aria-haspopup="listbox">TEST_A Lokanta <small>değiştir</small></button>
+  <span class="me">owner.a@kasam360.invalid</span>
+  <button class="btn btn-ghost" data-theme-toggle>Tema</button>
+</header>
+<div class="shell">
+  <nav class="side" aria-label="Hesap">
+    <a href="#" aria-current="page">Genel bakış</a>
+    <a href="#">Cihazlar <span class="num">1 / 2</span></a>
+    <a href="#">Abonelik</a>
+    <a href="#">Faturalar</a>
+    <a href="#">Destek <span class="num">1</span></a>
+    <a href="#">Hesap ayarları</a>
+  </nav>
+  <main>
+    <h1>TEST_A Lokanta</h1>
+    <p class="sub">Test Paket, 2 kasa hakkı. 1 kasa bağlı.</p>
+
+    <section class="sec" aria-labelledby="h-dev">
+      <div class="sec-h"><h2 id="h-dev">Kasalar</h2><a href="#">Kurulum dosyasını indir</a></div>
+      <div class="bay">
+        <article class="slot">
+          <div class="head"><span class="name">Kasa 1</span><span class="pill warn"><span class="dot"></span>2 kayıt sırada</span></div>
+          <dl>
+            <div><dt>Son görülme</dt><dd class="num">Bugün 14.31</dd></div>
+            <div><dt>Sürüm</dt><dd class="num">0.2.0</dd></div>
+            <div><dt>Cihaz</dt><dd class="mono">dev_a_01</dd></div>
+          </dl>
+          <div class="acts"><button class="btn btn-line">Ayrıntılar</button><button class="btn btn-ghost">Hakkı geri al</button></div>
+        </article>
+        <article class="slot empty">
+          <span class="name">Boş kasa hakkı</span>
+          <div class="code num" aria-label="Kurulum kodu">K3M-48Q-7TZ</div>
+          <div class="acts"><button class="btn btn-ink">Yeni kod üret</button><button class="btn btn-ghost">Kodu kopyala</button></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-sub">
+      <div class="sec-h"><h2 id="h-sub">Abonelik</h2><a href="#">Paketi değiştir</a></div>
+      <div class="plan">
+        <div class="big"><small>Paket</small><b>Test Paket</b></div>
+        <div><small>Aylık</small><b class="num">1.000,00 TL</b></div>
+        <div><small>Durum</small><span class="pill ok"><span class="dot"></span>Aktif</span></div>
+        <div><small>Yenileme</small><b class="num">6 Aralık 2026</b></div>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-inv">
+      <div class="sec-h"><h2 id="h-inv">Faturalar</h2></div>
+      <div class="fail" role="alert">
+        <p><strong>Faturalar şu an okunamadı.</strong> Aboneliğiniz ve kasalarınız etkilenmedi.</p>
+        <button class="btn btn-line">Yeniden dene</button>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

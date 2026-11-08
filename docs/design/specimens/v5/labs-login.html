@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Giriş · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script>
+<style>
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  .center { flex: 1; display: grid; place-items: center; padding: 24px 16px; }
+  form { width: min(380px, 100%); display: grid; gap: 14px; }
+  h1 { margin: 0 0 8px; font-size: 26px; font-weight: 680; letter-spacing: -.03em; }
+  .in { min-height: 46px; }
+  .in[aria-invalid="true"] { border-color: var(--bad); }
+  .err { padding: 11px 13px; border-radius: 10px; background: var(--bad-bg); color: var(--text); }
+  .err strong { color: var(--bad); }
+  form .btn { min-height: 46px; }
+  .foot { padding: 18px; text-align: center; color: var(--text-3); font-size: 12px; }
+  .top { position: absolute; top: 34px; right: 16px; }
+</style>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği. Giriş yapmaz.</span>
+<button class="btn btn-ghost top" data-theme-toggle>Tema</button>
+<main class="center">
+  <form onsubmit="return false" novalidate>
+    <h1>360 Labs</h1>
+    <div class="err" role="alert"><strong>E-posta veya şifre yanlış.</strong> 4 deneme hakkınız kaldı.</div>
+    <label class="f">E-posta<input class="in" type="email" value="mert@360labs.com.tr" autocomplete="username"></label>
+    <label class="f">Şifre<input class="in" type="password" aria-invalid="true" autocomplete="current-password"></label>
+    <label class="f">Doğrulama kodu<input class="in num" inputmode="numeric" placeholder="6 haneli kod" autocomplete="one-time-code"></label>
+    <button class="btn btn-ink">Giriş yap</button>
+    <button type="button" class="btn btn-ghost">Şifremi unuttum</button>
+  </form>
+</main>
+<div class="foot">© 2026 360 Labs</div>
+</body>
+</html>

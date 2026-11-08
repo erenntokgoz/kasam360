@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Salon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="desk.css"><script src="../theme.js"></script>
+<style>
+  .desk { grid-template-columns: minmax(0, 1fr) clamp(320px, 29vw, 380px); }
+  .floor { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .zones { display: flex; gap: 6px; padding: 12px; align-items: center; }
+  .zones .key { min-height: 48px; padding: 0 16px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+  .zones .key[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  .zones .key span { font-weight: 500; opacity: .7; }
+  .zones .count { margin-left: auto; color: var(--ink-2); font-size: 14px; padding-right: 6px; }
+  /* Plan: tezgâha gömülü zemin; masalar gerçek konumlarında, boyları kişi sayısına göre. */
+  .plan { position: relative; margin: 0 12px 12px; overflow: hidden;
+    background-image: radial-gradient(circle, var(--edge) 1px, transparent 1.4px); background-size: 24px 24px; }
+  .t { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px; }
+  .t b { font-size: 26px; line-height: 28px; font-weight: 800; font-stretch: 112%; }
+  .t small { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 16px; color: var(--ink-2); }
+  .t .amt { font-size: 13px; font-weight: 600; }
+  .t.round { border-radius: 50%; }
+  .t.free b { color: var(--ink-2); font-weight: 600; }
+  /* Durum çerçevesi outline ile çizilir; tuşun gölgesiyle çakışmaz, iki temada da görünür. */
+  .t.bill { outline: 2px solid var(--signal); outline-offset: -2px; }
+  .t.late { outline: 2px solid var(--bad); outline-offset: -2px; }
+  .t[aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 3px; }
+  .wall { position: absolute; background: var(--edge); border-radius: 3px; }
+  .zone-name { position: absolute; font-size: 13px; color: var(--ink-2); }
+  /* Seçili masa: gömme ekranda özet ve eylemler. */
+  .info { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .ih { padding: 18px 18px 12px; border-bottom: 1px solid var(--edge); }
+  .ih b { display: block; font-size: 40px; line-height: 40px; font-weight: 800; font-stretch: 120%; }
+  .ih span { display: block; margin-top: 6px; color: var(--ink-2); font-size: 14px; }
+  .warn { margin: 12px 14px 0; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--bad) 14%, transparent); display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 20px; }
+  .warn .lamp { margin-top: 5px; }
+  .items { overflow: auto; padding: 8px 18px; }
+  .it { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--edge); font-size: 15px; }
+  .it .x { font-weight: 800; }
+  .it small { display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; }
+  .foot { padding: 14px; border-top: 1px solid var(--edge); display: grid; gap: 8px; }
+  .total { display: flex; justify-content: space-between; align-items: baseline; }
+  .total b { font-size: 36px; font-weight: 800; font-stretch: 120%; }
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .acts .key { min-height: 52px; font-weight: 700; }
+  .acts .main { grid-column: 1 / -1; min-height: 60px; background: var(--ink); color: var(--panel); text-decoration: none; display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+<span class="tag">Tasarım örneği, sabit test verisi</span>
+<header class="bar">
+  <nav class="mods" aria-label="Modüller">
+    <a class="key" href="#" aria-current="page"><kbd>F1</kbd>Salon</a><a class="key" href="pos.html"><kbd>F2</kbd>Satış</a>
+    <a class="key" href="#"><kbd>F3</kbd>Mutfak</a><a class="key" href="tahsilat.html"><kbd>F4</kbd>Kasa</a><a class="key" href="#"><kbd>F5</kbd>İşletme</a>
+  </nav>
+  <div class="sys">
+    <span role="status"><i class="lamp on"></i><b>Çevrimdışı</b> 2 kayıt sırada</span>
+    <span class="opt"><i class="lamp ok"></i>Yazıcı</span>
+    <span><b>Mert D.</b> Kasa 1</span>
+  </div>
+  <button class="key lock">Kilitle</button>
+</header>
+<main class="desk">
+  <section class="panel floor" aria-label="Salon planı">
+    <div class="zones">
+      <button class="key" aria-pressed="true">Salon <span class="n">8/14</span></button><button class="key">Bahçe <span class="n">2/8</span></button><button class="key">Bar <span class="n">1/6</span></button>
+      <span class="count n">11 masa dolu, 31 kişi</span>
+    </div>
+    <div class="plan well" id="plan">
+      <div class="wall" style="left:3%;top:4%;width:22%;height:6px"></div>
+      <div class="wall" style="left:74%;top:4%;width:23%;height:6px"></div>
+      <span class="zone-name" style="left:40%;top:3%">Giriş</span>
+      <span class="zone-name" style="right:3%;bottom:3%">Mutfak kapısı</span>
+    </div>
+  </section>
+  <div class="bezel"><aside class="display info" aria-label="Masa 4">
+    <div class="ih"><b>Masa 4</b><span>3 kişi, Mert, 13.39'dan beri</span></div>
+    <div class="warn" role="alert"><i class="lamp bad"></i><span><b>Köfte 15 dakikadır mutfakta.</b> Mutfak ekranına not düşebilirsiniz.</span></div>
+    <div class="items" id="items"></div>
+    <div class="foot">
+      <div class="total"><span>Toplam</span><b class="n" id="total"></b></div>
+      <div class="acts"><a class="key main" href="pos.html">Siparişi aç</a><button class="key">Adisyon yazdır</button><button class="key">Masayı taşı</button><button class="key">Birleştir</button><button class="key">Mutfağa not</button></div>
+    </div>
+  </aside></div>
+</main>
+<script>
+const tl = c => (c / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+// [ad, x%, y%, genişlik%, yükseklik%, biçim, durum, dakika, tutar]
+const tables = [
+  ['1', 6, 16, 11, 17, 'round', 'ok', 24, 64000], ['2', 6, 42, 11, 17, 'round', 'free'], ['3', 6, 68, 11, 17, 'round', 'free'],
+  ['4', 24, 16, 16, 19, 'sq', 'late', 42, 236000, 1], ['5', 24, 44, 16, 19, 'sq', 'on', 31, 147500], ['6', 24, 72, 16, 19, 'sq', 'free'],
+  ['9', 46, 16, 16, 19, 'sq', 'bill', 55, 412500], ['12', 46, 44, 16, 19, 'sq', 'on', 19, 58000], ['14', 46, 72, 16, 19, 'sq', 'free'],
+  ['Salon grubu', 68, 18, 27, 26, 'sq', 'on', 80, 124875000], ['7', 68, 56, 12, 17, 'round', 'ok', 8, 31000], ['8', 83, 56, 12, 17, 'round', 'free'],
+  ['10', 68, 79, 12, 15, 'round', 'on', 12, 22000], ['11', 83, 79, 12, 15, 'round', 'free'],
+];
+const lampOf = { ok: 'ok', on: 'on', late: 'bad', bill: 'on' };
+const word = { ok: 'hazır', on: 'mutfakta', late: 'gecikti', bill: 'hesap istedi' };
+document.getElementById('plan').insertAdjacentHTML('beforeend', tables.map(([n, x, y, w, h, shape, st, m, c, sel]) =>
+  `<button class="key t ${shape === 'round' ? 'round' : ''} ${st}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%"${sel ? ' aria-pressed="true"' : ''} aria-label="Masa ${n}">
+    <b class="n">${n}</b>${st === 'free' ? '<small>boş</small>' : `<small><i class="lamp ${lampOf[st]}"></i><span class="n">${m} dk</span></small><span class="amt n">${tl(c)}</span>`}</button>`).join(''));
+const items = [[2, 'Kasap köfte, közlenmiş biber', 'bad', 'mutfakta, 15 dk', 29000], [1, 'Mercimek çorbası', 'ok', 'servis edildi', 8500], [3, 'Ayran', 'ok', 'servis edildi', 4000], [1, 'Kuzu tandır, iç pilav', 'ok', 'servis edildi', 52000], [2, 'Fırın sütlaç', '', 'mutfağa gitmedi', 9500], [1, 'Hünkâr beğendi', 'ok', 'servis edildi', 34000], [1, 'Adana kebap, acılı', 'ok', 'servis edildi', 36000], [1, 'Zeytinyağlı yaprak sarma', 'ok', 'servis edildi', 16500]];
+document.getElementById('items').innerHTML = items.map(([q, n, l, s, c]) => `<div class="it"><span class="x n">${q}</span><span>${n}<small><i class="lamp ${l}"></i>${s}</small></span><span class="n">${tl(q * c)}</span></div>`).join('');
+const total = items.reduce((s, [q, , , , c]) => s + q * c, 0);
+if (total !== 236000) console.warn('Masa 4 toplamı salon kartıyla tutmuyor', total);
+document.getElementById('total').textContent = tl(total);
+</script>
+</body>
+</html>

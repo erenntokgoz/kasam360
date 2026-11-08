@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { useCariStore } from '../../stores/cariStore';
@@ -78,14 +79,10 @@ export const DebtsTab: React.FC = () => {
     void loadCards(tab, '');
   };
 
-  const errorBox = loadError ? (
-    <div
-      role="alert"
-      className="p-3 rounded-lg bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red)] text-xs font-semibold"
-    >
-      {loadError}
-    </div>
-  ) : null;
+  const errorBox = loadError ? (<>
+    <p className="text-sm text-[var(--text-secondary)]">Cari kayıtlar okunamadı.</p>
+    <ErrorToast message={loadError} />
+  </>) : null;
 
   if (selected) {
     return (
@@ -135,9 +132,8 @@ export const DebtsTab: React.FC = () => {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Ad veya telefon ara"
             aria-label="Cari ara"
-            className="pl-9 min-h-12"
+            className="!pl-9 min-h-12"
           />
         </div>
       </div>

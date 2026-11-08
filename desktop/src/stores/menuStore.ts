@@ -53,11 +53,11 @@ export const useMenuStore = create<MenuState>((set, get) => ({
   bulkPreview: [],
 
   clearError: () => set({ error: null }),
-  setSelectedProductId: (id) => {
+  setSelectedProductId: async (id) => {
     set({ selectedProductId: id, detailMode: 'view', productModifierGroupIds: [] });
     if (id) {
-      get().loadProductRecipe(id);
-      get().loadProductModifierGroupIds(id);
+      void get().loadProductModifierGroupIds(id);
+      await get().loadProductRecipe(id);
     } else set({ productRecipe: null });
   },
   setDetailMode: (mode) =>
@@ -70,15 +70,15 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     set((state) => ({ filters: { ...state.filters, categoryId } })),
   toggleFilterTukendi: () =>
     set((state) => ({
-      filters: { ...state.filters, tukendi: !state.filters.tukendi },
+      filters: { ...state.filters, tukendi: !state.filters.tukendi, satista: false, satisDisi: false },
     })),
   toggleFilterSatista: () =>
     set((state) => ({
-      filters: { ...state.filters, satista: !state.filters.satista },
+      filters: { ...state.filters, tukendi: false, satista: !state.filters.satista, satisDisi: false },
     })),
   toggleFilterSatisDisi: () =>
     set((state) => ({
-      filters: { ...state.filters, satisDisi: !state.filters.satisDisi },
+      filters: { ...state.filters, tukendi: false, satista: false, satisDisi: !state.filters.satisDisi },
     })),
 
   loadCatalog: async () => {
@@ -117,11 +117,11 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     }
   },
 
-  saveProduct: async (productData) => {
+  saveProduct: async (productData, productId) => {
     try {
       const { actorRole, actorId, tenantId } = getAuthContext();
       set({ busy: true, error: null });
-      if (get().detailMode === 'new') {
+      if (!productId && get().detailMode === 'new') {
         const priceCents = productData.priceCents;
         if (typeof priceCents !== 'number' || !Number.isSafeInteger(priceCents) || priceCents < 0) {
           throw new Error('Yeni ürün için geçerli kuruş fiyatı gerekli.');
@@ -153,7 +153,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
           detailMode: 'view',
         }));
       } else {
-        const prodId = get().selectedProductId;
+        const prodId = productId ?? get().selectedProductId;
         if (!prodId) throw new Error('Güncellenecek ürün seçilmedi');
         const current = get().products.find((p) => p.id === prodId);
         const updatedWire = await invokeIPC<Parameters<typeof mapProduct>[0]>('update_product', {
@@ -322,14 +322,15 @@ export const useMenuStore = create<MenuState>((set, get) => ({
   deleteCategory: async (categoryId) => {
     try {
       const { actorRole, actorId, tenantId } = getAuthContext();
-      if (get().products.some((product) => product.categoryId === categoryId)) {
+      // Kategoriye bağlı kalmış eski hammadde silmeyi engellemez; backend onu kategorisiz bırakır.
+      if (get().products.some((product) => !product.isRaw && product.categoryId === categoryId)) {
         throw new Error('Ürün içeren kategori silinemez. Önce ürünleri taşıyın.');
       }
       set({ busy: true, error: null });
       await invokeIPC('delete_category', { actorRole, actorId, tenantId, id: categoryId });
       set((state) => ({
         categories: state.categories.filter((c) => c.id !== categoryId),
-        products: state.products.filter((p) => p.categoryId !== categoryId),
+        products: state.products.map((p) => p.categoryId === categoryId ? { ...p, categoryId: '' } : p),
         filters: {
           ...state.filters,
           categoryId: state.filters.categoryId === categoryId ? null : state.filters.categoryId,

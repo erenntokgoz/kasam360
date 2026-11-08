@@ -1,8 +1,10 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { accountPost, type AccountFieldErrors } from '../../lib/webAccount';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { openSitePage } from '../auth/AccountLogin';
+import { formatCountdown, markSent, useResendCountdown } from '../../lib/verificationResend';
 
 const CODE_PATTERN = /^\d{6}$/;
 
@@ -17,19 +19,21 @@ const Field: React.FC<FieldProps> = ({ id, label, error, ...input }) => (
     <label htmlFor={id} className="block text-sm font-medium mb-1 text-[var(--text-secondary)]">
       {label}
     </label>
-    <Input id={id} className="min-h-12" aria-invalid={Boolean(error)} {...input} />
-    {error ? <p className="mt-1 text-sm font-medium text-[var(--accent-red)]">{error}</p> : null}
+    <Input id={id} className="min-h-12" aria-invalid={Boolean(error)} {...input} aria-describedby={[input['aria-describedby'], error ? `${id}-error` : null].filter(Boolean).join(' ') || undefined} />
+    {error ? <p id={`${id}-error`} className="mt-1 text-sm font-medium text-[var(--accent-red)]">{error}</p> : null}
   </div>
 );
 
 const FormAlert: React.FC<{ message: string | null }> = ({ message }) =>
   message ? (
-    <p role="alert" className="text-sm font-medium text-[var(--accent-red)]">
-      {message}
-    </p>
+    <ErrorToast message={message} />
   ) : null;
 
-export const sendEmailCode = (email: string) => accountPost('/email-otp/send-verification-otp', { email, type: 'email-verification' });
+export async function sendEmailCode(email: string) {
+  const result = await accountPost('/email-otp/send-verification-otp', { email, type: 'email-verification' });
+  if (result.ok) markSent(email);
+  return result;
+}
 
 interface RegisterFormProps {
   onRegistered: (email: string, password: string) => void;
@@ -77,7 +81,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegistered, onBack
       </div>
       <Field id="register-password" name="password" label="Şifre (en az 8 karakter)" type="password" autoComplete="new-password" />
       <label className="flex min-h-12 items-start gap-3 text-sm text-[var(--text-secondary)]">
-        <input name="consent" type="checkbox" className="mt-0.5 h-6 w-6 shrink-0 accent-[var(--ink)]" />
+        <input name="consent" type="checkbox" className="mt-0.5" />
         <span>
           <button type="button" className="underline font-medium" onClick={() => void openSitePage('/kullanim-sartlari')}>
             Kullanım şartlarını
@@ -113,6 +117,8 @@ export const VerifyCodeForm: React.FC<VerifyCodeFormProps> = ({ email, onVerifie
   const [notice, setNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const remaining = useResendCountdown(email);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -131,7 +137,9 @@ export const VerifyCodeForm: React.FC<VerifyCodeFormProps> = ({ email, onVerifie
 
   const resend = async () => {
     setFormError(null);
+    setIsSending(true);
     const sent = await sendEmailCode(email);
+    setIsSending(false);
     if (sent.ok) setNotice('Yeni kod gönderildi.');
     else setFormError(sent.error ?? null);
   };
@@ -158,8 +166,8 @@ export const VerifyCodeForm: React.FC<VerifyCodeFormProps> = ({ email, onVerifie
         <Button type="button" variant="secondary" className="min-h-12" onClick={onBack}>
           Geri
         </Button>
-        <Button type="button" variant="secondary" className="min-h-12" onClick={() => void resend()}>
-          Kodu Yeniden Gönder
+        <Button type="button" variant="secondary" className="min-h-12" disabled={remaining > 0} isLoading={isSending} onClick={() => void resend()}>
+          {remaining > 0 ? <>Tekrar Gönder <span className="tabular-nums">({formatCountdown(remaining)})</span></> : 'Kodu Yeniden Gönder'}
         </Button>
       </div>
     </form>

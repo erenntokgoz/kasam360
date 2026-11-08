@@ -50,7 +50,7 @@ export interface StockState {
   orders: StockPurchaseOrder[];
   busy: boolean;
   error: string | null;
-  pendingQuickReceipt: { orderId: string; tenantId: string; productId: string; quantity: number; unitCostCents: number; supplierId: string } | null;
+  pendingQuickReceipt: { orderId: string; tenantId: string; productId: string; quantity: number; unitCostCents: number; supplierId: string; receipt: ReceiptInput } | null;
   /** Sonucu bilinmeyen teslimin işlem kimliği; aynı seçimle yeniden denemede değişmez. */
   receiptAttempt: { key: string; operationId: string } | null;
   load: () => Promise<void>;

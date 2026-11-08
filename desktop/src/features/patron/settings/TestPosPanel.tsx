@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
 import { formatMoney } from '../../../lib/formatMoney';
 import { formatServerDateTime } from '../../../lib/date';
@@ -72,7 +73,7 @@ export const TestPosPanel: React.FC = () => {
         <input type="checkbox" checked={enabled} onChange={(event) => void toggle(event.target.checked)} />
         <span>Test modunu aç</span>
       </label>
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
       {rows.length === 0 ? <p className="text-xs text-[var(--text-secondary)]">Ödeme günlüğü boş.</p> : null}
       <ul className="divide-y divide-[var(--border)]">
         {rows.map((row) => (

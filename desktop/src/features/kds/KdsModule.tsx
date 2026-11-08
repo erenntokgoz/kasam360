@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Volume2, VolumeX, Check, Clock, Flame, Send } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
@@ -45,7 +46,7 @@ const TicketCard: React.FC<{
   const ActionIcon = action.icon;
 
   return (
-    <article className={`paper ${isUrgent ? 'slip-pink' : 'slip-yellow'} rounded-xl border pt-2 flex flex-col`}>
+    <article className={`motion-item paper ${isUrgent ? 'slip-pink' : 'slip-yellow'} rounded-xl border pt-2 flex flex-col`}>
       <header className="px-4 py-3 border-b border-[var(--border-strong)] flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-xl font-extrabold text-[var(--text-primary)] truncate">{ticket.tableName}</h3>
@@ -158,9 +159,7 @@ export const KdsModule: React.FC = () => {
       </Bar>
 
       {error ? (
-        <p role="alert" className="mx-6 mt-5 p-4 rounded-lg text-sm font-semibold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
-          {error}
-        </p>
+        <ErrorToast message={error} />
       ) : null}
 
       <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start content-start">

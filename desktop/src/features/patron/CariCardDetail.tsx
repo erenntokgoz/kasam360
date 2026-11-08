@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import { sessionArgs, useCariStore } from '../../stores/cariStore';
-import { newOperationId } from '../../lib/cariInput';
-import { balanceLabel, statementPeriod } from '../../lib/cariLedger';
+import { localDate, newOperationId } from '../../lib/cariInput';
+import { balanceLabel } from '../../lib/cariLedger';
 import { invokeIPC } from '../../services/tauriClient';
 import { formatMoney } from '../../lib/formatMoney';
 import { Button } from '../../ui/Button';
@@ -24,7 +24,10 @@ interface CariCardDetailProps {
 
 export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onBack, onChanged, onDeleted }) => {
   const { debts, statement, awaiting, loadCardDetail, loadAwaiting, deleteCard } = useCariStore();
-  const [range, setRange] = useState(() => statementPeriod('THIS_MONTH'));
+  const [range, setRange] = useState(() => {
+    const today = localDate(new Date());
+    return { from: today, to: today };
+  });
   const [payingDebt, setPayingDebt] = useState<LedgerDebt | null>(null);
   const [editingDebt, setEditingDebt] = useState<LedgerDebt | null>(null);
   const [deletingDebt, setDeletingDebt] = useState<LedgerDebt | null>(null);
@@ -110,7 +113,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onBack, on
         <CariEditDebtModal debt={editingDebt} onClose={() => setEditingDebt(null)} onSaved={handleChanged} />
       ) : null}
       {deletingDebt ? (
-        <ConfirmDialog
+        <ConfirmDialog cardFlow
           title="Kayıt silinsin mi?"
           message={formatMoney(deletingDebt.totalAmountCents)}
           onConfirm={async () => {
@@ -129,7 +132,7 @@ export const CariCardDetail: React.FC<CariCardDetailProps> = ({ card, onBack, on
         onOpened={handleChanged}
       />
       {isDeleting ? (
-        <ConfirmDialog
+        <ConfirmDialog cardFlow
           title={`${card.name} silinsin mi?`}
           message="Yalnız hareket görmemiş kart silinir."
           onConfirm={async () => {

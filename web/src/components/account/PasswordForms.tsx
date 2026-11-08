@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { authPost } from '@/lib/authApi';
-import { FormError, TextField } from './FormParts';
+import { FormError, SecureForm, SubmitButton, TextField } from './FormParts';
 
 export function ForgotPasswordForm() {
   const [isBusy, setIsBusy] = useState(false);
@@ -23,20 +23,21 @@ export function ForgotPasswordForm() {
 
   if (isDone) {
     return (
-      <p className="text-ink-soft" role="status">
-        Bu e-postayla bir hesap varsa şifre yenileme bağlantısı gönderdik. Bağlantı 1 saat geçerlidir.
-      </p>
+      <div className="k-done" role="status">
+        <b>Bağlantı gönderildi.</b>
+        <p>Bu e-postayla bir hesap varsa şifre yenileme bağlantısı gönderdik. Bağlantı 1 saat geçerlidir.</p>
+      </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <SecureForm fallbackPath="/sifremi-unuttum" onSubmit={handleSubmit} className="k-stack">
       <TextField id="email" label="E-posta" type="email" inputMode="email" spellCheck={false} autoComplete="email" required />
       <FormError message={formError} />
-      <button type="submit" className="btn" disabled={isBusy}>
-        {isBusy ? 'Gönderiliyor…' : 'Bağlantı Gönder'}
-      </button>
-    </form>
+      <SubmitButton className="k-btn k-btn-ink k-btn-block k-btn-lg" disabled={isBusy}>
+        {isBusy ? 'Gönderiliyor…' : 'Bağlantı gönder'}
+      </SubmitButton>
+    </SecureForm>
   );
 }
 
@@ -58,10 +59,13 @@ export function ResetPasswordForm({ token }: { token?: string }) {
 
   if (isDone) {
     return (
-      <div className="flex flex-col gap-3" role="status">
-        <p className="text-ink-soft">Şifreniz değişti. Diğer cihazlardaki oturumlar kapatıldı.</p>
-        <Link href="/giris" className="btn self-start">
-          Giriş Yap
+      <div className="k-stack" role="status">
+        <div className="k-done">
+          <b>Şifreniz değişti.</b>
+          <p>Diğer cihazlardaki oturumlar kapatıldı.</p>
+        </div>
+        <Link href="/giris" className="k-btn k-btn-ink k-btn-lg">
+          Giriş yap
         </Link>
       </div>
     );
@@ -69,9 +73,9 @@ export function ResetPasswordForm({ token }: { token?: string }) {
 
   if (!token) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="k-stack">
         <FormError message={formError} />
-        <Link href="/sifremi-unuttum" className="text-link">
+        <Link href="/sifremi-unuttum" className="k-link">
           Yeni bağlantı iste
         </Link>
       </div>
@@ -79,12 +83,12 @@ export function ResetPasswordForm({ token }: { token?: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <SecureForm fallbackPath="/sifre-yenile" onSubmit={handleSubmit} className="k-stack">
       <TextField id="password" label="Yeni şifre (en az 8 karakter)" type="password" autoComplete="new-password" required />
       <FormError message={formError} />
-      <button type="submit" className="btn" disabled={isBusy}>
-        {isBusy ? 'Kaydediliyor…' : 'Şifreyi Değiştir'}
-      </button>
-    </form>
+      <SubmitButton className="k-btn k-btn-ink k-btn-block k-btn-lg" disabled={isBusy}>
+        {isBusy ? 'Kaydediliyor…' : 'Şifreyi değiştir'}
+      </SubmitButton>
+    </SecureForm>
   );
 }

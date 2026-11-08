@@ -1,23 +1,19 @@
 import type { Metadata } from 'next';
-import { PageSheet } from '@/components/PageSheet';
+import { pageMetadata } from '@/content/pageMetadata';
+import { PageShell } from '@/components/PageShell';
 import { LoginForm } from '@/components/account/LoginForm';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Giriş Yap',
   description: 'KASAM360 hesabınıza giriş yapın.',
-  alternates: { canonical: '/giris' },
-};
+  path: '/giris',
+});
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   return (
-    <PageSheet copy="Asıl nüsha">
-      <div className="sheet-grid">
-        <h1 className="sheet-title">Hesabınıza girin.</h1>
-        <div className="min-w-0">
-          <LoginForm linkError={error} />
-        </div>
-      </div>
-    </PageSheet>
+    <PageShell title="Hesabınıza girin." layout="split">
+      <LoginForm linkError={error} />
+    </PageShell>
   );
 }

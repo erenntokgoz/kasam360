@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { errorText } from '../../lib/cariInput';
 import { invokeIPC } from '../../services/tauriClient';
@@ -19,11 +20,13 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({ orderId,
   const [isSending, setIsSending] = useState(false);
 
   const submit = async () => {
-    if (isSending) return;
-    const { actorId, actorRole, tenantId } = sessionArgs();
+    const description = reason.trim();
+    if (isSending || !description) return;
     setIsSending(true);
+    setError(null);
     try {
-      await invokeIPC('create_order_change_request', { orderId, reason, actorId, actorRole, tenantId });
+      const { actorId, actorRole, tenantId } = sessionArgs();
+      await invokeIPC('create_order_change_request', { orderId, reason: description, actorId, actorRole, tenantId });
       onSubmitted();
     } catch (caught) {
       setError(errorText(caught));
@@ -33,8 +36,8 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({ orderId,
   };
 
   return (
-    <Modal isOpen onClose={() => { if (!isSending) onClose(); }} title="Değişiklik Talebi" subtitle={receiptLabel} maxWidth="md">
-      <div className="space-y-3">
+    <Modal cardFlow isOpen onClose={() => { if (!isSending) onClose(); }} title="Değişiklik Talebi" subtitle={receiptLabel} maxWidth="md">
+      <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
         <label htmlFor="change-reason" className="block text-sm font-semibold text-[var(--text-secondary)]">
           Gerekçe
         </label>
@@ -42,18 +45,19 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({ orderId,
           id="change-reason"
           rows={3}
           maxLength={500}
+          disabled={isSending}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           className="w-full min-h-24 p-3 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] text-[var(--text-primary)]"
         />
-        {error ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" size="lg" disabled={isSending} onClick={onClose}>Vazgeç</Button>
-          <Button variant="primary" size="lg" disabled={reason.trim() === ''} isLoading={isSending} onClick={() => void submit()}>
+        {error ? <ErrorToast message={error} /> : null}
+        <div className="flex justify-between gap-2 border-t border-[var(--border)] pt-3">
+          <Button type="button" disabled={isSending} onClick={onClose}>Fişe Dön</Button>
+          <Button type="submit" variant="primary" disabled={reason.trim() === ''} isLoading={isSending}>
             Talep Gönder
           </Button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 };

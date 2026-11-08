@@ -32,7 +32,7 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={activateOnKey(() => onSelect())}
-      className={`rounded-xl border p-3 transition-colors cursor-pointer ${
+      className={`motion-item rounded-xl border p-3 transition-colors cursor-pointer ${
         isSelected
           ? 'bg-[var(--bg-card)] border-[var(--border-strong)] shadow-sm'
           : 'bg-[var(--bg-card)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
@@ -85,10 +85,11 @@ export const OrderTicketLineItem: React.FC<OrderTicketLineItemProps> = ({
           {/* Not Düzenleme */}
           {onSetNote ? (
             <div className="flex items-center gap-1.5 pt-1">
+              <span className="text-sm font-semibold">Not</span>
               <input
                 type="text"
+                aria-label="Not"
                 defaultValue={item.notes || ''}
-                placeholder="Özel istek / pişme / mutfak notu..."
                 onBlur={(e) => onSetNote(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {

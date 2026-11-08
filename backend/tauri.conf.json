@@ -4,8 +4,8 @@
   "version": "0.2.0",
   "identifier": "com.kasam360.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm --prefix desktop run dev",
+    "beforeBuildCommand": "npm --prefix desktop run build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../desktop/dist"
   },

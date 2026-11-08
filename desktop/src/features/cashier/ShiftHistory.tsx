@@ -1,4 +1,6 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
+import { Button } from '../../ui/Button';
 import { errorText } from '../../lib/cariInput';
 import { formatDateTime } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
@@ -18,7 +20,7 @@ interface ShiftRow {
 const cell = 'px-3 py-2 border-b border-[var(--border)]';
 
 /** Kapanan günler kasadan silinmez: fark hangi gün oluştuysa orada görünür. */
-export const ShiftHistory: React.FC = () => {
+export const ShiftHistory: React.FC<{ onSelect: (id: string) => void }> = ({ onSelect }) => {
   const [rows, setRows] = useState<ShiftRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +34,7 @@ export const ShiftHistory: React.FC = () => {
   return (
     <div className="space-y-2">
       <h3 className="print-title text-sm font-bold">Geçmiş Vardiyalar</h3>
-      {error ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
       {rows.length === 0 && !error ? <p className="text-sm">Kapanmış vardiya yok.</p> : null}
       {rows.length > 0 ? (
         <div className="overflow-x-auto">
@@ -41,9 +43,10 @@ export const ShiftHistory: React.FC = () => {
               <tr className="text-left">
                 <th className={cell}>Açılış</th>
                 <th className={cell}>Kapanış</th>
-                <th className={`${cell} text-right`}>Beklenen</th>
+                <th className={`${cell} text-right`}>Açılış Nakdi</th>
                 <th className={`${cell} text-right`}>Sayılan</th>
                 <th className={`${cell} text-right`}>Fark</th>
+                <th className={cell}>Rapor</th>
               </tr>
             </thead>
             <tbody>
@@ -54,6 +57,7 @@ export const ShiftHistory: React.FC = () => {
                   <td className={`${cell} text-right tabular-nums`}>{formatMoney(row.expected_amount_cents)}</td>
                   <td className={`${cell} text-right tabular-nums`}>{row.actual_amount_cents == null ? '—' : formatMoney(row.actual_amount_cents)}</td>
                   <td className={`${cell} text-right tabular-nums font-bold`}>{row.difference_cents == null ? '—' : formatMoney(row.difference_cents)}</td>
+                  <td className={cell}><Button size="sm" disabled={row.actual_amount_cents == null} onClick={() => onSelect(row.id)}>Z Raporu</Button></td>
                 </tr>
               ))}
             </tbody>

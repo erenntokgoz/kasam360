@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ödemeler · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script><script src="labs-shell.js" defer></script>
+<style>
+  .mode { margin: 16px 28px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); }
+  .mode b { color: var(--warn); } .mode span { flex: 1 1 300px; } .mode a { color: var(--text); }
+  @media (max-width: 900px) { .mode { margin: 14px 16px 0; } }
+</style>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği, sabit test verisi. Gerçek ödeme yok, iade yapılmaz.</span>
+<div class="app">
+  <aside class="rail" data-page="payments"></aside>
+  <div class="main">
+    <div class="bar"><span class="crumb">KASAM360 / <b>Ödemeler</b></span>
+      <label class="search"><input placeholder="İşletme veya sağlayıcı referansı" aria-label="Ödeme ara"><kbd>/</kbd></label></div>
+    <div class="page">
+      <div class="ph"><div><h1>Ödemeler</h1><p>Kasım 2026</p></div>
+        <div class="acts"><button class="btn btn-line sm">Ay seç</button><button class="btn btn-line sm">Dışa aktar</button></div></div>
+      <div class="mode" role="status"><b>Test modu</b><span>Ödeme sağlayıcısı test anahtarlarıyla çalışıyor; kartlardan para çekilmez.</span><a href="labs-settings.html">Teknik ayarlar</a></div>
+      <div class="stat" id="stat"></div>
+      <div class="chips" role="group" aria-label="Filtre">
+        <button aria-pressed="true">Tümü <span class="num">6</span></button><button aria-pressed="false">Onaylandı <span class="num">4</span></button>
+        <button aria-pressed="false"><span class="warn-dot"></span>Reddedildi <span class="num">1</span></button><button aria-pressed="false">İade <span class="num">1</span></button>
+      </div>
+      <div class="wrapx">
+        <div class="tbl"><table class="grid">
+          <thead><tr><th>Tarih</th><th>İşletme</th><th>Tür</th><th>Sonuç</th><th>Sağlayıcı ref.</th><th class="r">Tutar</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  // Tutarlar kuruş; özet satırları aynı listeden toplanır.
+  const tl = (c) => (c / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + ' TL';
+  const P = [
+    ['6 Kas 08.00', 'TEST_A Lokanta', 'Aylık yenileme', 'ok', 'pay_test_7Q2M', 100000],
+    ['5 Kas 14.22', 'TEST_C Bar', 'Aylık yenileme', 'ok', 'pay_test_7P9K', 100000],
+    ['5 Kas 10.52', 'TEST_B Kafe', 'Aylık yenileme', 'bad', 'pay_test_7P8X', 100000],
+    ['3 Kas 11.40', 'TEST_G Kahvaltı Evi', 'İade, müşteri isteği', 'refund', 'pay_test_7L0R', -100000],
+    ['3 Kas 09.10', 'TEST_D Pastane', 'Aylık yenileme', 'ok', 'pay_test_7N1D', 100000],
+    ['2 Kas 16.05', 'TEST_G Kahvaltı Evi', 'Aylık yenileme', 'ok', 'pay_test_7M4A', 100000],
+  ];
+  const lab = { ok: ['ok', 'Onaylandı'], bad: ['bad', 'Reddedildi'], refund: ['mute', 'İade edildi'] };
+  const sum = (k) => P.filter((p) => p[3] === k).reduce((s, p) => s + p[5], 0);
+  const net = sum('ok') + sum('refund');
+  document.getElementById('stat').innerHTML =
+    `<div><small>Onaylanan</small><b class="num">${tl(sum('ok'))}</b></div><div><small>İade</small><b class="num">${tl(-sum('refund'))}</b></div>` +
+    `<div><small>Net</small><b class="num">${tl(net)}</b></div><div class="bad"><small>Reddedilen</small><b class="num">${P.filter((p) => p[3] === 'bad').length} ödeme</b></div>`;
+  document.getElementById('rows').innerHTML = P.map(([d, b, t, s, ref, c]) =>
+    `<tr><td class="num">${d}</td><td><a href="labs-business.html" style="text-decoration:none">${b}</a></td><td>${t}</td><td><span class="pill ${lab[s][0]}"><span class="dot"></span>${lab[s][1]}</span></td>
+     <td class="mono muted">${ref}</td><td class="r num">${c < 0 ? '−' + tl(-c) : tl(c)}</td>
+     <td><div class="row-acts"><button>Ayrıntı</button>${s === 'ok' ? '<button>İade et</button>' : s === 'bad' ? '<button>Yeniden dene maili</button>' : ''}</div></td></tr>`).join('');
+</script>
+</body>
+</html>

@@ -1,121 +1,146 @@
-// Menü Katalog Sekmesi
-// Sol kategori ağacı, merkez ürün kartları ızgarası, sağ detay paneli.
-// Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Search } from 'lucide-react';
+import { useAuthStore } from '../../stores/authStore';
 import { useMenuExtrasStore } from '../../stores/menuExtrasStore';
-import { CatalogBulkBar } from './CatalogBulkBar';
 import { useMenuStore } from '../../stores/menuStore';
+import { Button } from '../../ui/Button';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { Input } from '../../ui/Input';
+import { errorText } from '../../lib/cariInput';
+import { formatNumber } from '../../lib/numberText';
+import { filterMenuProducts, isOnSale, menuProducts } from '../../lib/productState';
+import { CatalogBulkBar } from './CatalogBulkBar';
 import { MenuCategoryTree } from './MenuCategoryTree';
 import { MenuProductCard } from './MenuProductCard';
 import { MenuDetailPanel } from './MenuDetailPanel';
-import { MenuCategoryModal } from './MenuCategoryModal';
-import { MenuModifierModal } from './MenuModifierModal';
-import { filterMenuProducts, menuProducts } from '../../lib/productState';
-import { Button } from '../../ui/Button';
+import { ProductActions } from './ProductActions';
 
 export const MenuCatalogTab: React.FC = () => {
   const {
-    products,
-    selectedProductId,
-    setSelectedProductId,
-    detailMode,
-    setDetailMode,
-    searchQuery,
-    filters,
+    products, categories, setSelectedProductId, detailMode, setDetailMode,
+    searchQuery, setSearchQuery, filters, setCategoryFilter,
+    toggleFilterTukendi, toggleFilterSatista, toggleFilterSatisDisi,
   } = useMenuStore();
-
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [isModifierModalOpen, setIsModifierModalOpen] = useState(false);
-  const [isPageOpen, setIsPageOpen] = useState(false);
+  const canEditCatalog = useAuthStore((state) => state.user?.role === 'OWNER');
+  const [openedProductId, setOpenedProductId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [isSorting, setIsSorting] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const savingOrder = useRef(false);
   const extras = useMenuExtrasStore((state) => state.products);
   const parents = useMenuExtrasStore((state) => state.parents);
   const loadExtras = useMenuExtrasStore((state) => state.load);
   const saveOrder = useMenuExtrasStore((state) => state.saveOrder);
 
   useEffect(() => {
-    void loadExtras().catch(() => undefined);
+    void loadExtras().catch((caught: unknown) => setOrderError(errorText(caught)));
   }, [loadExtras, products.length]);
-  // Katalog açılırken ilk ürün seçili gelir; sayfa yalnız karta tıklanınca açılır.
-  const showPage = detailMode === 'new' || (isPageOpen && selectedProductId !== null);
 
-  const saleProducts = menuProducts(products);
-  const filteredProducts = filterMenuProducts(products, searchQuery, filters, parents)
-    .sort((a, b) => (extras[a.id]?.displayOrder ?? 0) - (extras[b.id]?.displayOrder ?? 0));
+  const orderedProducts = useMemo(() => menuProducts(products)
+    .sort((a, b) => (extras[a.id]?.displayOrder ?? 0) - (extras[b.id]?.displayOrder ?? 0)), [products, extras]);
 
-  const move = (index: number, step: number) => {
-    const ids = filteredProducts.map((p) => p.id);
+  const filteredProducts = filterMenuProducts(orderedProducts, searchQuery, filters, parents);
+  const scopedProducts = filterMenuProducts(orderedProducts, searchQuery, {
+    ...filters, tukendi: false, satista: false, satisDisi: false,
+  }, parents);
+  const activeFilter = filters.tukendi ? toggleFilterTukendi
+    : filters.satista ? toggleFilterSatista
+    : filters.satisDisi ? toggleFilterSatisDisi : null;
+  const statuses = [
+    { label: 'Tümü', count: scopedProducts.length, active: activeFilter === null, action: () => activeFilter?.() },
+    { label: 'Satışta', count: scopedProducts.filter(isOnSale).length, active: filters.satista, action: toggleFilterSatista },
+    { label: 'Tükendi', count: scopedProducts.filter((product) => product.is86).length, active: filters.tukendi, action: toggleFilterTukendi },
+    { label: 'Satış Dışı', count: scopedProducts.filter((product) => !product.isActive).length, active: filters.satisDisi, action: toggleFilterSatisDisi },
+  ];
+
+  const move = async (index: number, step: number) => {
     const target = index + step;
-    if (target < 0 || target >= ids.length) return;
-    [ids[index], ids[target]] = [ids[target], ids[index]];
-    // Görünmeyen ürünler sıranın sonunda kalır: filtre başka ürünü kaydırmaz.
-    const rest = saleProducts.map((p) => p.id).filter((id) => !ids.includes(id));
-    void saveOrder([...ids, ...rest]);
+    if (target < 0 || target >= filteredProducts.length || savingOrder.current) return;
+    savingOrder.current = true;
+    setOrderError(null);
+    const currentId = filteredProducts[index].id;
+    const targetId = filteredProducts[target].id;
+    // Filtreye girmeyen ürünler kendi yerlerini korur.
+    const ids = orderedProducts.map(({ id }) => id === currentId ? targetId : id === targetId ? currentId : id);
+    try {
+      await saveOrder(ids);
+    } catch (caught) {
+      setOrderError(errorText(caught));
+    } finally {
+      savingOrder.current = false;
+    }
   };
 
-  if (showPage) {
-    return (
-      <div className="flex-1 flex min-h-0 overflow-hidden relative">
-        <MenuDetailPanel onOpenModifierModal={() => setIsModifierModalOpen(true)} />
-        <MenuModifierModal isOpen={isModifierModalOpen} onClose={() => setIsModifierModalOpen(false)} />
-      </div>
-    );
+  if (detailMode === 'new') {
+    return <MenuDetailPanel onBack={() => void setSelectedProductId(null)} />;
   }
 
+  const openedProduct = orderedProducts.find((product) => product.id === openedProductId);
+  const visibleSelection = filteredProducts.filter((product) => selected.includes(product.id)).map((product) => product.id);
+  const category = categories.find((item) => item.id === filters.categoryId);
+
   return (
-    <div className="flex-1 flex min-h-0 overflow-hidden relative bg-[var(--bg-canvas)]">
-      {/* 1. Sol Kategori Ağacı */}
-      <MenuCategoryTree
-        onOpenNewCategoryModal={() => setIsCategoryModalOpen(true)}
-      />
-
-      {/* 2. Merkez Ürün Izgarası */}
-      <div className="flex-1 overflow-y-auto p-4 bg-[var(--bg-canvas)] space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          {saleProducts.length > 0 ? (
-            <CatalogBulkBar
-              selected={selected}
-              onClear={() => setSelected([])}
-              isSorting={isSorting}
-              onToggleSort={() => setIsSorting((value) => !value)}
-            />
-          ) : <span />}
-          <Button variant="primary" className="min-h-12" onClick={() => setDetailMode('new')}>Yeni Ürün</Button>
-        </div>
-        {filteredProducts.length === 0 ? (
-          <p className="p-4 text-sm font-semibold">{saleProducts.length === 0 ? 'Henüz ürün yok.' : 'Bu filtrede ürün yok.'}</p>
-        ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
-            {filteredProducts.map((prod, index) => (
-              <MenuProductCard
-                key={prod.id}
-                product={prod}
-                station={extras[prod.id]?.station ?? null}
-                isChecked={selected.includes(prod.id)}
-                onCheck={(isOn) => setSelected((list) => (isOn ? [...list, prod.id] : list.filter((id) => id !== prod.id)))}
-                onMove={isSorting ? (step) => move(index, step) : undefined}
-                isSelected={selectedProductId === prod.id}
-                onSelect={(id) => {
-                  setSelectedProductId(id);
-                  setIsPageOpen(true);
-                }}
-              />
-            ))}
+    <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+      <ErrorToast message={orderError} />
+      <header className="shrink-0 border-b border-[var(--border)] bg-[var(--bg-panel)] px-3 py-2 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-bold mr-2">Ürünler</h2>
+          <div className="relative min-w-28 flex-1">
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
+            <Input type="search" aria-label="Ürün ara" className="!pl-9"
+              value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setSelected([]); }} />
           </div>
-        )}
-      </div>
+          {canEditCatalog ? (
+            <Button type="button" variant="primary" onClick={() => {
+              setDetailMode('new');
+            }}>Yeni Ürün</Button>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2 overflow-x-auto" role="group" aria-label="Ürün Durumu">
+          {statuses.map(({ label, count, active, action }) => (
+            <Button key={label} type="button" size="sm" className="shrink-0" aria-pressed={active}
+              variant={active ? 'selected' : 'secondary'} onClick={() => { action(); setSelected([]); }}>
+              {label} <span className="tabular-nums text-xs">{formatNumber(count)}</span>
+            </Button>
+          ))}
+        </div>
+      </header>
 
-      {/* Modallar */}
-      <MenuCategoryModal
-        isOpen={isCategoryModalOpen}
-        onClose={() => setIsCategoryModalOpen(false)}
-      />
-      <MenuModifierModal
-        isOpen={isModifierModalOpen}
-        onClose={() => setIsModifierModalOpen(false)}
-      />
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden lg:flex-row">
+        <MenuCategoryTree onSelect={(id) => { setCategoryFilter(id); setSelected([]); }} />
+        <section className="min-h-0 min-w-0 flex flex-1 flex-col">
+          <div className="shrink-0 flex flex-wrap justify-between items-center gap-2 px-3 py-2 border-b border-[var(--border)]">
+            <span className="text-sm font-semibold">
+              {category?.name ?? 'Tüm Kategoriler'} <span className="text-[var(--text-secondary)] tabular-nums">· {formatNumber(filteredProducts.length)} ürün</span>
+            </span>
+            {filteredProducts.length > 0 ? (
+              <CatalogBulkBar selected={visibleSelection} onClear={() => setSelected([])}
+                isSorting={isSorting} onToggleSort={() => setIsSorting((value) => !value)} canEditCatalog={canEditCatalog} />
+            ) : null}
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-3">
+            {filteredProducts.length === 0 ? (
+              <p className="p-3 text-sm text-[var(--text-secondary)]">
+                {orderedProducts.length === 0 ? 'Henüz ürün yok.' : 'Eşleşen ürün yok.'}
+              </p>
+            ) : (
+              <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,190px),1fr))] gap-3">
+                {filteredProducts.map((product, index) => (
+                  <li key={product.id}>
+                    <MenuProductCard product={product} station={extras[product.id]?.station ?? null}
+                      isChecked={selected.includes(product.id)}
+                      onCheck={(isOn) => setSelected((list) => isOn ? [...list, product.id] : list.filter((id) => id !== product.id))}
+                      onMove={isSorting ? (step) => void move(index, step) : undefined}
+                      isSelected={openedProductId === product.id}
+                      onSelect={setOpenedProductId} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      </div>
+      {openedProduct ? <ProductActions key={openedProduct.id} product={openedProduct} onClose={() => setOpenedProductId(null)} /> : null}
     </div>
   );
 };

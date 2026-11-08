@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/content/pageMetadata';
 import Link from 'next/link';
-import { PageSheet } from '@/components/PageSheet';
+import { PageShell } from '@/components/PageShell';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Adisyon Programı Özellikleri',
   description: 'Masa, mutfak, tahsilat, stok, cari, personel ve yedekleme özellikleri.',
-  alternates: { canonical: '/ozellikler' },
-};
+  path: '/ozellikler',
+});
 
 const groups = [
   {
@@ -85,40 +86,34 @@ const groups = [
 
 export default function FeaturesPage() {
   return (
-    <PageSheet copy="Garson nüshası">
-      <header className="flex max-w-3xl flex-col gap-3">
-        <h1 className="sheet-title">Servisin bütün işi tek uygulamada.</h1>
-        <p className="text-ink-soft">Windows üzerinde çalışır. Burada yalnız uygulamada bulunan işlevler yazılıdır.</p>
-      </header>
-
-      <div className="grid gap-x-14 gap-y-8 md:grid-cols-2">
+    <PageShell
+      title="Servisin bütün işi tek uygulamada."
+      lead="Windows üzerinde çalışır. Burada yalnız uygulamada bulunan işlevler yazılıdır."
+    >
+      <div className="k-groups">
         {groups.map((group) => (
           <section key={group.title} className="min-w-0">
-            <h2 className="form-row form-head text-2xl font-bold tracking-tight">{group.title}</h2>
+            <h2>{group.title}</h2>
             <ul>
               {group.items.map((item) => (
-                <li key={item} className="form-row">
-                  {item}
-                </li>
+                <li key={item}>{item}</li>
               ))}
             </ul>
           </section>
         ))}
       </div>
 
-      <section className="flex max-w-3xl flex-col gap-2">
-        <h2 className="text-2xl font-bold tracking-tight">Bu sürümde olmayanlar</h2>
-        <p className="text-ink-soft">
+      <section className="k-note">
+        <h2 className="k-section-title">Bu sürümde olmayanlar</h2>
+        <p>
           Paket servis platformu entegrasyonu, arayan numara gösterme, çoklu şube yönetimi, e-Adisyon ve yazar kasa
           entegrasyonu yoktur. Mali belgeyi mevcut yazar kasanız keser.
         </p>
       </section>
 
-      <div>
-        <Link href="/kayit" className="btn">
-          Kayıt Olun
-        </Link>
+      <div className="k-row" style={{ marginTop: 32 }}>
+        <Link href="/kayit" className="k-btn k-btn-buy k-btn-lg">Kayıt olun</Link>
       </div>
-    </PageSheet>
+    </PageShell>
   );
 }

@@ -1,5 +1,5 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
 import { useFloorStore } from '../../../stores/floorStore';
 import type { FloorTable, FloorZone } from '../../../types/floor';
@@ -10,16 +10,18 @@ import { Modal } from '../../../ui/Modal';
 import { NumberInput } from '../../../ui/NumberInput';
 import { AddTablesModal } from './AddTablesModal';
 import { KrokiEditor } from './KrokiEditor';
+import { RecordCard } from '../RecordCard';
 
 export const TablesSettings: React.FC = () => {
-  const { zones, tables, addZone, renameZone, removeZone, updateTable, removeTable, loadFloorPlan, setKrokiEditMode } = useFloorStore();
+  const { zones, tables, floorError, addZone, renameZone, removeZone, updateTable, removeTable, loadFloorPlan, setKrokiEditMode } = useFloorStore();
   const [zoneId, setZoneId] = useState<string | null>(null);
   const [zoneName, setZoneName] = useState('');
   const [editingZone, setEditingZone] = useState<FloorZone | null>(null);
   const [deletingZone, setDeletingZone] = useState<FloorZone | null>(null);
   const [isZoneOpen, setIsZoneOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const [editing, setEditing] = useState<FloorTable | null>(null);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [editingTable, setEditingTable] = useState(false);
   const [tableName, setTableName] = useState('');
   const [tableSeats, setTableSeats] = useState('');
   const [deleting, setDeleting] = useState<FloorTable | null>(null);
@@ -36,6 +38,7 @@ export const TablesSettings: React.FC = () => {
 
   const activeZone = zones.find((zone) => zone.id === zoneId) ?? zones[0] ?? null;
   const zoneTables = tables.filter((table) => table.zoneId === activeZone?.id);
+  const selectedTable = tables.find((table) => table.id === selectedTableId);
   const seatCount = Number.parseInt(tableSeats, 10);
   const isSeatCountValid = seatCount >= 1 && seatCount <= 30;
 
@@ -52,6 +55,8 @@ export const TablesSettings: React.FC = () => {
   };
 
   const closeZone = () => {
+    if (isBusy) return;
+    setError(null);
     setIsZoneOpen(false);
     setEditingZone(null);
     setZoneName('');
@@ -62,61 +67,69 @@ export const TablesSettings: React.FC = () => {
       const trimmed = zoneName.trim();
       if (editingZone) await renameZone(editingZone.id, trimmed);
       else setZoneId(await addZone(trimmed));
-      closeZone();
+      setIsZoneOpen(false);
+      setEditingZone(null);
+      setZoneName('');
     });
 
   const saveTableName = () =>
     run(async () => {
-      if (editing) await updateTable(editing.id, tableName.trim(), Number.parseInt(tableSeats, 10));
-      setEditing(null);
+      if (selectedTable) await updateTable(selectedTable.id, tableName.trim(), seatCount);
+      setEditingTable(false);
     });
 
   return (
     <div className="space-y-4">
-      {error ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {floorError ? <ErrorToast message={floorError} /> : null}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
-          <h3 className="print-title">Kısımlar</h3>
-          <Button variant="primary" className="w-full min-h-12" onClick={() => setIsZoneOpen(true)}>Kısım Ekle</Button>
-          {isZoneOpen ? (
-            <Modal isOpen onClose={closeZone} title={editingZone ? 'Kısmı Düzenle' : 'Kısım Ekle'} maxWidth="sm">
-              <div className="space-y-3">
-                <Input aria-label="Kısım adı" placeholder="Kısım adı" className="min-h-12" value={zoneName} maxLength={40} autoFocus onChange={(event) => setZoneName(event.target.value)} />
-                <div className="flex gap-2">
-                  <Button variant="secondary" className="flex-1 min-h-12" onClick={closeZone}>Vazgeç</Button>
-                  <Button variant="primary" className="flex-1 min-h-12" disabled={!zoneName.trim()} isLoading={isBusy} onClick={() => void saveZone()}>Kaydet</Button>
-                </div>
-              </div>
-            </Modal>
-          ) : null}
-          <ul className="divide-y divide-[var(--border)] max-h-[22rem] overflow-y-auto">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="print-title">Kısımlar</h3>
+            <Button variant="primary" onClick={() => { setError(null); setIsZoneOpen(true); }}>Kısım Ekle</Button>
+          </div>
+          {zones.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Henüz kısım yok.</p> : null}
+          <ul className="grid gap-2">
             {zones.map((zone) => (
-              <li key={zone.id} className="flex items-center gap-1 py-1">
-                <button
-                  type="button"
-                  aria-pressed={zone.id === activeZone?.id}
-                  className={`flex-1 min-w-0 min-h-12 px-2 rounded text-left font-semibold truncate ${zone.id === activeZone?.id ? 'bg-[var(--marker)]' : ''}`}
-                  onClick={() => setZoneId(zone.id)}
-                >
-                  {zone.name} <span className="tabular-nums font-normal">{zone.tableCount}</span>
-                </button>
-                <Button
-                  variant="ghost"
-                  aria-label={`${zone.name} düzenle`}
-                  onClick={() => {
-                    setEditingZone(zone);
-                    setZoneName(zone.name);
-                    setIsZoneOpen(true);
-                  }}
-                >
-                  <Pencil className="w-5 h-5" />
-                </Button>
-                <Button variant="ghost" aria-label={`${zone.name} sil`} disabled={zone.tableCount > 0} onClick={() => setDeletingZone(zone)}>
-                  <Trash2 className="w-5 h-5" />
+              <li key={zone.id}>
+                <Button type="button" aria-pressed={zone.id === activeZone?.id}
+                  variant={zone.id === activeZone?.id ? 'selected' : 'secondary'}
+                  className="w-full min-w-0 !justify-between !text-left" onClick={() => setZoneId(zone.id)}>
+                  <span className="min-w-0 truncate">{zone.name}</span>
+                  <span className="shrink-0 tabular-nums">{zone.tableCount} masa</span>
                 </Button>
               </li>
             ))}
           </ul>
+          {activeZone ? (
+            <Button onClick={() => {
+              setError(null);
+              setEditingZone(activeZone);
+              setZoneName(activeZone.name);
+              setIsZoneOpen(true);
+            }}>Seçili Kısmı Düzenle</Button>
+          ) : null}
+          {isZoneOpen ? (
+            <Modal cardFlow isOpen onClose={closeZone} title={editingZone?.name ?? 'Kısım Ekle'} maxWidth="sm">
+              <form className="space-y-3" onSubmit={(event) => {
+                event.preventDefault();
+                if (zoneName.trim() && !isBusy) void saveZone();
+              }}>
+                <label className="block space-y-1 text-sm font-semibold">
+                  <span>Kısım adı</span>
+                  <Input value={zoneName} maxLength={40} onChange={(event) => setZoneName(event.target.value)} required />
+                </label>
+                {error ? <ErrorToast message={error} /> : null}
+                <div className="flex flex-wrap justify-end gap-2">
+                  {editingZone && activeZone?.id === editingZone.id ? (
+                    <Button type="button" variant="ghost" className="mr-auto" disabled={isBusy || activeZone.tableCount > 0}
+                      onClick={() => { setDeletingZone(activeZone); closeZone(); }}>Kısmı Sil</Button>
+                  ) : null}
+                  <Button type="button" disabled={isBusy} onClick={closeZone}>Vazgeç</Button>
+                  <Button type="submit" variant="primary" disabled={!zoneName.trim()} isLoading={isBusy}>Kaydet</Button>
+                </div>
+              </form>
+            </Modal>
+          ) : null}
         </section>
 
         <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-3">
@@ -126,28 +139,17 @@ export const TablesSettings: React.FC = () => {
               Masa Ekle
             </Button>
           </div>
-          <ul className="grid gap-x-4 sm:grid-cols-2 xl:grid-cols-3 max-h-[22rem] overflow-y-auto pr-1">
+          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {zoneTables.map((table) => (
-              <li key={table.id} className="flex items-center gap-1 border-b border-[var(--border)] py-1">
-                <span className="min-w-0 flex-1 font-bold truncate">{table.tableNumber}</span>
-                <span className="text-sm tabular-nums text-[var(--text-secondary)]">{table.capacity} kişi</span>
-                <Button
-                  variant="ghost"
-                  aria-label={`${table.tableNumber} düzenle`}
-                  onClick={() => {
-                    setEditing(table);
-                    setTableName(table.tableNumber);
-                    setTableSeats(String(table.capacity));
-                  }}
-                >
-                  <Pencil className="w-5 h-5" />
-                </Button>
-                <Button variant="ghost" aria-label={`${table.tableNumber} sil`} disabled={table.status !== 'EMPTY'} onClick={() => setDeleting(table)}>
-                  <Trash2 className="w-5 h-5" />
-                </Button>
+              <li key={table.id}>
+                <RecordCard title={table.tableNumber} description={`${table.capacity} kişi`} onOpen={() => {
+                  setError(null);
+                  setSelectedTableId(table.id);
+                }} />
               </li>
             ))}
           </ul>
+          {activeZone && zoneTables.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Bu kısımda masa yok.</p> : null}
         </section>
       </div>
 
@@ -159,23 +161,49 @@ export const TablesSettings: React.FC = () => {
       {isKrokiOpen ? <KrokiEditor onClose={() => setIsKrokiOpen(false)} /> : null}
 
       {isAdding && activeZone ? <AddTablesModal zones={zones} initialZoneId={activeZone.id} onClose={() => setIsAdding(false)} /> : null}
-      <Modal isOpen={editing !== null} onClose={() => setEditing(null)} title="Masayı Düzenle" maxWidth="sm">
-        <div className="space-y-3">
-          <label className="block text-sm font-semibold text-[var(--text-secondary)]">
-            Masa adı
-            <Input className="min-h-12 mt-1" value={tableName} maxLength={40} autoFocus onChange={(event) => setTableName(event.target.value)} />
-          </label>
-          <label className="block text-sm font-semibold text-[var(--text-secondary)]">
-            Kişi
-            <NumberInput kind="integer" pinpad={false} className="mt-1" value={tableSeats} onValueChange={setTableSeats} />
-          </label>
-          <Button variant="primary" className="w-full min-h-12" disabled={!tableName.trim() || !isSeatCountValid} isLoading={isBusy} onClick={() => void saveTableName()}>
-            Kaydet
-          </Button>
-        </div>
-      </Modal>
-      {deleting ? <ConfirmDialog title={`${deleting.tableNumber} silinsin mi?`} onConfirm={() => removeTable(deleting.id)} onClose={() => setDeleting(null)} /> : null}
-      {deletingZone ? <ConfirmDialog title={`${deletingZone.name} silinsin mi?`} onConfirm={() => removeZone(deletingZone.id)} onClose={() => setDeletingZone(null)} /> : null}
+      {selectedTable && !deleting ? (
+        <Modal cardFlow isOpen onClose={() => {
+          if (!isBusy) { setSelectedTableId(null); setEditingTable(false); setError(null); }
+        }} title={selectedTable.tableNumber} subtitle={activeZone?.name} maxWidth="sm">
+          {editingTable ? (
+            <form className="space-y-3" onSubmit={(event) => {
+              event.preventDefault();
+              if (tableName.trim() && isSeatCountValid && !isBusy) void saveTableName();
+            }}>
+              <label className="block space-y-1 text-sm font-semibold">
+                <span>Masa adı</span>
+                <Input value={tableName} maxLength={40} onChange={(event) => setTableName(event.target.value)} required />
+              </label>
+              <label className="block space-y-1 text-sm font-semibold">
+                <span>Kişi</span>
+                <NumberInput kind="integer" pinpad={false} value={tableSeats} onValueChange={setTableSeats} />
+              </label>
+              {error ? <ErrorToast message={error} /> : null}
+              <div className="flex justify-end gap-2">
+                <Button type="button" disabled={isBusy} onClick={() => { setEditingTable(false); setError(null); }}>Vazgeç</Button>
+                <Button type="submit" variant="primary" disabled={!tableName.trim() || !isSeatCountValid} isLoading={isBusy}>Kaydet</Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm tabular-nums">Kapasite: {selectedTable.capacity} kişi</p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" disabled={selectedTable.status !== 'EMPTY'} onClick={() => setDeleting(selectedTable)}>Masayı Sil</Button>
+                <Button variant="primary" onClick={() => {
+                  setTableName(selectedTable.tableNumber);
+                  setTableSeats(String(selectedTable.capacity));
+                  setEditingTable(true);
+                }}>Düzenle</Button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      ) : null}
+      {deleting ? <ConfirmDialog cardFlow title={`${deleting.tableNumber} silinsin mi?`} onConfirm={async () => {
+        await removeTable(deleting.id);
+        setSelectedTableId(null);
+      }} onClose={() => setDeleting(null)} /> : null}
+      {deletingZone ? <ConfirmDialog cardFlow title={`${deletingZone.name} silinsin mi?`} onConfirm={() => removeZone(deletingZone.id)} onClose={() => setDeletingZone(null)} /> : null}
     </div>
   );
 };

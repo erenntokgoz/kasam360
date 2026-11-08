@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Satış</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="desk.css"><script src="../theme.js"></script>
+<style>
+  .desk { grid-template-columns: 228px minmax(0, 1fr) clamp(340px, 31vw, 400px); }
+  /* Açık masalar: seçili masa tezgâha gömülü durur. */
+  .tables { display: flex; flex-direction: column; padding: 10px; gap: 4px; overflow: auto; }
+  .tables h2, .menu h2 { margin: 4px 6px 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .tb { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; padding: 10px 12px; min-height: 60px; border: 0; border-radius: 12px; background: none; text-align: left; cursor: pointer; }
+  .tb b { grid-column: 1 / -1; font-size: 21px; line-height: 26px; font-weight: 800; font-stretch: 108%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tb .amt { grid-column: 2; grid-row: 2; font-weight: 600; font-size: 14px; }
+  .tb small { grid-column: 1; grid-row: 2; white-space: nowrap; min-width: 0; overflow: hidden; display: flex; align-items: center; gap: 7px; color: var(--ink-2); font-size: 13px; line-height: 16px; }
+  .tb[aria-current] { background: var(--well); box-shadow: inset 0 2px 4px rgba(0,0,0,.14); }
+  .tables .new { margin-top: auto; min-height: 52px; font-weight: 700; }
+  /* Menü: kategori tuşları ve ürün tuşları. */
+  .menu { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .cats { display: flex; gap: 6px; padding: 12px 12px 10px; overflow-x: auto; scrollbar-width: thin; }
+  .cats .key { flex: none; min-height: 48px; padding: 0 16px; font-weight: 600; }
+  .cats .key[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  .cats .find { margin-left: auto; color: var(--ink-2); }
+  .grid { overflow: auto; padding: 4px 12px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); grid-auto-rows: 104px; gap: 10px; align-content: start; }
+  .p { display: flex; flex-direction: column; justify-content: space-between; padding: 12px 14px; text-align: left; }
+  .p .nm { font-size: 16px; line-height: 19px; font-weight: 600; font-stretch: 82%; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .p .pr { font-size: 20px; font-weight: 700; font-stretch: 112%; }
+  .p .q { position: absolute; bottom: 14px; right: 12px; display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 15px; }
+  .p.out { background: var(--well); box-shadow: none; color: var(--ink-2); cursor: not-allowed; }
+  .p.out .pr { font-size: 14px; font-stretch: 100%; font-weight: 600; color: var(--bad); }
+  /* Hesap: gömme ekran. Kalemler mutfağa gidip gitmediğine göre ayrılır. */
+  .check { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .ch { display: flex; justify-content: space-between; align-items: flex-end; padding: 16px 18px 12px; border-bottom: 1px solid var(--edge); }
+  .ch b { font-size: 40px; line-height: 40px; font-weight: 800; font-stretch: 120%; letter-spacing: -.02em; }
+  .ch span { text-align: right; font-size: 13px; line-height: 18px; color: var(--ink-2); }
+  .lines { overflow: auto; padding: 6px 8px; }
+  .grp { display: flex; align-items: center; gap: 8px; padding: 10px 10px 4px; font-size: 13px; color: var(--ink-2); }
+  .grp em { margin-left: auto; font-style: normal; }
+  .ln { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 8px; padding: 10px; border-radius: 10px; }
+  .ln .x { font-weight: 800; font-stretch: 112%; }
+  .ln small { display: block; color: var(--ink-2); font-size: 13px; }
+  .ln.sel { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .ln .acts { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 6px; }
+  .ln .acts .key { min-height: 44px; min-width: 48px; padding: 0 10px; font-weight: 700; white-space: nowrap; }
+  .ln .acts .key.w { flex: 1; }
+  .sum { padding: 12px 14px 14px; border-top: 1px solid var(--edge); display: grid; gap: 8px; }
+  .row { display: flex; justify-content: space-between; font-size: 14px; color: var(--ink-2); }
+  .total { display: flex; justify-content: space-between; align-items: baseline; }
+  .total b { font-size: 44px; line-height: 46px; font-weight: 800; font-stretch: 122%; letter-spacing: -.02em; }
+  .more { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .more .key { min-height: 44px; font-weight: 600; font-size: 14px; }
+  .go { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 8px; }
+  .go .key { min-height: 64px; font-weight: 700; font-size: 16px; padding: 0 12px; }
+  .go .send { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .go .pay { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; line-height: 20px; }
+  .go .pay b { font-size: 22px; font-stretch: 115%; }
+  @media (max-width: 1150px) { .tb .st { display: none; } .more .key { font-size: 13px; line-height: 16px; } .tb small { font-size: 12px; } .desk { grid-template-columns: 196px minmax(0, 1fr) 336px; gap: 10px; padding: 10px; } .ch b { font-size: 34px; } .total b { font-size: 38px; } }
+</style>
+</head>
+<body>
+<span class="tag">Tasarım örneği, sabit test verisi</span>
+<header class="bar">
+  <nav class="mods" aria-label="Modüller">
+    <a class="key" href="salon.html"><kbd>F1</kbd>Salon</a><a class="key" href="#" aria-current="page"><kbd>F2</kbd>Satış</a>
+    <a class="key" href="#"><kbd>F3</kbd>Mutfak</a><a class="key" href="tahsilat.html"><kbd>F4</kbd>Kasa</a><a class="key" href="#"><kbd>F5</kbd>İşletme</a>
+  </nav>
+  <div class="sys">
+    <span role="status"><i class="lamp on"></i><b>Çevrimdışı</b> 2 kayıt sırada</span>
+    <span class="opt"><i class="lamp ok"></i>Yazıcı</span>
+    <span><b>Ayşe K.</b> Kasa 1</span>
+  </div>
+  <button class="key lock">Kilitle</button>
+</header>
+<main class="desk">
+  <nav class="panel tables" aria-label="Açık masalar" id="tables"></nav>
+  <section class="panel menu" aria-label="Menü">
+    <div class="cats" id="cats"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+  <div class="bezel"><aside class="display check" aria-label="Masa 12 hesabı">
+    <div class="ch"><b class="n">Masa 12</b><span>4 kişi, Ayşe<br>14.02'den beri</span></div>
+    <div class="lines" id="lines"></div>
+    <div class="sum">
+      <div class="row"><span>KDV</span><span>C01 kararından sonra eklenecek</span></div>
+      <div class="total"><span>Toplam</span><b class="n" id="total"></b></div>
+      <div class="more"><button class="key">Adisyon yazdır</button><button class="key">Hesabı böl</button><button class="key">Masayı taşı</button></div>
+      <div class="go"><button class="key send"><span class="lamp on"></span>Mutfağa gönder</button><a class="key signal pay" href="tahsilat.html" style="text-decoration:none">Tahsil et<b class="n" id="pay"></b></a></div>
+    </div>
+  </aside></div>
+</main>
+<script>
+// Tutarlar kuruş tamsayısı; ekranda formatMoney ile aynı kural.
+const tl = c => (c / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+const tables = [['Masa 12', 19, 58000, 'on', 1], ['Masa 4', 42, 236000, 'bad'], ['Bahçe 2', 11, 98000, 'ok'], ['Masa 9', 55, 412500, 'on'], ['Salon grubu', 80, 124875000, 'on'], ['Paket 3', 2, 27000, ''], ['Masa 1', 24, 64000, 'ok']];
+const note = { on: 'mutfakta', bad: 'gecikti', ok: 'hazır', '': 'gönderilmedi' };
+document.getElementById('tables').innerHTML = '<h2>Açık masalar</h2>' + tables.map(([n, m, c, s, on]) =>
+  `<button class="tb"${on ? ' aria-current="true"' : ''}><b>${n}</b><span class="amt n">${tl(c)}</span><small><i class="lamp ${s}"></i><span>${m} dk<span class="st">, ${note[s]}</span></span></small></button>`).join('') + '<button class="key new">Yeni sipariş</button>';
+const cats = ['Ana yemek', 'Çorba', 'Izgara', 'Meze', 'Tatlı', 'Sıcak içecek', 'Soğuk içecek'];
+document.getElementById('cats').innerHTML = cats.map((n, i) => `<button class="key" aria-pressed="${i === 0}">${n}</button>`).join('') + '<button class="key find">Ürün ara</button>';
+const prods = [['Ev usulü mantı, sarımsaklı yoğurt', 12500, 4], ['Kasap köfte, közlenmiş biber', 29000], ['Etli kuru fasulye, pilav yanında', 21000], ['Tavuk şiş', 24500],
+  ['İskender, tereyağlı', 38500, 0, 1], ['Hünkâr beğendi', 34000], ['Karnıyarık', 19500], ['Fırın sütlaç', 9500], ['Mercimek çorbası', 8500], ['Adana kebap, acılı', 36000],
+  ['Kuzu tandır, iç pilav', 52000], ['Patlıcan musakka', 22000], ['Zeytinyağlı yaprak sarma', 16500], ['Ayran', 4000, 2], ['Çoban salata', 11000], ['Lahmacun', 9000]];
+document.getElementById('grid').innerHTML = prods.map(([n, c, q, out]) => out
+  ? `<button class="key p out" aria-disabled="true"><span class="nm">${n}</span><span class="pr">Bugün bitti</span></button>`
+  : `<button class="key p${q ? ' has' : ''}"><span class="nm">${n}</span><span class="pr n">${tl(c)}</span>${q ? `<span class="q n"><i class="lamp on"></i>${q}</span>` : ''}</button>`).join('');
+const sent = [[4, 'Ev usulü mantı, sarımsaklı yoğurt', 'Biri acısız', 12500]];
+const fresh = [[2, 'Ayran', '', 4000]];
+const line = sel => ([q, n, t, c]) => `<div class="ln${sel ? ' sel' : ''}"><span class="x n">${q}</span><span>${n}${t ? `<small>${t}</small>` : ''}</span><span class="n">${tl(q * c)}</span>${sel ? '<div class="acts"><button class="key" aria-label="Bir azalt">−</button><button class="key" aria-label="Bir artır">+</button><button class="key w">Not ekle</button><button class="key w">Sil</button></div>' : ''}</div>`;
+document.getElementById('lines').innerHTML =
+  `<div class="grp"><i class="lamp on"></i>Mutfakta<em class="n">14.03, 18 dk</em></div>` + sent.map(line(false)).join('') +
+  `<div class="grp"><i class="lamp"></i>Mutfağa gitmedi<em>1 kalem</em></div>` + fresh.map(line(true)).join('');
+const total = [...sent, ...fresh].reduce((s, [q, , , c]) => s + q * c, 0);
+document.getElementById('total').textContent = tl(total);
+document.getElementById('pay').textContent = `${tl(total)} TL`;
+</script>
+</body>
+</html>

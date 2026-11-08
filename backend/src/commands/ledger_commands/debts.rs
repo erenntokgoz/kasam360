@@ -332,6 +332,18 @@ pub async fn pay_debt(
     require_ledger_write(actor_role.as_deref())?;
     let tid = require_ledger_tenant(payload.tenant_id.as_deref())?;
 
+    // Alacaklı tedarikçiye ödeme gerçek para çıkışıdır; OWNER onayı gerekir.
+    let debt_type: Option<String> =
+        sqlx::query_scalar("SELECT type FROM debts WHERE tenant_id = ? AND id = ?")
+            .bind(&tid)
+            .bind(&payload.debt_id)
+            .fetch_optional(&*pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    if debt_type.as_deref() == Some("RECEIVED") {
+        crate::rbac::require_owner(actor_role.as_deref().unwrap_or_default())?;
+    }
+
     // Vardiya sorgusu ödeme anının gerçeğidir; işlemle birlikte mühürlenir.
     let shift_id: Option<String> = sqlx::query_scalar(
         "SELECT id FROM shifts WHERE tenant_id = ? AND status = 'OPEN' ORDER BY opened_at DESC LIMIT 1",

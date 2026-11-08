@@ -32,8 +32,7 @@ fn require_tenant_scope(tenant_id: Option<&str>) -> Result<String, String> {
     Ok(t.to_string())
 }
 
-/// Maaş tutarı görüntüleme hakkı. `require_payroll_amounts` yalnız OWNER'a
-/// izin verir; müdür `false` döner ve servis `amounts: None` üretir.
+/// Maaş tutarı görüntüleme hakkı. OWNER ve MANAGER tenant bordrosunu görebilir.
 fn can_see_amounts(actor_role: &str) -> bool {
     crate::rbac::require_payroll_amounts(actor_role).is_ok()
 }
@@ -248,7 +247,7 @@ pub async fn get_payroll_rules(
 ) -> Result<Vec<PayrollRule>, String> {
     crate::rbac::require_staff_admin(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
-    payroll_service::list_rules(&pool, &tenant, can_see_amounts(&actor_role)).await
+    payroll_service::list_rules(&pool, &tenant, true).await
 }
 
 #[tauri::command]
@@ -258,7 +257,7 @@ pub async fn set_payroll_rule(
     input: PayrollRuleInput,
     pool: State<'_, DbPool>,
 ) -> Result<(), String> {
-    crate::rbac::require_payroll_amounts(&actor_role)?;
+    crate::rbac::require_owner(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     payroll_service::set_rule(&pool, &tenant, &input).await
 }
@@ -270,7 +269,7 @@ pub async fn delete_payroll_rule(
     user_id: String,
     pool: State<'_, DbPool>,
 ) -> Result<(), String> {
-    crate::rbac::require_payroll_amounts(&actor_role)?;
+    crate::rbac::require_owner(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     payroll_service::delete_rule(&pool, &tenant, &user_id).await
 }
@@ -434,7 +433,7 @@ pub async fn distribute_tip_pool(
 ) -> Result<Vec<TipAllocation>, String> {
     state.lan_sync.require_local_write()?;
     // Dağıtım para hareketidir: müdür göremez, yalnız sahibi dağıtabilir.
-    crate::rbac::require_payroll_amounts(&actor_role)?;
+    crate::rbac::require_owner(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     tip_service::distribute_pool(&pool, &tenant, &period, &allocations).await
 }
@@ -466,7 +465,7 @@ pub async fn get_staff_money_summary(
     period: String,
     pool: State<'_, DbPool>,
 ) -> Result<crate::services::staff360::payroll_deductions::StaffMoneySummary, String> {
-    crate::rbac::require_payroll_amounts(&actor_role)?;
+    crate::rbac::require_owner(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     crate::services::staff360::payroll_deductions::money_summary(

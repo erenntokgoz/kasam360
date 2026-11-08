@@ -56,7 +56,7 @@ export const PosModule: React.FC = () => {
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden select-none">
       <OrderStatusBanner className="m-2 mb-0 shrink-0" />
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 min-w-0 max-sm:flex-col">
         {/* Sol/Orta Katalog */}
         <ProductCatalog onBindTableClick={() => setShowBindModal(true)} />
 

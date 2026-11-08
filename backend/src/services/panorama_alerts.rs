@@ -168,33 +168,6 @@ async fn operation_alerts(pool: &SqlitePool, tenant: &str) -> Result<Vec<Alert>,
     Ok(alerts)
 }
 
-async fn freshness_alerts(pool: &SqlitePool, tenant: &str) -> Result<Vec<Alert>, String> {
-    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let report =
-        crate::services::inventory360::shelf_life::expiring_batches(&mut conn, tenant).await?;
-    let mut alerts = Vec::new();
-    if !report.expired.is_empty() {
-        alerts.push(alert(
-            "CRITICAL",
-            format!("{} partinin tarihi geçti", report.expired.len()),
-            "Satıştan çekip fire yazın.".to_string(),
-            "STOCK",
-        ));
-    }
-    if !report.expiring_soon.is_empty() {
-        alerts.push(alert(
-            "WARNING",
-            format!("{} parti bozulmak üzere", report.expiring_soon.len()),
-            format!(
-                "Risk altındaki maliyet {}.",
-                money(report.at_risk_cost_cents)
-            ),
-            "STOCK",
-        ));
-    }
-    Ok(alerts)
-}
-
 fn backup_alert(last_backup_at: Option<&str>) -> Option<Alert> {
     let stale = match last_backup_at {
         None => true,
@@ -227,11 +200,6 @@ pub async fn collect(
             Err(reason) => alerts.push(unreadable(area, &reason, target)),
         };
     add(stock_alerts(pool, tenant).await, "Stok", "STOCK");
-    add(
-        freshness_alerts(pool, tenant).await,
-        "Son kullanma tarihleri",
-        "STOCK",
-    );
     add(operation_alerts(pool, tenant).await, "Operasyon", "LOG");
     let flags = staff360::suspicious_service::radar(pool, tenant, from, to)
         .await

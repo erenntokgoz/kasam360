@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
@@ -66,7 +67,6 @@ export const TariffPanel: React.FC = () => {
       setEditing(null);
     } catch (caught) {
       setError(String(caught));
-      setEditing(null);
     } finally {
       setBusy(false);
     }
@@ -102,7 +102,7 @@ export const TariffPanel: React.FC = () => {
 
   return (
     <div className="page-fill flex-1 overflow-y-auto p-4 space-y-4 text-[var(--text-primary)]">
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
 
       <section className="rounded-xl border border-[var(--border)] paper">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] p-4">

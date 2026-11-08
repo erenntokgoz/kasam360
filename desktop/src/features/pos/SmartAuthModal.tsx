@@ -1,5 +1,6 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, AlertCircle } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import type { OrderItem } from '../../types/pos';
 import { Modal } from '../../ui/Modal';
 import { Button } from '../../ui/Button';
@@ -92,10 +93,7 @@ export const SmartAuthModal: React.FC<SmartAuthModalProps> = ({ isOpen, item, mo
         </div>
 
         {error ? (
-          <div role="alert" className="p-3 rounded-lg text-sm font-semibold text-center bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)] flex items-center justify-center gap-1.5">
-            <AlertCircle className="w-5 h-5" />
-            <span>{error}</span>
-          </div>
+          <ErrorToast message={error} />
         ) : null}
 
         <Numpad

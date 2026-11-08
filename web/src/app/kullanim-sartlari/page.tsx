@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/content/pageMetadata';
 import { LegalPage } from '@/components/LegalPage';
 import { siteConfig } from '@/content/siteConfig';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Kullanım Şartları',
   description: 'KASAM360 web sitesinin kullanım şartları, ürün durumu ve mali belge açıklaması.',
-  alternates: { canonical: '/kullanim-sartlari' },
-};
+  path: '/kullanim-sartlari',
+});
 
 export default function TermsPage() {
   return (

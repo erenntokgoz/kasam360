@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Durumlar · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script><script src="labs-shell.js" defer></script>
+<style>
+  /* Dört durum yan yana: her çerçeve, ilgili sayfanın içerik alanında görünecek hali gösterir. */
+  .board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 22px 28px 40px; }
+  .frame { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); min-height: 300px; display: flex; flex-direction: column; overflow: hidden; }
+  .frame > .cap { padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--text-3); background: var(--bg-2); }
+  .frame > .in-frame { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 28px; }
+  .frame h2 { margin: 0; font-size: 19px; font-weight: 640; letter-spacing: -.02em; }
+  .frame p { margin: 0; color: var(--text-2); max-width: 46ch; }
+  .frame .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .skel { justify-content: flex-start !important; gap: 0 !important; padding: 0 !important; }
+  .skel .r { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 18px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .bad-h { color: var(--bad); }
+  @media (max-width: 1000px) { .board { grid-template-columns: 1fr; padding: 16px; } }
+</style>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği. Boş, yükleniyor, hata ve yetkisiz durumları.</span>
+<div class="app">
+  <aside class="rail" data-page="inbox"></aside>
+  <div class="main">
+    <div class="bar"><span class="crumb">KASAM360 / <b>Durumlar</b></span></div>
+    <div class="page">
+      <div class="board">
+        <section class="frame" aria-label="Boş gelen kutusu"><div class="cap">Gelen kutusu, boş</div>
+          <div class="in-frame"><h2>Yanıt bekleyen mail yok.</h2><p>Son mail 11.34'te yanıtlandı.</p>
+            <div class="acts"><button class="btn btn-ink sm">Yeni mail</button><button class="btn btn-line sm">Arşivi aç</button></div></div></section>
+        <section class="frame" aria-label="İşletmeler yükleniyor" aria-busy="true"><div class="cap">İşletmeler, yükleniyor</div>
+          <div class="in-frame skel" id="skel"></div></section>
+        <section class="frame" aria-label="Bağlantı hatası"><div class="cap">Ödemeler, sunucuya ulaşılamadı</div>
+          <div class="in-frame" role="alert"><h2 class="bad-h">Ödemeler yüklenemedi.</h2><p>Labs sunucusuna ulaşılamadı. Gösterilen son veri bugün 11.20'den; o zamandan sonraki ödemeler listede yok.</p>
+            <div class="acts"><button class="btn btn-ink sm">Yeniden dene</button><button class="btn btn-line sm">11.20 verisini göster</button></div></div></section>
+        <section class="frame" aria-label="Yetkisiz"><div class="cap">Teknik ayarlar, destek yetkisiyle</div>
+          <div class="in-frame"><h2>Bu sayfa yalnız platform sahibine açık.</h2><p>Hesabınızın destek yetkisi var: mail, işletme okuma ve eşitleme kaydı isteme.</p>
+            <div class="acts"><button class="btn btn-line sm">Platform sahibinden yetki iste</button><a class="btn btn-ghost sm" href="labs-inbox.html">Gelen kutusuna dön</a></div></div></section>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  document.getElementById('skel').innerHTML = Array.from({ length: 6 }, (_, i) =>
+    `<div class="r"><span class="sk" style="width:${70 - (i % 3) * 12}%"></span><span class="sk"></span><span class="sk" style="width:60%"></span><span class="sk" style="width:40%"></span></div>`).join('');
+</script>
+</body>
+</html>

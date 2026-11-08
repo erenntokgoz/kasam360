@@ -144,7 +144,7 @@ export const MenuFiyatTab: React.FC = () => {
               <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                 {updateType === 'PERCENTAGE' ? 'Artış Oranı (%)' : 'Artış Tutarı (TL)'}
               </label>
-              <NumberInput aria-label="Zam değeri" pinpad={updateType === 'FIXED_AMOUNT'} value={valInput} onValueChange={(text) => { setValInput(text); clearBulkPreview(); }} placeholder={updateType === 'PERCENTAGE' ? 'Örn: 15' : 'Örn: 10,00'} />
+              <NumberInput aria-label="Zam değeri" pinpad={updateType === 'FIXED_AMOUNT'} value={valInput} onValueChange={(text) => { setValInput(text); clearBulkPreview(); }} />
             </div>
 
             {/* 3. Kapsam */}
@@ -363,27 +363,27 @@ export const MenuFiyatTab: React.FC = () => {
             <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">+ Yeni Fiyat Listesi</h3>
             <form onSubmit={handleCreatePriceList} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
+                <label htmlFor="tariff-new-name" className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                   Liste Adı
                 </label>
                 <input
+                  id="tariff-new-name"
                   type="text"
                   value={newListName}
                   onChange={(e) => setNewListName(e.target.value)}
-                  placeholder="Örn: Gece Tarifesi"
                   className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
+                <label htmlFor="tariff-new-description" className="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">
                   Açıklama (İsteğe Bağlı)
                 </label>
                 <input
+          id="tariff-new-description"
                   type="text"
                   value={newListDesc}
                   onChange={(e) => setNewListDesc(e.target.value)}
-                  placeholder="23:00 sonrası geçerli tarife"
                   className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                 />
               </div>

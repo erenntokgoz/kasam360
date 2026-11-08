@@ -29,7 +29,7 @@ export const AuthShell: React.FC<AuthShellProps> = ({ title, dialogLabel, classN
       <div className={`auth-spread ${className}`}>
         <aside className="auth-left">
           <div className="flex items-center gap-3">
-            <BrandMark className="w-11 h-11" surface="paper" />
+            <BrandMark className="w-11 h-11" surface="desk" />
             <span className="auth-brand">KASAM360</span>
           </div>
           <div>

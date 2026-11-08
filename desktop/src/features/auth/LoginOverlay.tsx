@@ -1,5 +1,5 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { AuthShell } from './AuthShell';
@@ -31,10 +31,7 @@ export const LoginOverlay: React.FC = () => {
   return (
     <AuthShell title="PIN kodunu gir" dialogLabel="Personel girişi" className={shake ? 'animate-shake' : ''}>
       {loginError ? (
-        <div role="alert" className="p-3 rounded-lg text-sm font-medium border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{loginError}</span>
-        </div>
+        <ErrorToast message={loginError} />
       ) : null}
       <PinEntry value={pin} onChange={setPin} onSubmit={() => void submit()} isBusy={isSubmitting} />
     </AuthShell>

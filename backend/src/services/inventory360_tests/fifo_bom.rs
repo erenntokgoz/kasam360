@@ -186,3 +186,109 @@ async fn bom_receteli_urun_fifo_bilesenlerden_duser_ve_maliyeti_hesaplar() {
     .expect("event_count");
     assert_eq!(event_count, 1, "FIFO düşüm olayı kaydedilmeli");
 }
+
+#[tokio::test]
+async fn yari_mamul_satista_kendi_recetesinden_duser() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, KIRACI, "prd_kruasan", "Kruasan", 9000).await;
+    urun_ekle(&mut conn, KIRACI, "prd_hamur", "Hamur", 0).await;
+    urun_ekle(&mut conn, KIRACI, "prd_un", "Un", 0).await;
+    parti_ekle(&mut conn, KIRACI, "bat_un", "prd_un", 5000.0, 4, None).await;
+    // 1000 g un → 10 adet hamur; kruasan 2 adet hamur ister.
+    recete_olustur(
+        &mut conn,
+        KIRACI,
+        recete_girdisi(
+            "prd_hamur",
+            "Hamur",
+            100.0,
+            10.0,
+            vec![malzeme("prd_un", 1000.0, "g", None)],
+        ),
+    )
+    .await;
+    recete_olustur(
+        &mut conn,
+        KIRACI,
+        recete_girdisi(
+            "prd_kruasan",
+            "Kruasan",
+            100.0,
+            1.0,
+            vec![malzeme("prd_hamur", 2.0, "adet", None)],
+        ),
+    )
+    .await;
+    let cart = CartItemDto {
+        id: "itm_1".into(),
+        product: serde_json::json!({"id": "prd_kruasan"}),
+        quantity: 1,
+        ..Default::default()
+    };
+    let result = InventoryService::execute_fifo_deduction(
+        &mut conn,
+        KIRACI,
+        "txn_sub",
+        &[cart],
+        "2026-11-05T00:00:00Z",
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.total_cogs_cents, 800, "200 g un × 4 kuruş");
+    assert_eq!(result.untracked_deficit, 0.0, "hamurun partisi aranmaz");
+    let remaining: f64 = sqlx::query_scalar(
+        "SELECT remaining_quantity FROM inventory_batches WHERE tenant_id = ? AND id = 'bat_un'",
+    )
+    .bind(KIRACI)
+    .fetch_one(&mut conn)
+    .await
+    .unwrap();
+    assert!((remaining - 4800.0).abs() < 1e-6);
+}
+
+#[tokio::test]
+async fn uyumsuz_birim_ve_tekrarlanan_malzeme_kayitta_reddedilir() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, KIRACI, "prd_ekmek", "Ekmek", 1000).await;
+    urun_ekle(&mut conn, KIRACI, "prd_un", "Un", 0).await;
+    sqlx::query("UPDATE products SET stock_unit = 'kg' WHERE tenant_id = ? AND id = 'prd_un'")
+        .bind(KIRACI)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    let uyumsuz = crate::services::inventory360::create_recipe(
+        &mut conn,
+        KIRACI,
+        "usr_1",
+        recete_girdisi(
+            "prd_ekmek",
+            "Ekmek",
+            100.0,
+            1.0,
+            vec![malzeme("prd_un", 200.0, "ml", None)],
+        ),
+    )
+    .await
+    .expect_err("kilo ile tutulan una ml yazılamaz");
+    assert!(uyumsuz.starts_with("VALIDATION"), "{uyumsuz}");
+    let tekrar = crate::services::inventory360::create_recipe(
+        &mut conn,
+        KIRACI,
+        "usr_1",
+        recete_girdisi(
+            "prd_ekmek",
+            "Ekmek",
+            100.0,
+            1.0,
+            vec![
+                malzeme("prd_un", 200.0, "g", None),
+                malzeme("prd_un", 100.0, "g", None),
+            ],
+        ),
+    )
+    .await
+    .expect_err("aynı malzeme iki kez yazılamaz");
+    assert!(tekrar.starts_with("VALIDATION"), "{tekrar}");
+}

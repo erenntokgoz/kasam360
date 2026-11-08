@@ -68,7 +68,7 @@ export const CariPaymentModal: React.FC<CariPaymentModalProps> = ({ debt, onClos
   const isLocked = operation.pendingOperationId !== null;
 
   return (
-    <Modal
+    <Modal cardFlow
       isOpen={debt !== null}
       onClose={onClose}
       title={debt?.type === 'TAKEN' ? 'Tediye' : 'Tahsilat'}

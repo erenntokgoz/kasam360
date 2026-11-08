@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
@@ -129,7 +130,7 @@ export const ReportsTab: React.FC = () => {
         </Button>
       </div>
 
-      {exportError ? <p role="alert" className="text-sm text-[var(--accent-red)]">Excel çıktısı oluşturulamadı. {exportError}</p> : null}
+      {exportError ? <ErrorToast message={`Excel çıktısı oluşturulamadı: ${exportError}`} /> : null}
 
       {table?.warning ? (
         <p role="status" className="p-3 rounded-lg text-sm font-semibold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
@@ -151,9 +152,7 @@ export const ReportsTab: React.FC = () => {
       {rangeError ? (
         <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{rangeError}</p>
       ) : error ? (
-        <p role="alert" className="p-3 rounded-lg text-sm font-semibold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
-          Rapor okunamadı: {error}
-        </p>
+        <><p className="text-sm text-[var(--text-secondary)]">Rapor okunamadı.</p><ErrorToast message={`Rapor okunamadı: ${error}`} /></>
       ) : !table ? (
         <p className="text-sm text-[var(--text-secondary)]">Rapor hazırlanıyor…</p>
       ) : table.rows.length === 0 ? (

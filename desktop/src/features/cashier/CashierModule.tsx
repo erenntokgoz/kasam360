@@ -1,5 +1,6 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
-import { Printer } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Printer, ReceiptText } from 'lucide-react';
 import { formatNumber } from '../../lib/numberText';
 import { useShiftStore } from '../../stores/shiftStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -8,12 +9,14 @@ import { errorText } from '../../lib/cariInput';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { formatMoney } from '../../lib/formatMoney';
+import type { ZReportData } from '../../types/shift';
+import { Modal } from '../../ui/Modal';
 import { formatDateTime } from '../../lib/date';
 import { Bar, BarAction, BarTab } from '../../ui/Bar';
 import { Button } from '../../ui/Button';
 import { BlindCloseModal } from './BlindCloseModal';
-import { CashExpenseModal } from './CashExpenseModal';
-import { CashMovementModal } from './CashMovementModal';
+import { CashExpenseForm } from './CashExpenseForm';
+import { CashMovementForm } from './CashMovementForm';
 import { FinanceTab } from '../patron/finance/FinanceTab';
 import { useLedgerStore } from '../../stores/ledgerStore';
 import { ReceiptsTab } from './ReceiptsTab';
@@ -23,22 +26,34 @@ import { ShiftMovements } from './ShiftMovements';
 /** Okunamayan tutar sıfır gösterilmez: kasa farkı sanılır. */
 const money = (cents?: number | null) => (cents == null ? '—' : formatMoney(cents));
 
+const CASH_ACTIONS = [
+  { id: 'IN', label: 'Nakit Giriş', title: 'Kasaya Nakit Girişi', icon: ArrowDownLeft },
+  { id: 'OUT', label: 'Nakit Çıkış', title: 'Kasadan Nakit Çıkışı', icon: ArrowUpRight },
+  { id: 'EXPENSE', label: 'Gider Öde', title: 'Kasadan Gider Öde', icon: ReceiptText },
+] as const;
+
+type CashAction = (typeof CASH_ACTIONS)[number]['id'];
+
 export const CashierModule: React.FC = () => {
-  const { activeShift, summary, lastZReport, loadShiftData, recordCashMovement, closeDay } = useShiftStore();
+  const { activeShift, summary, lastZReport: latestReport, isLoading, shiftError, loadShiftData, recordCashMovement, closeDay } = useShiftStore();
   const canCloseDay = useAuthStore((state) => state.user?.role === 'OWNER' || state.user?.role === 'MANAGER');
   // Kör sayım: kasiyer çekmecede olması gereken tutarı ve onu türeten toplamları görmez.
   const isBlind = useAuthStore((state) => state.user?.role === 'CASHIER');
+  const [selectedReport, setSelectedReport] = useState<ZReportData | null>(null);
+  const lastZReport = selectedReport ?? latestReport;
   const [dayCloseNotice, setDayCloseNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const openModal = useUIStore((state) => state.openModal);
 
   const [activeTab, setActiveTab] = useState<'SHIFT' | 'FINANCE' | 'RECEIPTS' | 'DAY_CLOSE'>('SHIFT');
   const financeAsked = useLedgerStore((state) => state.activeErpTab === 'FINANCE');
-  const [cashActionModal, setCashActionModal] = useState<'IN' | 'OUT' | null>(null);
-  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [cashAction, setCashAction] = useState<CashAction | 'CHOOSE' | null>(null);
+  const [isActionBusy, setIsActionBusy] = useState(false);
+  const [showExpenses, setShowExpenses] = useState(false);
 
   useEffect(() => {
     if (!financeAsked) return;
     setActiveTab('SHIFT');
+    if (canCloseDay) setShowExpenses(true);
     useLedgerStore.getState().setActiveErpTab('PANORAMA');
   }, [financeAsked, canCloseDay]);
 
@@ -50,14 +65,18 @@ export const CashierModule: React.FC = () => {
     await recordCashMovement(type, cents, reason);
   };
 
-  const isShiftOpen = activeShift && activeShift.isOpen;
+  const closeCashAction = () => { if (!isActionBusy) setCashAction(null); };
+  const currentAction = CASH_ACTIONS.find((action) => action.id === cashAction);
 
-  const handlePrintZ = async () => {
-    if (!lastZReport) return;
+  const isShiftOpen = activeShift?.isOpen === true;
+  const canShowReport = !!lastZReport && (!isBlind || !isShiftOpen);
+
+  const handleSelectReport = async (shiftId: string) => {
+    setDayCloseNotice(null);
     try {
       const { actorRole, tenantId } = sessionArgs();
-      await invokeIPC('print_z_report', { shiftId: lastZReport.shiftId, actorRole, tenantId });
-      window.print();
+      const report = await invokeIPC<ZReportData>('get_z_report', { shiftId, actorRole, tenantId });
+      setSelectedReport(report);
     } catch (caught) {
       setDayCloseNotice({ ok: false, text: errorText(caught) });
     }
@@ -78,9 +97,7 @@ export const CashierModule: React.FC = () => {
         actions={
           isShiftOpen ? (
             <>
-              <BarAction onClick={() => setCashActionModal('IN')}>Nakit Giriş</BarAction>
-              <BarAction onClick={() => setCashActionModal('OUT')}>Nakit Çıkış</BarAction>
-              {canCloseDay ? <BarAction onClick={() => setExpenseOpen(true)}>Gider Öde</BarAction> : null}
+              <BarAction onClick={() => setCashAction('CHOOSE')}>İşlem Ekle</BarAction>
               <BarAction tone="primary" onClick={() => openModal('blindClose')}>Vardiyayı Kapat</BarAction>
             </>
           ) : undefined
@@ -92,36 +109,54 @@ export const CashierModule: React.FC = () => {
       </Bar>
 
       {/* İçerik */}
-      <div className="page-fill flex-1 overflow-y-auto p-4 space-y-4">
-        {activeTab === 'SHIFT' && !isShiftOpen ? (
-          <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-col items-start gap-4">
-            <h2 className="print-title text-sm font-bold">Vardiya açık değil</h2>
-            <Button variant="primary" className="min-h-12" onClick={() => openModal('shiftGate')}>Vardiya Başlat</Button>
-          </div>
-        ) : activeTab === 'SHIFT' ? (
+      <div className="motion-swap page-fill flex-1 overflow-y-auto p-4 space-y-4">
+        {activeTab === 'SHIFT' ? (
           <>
-            <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-wrap gap-x-10 gap-y-3">
-              {[
-                ...(isBlind
-                  ? []
-                  : [
-                      ['Çekmecedeki Nakit', money(summary?.expectedCashInDrawerCents)],
-                      ['Ciro', money(summary?.totalSalesCents)],
-                      ['Nakit', money(summary?.totalCashSalesCents)],
-                    ]),
-                ['Kart', money(summary?.totalCardSalesCents)],
-                ['Yemek Kartı', money(summary?.totalMealCardSalesCents)],
-                ['Veresiye', money(summary?.totalVeresiyeCents)],
-                ['Sorumlu', summary?.cashierName ?? '—'],
-              ].map(([label, value]) => (
-                <span key={label}>
-                  <span className="block text-xs text-[var(--text-secondary)]">{label}</span>
-                  <span className="block text-lg font-bold tabular-nums">{value}</span>
-                </span>
-              ))}
+            <div className="work-surface rounded-lg border border-[var(--border)] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold">
+                  {shiftError ? 'Vardiya Durumu Okunamadı' : isLoading ? 'Vardiya Yükleniyor' : isShiftOpen ? 'Vardiya Açık' : 'Vardiya Kapalı'}
+                </h2>
+                {isShiftOpen && <p className="text-sm text-[var(--text-secondary)]">
+                  {activeShift.cashierName} · {formatDateTime(activeShift.openedAt)}
+                </p>}
+                {shiftError && <ErrorToast message={errorText(shiftError)} />}
+              </div>
+              {shiftError ? <Button onClick={() => void loadShiftData()}>Tekrar Dene</Button> : null}
+              {!isShiftOpen && !isLoading && !shiftError ? (
+                <Button variant="primary" onClick={() => openModal('shiftGate')}>Vardiya Başlat</Button>
+              ) : null}
             </div>
             {summary ? <ShiftMovements summary={summary} blind={isBlind} /> : null}
-            {canCloseDay ? <FinanceTab /> : null}
+            {summary ? (
+              <details className="work-surface rounded-lg border border-[var(--border)]">
+                <summary className="min-h-12 cursor-pointer px-4 py-3 font-semibold">Vardiya Toplamları</summary>
+                <dl className="flex flex-wrap gap-x-8 gap-y-3 px-4 pb-4">
+                  {[
+                    ...(!isBlind ? [
+                      ['Beklenen Kasa Nakdi', summary.expectedCashInDrawerCents],
+                      ['Ciro', summary.totalSalesCents],
+                      ['Nakit', summary.totalCashSalesCents],
+                    ] as const : []),
+                    ['Kart', summary.totalCardSalesCents] as const,
+                    ['Yemek Kartı', summary.totalMealCardSalesCents] as const,
+                    ['Veresiye', summary.totalVeresiyeCents] as const,
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <dt className="text-sm text-[var(--text-secondary)]">{label}</dt>
+                      <dd className="font-bold tabular-nums">{money(value)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            ) : null}
+            {canCloseDay ? (
+              <details className="work-surface rounded-lg border border-[var(--border)]" open={showExpenses}
+                onToggle={(event) => setShowExpenses(event.currentTarget.open)}>
+                <summary className="min-h-12 cursor-pointer px-4 py-3 font-semibold">Dönem Giderleri</summary>
+                {showExpenses ? <div className="p-3"><FinanceTab /></div> : null}
+              </details>
+            ) : null}
           </>
         ) : activeTab === 'RECEIPTS' ? (
           <ReceiptsTab onRefunded={() => void loadShiftData()} />
@@ -135,23 +170,23 @@ export const CashierModule: React.FC = () => {
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => void handlePrintZ()}
-                disabled={!lastZReport}
+                onClick={() => window.print()}
+                disabled={!canShowReport}
                 className="text-xs"
               >
                 <Printer className="w-4 h-4 mr-1.5" />
-                <span>Son Z Raporunu Yazdır</span>
+                <span>Z Raporunu Yazdır</span>
               </Button>
             </div>
 
-            <div className="receipt-paper text-sm space-y-3">
+            {canShowReport ? <div className="receipt-paper text-sm space-y-3">
               <div className="text-center pb-2 border-b border-dashed border-[var(--border-strong)]">
                 <div className="font-bold text-sm">{lastZReport?.tenantName || 'Gün Sonu Raporu'}</div>
                 <div className="font-bold text-xs mt-1">
-                  {lastZReport ? 'Gün sonu raporu (kapanış)' : 'Gün sonu raporu (ön izleme)'}
+                  Gün sonu raporu (kapanış)
                 </div>
                 <div className="text-xs text-[var(--text-secondary)]">
-                  Rapor No: {lastZReport?.reportNumber ?? 'Ön izleme'} · Tarih: {formatDateTime(lastZReport?.closedAt)}
+                  Rapor No: {lastZReport.reportNumber} · Tarih: {formatDateTime(lastZReport?.closedAt)}
                   {lastZReport?.cashierName ? ` · Kasiyer: ${lastZReport.cashierName}` : ''}
                 </div>
               </div>
@@ -160,31 +195,31 @@ export const CashierModule: React.FC = () => {
                 <div className="flex justify-between">
                   <span>Açılış Kasa Nakiti:</span>
                   <span className="font-bold tabular-nums">
-                    {money(lastZReport?.openingCashCents ?? summary?.openingCashCents)}
+                    {money(lastZReport.openingCashCents)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Toplam Nakit Satış:</span>
                   <span className="font-bold tabular-nums">
-                    {money(lastZReport?.cashSalesCents ?? summary?.totalCashSalesCents)}
+                    {money(lastZReport.cashSalesCents)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Toplam Kredi Kartı:</span>
                   <span className="font-bold tabular-nums">
-                    {money(lastZReport?.cardSalesCents ?? summary?.totalCardSalesCents)}
+                    {money(lastZReport.cardSalesCents)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Toplam Yemek Kartı:</span>
                   <span className="font-bold tabular-nums">
-                    {money(lastZReport?.mealCardSalesCents ?? summary?.totalMealCardSalesCents)}
+                    {money(lastZReport.mealCardSalesCents)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Toplam Veresiye:</span>
                   <span className="font-bold tabular-nums">
-                    {money(lastZReport?.veresiyeSalesCents ?? summary?.totalVeresiyeCents)}
+                    {money(lastZReport.veresiyeSalesCents)}
                   </span>
                 </div>
                 {lastZReport ? (
@@ -224,7 +259,7 @@ export const CashierModule: React.FC = () => {
                 <div className="flex justify-between pt-1 border-t border-[var(--border)] font-bold">
                   <span>GENEL GÜNLÜK CİRO:</span>
                   <span className="text-sm tabular-nums">
-                    {money(lastZReport?.totalRevenueCents ?? summary?.totalSalesCents)}
+                    {money(lastZReport.totalRevenueCents)}
                   </span>
                 </div>
               </div>
@@ -232,42 +267,42 @@ export const CashierModule: React.FC = () => {
               <div className="text-center pt-1 text-xs text-[var(--text-muted)]">
                 Bilgi amaçlıdır, mali belge değildir.
               </div>
-            </div>
+            </div> : <p className="text-sm text-[var(--text-secondary)]">Rapor, vardiya sayımla kapatıldığında açılır.</p>}
 
-            {canCloseDay ? <ShiftHistory /> : null}
+            {canCloseDay ? <ShiftHistory key={latestReport?.shiftId} onSelect={(id) => void handleSelectReport(id)} /> : null}
             {canCloseDay ? (
               <Button variant="danger" className="w-full min-h-12" onClick={() => void handleCloseDay()}>
                 Günü Kapat
               </Button>
             ) : null}
-            {dayCloseNotice ? (
-              <p role="alert" className={`text-xs font-semibold ${dayCloseNotice.ok ? 'text-[var(--accent-emerald)]' : 'text-[var(--accent-red)]'}`}>
-                {dayCloseNotice.text}
-              </p>
-            ) : null}
+            {dayCloseNotice?.ok ? <p role="status" className="text-xs font-semibold text-[var(--accent-emerald)]">{dayCloseNotice.text}</p> : null}
+            <ErrorToast message={dayCloseNotice && !dayCloseNotice.ok ? dayCloseNotice.text : null} />
           </div>
         )}
       </div>
 
       {/* Kör Sayım Modalı */}
-      <BlindCloseModal onShowZ={() => setActiveTab('DAY_CLOSE')} />
+      <BlindCloseModal onShowZ={() => { setSelectedReport(null); setActiveTab('DAY_CLOSE'); }} />
 
-      {/* Nakit Giriş / Çıkış Modalı */}
-      <CashMovementModal
-        isOpen={cashActionModal !== null}
-        type={cashActionModal}
-        onClose={() => setCashActionModal(null)}
-        onSubmit={handleCashMovementSubmit}
-      />
-      {expenseOpen ? (
-        <CashExpenseModal
-          onClose={() => setExpenseOpen(false)}
-          onSaved={() => {
-            setExpenseOpen(false);
-            void loadShiftData();
-          }}
-        />
-      ) : null}
+      <Modal cardFlow isOpen={cashAction !== null && isShiftOpen}
+        title={currentAction?.title ?? 'İşlem Ekle'} onClose={closeCashAction} maxWidth="sm">
+        {cashAction === 'CHOOSE' ? (
+          <div className="grid gap-2">
+            {CASH_ACTIONS.filter((action) => action.id !== 'EXPENSE' || canCloseDay).map(({ id, label, icon: Icon }) => (
+              <Button key={id} type="button" className="!justify-start" onClick={() => setCashAction(id)}>
+                <Icon size={18} aria-hidden="true" />
+                {label}
+              </Button>
+            ))}
+          </div>
+        ) : cashAction === 'EXPENSE' && canCloseDay ? (
+          <CashExpenseForm busy={isActionBusy} setBusy={setIsActionBusy} onBack={() => setCashAction('CHOOSE')}
+            onSaved={() => { setCashAction(null); void loadShiftData(); }} />
+        ) : cashAction === 'IN' || cashAction === 'OUT' ? (
+          <CashMovementForm type={cashAction} busy={isActionBusy} setBusy={setIsActionBusy}
+            onBack={() => setCashAction('CHOOSE')} onSaved={() => setCashAction(null)} onSubmit={handleCashMovementSubmit} />
+        ) : null}
+      </Modal>
     </section>
   );
 };

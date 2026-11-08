@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KASAM360</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="scene.css"><script src="theme.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<style>
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 40px; }
+  .nav { position: relative; z-index: 20; display: flex; align-items: center; gap: 28px; height: 68px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: -.01em; text-decoration: none; }
+  .brand img { width: 28px; height: 28px; }
+  :root[data-theme="dark"] .brand img { background: #fff; border-radius: 50%; }
+  .nav .links { display: flex; gap: 24px; font-size: 14px; color: var(--text-2); }
+  .nav .links a { text-decoration: none; } .nav .links a:hover { color: var(--text); }
+  .nav .end { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+
+  /* Sahne: makine sağda, başlık solda; arkadaki örtü başlığın okunmasını sağlar. */
+  .hero { position: relative; height: calc(100svh - 94px); min-height: 640px; max-height: 920px; }
+  .hero .stage { position: absolute; inset: 0; }
+  .hero .veil { position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    background: linear-gradient(90deg, var(--bg) 0 26%, color-mix(in srgb, var(--bg) 70%, transparent) 40%, transparent 56%); }
+  .copy { position: absolute; z-index: 5; left: max(40px, calc((100vw - 1280px) / 2 + 40px)); top: 50%; transform: translateY(-56%); width: min(500px, 40vw); }
+  h1 { margin: 0 0 22px; font-weight: 650; font-size: clamp(40px, 4.6vw, 70px); line-height: 1.02; letter-spacing: -.04em; }
+  .copy p { margin: 0 0 30px; font-size: 18px; line-height: 1.55; color: var(--text-2); max-width: 40ch; }
+  .copy .go { display: flex; gap: 10px; flex-wrap: wrap; }
+  .copy .go .btn { min-height: 50px; padding: 0 22px; font-size: 15px; }
+
+  /* Yolculuk: beş istasyon gerçek bir sıra; numara bu yüzden var. Sütuna basınca makine o istasyona döner. */
+  .route { border-top: 1px solid var(--line); }
+  .route ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .route li + li { border-left: 1px solid var(--line); }
+  .route button { width: 100%; height: 100%; border: 0; background: none; text-align: left; padding: 30px 26px 34px; cursor: pointer; display: grid; gap: 10px; align-content: start; }
+  .route button:hover { background: var(--bg-2); }
+  .route .n { font: 500 12px/1 var(--mono); color: var(--accent-ink); }
+  .route b { font-size: 20px; font-weight: 620; letter-spacing: -.02em; }
+  .route span:last-child { color: var(--text-2); font-size: 14px; line-height: 1.5; }
+
+  .plan { padding: 96px 0; border-top: 1px solid var(--line); }
+  .plan .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 64px; align-items: start; }
+  .plan h2 { margin: 0 0 14px; font-size: clamp(32px, 3.4vw, 48px); line-height: 1.05; letter-spacing: -.035em; font-weight: 640; }
+  .price { display: flex; align-items: baseline; gap: 10px; margin: 28px 0 8px; }
+  .price b { font-size: 64px; letter-spacing: -.04em; font-weight: 650; }
+  .price span { color: var(--text-2); }
+  .plan .meta { color: var(--text-2); margin: 0 0 28px; }
+  .feat { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
+  .feat li { display: flex; justify-content: space-between; gap: 16px; padding: 16px 4px; border-bottom: 1px solid var(--line); }
+  .feat li:nth-child(odd) { padding-right: 28px; }
+  .feat li:nth-child(even) { padding-left: 28px; border-left: 1px solid var(--line); }
+  .feat em { font-style: normal; font-size: 13px; color: var(--ok); font-weight: 560; }
+  .feat li.off { color: var(--text-3); } .feat li.off em { color: var(--text-3); }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--text-3); font-size: 13px; }
+  footer .wrap { display: flex; gap: 24px; flex-wrap: wrap; } footer a { text-decoration: none; } footer .sp { margin-left: auto; }
+
+  @media (max-width: 900px) {
+    .wrap { padding: 0 18px; }
+    .nav .links, .nav .in, .nav .btn-buy { display: none; }
+    .copy { order: -1; }
+    .hero { height: auto; min-height: 0; max-height: none; display: flex; flex-direction: column; }
+    .hero .veil { display: none; }
+    .copy { position: static; transform: none; width: auto; padding: 28px 18px 8px; }
+    .hero .stage { position: relative; inset: auto; height: 470px; }
+    .route ol { grid-template-columns: 1fr; } .route li + li { border-left: 0; border-top: 1px solid var(--line); }
+    .route button { padding: 20px 18px; }
+    .plan { padding: 56px 0; } .plan .wrap { grid-template-columns: 1fr; gap: 28px; }
+    .feat { grid-template-columns: 1fr; } .feat li:nth-child(n) { padding: 14px 2px; border-left: 0; }
+    .price b { font-size: 52px; }
+  }
+</style>
+</head>
+<body>
+<span class="specimen">Tasarım örneği, sabit test verisi. Sahnedeki tutarlar gerçek işlem değildir.</span>
+<header class="wrap nav">
+  <a class="brand" href="#"><img src="../../../../desktop/src/assets/brand/kasam360-ikon-kucuk-renkli.svg" alt="">KASAM360</a>
+  <nav class="links" aria-label="Site"><a href="#yol">Nasıl çalışır</a><a href="#paket">Paket</a><a href="#">Sorular</a></nav>
+  <div class="end">
+    <button class="btn btn-ghost" data-theme-toggle>Tema</button>
+    <a class="btn btn-ghost in" href="web-account.html">Giriş yap</a>
+    <a class="btn btn-buy" href="#paket">Paketi incele</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="stage" id="stage">
+    <div id="scene" role="img" aria-label="Döndürülebilir 3D restoran makinesi: salon, mutfak, depo, kasa ve bulut istasyonları. Sürükleyip çevirin, bir istasyona tıklayıp yaklaşın."></div>
+    <div class="vignette"></div>
+    <div id="labels"></div>
+    <div id="tooltip" role="tooltip"><b></b><p></p></div>
+    <div id="journey" aria-live="polite"><div><strong id="journey-title">Masa 12 sipariş verdi</strong><small id="journey-detail"></small></div><div class="track"><i id="journey-progress"></i></div></div>
+    <nav class="modes" aria-label="Makine görünümü">
+      <button data-mode="assembled" aria-pressed="true">Bütün</button>
+      <button data-mode="cutaway" aria-pressed="false">Kesit</button>
+      <button data-mode="stations" aria-pressed="false">İstasyonlar</button>
+      <button data-mode="order" aria-pressed="false">Bir sipariş</button>
+    </nav>
+    <div id="loading"><i></i>Makine kuruluyor</div>
+    <div id="error" hidden><b>3D sahne açılamadı</b><p>Tarayıcıda WebGL kapalı olabilir.</p><button class="btn btn-line" onclick="location.reload()">Yeniden dene</button></div>
+  </div>
+  <div class="veil"></div>
+  <div class="copy">
+    <h1>İnternet gitse de mutfak durmaz, hesap kapanır.</h1>
+    <p>Salon, mutfak, depo ve kasa aynı cihazda çalışır. Bağlantı gelince her kayıt buluta sırasıyla gider.</p>
+    <div class="go"><a class="btn btn-buy" href="#paket">Paketi incele</a><button class="btn btn-line" id="watch">Bir siparişi izle</button></div>
+  </div>
+</section>
+
+<section class="route" id="yol" aria-label="Bir siparişin yolu">
+  <ol>
+    <li><button data-focus="salon"><span class="n">01</span><b>Salon</b><span>Masa 12 açıldı, 4 kişi. Garson siparişi terminalden girdi.</span></button></li>
+    <li><button data-focus="mutfak"><span class="n">02</span><b>Mutfak</b><span>4 × Ev usulü mantı, biri acısız. Ekranda süre sayıyor.</span></button></li>
+    <li><button data-focus="depo"><span class="n">03</span><b>Depo</b><span id="r-depo"></span></button></li>
+    <li><button data-focus="kasa"><span class="n">04</span><b>Kasa</b><span id="r-kasa"></span></button></li>
+    <li><button data-focus="bulut"><span class="n">05</span><b>Bulut</b><span>İnternet yokken 2 kayıt sırada bekler, gelince gider.</span></button></li>
+  </ol>
+</section>
+
+<section class="plan" id="paket">
+  <div class="wrap">
+    <div>
+      <h2>Test Paket</h2>
+      <div class="price"><b class="num" id="price"></b><span>TL / ay</span></div>
+      <p class="meta">2 kasa cihazı dahil. Sürüm 1.</p>
+      <a class="btn btn-buy" href="web-account.html" style="min-height:52px;padding:0 26px">Bu paketle başla</a>
+    </div>
+    <ul class="feat">
+      <li>Masa ve salon düzeni<em>Var</em></li><li>Mutfak ekranı<em>Var</em></li>
+      <li>Reçete ve FIFO maliyet<em>Var</em></li><li>Cari ve tedarikçi<em>Var</em></li>
+      <li>QR menü<em>Var</em></li><li>Fire ve iptal radarı<em>Var</em></li>
+      <li class="off">Paket servis entegrasyonu<em>Yok</em></li><li class="off">Çoklu şube<em>Yok</em></li>
+    </ul>
+  </div>
+</section>
+<footer><div class="wrap"><span>© 2026 360 Labs</span><a href="#">Gizlilik</a><a href="#">Koşullar</a><a class="sp" href="#">destek@kasam360.com.tr</a></div></footer>
+
+<script type="module">
+  import { initRestaurantScene } from './restaurant-scene.js?v=4';
+  import { FIX } from './scene-stations.js';
+  const tl = (c) => (c / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+  document.getElementById('r-depo').textContent = `En eski parti önce: Lot A ${FIX.lotA[0]} × ${tl(FIX.lotA[1])}, Lot B ${FIX.lotB[0]} × ${tl(FIX.lotB[1])}. Maliyet ${tl(FIX.cost)} TL.`;
+  document.getElementById('r-kasa').textContent = `Nakit ${tl(FIX.cash)} + kart ${tl(FIX.card)} = ${tl(FIX.total)} TL. Nakit ve kart gün sonunda ayrı sayılır.`;
+  document.getElementById('price').textContent = tl(100000);
+  const stage = document.getElementById('stage');
+  // ?mode=order gibi bir adres, kanıt görüntüleri için makineyi o modda açar.
+  const startMode = new URLSearchParams(location.search).get('mode');
+  document.fonts.ready.then(() => { initRestaurantScene(stage, { embedded: true }); if (startMode) window.__restaurant?.setMode(startMode, true); });
+  document.getElementById('watch').addEventListener('click', () => window.__restaurant?.setMode('order'));
+  document.querySelectorAll('[data-focus]').forEach((b) => b.addEventListener('click', () => {
+    stage.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+    window.__restaurant?.focusStation(b.dataset.focus);
+  }));
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { ErrorToast } from '../../ui/ErrorToast';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { errorText } from '../../lib/cariInput';
 import { formatDateTime } from '../../lib/date';
 import { formatNumber } from '../../lib/numberText';
@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
 import { NumberInput } from '../../ui/NumberInput';
+import { RecordCard } from './RecordCard';
 
 interface BackupStatus {
   directory: string;
@@ -50,9 +51,11 @@ export const BackupPanel: React.FC = () => {
   const [mirror, setMirror] = useState('');
   const [target, setTarget] = useState<BackupFile | null>(null);
   const [pin, setPin] = useState('');
-  const [deleting, setDeleting] = useState<BackupFile | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const inFlight = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -74,6 +77,8 @@ export const BackupPanel: React.FC = () => {
   }, [load]);
 
   const run = async (action: () => Promise<unknown>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setIsBusy(true);
     setError(null);
     try {
@@ -82,11 +87,19 @@ export const BackupPanel: React.FC = () => {
     } catch (caught) {
       setError(errorText(caught));
     } finally {
+      inFlight.current = false;
       setIsBusy(false);
     }
   };
 
   const { actorId, actorRole, tenantId } = sessionArgs();
+  const closeDetail = () => {
+    if (inFlight.current) return;
+    setTarget(null);
+    setRestoring(false);
+    setPin('');
+    setError(null);
+  };
 
   return (
     <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-4">
@@ -107,7 +120,7 @@ export const BackupPanel: React.FC = () => {
         </p>
       ) : null}
 
-      <Button variant="primary" className="w-full min-h-12" isLoading={isBusy} onClick={() => void run(() => invokeIPC('create_backup_now', { actorRole }))}>
+      <Button variant="primary" className="min-h-12" isLoading={isBusy} onClick={() => void run(() => invokeIPC('create_backup_now', { actorRole }))}>
         Şimdi Yedekle
       </Button>
 
@@ -118,6 +131,7 @@ export const BackupPanel: React.FC = () => {
           <Button
             variant="secondary"
             className="min-h-12 shrink-0"
+            disabled={isBusy}
             onClick={() => void run(() => invokeIPC('set_backup_mirror', { mirrorDir: mirror, actorRole }))}
           >
             Kaydet
@@ -125,83 +139,68 @@ export const BackupPanel: React.FC = () => {
         </div>
       </label>
 
-      {error ? (
-        <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
-          {error}
-        </p>
+      {error && !restoring ? (
+        <ErrorToast message={error} />
       ) : null}
 
-      <ul className="divide-y divide-[var(--border)]">
+      {files.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Henüz yedek yok.</p> : null}
+      <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {files.slice(0, 20).map((file) => (
-          <li key={file.path} className="flex items-center justify-between gap-3 py-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-[var(--text-primary)] tabular-nums">{stampText(file.createdAt)}</p>
-              <p className="text-sm text-[var(--text-secondary)] tabular-nums">
-                {TAG_LABEL[file.tag] ?? file.tag} · {formatNumber(Math.ceil(file.bytes / 1024))} KB
-              </p>
-            </div>
-            <Button variant="secondary" className="shrink-0" onClick={() => setTarget(file)}>
-              Geri Dön
-            </Button>
-            <Button variant="ghost" className="shrink-0" aria-label={`${stampText(file.createdAt)} yedeğini sil`} onClick={() => setDeleting(file)}>
-              <Trash2 className="w-5 h-5" />
-            </Button>
+          <li key={file.path}>
+            <RecordCard title={stampText(file.createdAt)}
+              description={`${TAG_LABEL[file.tag] ?? file.tag} · ${formatNumber(Math.ceil(file.bytes / 1024))} KB`}
+              onOpen={() => { setError(null); setTarget(file); }} />
           </li>
         ))}
       </ul>
 
-      {deleting ? (
-        <ConfirmDialog
+      {deleting && target ? (
+        <ConfirmDialog cardFlow
           title="Yedek silinsin mi?"
-          message={stampText(deleting.createdAt)}
+          message={stampText(target.createdAt)}
           onConfirm={async () => {
-            await invokeIPC('delete_backup', { filePath: deleting.path, actorRole });
+            await invokeIPC('delete_backup', { filePath: target.path, actorRole });
+            closeDetail();
             await load();
           }}
-          onClose={() => setDeleting(null)}
+          onClose={() => setDeleting(false)}
         />
       ) : null}
 
-      {target ? (
-        <Modal
-          isOpen
-          onClose={() => {
-            setTarget(null);
-            setPin('');
-          }}
-          title="Yedeğe Geri Dön"
-          maxWidth="sm"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-[var(--text-secondary)]">
-              {stampText(target.createdAt)} sonrasındaki işlemler ekrandan kalkar. Mevcut veri önce ayrıca yedeklenir. Uygulama yeniden açılır.
-            </p>
-            <NumberInput
-              id="restore-pin"
-              aria-label="PIN"
-              kind="digits"
-              type="password"
-              placeholder="PIN"
-              maxLength={8}
-              value={pin}
-              onValueChange={setPin}
-            />
-            {error ? (
-              <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">
-                {error}
+      {target && !deleting ? (
+        <Modal cardFlow isOpen onClose={closeDetail} title={restoring ? 'Yedeğe Geri Dön' : 'Yedek Ayrıntısı'}
+          subtitle={stampText(target.createdAt)} maxWidth="sm">
+          {restoring ? (
+            <form className="space-y-4" onSubmit={(event) => {
+              event.preventDefault();
+              if (pin.length >= 4) void run(() => invokeIPC('restore_backup', { filePath: target.path, pin, actorId, actorRole, tenantId }));
+            }}>
+              <p className="text-sm text-[var(--text-secondary)]">
+                Bu yedekten sonraki işlemler ekrandan kalkar. Mevcut veri önce ayrıca yedeklenir. Uygulama yeniden açılır.
               </p>
-            ) : null}
-            <Button
-              variant="danger"
-              size="lg"
-              className="w-full"
-              disabled={pin.length < 4}
-              isLoading={isBusy}
-              onClick={() => void run(() => invokeIPC('restore_backup', { filePath: target.path, pin, actorId, actorRole, tenantId }))}
-            >
-              Geri Dön ve Yeniden Aç
-            </Button>
-          </div>
+              <label className="block space-y-1 text-sm font-semibold">
+                <span>PIN</span>
+                <NumberInput kind="digits" type="password" maxLength={8} value={pin} onValueChange={setPin} disabled={isBusy} />
+              </label>
+              {error ? <ErrorToast message={error} /> : null}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" disabled={isBusy} onClick={() => { setRestoring(false); setPin(''); setError(null); }}>Vazgeç</Button>
+                <Button type="submit" variant="danger" disabled={pin.length < 4} isLoading={isBusy}>Geri Dön ve Yeniden Aç</Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              <dl className="grid gap-2 text-sm">
+                <div><dt className="font-semibold">Dosya</dt><dd className="break-all">{target.name}</dd></div>
+                <div><dt className="font-semibold">Tür</dt><dd>{TAG_LABEL[target.tag] ?? target.tag}</dd></div>
+                <div><dt className="font-semibold">Boyut</dt><dd className="tabular-nums">{formatNumber(Math.ceil(target.bytes / 1024))} KB</dd></div>
+              </dl>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" disabled={isBusy} onClick={() => setDeleting(true)}>Yedeği Sil</Button>
+                <Button variant="primary" disabled={isBusy} onClick={() => setRestoring(true)}>Geri Dön</Button>
+              </div>
+            </div>
+          )}
         </Modal>
       ) : null}
     </section>

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
 import { errorText } from '../../../lib/cariInput';
 import { downloadFile } from '../../../lib/downloadFile';
@@ -35,7 +36,7 @@ export const LegacyArchivePanel: React.FC = () => {
         Yasal modül üründen kaldırıldı. Daha önce girilen {count} kayıt silinmedi ve yedeğe dahildir.
       </p>
       <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void download()}>Arşivi İndir</Button>
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
     </section>
   );
 };

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
@@ -16,13 +17,14 @@ export interface ApprovalScope {
 
 interface ManagerPinPromptProps {
   scope: ApprovalScope;
+  cardFlow?: boolean;
   title: string;
   onApproved: (approvalToken: string) => void;
   onClose: () => void;
 }
 
 /** Yönetici PIN'ini sunucuda doğrular. PIN saklanmaz; kapsamlı tek kullanımlık jeton döner. */
-export const ManagerPinPrompt: React.FC<ManagerPinPromptProps> = ({ scope, title, onApproved, onClose }) => {
+export const ManagerPinPrompt: React.FC<ManagerPinPromptProps> = ({ scope, title, onApproved, onClose, cardFlow }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -53,7 +55,7 @@ export const ManagerPinPrompt: React.FC<ManagerPinPromptProps> = ({ scope, title
   };
 
   return (
-    <Modal isOpen onClose={onClose} title={title} maxWidth="sm">
+    <Modal cardFlow={cardFlow} isOpen onClose={() => { if (!isBusy) onClose(); }} title={title} maxWidth="sm">
       <div className="space-y-3">
         <p className="text-xs flex items-center gap-1.5 text-[var(--text-secondary)]">
           <ShieldCheck className="w-4 h-4 text-[var(--text-secondary)]" />
@@ -63,9 +65,7 @@ export const ManagerPinPrompt: React.FC<ManagerPinPromptProps> = ({ scope, title
           {'•'.repeat(pin.length)}
         </div>
         {error ? (
-          <p role="alert" className="text-xs font-semibold text-center text-[var(--accent-red)]">
-            {error}
-          </p>
+          <ErrorToast message={error} />
         ) : null}
         <Numpad
           onDigit={(digit) => {

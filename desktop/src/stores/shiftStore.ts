@@ -32,11 +32,11 @@ interface ShiftWire {
 
 interface SummaryWire {
   shiftId: string;
-  totalSales: number;
+  totalSales: number | null;
   totalCashIn: number;
   totalCashOut: number;
-  expectedBalance: number;
-  cashSales: number;
+  expectedBalance: number | null;
+  cashSales: number | null;
   cardSales: number;
   mealCardSales: number;
   veresiyeSales: number;

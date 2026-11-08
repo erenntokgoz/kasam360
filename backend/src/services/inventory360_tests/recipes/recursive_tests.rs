@@ -173,9 +173,10 @@ async fn dongusel_recete_yine_reddedilir() {
         ),
     )
     .await;
-    recete_olustur(
+    let kayit = create_recipe(
         &mut conn,
         KIRACI_A,
+        AKTOR,
         recete_girdisi(
             "prd_b",
             "B",
@@ -184,7 +185,20 @@ async fn dongusel_recete_yine_reddedilir() {
             vec![malzeme("prd_a", 1.0, "adet", None)],
         ),
     )
-    .await;
+    .await
+    .expect_err("döngü kayıtta reddedilmeli");
+    assert!(kayit.contains("döngüsel"), "neden belirtilmeli: {kayit}");
+
+    // Eski kurulumda kayıtlı döngü de maliyet çözümünde reddedilir.
+    sqlx::raw_sql(
+        "INSERT INTO recipes (id, tenant_id, product_id, name, yield_percent, output_quantity, output_unit, is_active, created_by)
+         VALUES ('rcp_eski_b', 'tnt_a', 'prd_b', 'B', 100, 1, 'adet', 1, 'usr_1');
+         INSERT INTO recipe_items (id, tenant_id, recipe_id, component_product_id, is_sub_recipe, quantity, unit, waste_percent)
+         VALUES ('rit_eski_b', 'tnt_a', 'rcp_eski_b', 'prd_a', 0, 1, 'adet', 0);",
+    )
+    .execute(&mut conn)
+    .await
+    .unwrap();
 
     // A → B → A döngüsü sonsuz çözüm üretir; reddedilmelidir. Döngü kontrolü
     // giriş noktasında gevşetilirse bu test kızar.

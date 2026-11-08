@@ -1,227 +1,96 @@
-// Menü Kategori Ağacı ve Hızlı Filtreler
-// Sol navigasyon paneli: kategoriler, ürün sayıları, silme işlemi ve durum filtreleri.
-// Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
-
-import { useMenuExtrasStore } from '../../stores/menuExtrasStore';
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { activateOnKey } from '../../lib/activateOnKey';
+import { useAuthStore } from '../../stores/authStore';
+import { useMenuExtrasStore } from '../../stores/menuExtrasStore';
 import { useMenuStore } from '../../stores/menuStore';
+import { formatNumber } from '../../lib/numberText';
+import { menuProducts } from '../../lib/productState';
+import { Button } from '../../ui/Button';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { Modal } from '../../ui/Modal';
 import { MenuCategoryModal } from './MenuCategoryModal';
 import type { CategoryDto } from '../../types/menu';
-import { isOnSale, menuProducts } from '../../lib/productState';
 
-interface MenuCategoryTreeProps {
-  onOpenNewCategoryModal: () => void;
-}
-
-export const MenuCategoryTree: React.FC<MenuCategoryTreeProps> = ({
-  onOpenNewCategoryModal,
-}) => {
+export const MenuCategoryTree: React.FC<{ onSelect: (id: string | null) => void }> = ({ onSelect }) => {
+  const { categories, products, filters, deleteCategory } = useMenuStore();
+  const canEdit = useAuthStore((state) => state.user?.role === 'OWNER');
   const parents = useMenuExtrasStore((state) => state.parents);
-  const {
-    categories,
-    products,
-    filters,
-    setCategoryFilter,
-    toggleFilterTukendi,
-    toggleFilterSatista,
-    toggleFilterSatisDisi,
-    deleteCategory,
-    busy,
-  } = useMenuStore();
-
-  const [deletingCat, setDeletingCat] = useState<CategoryDto | null>(null);
-  const [editingCat, setEditingCat] = useState<CategoryDto | null>(null);
-
+  const loadExtras = useMenuExtrasStore((state) => state.load);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<CategoryDto | 'NEW' | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const detail = categories.find((category) => category.id === detailId);
+  const selected = categories.find((category) => category.id === filters.categoryId);
   const saleProducts = menuProducts(products);
-  const totalCount = saleProducts.length;
-  const tukendiCount = saleProducts.filter((p) => p.is86).length;
-  const satisDisiCount = saleProducts.filter((p) => !p.isActive).length;
-  const satistaCount = saleProducts.filter(isOnSale).length;
+  const sorted = [...categories].sort((a, b) => a.displayOrder - b.displayOrder);
+  const categoryIds = new Set(categories.map((category) => category.id));
+  const ordered = sorted.filter((category) => !categoryIds.has(parents[category.id] ?? '')).flatMap((parent) => [
+    parent, ...sorted.filter((category) => parents[category.id] === parent.id),
+  ]);
+  const countOf = (id: string) => saleProducts.filter((product) =>
+    product.categoryId === id || parents[product.categoryId] === id).length;
+  const hasProducts = detail ? saleProducts.some((product) => product.categoryId === detail.id) : false;
 
   return (
-    <div className="w-60 xl:w-72 bg-[var(--bg-panel)] border-r border-[var(--border)] p-3 flex flex-col justify-between select-none shrink-0">
-      <div className="space-y-4">
-        {/* Kategoriler Bölümü */}
-        <div>
-          <div className="flex items-center justify-between gap-2 px-2">
-            <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Kategoriler</span>
-            <button
-              type="button"
-              onClick={onOpenNewCategoryModal}
-              className="tactile-btn min-h-12 px-3 rounded-md bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-xs font-bold border border-[var(--border)] inline-flex items-center gap-1 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Kategori Ekle</span>
-            </button>
-          </div>
-          <div className="mt-1 space-y-0.5">
-            <button
-              type="button"
-              onClick={() => setCategoryFilter(null)}
-              className={`w-full flex items-center justify-between min-h-12 px-3 rounded-md text-sm font-semibold cursor-pointer transition-colors ${
-                filters.categoryId === null
-                  ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] shadow-[inset_0_0_0_1px_var(--border)] font-bold'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-              }`}
-            >
-              <span>Tüm Ürünler</span>
-              <span className="text-xs tabular-nums text-[var(--text-muted)]">{totalCount}</span>
-            </button>
-
-            {[...categories]
-              .sort((a, b) => {
-                // Alt kategori üstünün hemen altında durur.
-                const keyOf = (item: typeof a) => {
-                  const parent = categories.find((c) => c.id === parents[item.id]);
-                  return parent ? [parent.displayOrder, 1, item.displayOrder] : [item.displayOrder, 0, 0];
-                };
-                const [x, y] = [keyOf(a), keyOf(b)];
-                return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
-              })
-              .map((cat) => {
-              const count = saleProducts.filter((p) => p.categoryId === cat.id).length;
-              // Hammaddesi olan kategori de silinemez; sunucu ürünü olan kategoriyi reddeder.
-              const hasAny = products.some((p) => p.categoryId === cat.id);
-              const isChild = Boolean(parents[cat.id]);
-              const isSelected = filters.categoryId === cat.id;
-              return (
-                <div
-                  key={cat.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setCategoryFilter(cat.id)}
-                  onKeyDown={activateOnKey(() => setCategoryFilter(cat.id))}
-                  className={`group w-full flex items-center justify-between min-h-12 px-3 rounded-md text-sm font-semibold cursor-pointer transition-colors ${
-                    isSelected
-                      ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] shadow-[inset_0_0_0_1px_var(--border)] font-bold'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-                  }`}
-                >
-                  <span className={`truncate flex-1 text-left ${isChild ? 'pl-4' : ''}`}>{cat.name}</span>
-                  <div className="flex items-center gap-1.5 shrink-0 ml-1">
-                    <span className="text-xs tabular-nums text-[var(--text-muted)]">{count}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingCat(cat);
-                      }}
-                      className="w-10 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded cursor-pointer"
-                      aria-label={`${cat.name} düzenle`}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={hasAny}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeletingCat(cat);
-                      }}
-                      className="w-10 h-12 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--accent-red)] rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                      title={hasAny ? 'Önce ürünleri taşıyın' : 'Kategoriyi sil'}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Hızlı Filtreler */}
-        <div>
-          <div className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-2 py-1">
-            Hızlı Filtre
-          </div>
-          <div className="mt-1 space-y-1">
-            <button
-              type="button"
-              onClick={toggleFilterTukendi}
-              className={`w-full flex items-center justify-between min-h-12 px-3 rounded-md text-sm font-semibold cursor-pointer transition-colors ${
-                filters.tukendi
-                  ? 'bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)] font-bold'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
-              }`}
-            >
-              <span className="inline-flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[var(--accent-red)]" />
-                Tükendi
-              </span>
-              <span className="text-xs tabular-nums tabular-nums">{tukendiCount}</span>
-            </button>
-
-            <button
-              type="button"
-              aria-pressed={filters.satisDisi}
-              onClick={toggleFilterSatisDisi}
-              className={`w-full flex items-center justify-between min-h-12 px-3 rounded-md text-sm font-semibold cursor-pointer transition-colors ${
-                filters.satisDisi
-                  ? 'bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)] font-bold'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
-              }`}
-            >
-              <span className="inline-flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[var(--text-muted)]" />
-                Satış Dışı
-              </span>
-              <span className="text-xs tabular-nums">{satisDisiCount}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleFilterSatista}
-              className={`w-full flex items-center justify-between min-h-12 px-3 rounded-md text-sm font-semibold cursor-pointer transition-colors ${
-                filters.satista
-                  ? 'bg-[var(--accent-emerald-soft)] text-[var(--accent-emerald)] border border-[var(--accent-emerald-border)] font-bold'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
-              }`}
-            >
-              <span className="inline-flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[var(--accent-emerald)]" />
-                Satışta
-              </span>
-              <span className="text-xs tabular-nums tabular-nums">{satistaCount}</span>
-            </button>
-          </div>
-        </div>
+    <aside className="shrink-0 min-w-0 border-b border-[var(--border)] bg-[var(--bg-panel)] lg:w-56 lg:border-b-0 lg:border-r lg:flex lg:flex-col" aria-label="Ürün Kategorileri">
+      <div className="flex gap-2 items-center px-3 py-2 lg:justify-between">
+        <h3 className="hidden lg:block text-sm font-bold">Kategoriler</h3>
+        <select aria-label="Kategori filtresi"
+          className="lg:hidden min-w-0 min-h-12 flex-1 rounded-lg px-3 bg-[var(--bg-subtle)] border border-[var(--border)]"
+          value={selected?.id ?? ''} onChange={(event) => onSelect(event.target.value || null)}>
+          <option value="">Tüm Kategoriler</option>
+          {ordered.map((category) => (
+            <option key={category.id} value={category.id}>{parents[category.id] ? '↳ ' : ''}{category.name}</option>
+          ))}
+        </select>
+        {canEdit ? <Button type="button" size="sm" onClick={() => setDraft('NEW')}>Kategori Ekle</Button> : null}
       </div>
-
-      {/* Kategori Silme Onay Modalı */}
-      {deletingCat && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-80 paper border border-[var(--border)] rounded-xl p-4 space-y-4 shadow-2xl">
-            <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Kategoriyi Sil?</h3>
-            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-              Boş &quot;{deletingCat.name}&quot; kategorisi silinecektir.
-            </p>
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setDeletingCat(null)}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-sm font-bold text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
-              >
-                Vazgeç
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  await deleteCategory(deletingCat.id);
-                  setDeletingCat(null);
-                }}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-sm font-bold text-white cursor-pointer disabled:opacity-50"
-              >
-                Sil
-              </button>
-            </div>
-          </div>
+      {canEdit && selected ? (
+        <div className="px-3 pb-2">
+          <Button type="button" size="sm" className="w-full" onClick={() => setDetailId(selected.id)}>Kategori Detayı</Button>
         </div>
-      )}
-      <MenuCategoryModal isOpen={editingCat !== null} category={editingCat} onClose={() => setEditingCat(null)} />
-    </div>
+      ) : null}
+      <ul className="hidden lg:block min-h-0 overflow-y-auto px-3 pb-3 space-y-1">
+        <li>
+          <Button type="button" size="sm" className="w-full !justify-between"
+            aria-pressed={selected === undefined} variant={selected === undefined ? 'selected' : 'ghost'} onClick={() => onSelect(null)}>
+            Tüm Kategoriler <span className="tabular-nums text-xs">{formatNumber(saleProducts.length)}</span>
+          </Button>
+        </li>
+        {ordered.map((category) => (
+          <li key={category.id} className={parents[category.id] ? 'pl-3' : undefined}>
+            <Button type="button" size="sm" title={category.name} className="w-full !justify-between"
+              aria-pressed={selected?.id === category.id} variant={selected?.id === category.id ? 'selected' : 'ghost'}
+              onClick={() => onSelect(category.id)}>
+              <span className="truncate">{category.name}</span>
+              <span className="tabular-nums text-xs shrink-0">{formatNumber(countOf(category.id))}</span>
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <MenuCategoryModal isOpen={draft !== null} category={draft === 'NEW' ? null : draft}
+        onCreated={(category) => { if (draft === 'NEW') onSelect(category.id); }}
+        onClose={() => setDraft(null)} />
+      {detail && draft === null && !deleting ? (
+        <Modal cardFlow isOpen title={detail.name} maxWidth="sm" onClose={() => setDetailId(null)}>
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div><dt className="text-[var(--text-secondary)]">Ürün</dt><dd className="font-bold tabular-nums">{formatNumber(countOf(detail.id))}</dd></div>
+            <div><dt className="text-[var(--text-secondary)]">İstasyon</dt><dd className="font-bold">{detail.defaultStation || 'Tanımlı değil'}</dd></div>
+          </dl>
+          {hasProducts ? <p className="mt-3 text-sm text-[var(--text-secondary)]">Kategoriyi silmeden önce ürünlerini taşıyın.</p> : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="danger" disabled={hasProducts} onClick={() => setDeleting(true)}>Sil</Button>
+            <Button type="button" variant="primary" onClick={() => setDraft(detail)}>Düzenle</Button>
+          </div>
+        </Modal>
+      ) : null}
+      {detail && deleting ? (
+        <ConfirmDialog cardFlow title={`${detail.name} silinsin mi?`}
+          onClose={() => setDeleting(false)} onConfirm={async () => {
+            if (!await deleteCategory(detail.id)) throw new Error(useMenuStore.getState().error ?? 'Kategori silinemedi.');
+            setDetailId(null);
+            await loadExtras();
+          }} />
+      ) : null}
+    </aside>
   );
 };

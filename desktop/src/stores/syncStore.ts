@@ -41,6 +41,14 @@ export const SYNC_STATE_LABEL: Record<SyncState, string> = {
   INTERVENTION: 'Müdahale gerekli',
 };
 
+type DeviceOutcome = { status: 'APPLIED' | 'PENDING' | 'REJECTED' | 'UNKNOWN'; error?: string | null };
+
+function requireApplied(outcome: DeviceOutcome) {
+  if (outcome.status !== 'APPLIED') {
+    throw new Error(outcome.error || 'İşlem doğrulanamadı. Yeniden denemeden önce cihaz listesini yenileyin.');
+  }
+}
+
 export const useSyncStore = create<SyncStore>((set, get) => ({
   status: null,
   statusError: null,
@@ -70,13 +78,15 @@ export const useSyncStore = create<SyncStore>((set, get) => ({
 
   setDevicePassive: async (deviceId) => {
     const { actorRole, actorId, tenantId } = sessionArgs();
-    await invokeIPC('set_device_passive', { actorRole, actorId, tenantId, deviceId });
+    const outcome = await invokeIPC<DeviceOutcome>('set_device_passive', { actorRole, actorId, tenantId, deviceId });
     await get().refresh();
+    requireApplied(outcome);
   },
 
   takeOver: async (pin) => {
     const { tenantId } = sessionArgs();
-    await invokeIPC('take_over_device', { pin, tenantId });
+    const outcome = await invokeIPC<DeviceOutcome>('take_over_device', { pin, tenantId });
     await get().refresh();
+    requireApplied(outcome);
   },
 }));

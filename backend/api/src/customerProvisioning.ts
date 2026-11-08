@@ -3,12 +3,35 @@ import { timingSafeEqual } from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
 import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type { Pool } from 'pg';
+import type { Databases } from './lib/mongo.js';
 
 const PAGE = 500;
 
-export function mountCustomerProvisioning(app: Hono, pool: Pool, secret: string) {
+// Hesap kütüphanesinin belge biçimi; kayıt aynı alanlarla açılır ki girişte aynen okunsun.
+interface CustomerUser {
+  _id: string;
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  businessName?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface CustomerAccount {
+  _id: string;
+  userId: string;
+  accountId: string;
+  providerId: string;
+  password: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export function mountCustomerProvisioning(app: Hono, { account, accountClient }: Databases, secret: string) {
   const path = '/internal/labs/customers';
+  const users = account.collection<CustomerUser>('user');
+  const accounts = account.collection<CustomerAccount>('account');
   const authorized = (header: string | undefined) => {
     const supplied = Buffer.from(header ?? '');
     const expected = Buffer.from(`Bearer ${secret}`);
@@ -22,14 +45,15 @@ export function mountCustomerProvisioning(app: Hono, pool: Pool, secret: string)
     if (!authorized(context.req.header('authorization'))) return context.body(null, 401);
     const after = context.req.query('after') ?? '';
     if (after && !/^[a-z]{2,4}_[0-9A-Za-z]{1,40}$/.test(after)) return context.body(null, 422);
-    const { rows } = await pool.query(
-      `SELECT id,name,email,"businessName","emailVerified" FROM "user"
-       WHERE id > $1 ORDER BY id LIMIT $2`,
-      [after, PAGE + 1],
-    );
+    const found = await users.find(after ? { _id: { $gt: after } } : {}, {
+      projection: { name: 1, email: 1, businessName: 1, emailVerified: 1 },
+    }).sort({ _id: 1 }).limit(PAGE + 1).toArray();
+    const rows = found.map(({ _id, name, email, businessName, emailVerified }) => ({
+      id: _id, name, email, businessName: businessName ?? null, emailVerified: emailVerified === true,
+    }));
     const more = rows.length > PAGE;
-    const accounts = more ? rows.slice(0, PAGE) : rows;
-    return context.json({ accounts, next: more ? accounts[accounts.length - 1].id : null });
+    const page = more ? rows.slice(0, PAGE) : rows;
+    return context.json({ accounts: page, next: more ? page[page.length - 1].id : null });
   });
   app.post(path, async (context) => {
     context.header('Cache-Control', 'no-store');
@@ -49,22 +73,28 @@ export function mountCustomerProvisioning(app: Hono, pool: Pool, secret: string)
     const accountId = `acc_${suffix}`;
     const email = data.email.toLowerCase();
     // Hesap ve kimlik bilgisi tek yazımda açılır. Müşterinin onayı ve e-posta doğrulaması sonradan alınır.
-    const inserted = await pool.query(
-      `WITH new_user AS (
-          INSERT INTO "user" (id,name,email,"emailVerified","createdAt","updatedAt")
-          VALUES ($1,$2,$3,false,now(),now()) ON CONFLICT DO NOTHING RETURNING id
-       )
-       INSERT INTO account (id,"userId","accountId","providerId",password,"createdAt","updatedAt")
-       SELECT $4,id,id,'credential',$5,now(),now() FROM new_user RETURNING id`,
-      [userId, data.name.trim(), email, accountId, await hash(data.password)],
-    );
-    if (inserted.rowCount === 1) return context.json({ id: userId }, 201);
-    const existing = await pool.query<{ password: string }>(
-      `SELECT a.password FROM "user" u JOIN account a ON a."userId"=u.id
-       WHERE u.id=$1 AND u.email=$2 AND a.id=$3 AND a."providerId"='credential'`,
-      [userId, email, accountId],
-    );
-    if (existing.rows[0]?.password && await verify(existing.rows[0].password, data.password)) {
+    const name = data.name.trim();
+    const passwordHash = await hash(data.password);
+    const now = new Date();
+    const session = accountClient.startSession();
+    let created = false;
+    try {
+      await session.withTransaction(async () => {
+        created = false;
+        if (await users.findOne({ $or: [{ _id: userId }, { email }] }, { session })) return;
+        await users.insertOne({ _id: userId, name, email, emailVerified: false, createdAt: now, updatedAt: now }, { session });
+        await accounts.insertOne({
+          _id: accountId, userId, accountId: userId, providerId: 'credential', password: passwordHash, createdAt: now, updatedAt: now,
+        }, { session });
+        created = true;
+      });
+    } finally {
+      await session.endSession();
+    }
+    if (created) return context.json({ id: userId }, 201);
+    const user = await users.findOne({ _id: userId, email });
+    const credential = user ? await accounts.findOne({ _id: accountId, userId, providerId: 'credential' }) : null;
+    if (credential?.password && await verify(credential.password, data.password)) {
       return context.json({ id: userId });
     }
     return context.body(null, 409);

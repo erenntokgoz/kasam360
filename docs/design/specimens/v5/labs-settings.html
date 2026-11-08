@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Teknik ayarlar · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script><script src="labs-shell.js" defer></script>
+<style>
+  .split { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); }
+  .toc { border-right: 1px solid var(--line); padding: 18px 12px; display: grid; gap: 2px; align-content: start; }
+  .toc a { padding: 7px 10px; border-radius: 7px; text-decoration: none; color: var(--text-2); }
+  .toc a[aria-current] { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+  .content { overflow: auto; padding: 24px 32px 48px; }
+  .content > h1 { margin: 0 0 18px; font-size: 24px; font-weight: 650; letter-spacing: -.03em; }
+  section.card { max-width: 860px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); margin-bottom: 18px; }
+  .card > header { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .card > header h2 { margin: 0; font-size: 16px; font-weight: 620; } .card > header .pill { margin-left: auto; }
+  .card .body { padding: 16px 18px; display: grid; gap: 14px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .secret { display: flex; gap: 8px; } .secret .in { font-family: var(--mono); }
+  .card table.grid td, .card table.grid th { padding-left: 0; }
+  .card footer { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--line); }
+  .hint { color: var(--text-3); font-size: 12.5px; margin: -6px 0 0; }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } .toc { display: none; } .content { padding: 20px 16px; } .row2 { grid-template-columns: 1fr; } .card .body { overflow-x: auto; } }
+</style>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği, sabit test verisi. Anahtarlar sahte ve maskeli; kaydetmez.</span>
+<div class="app">
+  <aside class="rail" data-page="settings"></aside>
+  <div class="main">
+    <div class="bar"><span class="crumb">KASAM360 / <b>Teknik ayarlar</b></span>
+      <label class="search"><input placeholder="Ayar ara" aria-label="Ayar ara"><kbd>/</kbd></label></div>
+    <div class="split">
+      <nav class="toc" aria-label="Bölümler">
+        <a href="#pay" aria-current="true">Ödeme sağlayıcısı</a><a href="#map">Paket eşlemesi</a><a href="#mail">Mail</a><a href="#lic">Lisans imzası</a><a href="#users">Labs kullanıcıları</a>
+      </nav>
+      <div class="content">
+        <h1>Teknik ayarlar</h1>
+        <section class="card" id="pay">
+          <header><h2>Ödeme sağlayıcısı</h2><span class="pill warn"><span class="dot"></span>Test modu</span></header>
+          <div class="body">
+            <div class="row2"><label class="f">Mağaza kimliği<input class="in mono" value="store_test_48211"></label>
+              <label class="f">API anahtarı<div class="secret"><input class="in" value="•••• •••• •••• 9c2e" readonly aria-label="API anahtarı, son 4 hane 9c2e"><button type="button" class="btn btn-line sm">Değiştir</button></div></label></div>
+            <label class="f">Webhook adresi<input class="in mono" value="https://api.kasam360.com.tr/webhooks/payments" readonly></label>
+            <p class="hint">Son webhook bugün 08.00'de geldi, imza doğrulandı.</p>
+          </div>
+          <footer><button class="btn btn-line sm">Bağlantıyı dene</button><button class="btn btn-ink sm">Canlı moda geç</button></footer>
+        </section>
+        <section class="card" id="map">
+          <header><h2>Paket eşlemesi</h2></header>
+          <div class="body"><table class="grid">
+            <thead><tr><th>Paket</th><th>Sağlayıcıdaki ürün</th><th>Varyant</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>Test Paket</td><td class="mono">prod_test_1120</td><td class="mono">var_test_5521</td><td><div class="row-acts"><button>Düzenle</button><button class="del">Kaldır</button></div></td></tr>
+              <tr><td>Başlangıç</td><td class="muted">Eşlenmedi</td><td class="muted">—</td><td><div class="row-acts"><button>Eşle</button></div></td></tr>
+            </tbody></table></div>
+        </section>
+        <section class="card" id="mail">
+          <header><h2>Mail</h2><span class="pill ok"><span class="dot"></span>Çalışıyor</span></header>
+          <div class="body">
+            <div class="row2"><label class="f">Gönderen<input class="in" value="destek@kasam360.com.tr"></label><label class="f">Sunucu<input class="in mono" value="mail.kasam360.com.tr:587"></label></div>
+            <p class="hint">Son gönderim 11.34, son alım 11.19. Kutuda 7 okunmamış.</p>
+          </div>
+          <footer><button class="btn btn-line sm">Kendime test maili gönder</button><button class="btn btn-ink sm">Kaydet</button></footer>
+        </section>
+        <section class="card" id="lic">
+          <header><h2>Lisans imzası</h2></header>
+          <div class="body">
+            <div class="row2"><div><small class="muted">Etkin anahtar</small><div class="mono">key_2026_10</div></div><div><small class="muted">Oluşturuldu</small><div class="num">1 Ekim 2026</div></div></div>
+          </div>
+          <footer><button class="btn btn-danger sm">Anahtarı döndür</button></footer>
+        </section>
+        <section class="card" id="users">
+          <header><h2>Labs kullanıcıları</h2><button class="btn btn-line sm" style="margin-left:auto">Kullanıcı davet et</button></header>
+          <div class="body"><table class="grid">
+            <thead><tr><th>Kişi</th><th>Yetki</th><th>Son giriş</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="cell-2"><b>Eren T.</b><small>platform sahibi</small></td><td>Tam yetki</td><td class="num">Bugün 10.02</td><td></td></tr>
+              <tr><td class="cell-2"><b>Mert D.</b><small>destek</small></td><td>Destek: mail, işletme okuma, eşitleme kaydı</td><td class="num">Bugün 11.34</td><td><div class="row-acts"><button>Düzenle</button><button class="del">Kaldır</button></div></td></tr>
+            </tbody></table></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

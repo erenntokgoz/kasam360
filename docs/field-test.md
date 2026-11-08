@@ -1,8 +1,20 @@
+> Belge kapsamı: mevcut teknik uygulama/inceleme kaydıdır; yeni ürün kararları ve teslim sırası için [ana plan](uygulama-tamamlama-plani.md) geçerlidir. Buradaki tamamlanma ifadeleri güncel kabul testlerinin yerine geçmez.
+
 # Saha Testi Talimatı
 
 Bu testler gerçek donanım ister; yazılım testleri ve aynı bilgisayardaki çok uygulamalı testler bunların yerine geçmez. Hepsi geçmeden ürün üretime hazır sayılmaz. Her satıra gözlenen sonucu ve tarihi yazın.
 
 ## Hazırlık
+
+Yerel geliştirme ortamını proje kökündeki `start-dev.cmd` ile açın (çift tıklama veya terminal). Betik Labs, API, web, Vite ve native Tauri uygulamasını başlatır. Dolu portlar atlanır; adresler `.dev-servers/addresses.json`, servis logları `.dev-servers/*.log` içinde tutulur. İkinci çalıştırma yeni kopyalar açmaz. Ctrl+C yalnız betiğin açtığı süreçleri kapatır; terminali zorla kapatmak yerine bunu kullanın.
+
+Varsayılan MongoDB `.dev-servers/mongo` altında kalıcı ve yereldir; mevcut Atlas verisine bağlanmaz. `start-dev.cmd --configured-db` API `.env` içindeki Mongo adreslerini kullanır. Labs kendi mevcut `.env`/DATA_DIR ayarını kullanır. Hesaplar ve Labs entegrasyon anahtarları otomatik uydurulmaz. `.env` dosyaları değiştirilmez.
+
+Google ayrı bir sunucu değildir: API `.env` içindeki GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET ve ekrana basılan tam `/api/auth/callback/google` adresinin Google Console kaydı gerekir. Web portu değişirse o callback ayrıca izinli olmalıdır; başlatıcı Google Console ayarlarını değiştirmez. Native geliştirme derlemesi seçilen web adresini `KASAM360_DEV_SITE_URL` ile alır; release adresi değişmez.
+
+`start-dev.cmd --check` yalnız port/bağımlılık kontrolü yapar. `start-dev.cmd --no-desktop` native pencereyi açmadan sunucuları ve Vite önizlemesini başlatır. Önkoşullar: Node.js 24, Rust/cargo-tauri, her JS uygulamasında kurulmuş node_modules. İlk Mongo indirmesi ve Rust derlemesi uzun sürebilir.
+
+`start-dev.cmd --stop` çalışan başlatıcının servislerini başka terminalden kapatır. Bir uygulamanın derleme/başlangıç hatası diğerlerini kapatmaz; her uygulama için HAZIR/BAŞLATILAMADI ayrı gösterilir. Eksik Google veya Labs entegrasyon anahtarları sunucu açılışından ayrı yapılandırma gereksinimleridir.
 
 - Aynı sürümü iki Windows cihaza (A, B) kurun. Üç cihaz testi için üçüncü cihaz (C) gerekir.
 - Cihazlar aynı Wi-Fi veya kablolu ağda olsun. Windows Güvenlik Duvarı 47360 numaralı TCP portuna izin versin.

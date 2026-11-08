@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { capitalizeRecordName } from '../../lib/recordName';
 import React, { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
@@ -34,6 +35,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
   const [similar, setSimilar] = useState<DirectoryContact[]>([]);
   const [operationId, setOperationId] = useState(newOperationId);
   const [error, setError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   // Müşteri kartında vergi bilgisi tutulmaz; kayıtlı değer düzenlemede korunur.
   const isSupplier = directoryType === 'SUPPLIER';
@@ -46,6 +48,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
     setLimit(card?.creditLimitCents ? centsToText(card.creditLimitCents) : '');
     setSimilar([]);
     setError(null);
+    setOperationError(null);
     setOperationId(newOperationId());
   }, [isOpen, card]);
 
@@ -57,6 +60,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
     }
     setIsSaving(true);
     setError(null);
+    setOperationError(null);
     try {
       const trimmedPhone = phone.trim() || undefined;
       const taxValue = isSupplier ? taxNo.trim() || undefined : card?.taxNo ?? undefined;
@@ -84,7 +88,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
       );
       onCreated(created);
     } catch (caught) {
-      setError(errorText(caught));
+      setOperationError(errorText(caught));
     } finally {
       setIsSaving(false);
     }
@@ -96,7 +100,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
   };
 
   return (
-    <Modal
+    <Modal cardFlow
       isOpen={isOpen}
       onClose={onClose}
       title={card ? 'Kartı Düzenle' : directoryType === 'SUPPLIER' ? 'Yeni Tedarikçi Kartı' : 'Yeni Müşteri Kartı'}
@@ -167,6 +171,7 @@ export const CariCardModal: React.FC<CariCardModalProps> = ({
           </div>
         ) : null}
 
+        <ErrorToast message={operationError} />
         {error ? (
           <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
             {error}

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KASAM360</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="panel.css"><script src="../theme.js"></script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+<style>
+  body { font-size: 17px; line-height: 27px; }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 0 40px; }
+  /* Kahraman: sahne tam genişlik, metin sol tarafta sahnenin üstünde. */
+  .hero { position: relative; height: clamp(660px, 100vh, 900px); overflow: hidden;
+    background: radial-gradient(ellipse 60% 70% at 68% 55%, var(--raised), var(--bg) 70%); }
+  [data-scene] { position: absolute; inset: 0; touch-action: pan-y; }
+  [data-scene] canvas { display: block; width: 100%; height: 100%; }
+  .nav { position: relative; z-index: 2; display: flex; align-items: center; gap: 28px; height: 84px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-stretch: 112%; font-size: 21px; color: var(--ink); text-decoration: none; }
+  .brand img { width: 30px; height: 30px; }
+  :root[data-theme="dark"] .brand img { background: #fff; border-radius: 50%; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand img { background: #fff; border-radius: 50%; } }
+  .nav nav { display: flex; gap: 26px; font-size: 15px; }
+  .nav nav a { color: var(--ink-2); text-decoration: none; font-weight: 500; }
+  .nav .end { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .key { min-height: 48px; padding: 0 20px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+  .copy { position: relative; z-index: 2; max-width: 520px; margin-top: clamp(24px, 9vh, 96px); pointer-events: none; }
+  .copy > * { pointer-events: auto; }
+  h1 { font-size: clamp(46px, 5.4vw, 80px); line-height: .95; font-weight: 800; font-stretch: 118%; letter-spacing: -.025em; margin: 0 0 24px; }
+  .lead { color: var(--ink-2); font-size: 19px; line-height: 29px; margin: 0 0 32px; max-width: 34ch; }
+  .go { display: flex; gap: 12px; flex-wrap: wrap; }
+  .go .key { min-height: 56px; padding: 0 26px; font-size: 17px; }
+  /* Yolculuk paneli: kamera bir istasyondayken ne olduğunu tek cümleyle söyler. */
+  .journey { position: absolute; z-index: 2; left: 40px; bottom: 112px; width: min(440px, calc(100% - 80px)); padding: 16px 18px; border-radius: 14px;
+    background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(10px); box-shadow: 0 0 0 1px var(--edge); opacity: 0; transform: translateY(6px); transition: .3s; }
+  .journey.on { opacity: 1; transform: none; }
+  .journey b { display: flex; align-items: center; gap: 10px; font-size: 18px; }
+  .journey p { margin: 4px 0 0; color: var(--ink-2); font-size: 15px; line-height: 22px; }
+  .journey i { display: block; height: 3px; margin-top: 12px; background: var(--well); border-radius: 2px; overflow: hidden; }
+  .journey i::after { content: ""; display: block; height: 100%; width: var(--p, 0%); background: var(--signal); transition: width .4s; }
+  .stations { position: absolute; z-index: 2; left: 0; right: 0; bottom: 28px; }
+  .stations .wrap { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+  .stations .key { flex: none; min-height: 48px; padding: 0 18px; font-weight: 600; gap: 10px; }
+  .state { position: absolute; z-index: 1; right: 40px; top: 50%; color: var(--ink-2); font-size: 15px; }
+  .state.fail { left: 52%; right: 40px; padding: 20px; border-radius: 14px; background: var(--panel); box-shadow: 0 0 0 1px var(--edge); color: var(--ink); }
+  /* Ürün sahnesi 2: kasadaki ekranın kendisi. */
+  .till { padding: 104px 0; }
+  .till .wrap { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 56px; align-items: center; }
+  h2 { font-size: clamp(34px, 3.6vw, 52px); line-height: 1; font-weight: 800; font-stretch: 115%; letter-spacing: -.02em; margin: 0 0 18px; }
+  .till p { color: var(--ink-2); margin: 0 0 14px; max-width: 38ch; }
+  .bezel { position: relative; aspect-ratio: 1280 / 826; border-radius: 22px; padding: 14px; background: #15181c; box-shadow: 0 30px 60px -30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.08); }
+  .bezel .screen { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 10px; background: #000; }
+  .bezel iframe { position: absolute; left: 0; top: 0; width: 1280px; height: 800px; border: 0; transform-origin: 0 0; pointer-events: none; }
+  /* Paket: makinenin künye plakası. */
+  .plan { padding: 0 0 112px; }
+  .plate { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); border-radius: 20px; background: var(--panel); box-shadow: 0 0 0 1px var(--edge), 0 3px 0 var(--key-side); overflow: hidden; }
+  .plate .l { padding: 40px; background: var(--raised); border-right: 1px solid var(--edge); display: grid; gap: 24px; align-content: space-between; }
+  .plate .r { padding: 40px; }
+  .price { font-size: clamp(80px, 8.4vw, 128px); line-height: .85; font-weight: 800; font-stretch: 125%; letter-spacing: -.03em; }
+  .price small { display: block; margin-top: 14px; font-size: 20px; line-height: 24px; font-weight: 600; font-stretch: 100%; letter-spacing: 0; color: var(--ink-2); }
+  .feats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 28px; }
+  .feats li { display: flex; align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--edge); }
+  .feats li.off { color: var(--ink-2); }
+  .foot { padding-top: 32px; padding-bottom: 48px; color: var(--ink-2); font-size: 15px; border-top: 1px solid var(--edge); }
+  @media (max-width: 900px) {
+    .wrap { padding: 0 20px; }
+    .nav { height: 68px; } .nav nav, .nav .login { display: none; }
+    .hero { height: auto; background: var(--bg); display: flex; flex-direction: column; }
+    .hero > .wrap { order: 0; } .hero [data-scene] { order: 1; } .hero .state { order: 2; } .hero .journey { order: 3; } .hero .stations { order: 4; }
+    .nav .end .signal { display: none; }
+    .copy { margin-top: 12px; max-width: none; }
+    [data-scene] { position: relative; height: 340px; margin-top: 8px; }
+    .journey { position: relative; left: auto; bottom: auto; margin: -8px 20px 0; width: auto; }
+    .stations { position: relative; bottom: auto; padding: 16px 0 28px; }
+    .state { right: auto; left: 20px; top: auto; margin-top: -240px; } .state.fail { left: 20px; right: 20px; }
+    .till { padding: 64px 0; } .till .wrap, .plate { grid-template-columns: 1fr; gap: 32px; }
+    .plate .l { border-right: 0; border-bottom: 1px solid var(--edge); } .plate .l, .plate .r { padding: 24px; }
+    .feats { grid-template-columns: 1fr; } .plan { padding-bottom: 64px; }
+  }
+</style>
+</head>
+<body>
+<span class="tag">Tasarım örneği, sabit test verisi</span>
+<section class="hero" id="hero">
+  <div data-scene role="img" aria-label="Restoran makinesi: salon, mutfak, servis, kasa ve eşitleme kutusu. Sürükleyerek çevirin, bir istasyona tıklayıp yaklaşın."></div>
+  <div class="wrap">
+    <header class="nav">
+      <a class="brand" href="#"><img src="../../../../desktop/src/assets/brand/kasam360-ikon-kucuk-renkli.svg" alt="">KASAM360</a>
+      <nav aria-label="Site"><a href="#">Nasıl çalışır</a><a href="#paket">Paket</a><a href="#">Sorular</a></nav>
+      <div class="end">
+        <button class="key" id="theme" aria-label="Temayı değiştir">Gece</button>
+        <a class="key login" href="#">Giriş yap</a>
+        <a class="key signal" href="#paket">Paketi incele</a>
+      </div>
+    </header>
+    <div class="copy">
+      <h1>Masadan kasaya tek makine.</h1>
+      <p class="lead">Sipariş mutfağa, tabak servise, hesap kasaya geçer. İnternet kesilirse makine durmaz; kayıtlar sıraya girer, bağlantı dönünce buluta gider.</p>
+      <div class="go"><a class="key signal" href="#paket">Paketi incele</a><button class="key" id="follow">Bir siparişi izle</button></div>
+    </div>
+  </div>
+  <div class="journey" id="journey" aria-live="polite"><b><span class="lamp on"></span><span id="j-title"></span></b><p id="j-desc"></p><i id="j-bar"></i></div>
+  <div class="state" id="state">Makine kuruluyor</div>
+  <div class="stations"><div class="wrap" id="stations" role="group" aria-label="İstasyonlar"></div></div>
+</section>
+
+<section class="till"><div class="wrap">
+  <div>
+    <h2>Kasadaki ekran da aynı makinenin parçası.</h2>
+    <p>Açık masalar solda, menü ortada, hesap sağda. Mutfağa gitmeyen kalem ayrı durur; tahsil tuşu tutarı üzerinde taşır.</p>
+    <p>Gece servisinde koyu, gündüz açık tema.</p>
+  </div>
+  <div class="bezel"><div class="screen" id="screen"><iframe title="Kasa ekranı örneği" tabindex="-1" loading="lazy"></iframe></div></div>
+</div></section>
+
+<section class="plan" id="paket"><div class="wrap">
+  <h2>Test Paket</h2>
+  <div class="plate">
+    <div class="l"><div class="price n" id="price"></div><a class="key signal" href="#" style="min-height:56px">Bu paketle başla</a></div>
+    <div class="r"><ul class="feats">
+      <li><span class="lamp on"></span>2 kasa cihazı</li><li><span class="lamp on"></span>Salon ve masa düzeni</li>
+      <li><span class="lamp on"></span>Mutfak ekranı</li><li><span class="lamp on"></span>Reçete ve FIFO maliyet</li>
+      <li><span class="lamp on"></span>Tedarikçi ve cari hesap</li><li><span class="lamp on"></span>Gün sonu kasa sayımı</li>
+      <li class="off"><span class="lamp"></span>Paket servis entegrasyonu</li><li class="off"><span class="lamp"></span>Çoklu şube</li>
+    </ul></div>
+  </div>
+</div></section>
+<footer class="wrap foot">KASAM360, restoran, kafe ve barlar için kasa ve işletme yönetimi.</footer>
+
+<script type="module">
+import { startKitchen, STATIONS } from './kitchen-scene.js';
+const $ = id => document.getElementById(id);
+$('price').innerHTML = `${(100000 / 100).toLocaleString('tr-TR')}<small>TL, aylık</small>`;
+// Tema anahtarı: gündüz ve gece aynı sayfada denenebilsin.
+const isDark = () => document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+const syncThemeKey = () => ($('theme').textContent = isDark() ? 'Gündüz' : 'Gece');
+// Kasa önizlemesi sayfanın temasını izler.
+const syncFrame = () => { document.querySelector('#screen iframe').src = `pos.html?theme=${isDark() ? 'dark' : 'light'}`; };
+syncThemeKey(); syncFrame();
+let api;
+$('theme').addEventListener('click', () => { document.documentElement.dataset.theme = isDark() ? 'light' : 'dark'; syncThemeKey(); syncFrame(); api?.applyTheme(); });
+// Kasa ekranı önizlemesi: gerçek POS örneği, çerçeveye ölçeklenir.
+const fitScreen = () => { const s = $('screen'); s.querySelector('iframe').style.transform = `scale(${s.clientWidth / 1280})`; };
+new ResizeObserver(fitScreen).observe($('screen'));
+$('stations').innerHTML = STATIONS.map((s, i) => `<button class="key" data-i="${i}"><span class="lamp"></span>${s.name}</button>`).join('') + '<button class="key" data-i="all">Tümü</button>';
+function show(i, following) {
+  const s = STATIONS[i]; if (!s) return;
+  $('j-title').textContent = s.title; $('j-desc').textContent = s.desc;
+  $('j-bar').style.setProperty('--p', following ? `${(i + 1) / STATIONS.length * 100}%` : '0%');
+  $('journey').classList.add('on');
+  document.querySelectorAll('#stations [data-i]').forEach(b => { const on = b.dataset.i === String(i); b.setAttribute('aria-pressed', on); b.querySelector('.lamp')?.classList.toggle('on', on); });
+}
+try {
+  await document.fonts.ready;
+  api = startKitchen($('hero'), { font: '"Archivo", sans-serif', onStage: show, onReady: () => $('state').remove() });
+  $('follow').addEventListener('click', () => api.followOrder());
+  // Kanıt görüntüleri için: ?izle=1 siparişi takip eder, ?istasyon=mutfak o istasyona yaklaşır.
+  const q = new URLSearchParams(location.search);
+  if (q.has('izle')) api.followOrder();
+  const qi = STATIONS.findIndex(s => s.id === q.get('istasyon'));
+  if (qi >= 0) { api.focusStation(STATIONS[qi].id); show(qi, false); }
+  $('stations').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (!b) return;
+    if (b.dataset.i === 'all') { api.overview(); $('journey').classList.remove('on'); document.querySelectorAll('#stations [aria-pressed]').forEach(x => { x.setAttribute('aria-pressed', 'false'); x.querySelector('.lamp')?.classList.remove('on'); }); return; }
+    api.focusStation(STATIONS[+b.dataset.i].id); show(+b.dataset.i, false); });
+} catch (err) {
+  console.error(err);
+  $('state').className = 'state fail';
+  $('state').textContent = '3D sahne açılamadı. Tarayıcı ayarlarında donanım hızlandırmayı açıp sayfayı yenileyin; sayfanın geri kalanı çalışır.';
+}
+</script>
+</body>
+</html>

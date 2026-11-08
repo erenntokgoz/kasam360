@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hesaplar · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script><script src="labs-shell.js" defer></script>
+<style>
+  .links { display: grid; gap: 6px; } .links div { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; }
+  .sec-t { margin: 6px 0 -4px; font-size: 12px; font-weight: 600; color: var(--text-3); }
+</style>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği, sabit test verisi. Kaydetmez, silmez, mail göndermez.</span>
+<div class="app">
+  <aside class="rail" data-page="accounts"></aside>
+  <div class="main">
+    <div class="bar"><span class="crumb">KASAM360 / <b>Hesaplar</b></span>
+      <label class="search"><input placeholder="Ad veya e-posta" aria-label="Hesap ara"><kbd>/</kbd></label></div>
+    <div class="page">
+      <div class="ph"><div><h1>Hesaplar</h1><p>Web hesabıyla giriş yapan kişiler. Kasa personeli PIN'leri işletmede tutulur.</p></div>
+        <div class="acts"><button class="btn btn-ink sm">Hesap aç</button></div></div>
+      <div class="chips" role="group" aria-label="Filtre">
+        <button aria-pressed="true">Tümü <span class="num">51</span></button><button aria-pressed="false">E-postası doğrulanmamış <span class="num">4</span></button><button aria-pressed="false">Kilitli <span class="num">1</span></button>
+      </div>
+      <div class="wrapx">
+        <div class="tbl"><table class="grid">
+          <thead><tr><th>Hesap</th><th>İşletmeler</th><th>E-posta</th><th>Son giriş</th><th>Açılış</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="cell-2"><b>Ayşe Kaya</b><small>owner.a@kasam360.invalid</small></td><td>TEST_A Lokanta</td><td><span class="pill ok"><span class="dot"></span>Doğrulandı</span></td><td class="num">Bugün 09.01</td><td class="num muted">14 Eki 2026</td><td><div class="row-acts"><button>Düzenle</button><button>Şifre sıfırlama maili</button><button class="del">Sil</button></div></td></tr>
+            <tr><td class="cell-2"><b>Selin Arslan</b><small>selin@testb.invalid</small></td><td>TEST_B Kafe</td><td><span class="pill ok"><span class="dot"></span>Doğrulandı</span></td><td class="num">Dün 22.40</td><td class="num muted">2 Eki 2026</td><td><div class="row-acts"><button>Düzenle</button><button>Şifre sıfırlama maili</button><button class="del">Sil</button></div></td></tr>
+            <tr><td class="cell-2"><b>Okan Tekin</b><small>okan@testc.invalid</small></td><td>TEST_C Bar</td><td><span class="pill ok"><span class="dot"></span>Doğrulandı</span></td><td class="num">Bugün 01.12</td><td class="num muted">28 Eyl 2026</td><td><div class="row-acts"><button>Düzenle</button><button>Şifre sıfırlama maili</button><button class="del">Sil</button></div></td></tr>
+            <tr><td class="cell-2"><b>Can Yıldız</b><small>can@testh.invalid</small></td><td>TEST_H Meyhane</td><td><span class="pill warn"><span class="dot"></span>Doğrulanmadı</span></td><td class="muted">Hiç</td><td class="num muted">5 Kas 2026</td><td><div class="row-acts"><button>Doğrulama mailini yeniden gönder</button><button class="del">Sil</button></div></td></tr>
+            <tr><td class="cell-2"><b>Hakan Polat</b><small>hakan@testf.invalid</small></td><td>TEST_F Döner</td><td><span class="pill bad"><span class="dot"></span>Kilitli, 5 hatalı giriş</span></td><td class="num">29 Eki 18.03</td><td class="num muted">3 Ağu 2026</td><td><div class="row-acts"><button>Kilidi kaldır</button><button>Düzenle</button><button class="del">Sil</button></div></td></tr>
+          </tbody></table></div>
+        <div class="pager"><span class="num">1–5 / 51</span><button class="btn btn-line sm" disabled>Önceki</button><button class="btn btn-line sm">Sonraki</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Hesabı düzenle">
+  <header><h2>Ayşe Kaya</h2><span class="pill ok"><span class="dot"></span>Doğrulandı</span><button class="btn btn-ghost sm" id="close">Kapat</button></header>
+  <form class="dbody" onsubmit="return false">
+    <label class="f">Ad soyad<input class="in" value="Ayşe Kaya"></label>
+    <label class="f">E-posta<input class="in" type="email" value="owner.a@kasam360.invalid"></label>
+    <label class="f">Telefon<input class="in" inputmode="tel" value="+90 555 000 00 00"></label>
+    <p class="sec-t">Bağlı işletmeler</p>
+    <div class="links"><div><span>TEST_A Lokanta</span><span class="pill mute">Sahibi</span></div></div>
+    <p class="sec-t">Güvenlik</p>
+    <div class="links"><div><span>Şifre en son 14 Eki 2026'da değişti</span><button type="button" class="btn btn-line sm">Sıfırlama maili</button></div>
+      <div><span>Açık oturum: 2 cihaz</span><button type="button" class="btn btn-line sm">Hepsini kapat</button></div></div>
+  </form>
+  <footer><button class="btn btn-danger sm" id="del">Hesabı sil</button><button class="btn btn-line sm sp">Vazgeç</button><button class="btn btn-ink sm">Kaydet</button></footer>
+</aside>
+
+<div class="confirm" id="confirm" role="alertdialog" aria-labelledby="c-h" hidden>
+  <h2 id="c-h">Ayşe Kaya'nın hesabı silinsin mi?</h2>
+  <p>TEST_A Lokanta'nın tek sahibi bu hesap. Silmeden önce işletmeye yeni sahip atanmalı; işletme kayıtları ve kasalar silinmez.</p>
+  <label class="f">Onay için e-postayı yazın<input class="in" id="c-in" placeholder="owner.a@kasam360.invalid" autocomplete="off"></label>
+  <div class="acts"><button class="btn btn-line sm" id="c-no">Vazgeç</button><button class="btn btn-danger-fill sm" id="c-yes" disabled>Hesabı sil</button></div>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const openConfirm = () => { $('confirm').hidden = false; $('c-in').focus(); };
+  $('del').addEventListener('click', openConfirm);
+  $('c-no').addEventListener('click', () => { $('confirm').hidden = true; });
+  $('c-in').addEventListener('input', (e) => { $('c-yes').disabled = e.target.value.trim() !== 'owner.a@kasam360.invalid'; });
+  $('close').addEventListener('click', () => { $('drawer').hidden = true; $('scrim').hidden = true; });
+  if (new URLSearchParams(location.search).get('confirm')) openConfirm();
+</script>
+</body>
+</html>

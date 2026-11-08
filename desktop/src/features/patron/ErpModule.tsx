@@ -18,24 +18,25 @@ const TABS: { id: ErpTab; label: string }[] = [
 
 export const ErpModule: React.FC = () => {
   const { activeErpTab, setActiveErpTab } = useLedgerStore();
+  const section = TABS.some(({ id }) => id === activeErpTab) ? activeErpTab : 'PANORAMA';
 
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] select-none">
       <Bar label="Yönetim">
         {TABS.map((tab) => (
-          <BarTab key={tab.id} active={activeErpTab === tab.id} onClick={() => setActiveErpTab(tab.id)}>
+          <BarTab key={tab.id} id={`erp-tab-${tab.id}`} aria-controls="erp-content"
+            active={section === tab.id} onClick={() => setActiveErpTab(tab.id)}>
             {tab.label}
           </BarTab>
         ))}
       </Bar>
 
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-        <div className="page-fill flex-1 overflow-y-auto p-4">
-            {activeErpTab === 'PANORAMA' && <PanoramaTab />}
-            {activeErpTab === 'DEBTS' && <DebtsTab />}
-            {activeErpTab === 'STAFF' && <StaffLedger />}
-            {activeErpTab === 'AUDIT' && <CriticalLogTab />}
-        </div>
+      <div id="erp-content" role="tabpanel" aria-labelledby={`erp-tab-${section}`}
+        className="motion-swap page-fill flex-1 min-h-0 overflow-y-auto p-4">
+        {section === 'PANORAMA' && <PanoramaTab />}
+        {section === 'DEBTS' && <DebtsTab />}
+        {section === 'STAFF' && <StaffLedger />}
+        {section === 'AUDIT' && <CriticalLogTab />}
       </div>
     </section>
   );

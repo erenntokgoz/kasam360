@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { useCariStore } from '../../stores/cariStore';
 import { errorCode, errorText } from '../../lib/cariInput';
@@ -82,12 +83,12 @@ export const OperationFeedback: React.FC<OperationFeedbackProps> = ({
 }) => {
   if (!error) return null;
   return (
-    <div role="alert" className="space-y-2">
-      <p className="text-xs font-semibold text-[var(--accent-red)]">{error}</p>
+    <div className="space-y-2">
+      <ErrorToast message={error} />
       {pendingOperationId ? (
         <>
           <p className="text-xs text-[var(--text-secondary)] break-all">
-            İşlem kimliği: <span className="tabular-nums">{pendingOperationId}</span>
+            İşlem sonucu doğrulanamadı. İşlem kimliği: <span className="tabular-nums">{pendingOperationId}</span>
           </p>
           <Button
             type="button"

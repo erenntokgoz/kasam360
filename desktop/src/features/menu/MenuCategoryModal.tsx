@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { capitalizeRecordName } from '../../lib/recordName';
 // Menü Yeni Kategori Ekleme Modalı
 // Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
@@ -86,12 +87,10 @@ export const MenuCategoryModal: React.FC<MenuCategoryModalProps> = ({
   };
 
   return (
-    <Modal isOpen onClose={() => { if (!saving && !stationSaving) onClose(); }} title={category ? 'Kategoriyi Düzenle' : 'Kategori Ekle'} maxWidth="sm">
+    <Modal cardFlow isOpen onClose={() => { if (!saving && !stationSaving) onClose(); }} title={category ? 'Kategoriyi Düzenle' : 'Kategori Ekle'} maxWidth="sm">
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {error && (
-            <div className="p-2 text-xs rounded-lg bg-[var(--accent-red-soft)] border border-[var(--accent-red-border)] text-[var(--accent-red)]">
-              {error}
-            </div>
+            <ErrorToast message={error} />
           )}
 
           <div>
@@ -103,7 +102,6 @@ export const MenuCategoryModal: React.FC<MenuCategoryModalProps> = ({
               aria-label="Kategori adı"
               value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Örn: Sıcak İçecekler"
               className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
               autoFocus
             />

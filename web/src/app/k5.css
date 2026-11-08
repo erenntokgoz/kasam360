@@ -1,0 +1,169 @@
+/* Yeni site dili: çelik tezgâh, gece servisi, tek turuncu (logo). Eski defter teması sınıflarıyla çakışmasın diye
+   bütün ad ve tokenlar "k-" önekiyle tanımlıdır. Açık ve koyu tema aynı hiyerarşiyi korur. */
+:root[data-theme="dark"] {
+  --k-bg: #0b0d12; --k-bg-2: #11141b; --k-panel: #161a22; --k-panel-2: #1d222c;
+  --k-line: #262c38; --k-line-2: #343b4a;
+  --k-text: #eef1f6; --k-text-2: #a7afbd; --k-text-3: #8890a0;
+  --k-accent-ink: #8fa6ff; --k-ok: #6fd3a0; --k-bad: #ff8577; --k-bad-bg: #2e1715;
+  --k-orange: #6c8cff; --k-on-orange: #0b0d12; --k-focus: #8fa6ff;
+  --k-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+/* Varsayılan açık tema: sıcak nötr zemin, beyaz kutular, tek kobalt vurgu. "--k-orange" adı geçmişten kalır; değeri vurgu rengidir. */
+:root[data-theme="light"], :root:not([data-theme]) {
+  --k-bg: #f7f6f3; --k-bg-2: #efeee9; --k-panel: #ffffff; --k-panel-2: #f4f3ef;
+  --k-line: #e3e1db; --k-line-2: #cfccc4;
+  --k-text: #16181d; --k-text-2: #4e535c; --k-text-3: #686d76;
+  --k-accent-ink: #2b4bd6; --k-ok: #1a7a4b; --k-bad: #b4231a; --k-bad-bg: #fbe6e3;
+  --k-orange: #3355e8; --k-on-orange: #ffffff; --k-focus: #2b4bd6;
+  --k-shadow: 0 10px 34px rgba(30, 32, 40, 0.08);
+}
+.k-root { font-family: var(--font-geist), system-ui, sans-serif; color: var(--k-text); background: var(--k-bg); -webkit-font-smoothing: antialiased; }
+.k-root :focus-visible { outline: 2px solid var(--k-focus); outline-offset: 3px; }
+.k-num { font-variant-numeric: tabular-nums; }
+.k-wrap { max-width: 1280px; margin: 0 auto; padding: 0 40px; }
+
+/* Düğmeler: turuncu yalnız satın alma yolunda. Bütün dokunma hedefleri en az 48px. */
+.k-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 18px; border-radius: 10px;
+  border: 1px solid transparent; background: none; color: var(--k-text); font: 560 14px/1 var(--font-geist), sans-serif; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.k-btn-buy { background: var(--k-orange); color: var(--k-on-orange); }
+.k-btn-buy:hover { filter: brightness(1.06); }
+.k-btn-line { border-color: var(--k-line-2); }
+.k-btn-line:hover { border-color: var(--k-text-3); }
+.k-btn-ghost { color: var(--k-text-2); padding: 0 10px; }
+.k-btn-ghost:hover { color: var(--k-text); }
+.k-btn-lg { min-height: 52px; padding: 0 22px; font-size: 15px; }
+
+/* Üst menü ve alt bilgi */
+.k-header { position: sticky; top: 0; z-index: 40; background: color-mix(in srgb, var(--k-bg) 88%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--k-line); }
+.k-header .k-wrap { display: flex; align-items: center; gap: 28px; height: 68px; }
+.k-brand { display: flex; align-items: center; min-height: 48px; gap: 10px; color: var(--k-text); font-weight: 700; font-size: 17px; letter-spacing: -0.01em; text-decoration: none; }
+/* Logonun iki çizimi var: açık çizgili koyu zemin için, koyu çizgili açık zemin için. */
+.k-brand .k-logo-light { display: none; }
+:root[data-theme="light"] .k-brand .k-logo-light { display: block; }
+:root[data-theme="light"] .k-brand .k-logo-dark { display: none; }
+.k-nav { display: flex; gap: 22px; font-size: 14px; }
+.k-nav a { color: var(--k-text-2); text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; }
+.k-nav a:hover, .k-nav a[aria-current="page"] { color: var(--k-text); }
+.k-header-end { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.k-menu-btn { display: none; }
+.k-mobile { display: grid; gap: 2px; padding: 8px 18px 18px; border-top: 1px solid var(--k-line); }
+.k-mobile a { min-height: 48px; display: flex; align-items: center; color: var(--k-text); text-decoration: none; }
+/* Menü açıkken pencere genişlerse mobil liste masaüstü menüsünün altında kopya olarak kalmasın. */
+@media (min-width: 901px) { .k-mobile { display: none; } }
+.k-footer { border-top: 1px solid var(--k-line); padding: 32px 0 calc(40px + env(safe-area-inset-bottom, 0px)); color: var(--k-text-3); font-size: 13px; }
+.k-footer .k-wrap { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 24px; }
+.k-footer p { margin: 0 0 8px; max-width: 42ch; line-height: 1.5; }
+.k-footer nav { display: grid; align-content: start; }
+.k-footer a { color: var(--k-text-2); text-decoration: none; min-height: 48px; display: inline-flex; align-items: center; }
+.k-footer a:hover { color: var(--k-text); }
+
+/* Ana sayfa sahnesi: makine sağda, başlık solda; örtü başlığın okunmasını sağlar. */
+.k-hero { position: relative; height: calc(100svh - 68px); min-height: 640px; max-height: 920px; }
+.k-stage { position: absolute; inset: 0; overflow: hidden; }
+.k-canvas { position: absolute; inset: 0; touch-action: pan-y; }
+.k-canvas canvas { display: block; width: 100%; height: 100%; }
+.k-vignette { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 66% 50%, transparent 34%, color-mix(in srgb, var(--k-bg) 55%, transparent) 72%, var(--k-bg) 100%); }
+.k-veil { position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: linear-gradient(90deg, var(--k-bg) 0 26%, color-mix(in srgb, var(--k-bg) 70%, transparent) 40%, transparent 56%); }
+.k-copy { position: absolute; z-index: 5; left: max(40px, calc((100vw - 1280px) / 2 + 40px)); top: 50%; transform: translateY(-56%); width: min(500px, 40vw); }
+.k-copy h1 { margin: 0 0 22px; font-weight: 650; font-size: clamp(40px, 4.6vw, 70px); line-height: 1.02; letter-spacing: -0.04em; }
+.k-copy p { margin: 0 0 30px; font-size: 18px; line-height: 1.55; color: var(--k-text-2); max-width: 40ch; }
+.k-go { display: flex; gap: 10px; flex-wrap: wrap; }
+.k-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+/* İstasyon etiketleri: hep görünür küçük çip; siparişin bulunduğu istasyonun çipi vurgulanır ve ne ürettiğini yazar. */
+.k5-station-label { position: absolute; left: 0; top: 0; opacity: 0; transition: opacity 0.3s; display: flex; flex-direction: column; will-change: transform; }
+.k5-station-label[data-visible="true"] { opacity: 1; }
+.k5-station-label i { width: 1px; height: 18px; margin-left: 14px; background: var(--k-line-2); order: 2; transition: background 0.3s; }
+.k5-station-label div { padding: 6px 10px; border-radius: 999px; background: color-mix(in srgb, var(--k-panel) 94%, transparent); border: 1px solid var(--k-line);
+  box-shadow: var(--k-shadow); transition: background 0.3s, border-color 0.3s, color 0.3s; }
+.k5-station-label b { display: flex; gap: 6px; align-items: baseline; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.k5-station-label b span { font: 500 11px/1 var(--font-geist-mono), monospace; color: var(--k-text-3); }
+.k5-station-label small { display: none; }
+.k5-station-label[data-active="true"] { z-index: 1; }
+.k5-station-label[data-active="true"] div { background: var(--k-orange); border-color: var(--k-orange); color: var(--k-on-orange); border-radius: 10px; }
+.k5-station-label[data-active="true"] b span { color: inherit; opacity: 0.75; }
+.k5-station-label[data-active="true"] small { display: block; margin-top: 2px; font-size: 12px; opacity: 0.85; }
+.k5-station-label[data-active="true"] i { background: var(--k-orange); }
+.k-tip { position: absolute; z-index: 8; pointer-events: none; max-width: 240px; padding: 10px 13px; border-radius: 8px; transition: opacity 0.15s;
+  background: color-mix(in srgb, var(--k-panel) 94%, transparent); border: 1px solid var(--k-line-2); box-shadow: var(--k-shadow); }
+.k-tip[data-visible="false"] { opacity: 0; }
+.k-tip b { font-size: 13px; font-weight: 600; white-space: pre; }
+.k-tip p { margin: 5px 0 0; font-size: 12px; line-height: 1.45; color: var(--k-text-2); }
+.k-stage-msg { position: absolute; z-index: 7; left: 66%; top: 48%; transform: translate(-50%, -50%); color: var(--k-text-2); font-size: 13px; }
+.k-stage-error { left: 50%; right: 8%; transform: translateY(-50%); padding: 22px; border-radius: 12px; background: var(--k-panel); border: 1px solid var(--k-line-2); }
+.k-stage-error b { color: var(--k-bad); } .k-stage-error p { margin: 6px 0 0; }
+
+.k-plan { padding: 96px 0; border-top: 1px solid var(--k-line); }
+.k-plan .k-wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 64px; align-items: start; }
+.k-plan h2 { margin: 0 0 14px; font-size: clamp(32px, 3.4vw, 48px); line-height: 1.05; letter-spacing: -0.035em; font-weight: 640; }
+.k-plan .k-meta { color: var(--k-text-2); margin: 0 0 28px; font-size: 16px; }
+.k-feat { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--k-line); }
+.k-feat li { display: flex; justify-content: space-between; gap: 16px; padding: 16px 4px; border-bottom: 1px solid var(--k-line); font-size: 15px; }
+.k-feat li:nth-child(odd) { padding-right: 28px; }
+.k-feat li:nth-child(even) { padding-left: 28px; border-left: 1px solid var(--k-line); }
+.k-feat em { font-style: normal; font-size: 13px; color: var(--k-ok); font-weight: 560; }
+.k-feat li[data-off] { color: var(--k-text-3); } .k-feat li[data-off] em { color: var(--k-text-3); }
+
+@media (max-width: 900px) {
+  .k-wrap { padding: 0 18px; }
+  .k-nav, .k-header-end .k-hide-sm { display: none; }
+  .k-menu-btn { display: inline-flex; }
+  .k-footer .k-wrap { grid-template-columns: 1fr; }
+  .k-hero { height: auto; min-height: 0; max-height: none; display: flex; flex-direction: column; }
+  .k-veil { display: none; }
+  .k-copy { position: static; transform: none; width: auto; padding: 28px 18px 8px; order: -1; }
+  .k-stage { position: relative; inset: auto; height: 470px; }
+  .k-vignette { background: radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--k-bg) 70%, transparent) 100%); }
+  .k-stage-error { left: 6%; right: 6%; }
+  .k-plan { padding: 56px 0; } .k-plan .k-wrap { grid-template-columns: 1fr; gap: 28px; }
+  .k-feat { grid-template-columns: 1fr; } .k-feat li:nth-child(n) { padding: 14px 2px; border-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .k-root *, .k-root *::before, .k-root *::after { transition: none !important; } }
+
+/* Bir siparişin yolu: makinedeki öndeki siparişle aynı anda ilerleyen beş adım. Çizgi tamamlanan adımlara kadar dolar. */
+.k-flow { border-top: 1px solid var(--k-line); padding: 44px 0 56px; background: var(--k-bg-2); }
+.k-flow-head { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 30px; }
+.k-flow-head h2 { margin: 0; font-size: clamp(24px, 2.2vw, 30px); font-weight: 640; letter-spacing: -0.03em; }
+.k-flow-live { display: flex; align-items: center; gap: 10px; margin: 0; min-height: 48px; padding: 0 18px; border-radius: 999px;
+  background: var(--k-panel); border: 1px solid var(--k-line); font-size: 14px; color: var(--k-text-2); box-shadow: var(--k-shadow); }
+.k-flow-live b { color: var(--k-text); font-weight: 600; }
+.k-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--k-orange); box-shadow: 0 0 0 0 color-mix(in srgb, var(--k-orange) 50%, transparent); animation: k-ping 1.6s ease-out infinite; }
+.k-dot[data-paused="true"] { animation: none; background: var(--k-text-3); }
+@keyframes k-ping { to { box-shadow: 0 0 0 10px transparent; } }
+.k-flowline { --k-at: 0; position: relative; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.k-flowline::before, .k-flowline::after { content: ""; position: absolute; top: 23px; left: 24px; height: 2px; border-radius: 2px; }
+.k-flowline::before { right: calc(20% - 33.6px); background: var(--k-line-2); }
+.k-flowline::after { width: calc((100% - 48px) * var(--k-at) / 5 + var(--k-at) * 12px); background: var(--k-orange); transition: width 0.8s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.k-flowline li { position: relative; z-index: 1; }
+.k-flowline button { width: 100%; display: grid; gap: 6px; justify-items: start; padding: 0 8px 8px 0; border: 0; background: none; color: var(--k-text); text-align: left; font: inherit; cursor: pointer; }
+.k-node { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 8px; border-radius: 50%; font: 560 13px/1 var(--font-geist-mono), monospace;
+  background: var(--k-panel); border: 1.5px solid var(--k-line-2); color: var(--k-text-3); transition: background 0.35s, color 0.35s, border-color 0.35s, transform 0.35s; }
+.k-flowline li[data-state="done"] .k-node { border-color: var(--k-orange); color: var(--k-accent-ink); }
+.k-flowline li[data-state="active"] .k-node { background: var(--k-orange); border-color: var(--k-orange); color: var(--k-on-orange); transform: scale(1.08);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--k-orange) 18%, transparent); }
+.k-flowline b { font-size: 17px; font-weight: 620; letter-spacing: -0.015em; }
+.k-step-text { font-size: 14px; line-height: 1.45; color: var(--k-text-2); }
+.k-flowline li[data-state="next"] b { color: var(--k-text-2); }
+.k-flowline button:hover b { color: var(--k-text); }
+@media (max-width: 900px) {
+  .k-flow { padding: 32px 0 40px; }
+  .k-flow-live { width: 100%; border-radius: 12px; padding: 10px 14px; flex-wrap: wrap; }
+  .k-flowline { grid-template-columns: 1fr; gap: 4px; }
+  .k-flowline::before, .k-flowline::after { display: none; }
+  .k-flowline button { grid-template-columns: 48px 1fr; column-gap: 14px; align-items: center; }
+  .k-node { grid-row: span 2; margin: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .k-dot { animation: none; } }
+
+/* Gündüz/gece düğmesi: başlığın en sağında, ayraçla hesap düğmelerinden ayrılır. */
+.k-header-sep { width: 1px; height: 24px; margin: 0 6px; background: var(--k-line-2); }
+.k-theme-btn { display: inline-grid; place-items: center; width: 48px; height: 48px; border: 1px solid var(--k-line); border-radius: 999px;
+  background: var(--k-panel); color: var(--k-text-2); cursor: pointer; transition: color 0.2s, border-color 0.2s, transform 0.3s; }
+.k-theme-btn:hover { color: var(--k-text); border-color: var(--k-line-2); }
+.k-theme-btn:active { transform: rotate(-20deg); }
+.k-theme-btn svg { grid-area: 1 / 1; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.k-theme-btn .k-ico-sun { display: none; }
+:root[data-theme="dark"] .k-theme-btn .k-ico-sun { display: block; }
+:root[data-theme="dark"] .k-theme-btn .k-ico-moon { display: none; }
+@media (max-width: 900px) { .k-header-sep { display: none; } }

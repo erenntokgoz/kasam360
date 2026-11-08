@@ -73,3 +73,27 @@ backups/
 
 # Test veritabanı
 backend/api/.test-db/
+/.dev-servers/
+/web/.next-launcher/
+/web/.next-launcher-isolated/
+/web/.launcher-projects/
+
+# Yerel kabul verisi, derleme çıktısı ve imzalama malzemesi repoya girmez.
+/work/
+/web/.next-*/
+/backend/mobile-dist/
+/mobile/.icon-preview/
+/docs/acceptance/working-tree-*.txt
+/docs/design/specimens/renders$2.png
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.pem
+*.key
+*.p12
+*.pfx
+*.p8
+*.jks
+*.keystore
+*.mobileprovision

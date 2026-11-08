@@ -83,6 +83,7 @@ async fn receive_lines(
     conn: &mut SqliteConnection,
     tenant_id: &str,
     input: &ReceivePurchaseInput,
+    supplier_id: &str,
 ) -> Result<i64, ApplyError> {
     let items = sqlx::query(
         "SELECT poi.id, poi.product_id, poi.quantity, poi.received_quantity, poi.unit_cost_cents,
@@ -156,6 +157,25 @@ async fn receive_lines(
         .bind(&input.created_at)
         .execute(&mut *conn)
         .await?;
+        let suffix = line
+            .batch_id
+            .strip_prefix("bat_")
+            .ok_or_else(|| rejected("VALIDATION: parti kimliği geçersiz"))?;
+        sqlx::query(
+            "INSERT INTO supplier_products
+                 (id, tenant_id, supplier_id, product_id, unit_cost_cents, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT (tenant_id, supplier_id, product_id) DO NOTHING",
+        )
+        .bind(format!("spp_{suffix}"))
+        .bind(tenant_id)
+        .bind(supplier_id)
+        .bind(&product_id)
+        .bind(unit_cost)
+        .bind(&input.created_at)
+        .bind(&input.created_at)
+        .execute(&mut *conn)
+        .await?;
         // Kimlik ve zaman işlemden gelir: diğer cihaz aynı hareketi aynı satırla yazar.
         sqlx::query(
             "INSERT INTO stock_movements
@@ -212,7 +232,7 @@ pub(super) async fn apply_receipt(
     let supplier_id: String = order.try_get("supplier_id")?;
     let order_number: String = order.try_get("order_number")?;
 
-    let total = receive_lines(conn, tenant_id, input).await?;
+    let total = receive_lines(conn, tenant_id, input, &supplier_id).await?;
     sqlx::query(
         "UPDATE purchase_orders SET status = 'ALINDI', received_at = ?
           WHERE id = ? AND tenant_id = ? AND status = 'TASI'",
@@ -317,6 +337,7 @@ pub(super) async fn apply_receipt(
                     shift_id: input.shift_id.clone(),
                     created_at: input.created_at.clone(),
                 },
+                true,
             )
             .await?,
         )

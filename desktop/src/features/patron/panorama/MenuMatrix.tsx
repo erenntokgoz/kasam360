@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React from 'react';
 import type { MenuMetrics } from '../../../stores/panoramaStore';
 import { Panel } from './Panel';
@@ -16,9 +17,8 @@ export const MenuMatrix: React.FC<{ metrics: MenuMetrics | null; error: string |
   if (!metrics) {
     return (
       <Panel title="Menü Analizi">
-        <p role={error ? 'alert' : undefined} className="text-sm text-[var(--text-secondary)]">
-          {error ? `Menü analizi okunamadı: ${error}` : 'Menü analizi okunuyor…'}
-        </p>
+        <p className="text-sm text-[var(--text-secondary)]">{error ? 'Menü analizi okunamadı.' : 'Menü analizi okunuyor…'}</p>
+        <ErrorToast message={error} />
       </Panel>
     );
   }

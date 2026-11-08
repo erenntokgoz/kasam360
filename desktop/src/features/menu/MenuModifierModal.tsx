@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { capitalizeRecordName } from '../../lib/recordName';
 // Menü Yeni Modifiye Grubu Ekleme Modalı
 // Açık ve koyu tema tam uyumlu, CSS tema değişkenleriyle desteklenir.
@@ -77,12 +78,10 @@ export const MenuModifierModal: React.FC<MenuModifierModalProps> = ({
   };
 
   return (
-    <Modal isOpen onClose={() => { if (!saving) onClose(); }} title="Yeni Seçenek Grubu" maxWidth="sm">
+    <Modal cardFlow isOpen onClose={() => { if (!saving) onClose(); }} title="Yeni Seçenek Grubu" maxWidth="sm">
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {error && (
-            <div className="p-2 text-xs rounded-lg bg-[var(--accent-red-soft)] border border-[var(--accent-red-border)] text-[var(--accent-red)]">
-              {error}
-            </div>
+            <ErrorToast message={error} />
           )}
 
           <div>
@@ -95,7 +94,6 @@ export const MenuModifierModal: React.FC<MenuModifierModalProps> = ({
               type="text"
               value={name} onBlur={(event) => setName(capitalizeRecordName(event.currentTarget.value))}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Örn: Sos Tercihi, Pişme Derecesi"
               className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-md min-h-12 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
               autoFocus
             />
@@ -134,7 +132,6 @@ export const MenuModifierModal: React.FC<MenuModifierModalProps> = ({
               disabled={!!createdId.current}
               checked={isRequired}
               onChange={(e) => setIsRequired(e.target.checked)}
-              className="w-4 h-4 rounded cursor-pointer accent-[var(--brand)]"
             />
           </div>
 

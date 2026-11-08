@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
 import { errorText } from '../../lib/cariInput';
 import { invokeIPC } from '../../services/tauriClient';
@@ -21,7 +22,7 @@ const LEAD_OPTIONS = [30, 45, 60, 75, 90, 105, 120].map((minutes) => {
 });
 
 /** Oturum, görünüm ve rezervasyon ayarları. */
-export const SessionSettingsTab: React.FC = () => {
+export const SessionSettingsTab: React.FC<{ reservations?: boolean }> = ({ reservations = false }) => {
   const { session, setPolicy, signOut } = useDeviceSessionStore();
   const theme = useUIStore((state) => state.theme);
   const setTheme = useUIStore((state) => state.setTheme);
@@ -30,12 +31,15 @@ export const SessionSettingsTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!reservations) return;
+    let active = true;
     invokeIPC<number>('get_reservation_lead', { tenantId: sessionArgs().tenantId })
-      .then(setLeadMinutes)
-      .catch((caught) => setError(errorText(caught)));
-  }, []);
+      .then((minutes) => { if (active) setLeadMinutes(minutes); })
+      .catch((caught) => { if (active) setError(errorText(caught)); });
+    return () => { active = false; };
+  }, [reservations]);
 
-  if (!session) return <p role="alert" className="text-sm text-[var(--accent-red)]">Oturum ayarları okunamadı.</p>;
+  if (!reservations && !session) return <p role="alert" className="text-sm text-[var(--accent-red)]">Oturum ayarları okunamadı.</p>;
 
   const run = async (action: () => Promise<void>) => {
     setError(null);
@@ -53,14 +57,14 @@ export const SessionSettingsTab: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start max-w-5xl">
+    <div className="grid w-full min-w-0 grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+      {!reservations && session ? <>
       <section className="work-surface border border-[var(--border)] rounded-xl p-4 space-y-3">
         <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Bu Cihazdaki İşletme Hesabı</h2>
         <p className="text-xs text-[var(--text-secondary)]">{session.email}</p>
         <label className="flex items-center gap-3 min-h-12 text-sm text-[var(--text-primary)] cursor-pointer">
           <input
             type="checkbox"
-            className="w-6 h-6"
             checked={session.keepSignedIn}
             onChange={(event) => void run(() => setPolicy(event.target.checked, session.staffIdleSeconds))}
           />
@@ -102,7 +106,9 @@ export const SessionSettingsTab: React.FC = () => {
         </div>
       </section>
 
-      {canEditLead ? (
+      </> : null}
+
+      {reservations && canEditLead ? (
         <section className="work-surface border border-[var(--border)] rounded-xl p-4 space-y-3">
           <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Rezervasyon</h2>
           <label className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-primary)]">
@@ -124,9 +130,7 @@ export const SessionSettingsTab: React.FC = () => {
       ) : null}
 
       {error ? (
-        <p role="alert" className="lg:col-span-2 text-sm font-semibold text-[var(--accent-red)]">
-          {error}
-        </p>
+        <ErrorToast message={error} />
       ) : null}
     </div>
   );

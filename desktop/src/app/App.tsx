@@ -1,4 +1,3 @@
-import { OperationNotice } from '../ui/OperationNotice';
 import { canOpenModule, homeModule } from '../lib/roleAccess';
 import React, { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
@@ -137,19 +136,19 @@ export const App: React.FC = () => {
 
   // Durum bilinmeden PIN ekranı açılmaz: kapalı cihaz açık sayılamaz.
   if (!deviceSession?.signedIn) {
-    if (!deviceSession && !deviceError) return <div className="h-screen w-screen bg-[var(--bg-canvas)]" aria-busy="true" />;
+    if (!deviceSession && !deviceError) return <div className="h-full w-full bg-[var(--bg-canvas)]" aria-busy="true" />;
     return <AccountGate />;
   }
 
   // Geçerli lisans yoksa personel ekranı açılmaz; durum okunmadan da açık sayılmaz.
   if (!isUsable(license) && user?.role !== 'MASTER') {
-    if (!license && !licenseError) return <div className="h-screen w-screen bg-[var(--bg-canvas)]" aria-busy="true" />;
+    if (!license && !licenseError) return <div className="h-full w-full bg-[var(--bg-canvas)]" aria-busy="true" />;
     return <LicenseGate />;
   }
 
   if (!isAuthenticated || mustChangePin) {
     return (
-      <div className="h-screen w-screen bg-[var(--bg-canvas)]">
+      <div className="h-full w-full bg-[var(--bg-canvas)]">
         <LoginOverlay />
         <MustChangePinModal />
         <LockScreen />
@@ -159,7 +158,7 @@ export const App: React.FC = () => {
 
   if (!canUseOperations(user?.role)) {
     return (
-      <div className="h-screen w-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex items-center justify-center p-6">
+      <div className="h-full w-full bg-[var(--bg-canvas)] text-[var(--text-primary)] flex items-center justify-center p-6">
         <div className="bg-[var(--bg-surface)] border border-[var(--border-strong)] rounded-lg p-6 max-w-sm space-y-4">
           <h1 className="text-base font-bold">Platform hesabı</h1>
           <p className="text-sm text-[var(--text-secondary)]">Bu hesapla satış ve işletme ekranları açılamaz.</p>
@@ -175,7 +174,7 @@ export const App: React.FC = () => {
   const lockedProps = (isLocked ? { inert: '' } : {}) as React.HTMLAttributes<HTMLDivElement>;
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[var(--bg-canvas)]">
+    <div className="h-full w-full overflow-hidden bg-[var(--bg-canvas)]">
     {/* Kilit oturumu kapatmaz: açık ekranlar ve sepet korunur, ama erişilemez olur. */}
     <div {...lockedProps} className="flex flex-col h-full w-full overflow-hidden text-[var(--text-primary)] select-none">
       {/* Ana Çalışma Alanı: Sol Menü + Merkez Modül */}
@@ -184,31 +183,31 @@ export const App: React.FC = () => {
 
         <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
           {/* Zero-latency modül geçişi: açık sepeti, filtreleri ve krokiyi korumak için sekmeler canlı kalır */}
-          <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'FLOOR' ? '' : 'hidden'}`}>
+          <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'FLOOR' ? 'motion-panel' : 'hidden'}`}>
             <FloorModule />
           </div>
 
-          <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'POS' ? '' : 'hidden'}`}>
+          <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'POS' ? 'motion-panel' : 'hidden'}`}>
             <PosModule />
           </div>
 
-          <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'KDS' ? '' : 'hidden'}`}>
+          <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'KDS' ? 'motion-panel' : 'hidden'}`}>
             <KdsModule />
           </div>
 
-          <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'CASHIER' ? '' : 'hidden'}`}>
+          <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'CASHIER' ? 'motion-panel' : 'hidden'}`}>
             <CashierModule />
           </div>
 
-          <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'ERP' ? '' : 'hidden'}`}>
+          <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'ERP' ? 'motion-panel' : 'hidden'}`}>
             <ErpModule />
           </div>
 
-          <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'CATALOG' ? '' : 'hidden'}`}>
+          <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'CATALOG' ? 'motion-panel' : 'hidden'}`}>
             {canOpenModule(user?.role, 'CATALOG') ? <CatalogModule /> : null}
           </div>
 
-          <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeModule === 'SETTINGS' ? '' : 'hidden'}`}>
+          <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'SETTINGS' ? 'motion-panel' : 'hidden'}`}>
             {canOpenModule(user?.role, 'SETTINGS') ? <SettingsTab /> : null}
           </div>
         </main>
@@ -220,7 +219,6 @@ export const App: React.FC = () => {
       <ShiftGateModal />
       <PaymentModal />
       <ReceiptPreviewModal />
-      {!isLocked ? <OperationNotice /> : null}
     </div>
     <LockScreen />
     </div>

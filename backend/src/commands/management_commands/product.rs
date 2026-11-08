@@ -10,6 +10,7 @@ use crate::services::lan_sync::WritePool;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
+use super::category::product_category;
 use super::{audit_actor, ensure_owned, record_audit, require_tenant};
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
@@ -75,7 +76,11 @@ pub async fn get_management_products(
     for row in rows {
         res.push(ProductDto {
             id: row.try_get("id").map_err(|e| e.to_string())?,
-            category_id: row.try_get("category_id").map_err(|e| e.to_string())?,
+            // Hammaddenin kategorisi yoktur; arayüz boş kimliği "kategorisiz" okur.
+            category_id: row
+                .try_get::<Option<String>, _>("category_id")
+                .map_err(|e| e.to_string())?
+                .unwrap_or_else(String::new),
             name: row.try_get("name").map_err(|e| e.to_string())?,
             price_cents: row
                 .try_get::<i64, _>("price_cents")
@@ -106,7 +111,7 @@ pub async fn get_management_products(
 #[allow(clippy::too_many_arguments)]
 pub async fn create_product(
     actor_role: String,
-    category_id: String,
+    category_id: Option<String>,
     name: String,
     price_cents: i64,
     image_url: Option<String>,
@@ -142,9 +147,7 @@ pub async fn create_product(
 
     let result: Result<ProductDto, String> = async {
         let id = generate_id("prd");
-        // Kategori kimliği başka işletmeye aitse ürün o işletmenin menüsünde
-        // görünür. INSERT öncesi sınanır.
-        ensure_owned(&mut conn, "categories", &category_id, &tenant_id).await?;
+        let category_id = product_category(&mut conn, category_id, is_raw, &tenant_id).await?;
         sqlx::query("INSERT INTO products (id, tenant_id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason, stock_unit, is_raw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(&id)
             .bind(&tenant_id)
@@ -185,7 +188,7 @@ pub async fn create_product(
 
         Ok(ProductDto {
             id,
-            category_id,
+            category_id: category_id.unwrap_or_else(String::new),
             name,
             price_cents,
             image_url,
@@ -212,7 +215,7 @@ pub async fn create_product(
 pub async fn update_product(
     actor_role: String,
     id: String,
-    category_id: String,
+    category_id: Option<String>,
     name: String,
     price_cents: i64,
     image_url: Option<String>,
@@ -243,9 +246,6 @@ pub async fn update_product(
     let sku_val = sku.clone().unwrap_or_default();
 
     let result: Result<ProductDto, String> = async {
-        // Ürünün taşınacağı kategori de bu işletmenin menüsünde olmalı; aksi
-        // halde ürün başka işletmenin kategorisine bağlanır ve menü orada görünür.
-        ensure_owned(&mut conn, "categories", &category_id, &tenant_id).await?;
         // Fiyat ve ad değişikliği mali sonuç doğurur; eski değerler "Eski Değer →
         // Yeni Değer" sütununda gösterilmek üzere kayda geçer.
         let previous: Option<(String, i64, bool, String)> =
@@ -270,6 +270,7 @@ pub async fn update_product(
                 .map_err(|e| e.to_string())?;
         let is_raw = is_raw.unwrap_or(previous_raw);
         let is_active = is_active && !is_raw;
+        let category_id = product_category(&mut conn, category_id, is_raw, &tenant_id).await?;
         valid_stock_unit(&stock_unit)?;
         if stock_unit != previous_unit && previous_unit != "belirsiz" {
             let reference_count: i64 = sqlx::query_scalar(
@@ -334,7 +335,7 @@ pub async fn update_product(
 
         Ok(ProductDto {
             id,
-            category_id,
+            category_id: category_id.unwrap_or_else(String::new),
             name,
             price_cents,
             image_url,
@@ -440,6 +441,20 @@ pub async fn delete_product(
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     ensure_owned(&mut conn, "products", &id, &tenant_id).await?;
+    let has_stock_history: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM inventory_batches WHERE tenant_id = ? AND product_id = ?)
+             OR EXISTS(SELECT 1 FROM stock_movements WHERE tenant_id = ? AND product_id = ?)",
+    )
+    .bind(&tenant_id)
+    .bind(&id)
+    .bind(&tenant_id)
+    .bind(&id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if has_stock_history {
+        return Err("STOCK: Stok geçmişi olan kalem silinemez.".into());
+    }
     let previous_name: Option<String> =
         sqlx::query_scalar("SELECT name FROM products WHERE id = ? AND tenant_id = ?")
             .bind(&id)

@@ -24,7 +24,7 @@ impl LanSync {
                 ensure_local_device(&mut conn, tenant_id).await?,
             )
         };
-        if self.status().state != "NO_CONNECTION" {
+        if !matches!(self.status().state, "NO_CONNECTION" | "ISLAND") {
             return Err("CONFLICT: çoğunluk varken devralma yapılamaz".to_string());
         }
         let remaining: Vec<Member> = members

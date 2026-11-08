@@ -21,14 +21,14 @@ pub struct CashMovementDto {
 #[serde(rename_all = "camelCase")]
 pub struct ShiftSummaryDto {
     pub shift_id: String,
-    pub total_sales: i64,
+    pub total_sales: Option<i64>,
     pub total_cash_in: i64,
     pub total_cash_out: i64,
-    pub expected_balance: i64,
+    pub expected_balance: Option<i64>,
     pub discrepancy: i64,
     pub actual_closing_balance: Option<i64>,
     #[serde(alias = "cash_sales", default)]
-    pub cash_sales: i64,
+    pub cash_sales: Option<i64>,
     #[serde(alias = "card_sales", default)]
     pub card_sales: i64,
     #[serde(alias = "meal_card_sales", default)]

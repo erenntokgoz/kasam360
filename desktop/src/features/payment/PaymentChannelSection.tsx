@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { Banknote, CreditCard, Utensils, BookOpen } from 'lucide-react';
 import type { PaymentMethod } from '../../types/payment';
@@ -100,7 +101,6 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
               aria-label="Alınan Nakit"
               value={receivedText}
               onValueChange={onChangeReceived}
-              placeholder={formatMoney(plan.dueCents).replace(' ₺', '')}
               pinpadTitle="Alınan Nakit"
               pinpadInfo={pinpadInfo}
               pinpadLiveInfo={changeRow}
@@ -151,9 +151,13 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
 
           {showQuickAddCari ? (
             <div className="space-y-3">
-              <Input aria-label="Müşteri adı" value={newCariName} onChange={(e) => setNewCariName(e.target.value)} placeholder="Müşteri Adı" />
-              <NumberInput aria-label="Telefon" kind="digits" value={newCariPhone} onValueChange={setNewCariPhone} placeholder="Telefon" maxLength={15} />
-              {cariError ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{cariError}</p> : null}
+              <label className="block space-y-1"><span className="text-sm font-semibold">Müşteri adı</span>
+                <Input aria-label="Müşteri adı" value={newCariName} onChange={(e) => setNewCariName(e.target.value)} />
+              </label>
+              <label className="block space-y-1"><span className="text-sm font-semibold">Telefon</span>
+                <NumberInput aria-label="Telefon" kind="digits" value={newCariPhone} onValueChange={setNewCariPhone} maxLength={15} />
+              </label>
+              {cariError ? <ErrorToast message={cariError} /> : null}
               <Button variant="primary" onClick={() => void handleCreateCariSubmit()} disabled={!newCariName} className="w-full">
                 Kaydet ve Seç
               </Button>

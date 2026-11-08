@@ -1,60 +1,63 @@
+> Belge kapsamı: mevcut teknik uygulama/inceleme kaydıdır; yeni ürün kararları ve teslim sırası için [ana plan](uygulama-tamamlama-plani.md) geçerlidir. Buradaki tamamlanma ifadeleri güncel kabul testlerinin yerine geçmez.
+
 # Yerel Ağ Eşitlemesi
 
-Durum: Bütün iş yazmaları günlükten geçer. Aynı bilgisayarda üç uygulamayla ve gerçek bağlantıyla sınandı; iki fiziksel cihaz testi `docs/field-test.md` tamamlanmadan üretime hazır değildir.
+Durum: Ada modu, yeniden birleşme ve çakışma kuyruğu uygulandı; sanal ağ ve gerçek TCP testleriyle sınandı. İki fiziksel cihaz testi `docs/field-test.md` tamamlanmadan üretime hazır değildir.
 
 ## Hedef
 
-İnternet kesildiğinde aynı WLAN/LAN üzerindeki cihazlar sipariş, ödeme, stok ve cari işlemlerini sürdürebilir. Bir cihaz kapandığında onaylanmış işlemler kaybolmaz. Tek cihazlı işletme çalışabilir. Ağdan tümüyle kopmuş cihaz yeni işlem açmaz.
+Aynı ağdaki cihazlar birbirini görürken tek otoriteyle çalışır. Otorite düşerse kalanlar saniyeler içinde yenisini seçer. Cihaz tümüyle yalnız kalsa bile satış, sipariş, ödeme ve stok düşümü durmaz: cihaz ada modunda yerel yazar. Hiçbir işlem kaybolmaz, hiçbir çakışma sessizce yutulmaz.
 
-## Mevcut durum
+## Çalışma kipleri
 
-- Tek cihazlı kurulum eşleştirme gerektirmez; cari işlemler yine de işlem günlüğünden geçer.
-- Eşitlenen işlemler: sipariş, ödeme, iade, kasa, vardiya, gün sonu, menü, stok, personel, cari, üyelik ve denetim defteri.
-- Kod `backend/src/services/lan_sync` altındadır: işlem günlüğü (`op_log`), otorite ve çoğunluk (`engine`), şifreli kanal (`secure_channel`), eşleştirme (`pairing`), TCP çalışma döngüsü (`runtime`, `transport`).
-- Yazma komutları `begin_write` ile açılır (`write_tx`). Çok cihazda transaction yalnız satır değişikliklerini üretir (`capture`): liste okunur, transaction geri alınır, liste günlüğe önerilir, çoğunluk onayından sonra her cihazda aynı sırayla uygulanır. Komut cevabı onaydan sonra döner.
-- Değişiklik başladığı durumu taşır (`base_state`). Araya başka yazma girdiyse her cihazda aynı biçimde reddedilir (`SYNC_RETRY`) ve istemci taze durumla yeniden dener. Aynı adisyonun iki kasadan tahsil edilememesi buna dayanır.
-- Tetikleyiciler yalnız çok cihazlı kurulumda vardır. Kapıdan geçmeyen yazma `SYNC_UNSUPPORTED` ile durur; yeni bir yazma yolu unutulursa cihazlar sessizce ayrışmaz, hata görünür.
-- Eşleşmiş cihazlar güvenilir sayılır: otorite takipçinin gönderdiği satırları yeniden hesaplamaz, yalnız tablo adını ve kapsamını denetler.
-- Cihaza özel tablolardan onay jetonu ve dış teslim kuyruğu işlemle birlikte yalnız kaynak cihazda yazılır.
-- `outbox` harici sistem teslimatı içindir; cihazlar arası eşitlemede kullanılmaz.
-- Yeni cihaz, ilk kurulumda tek kullanımlık kodla katılır ve işletmenin kiracı kapsamlı tam görüntüsünü (kullanıcılar, menü, stok, cari, denetim zinciri) alır. Oturum, giriş sayacı, teslim kuyrukları ve eşitleme durumu cihaza özeldir, taşınmaz. Görüntü tek şifreli çerçevede 32 MB ile sınırlıdır.
-- Onay yanıtı cihaza ulaşmadan kesilen katılım, aynı cihaz anahtarı ve yeni kodla tekrarlanır; cihaz çift eklenmez. Kurulumdan vazgeçilirse otorite o cihazı Cihazlar ekranından pasife alır.
+| Kip | Ne zaman | Yazma yolu |
+|---|---|---|
+| Tek cihaz | Küme yok ya da tek üye | Transaction yerelde onaylanır; satır değişiklikleri aynı transaction'da `sync_operations` günlüğüne `APPLIED` olarak eklenir. |
+| Küme | Otorite ve çoğunluk erişilebilir | Değişiklik yakalanır, transaction geri alınır, otoriteye önerilir, çoğunluk onayından sonra her cihazda aynı sırayla uygulanır (`base_state` iyimser kilidi). |
+| Ada | Otoriteye/çoğunluğa `ISLAND_AFTER_MS` boyunca ulaşılamıyor ya da bekleyen ada kaydı var | Transaction yerelde onaylanır; değişiklikler önceki görüntüleriyle `sync_island_ops` tablosuna eklenir. Denetim kaydı ana zincire değil cihazın alt zincirine (`audit_island_ledger`) yazılır. |
 
-## Güvenlik ve süreklilik kuralı
+Kümeden ada moduna geçiş: otoriteye gönderilemeyen işlem (`NO_AUTHORITY`, `QUORUM_LOST`; ikisi de işlemin hiçbir günlüğe girmediğini garanti eder) yakalanan değişikliklerle ada işlemine çevrilir. Zaman aşımına uğrayan işlem (`PENDING_RESULT`) çevrilmez; günlükte olabilir ve iki kez yazılırdı.
 
-Bir cihazın bozulması ile cihazlar arasındaki ağın bölünmesi diğer cihaz açısından her zaman ayırt edilemez. Bu nedenle yalnız iki aktif cihazdan biri aniden görünmez olduğunda kalan cihazın tek başına **hem** kesintisiz finansal yazma yapması **hem** çift işlem ihtimalini sıfıra indirmesi garanti edilemez. Ürün bunu gizlemez:
+## Kurallar
 
-- Tek cihazlı kurulumda yerel SQLite kalıcı yazımı işlem için yeterlidir. Otomatik yedekleme ayrıca izlenir.
-- Çok cihazlı kurulumda kritik yazma için tek bir güncel işlem otoritesi ve kalıcı çoğunluk onayı gerekir. Ağ bölünmesinde çoğunluğu kaybeden taraf yeni finansal işlem açamaz; mevcut ekranı ve kayıtlarını korur.
-- Üç veya daha fazla aktif cihazda tek cihaz kaybı çoğunluğu bozmaz. İki cihazlı kurulumda ani cihaz/ağ kaybı finansal yazmayı durdurur; cihazın planlı olarak pasife alınması kalan cihazı güvenle tek cihaz moduna geçirir.
-- Diğer cihazlar kalıcı olarak kaybolduysa sahip, PIN'iyle kalan cihazdan devam eder (`take_over_device`). Bu çoğunluk kuralını bilerek aşar: cihazlar yalnız ağdan kopuksa iki tarafta yapılırsa kayıtlar birleştirilemez. Kaybolan cihaz dönerse kümeye girmez, temiz kurulumla yeniden eşleştirilir.
-- Yedekten dönen cihaz kümeden ayrılır ve tek başına açılır; diğer cihazlarda pasife alınıp boş kurulumla yeniden eşleştirilir. Geri sarılmış günlükle kümeye dönmesine izin verilmez.
-- “İşlem tamamlandı” cevabı yalnızca kalıcı kayıt ve gereken onaylar alındıktan sonra verilir. Zaman aşımında kullanıcı işlem kimliğiyle sonucu sorgular; körlemesine ikinci kez ödeme göndermez.
+- Her işlem: `operation_id` (ön ekli ULID), `tenant_id`, `device_id`, yazan, satır değişiklikleri (yeni ve önceki görüntü). Ada işlemi ayrıca `island_epoch`, cihaz sırası `device_sequence`, `base_commit_index` ve `base_state` taşır.
+- Aynı `operation_id` ikinci kez gelirse aynı sonuç döner; ada işlemi de sorgulanır.
+- Ada kaydı olan cihaz, birleşme bitene kadar yalnız ada yolundan yazar; ada durumuna dayanan bir yazma kümeye gönderilmez.
+- Ada kaydı varken onaylı küme kaydı uygulanmaz. Otorite yeniden görülünce cihaz önce ada değişikliklerini önceki görüntülerle geri alır, sonra küme kayıtlarını uygular, sonra ada işlemlerini tek bir `ISLAND_MERGE` kaydı olarak otoriteye önerir. Böylece birleştirme her cihazda aynı durumda, günlükteki aynı konumda çalışır.
+- Denetim defterinde `UPDATE`/`DELETE` yoktur. Ada alt zinciri cihaz başına `GENESIS`'ten başlar, aynı SHA-256 kanonik biçimiyle mühürlenir. Birleşmede alt zincir satırları olduğu gibi taşınır ve ana zincire uç özetini taşıyan tek `sync:island_merged` kaydı eklenir.
+- Para tutarları kuruş INTEGER; birleştirme hiçbir tutarı yeniden hesaplamaz, satırları olduğu gibi taşır.
+- Yedekten geri sarılmış cihaz, kümenin daha önce birleştirdiği cihaz sırasını farklı kimlikle yeniden gönderirse birleşme reddedilir (`ROLLED_BACK`), cihaz `INTERVENTION` durumuna geçer.
 
-## İşlem sözleşmesi
+## Birleştirme ve çakışma
 
-1. Her cihaz kalıcı, ön ekli benzersiz kimlik taşır. Cihaz anahtarı ve kiracı kapsamı eşleşmeden ağ isteği kabul edilmez.
-2. Her değişiklik `operation_id`, `tenant_id`, `device_id`, hedef kayıt ID'si, beklenen sürüm, tür ve kanonik veri taşır. Aynı `operation_id` tekrar geldiğinde aynı sonuç döner.
-3. Otorite, aynı adisyon için değişiklikleri tek sıra halinde doğrular. Ödeme yalnızca kalan tutar ve kalem/adet tahsisleriyle uyumluysa kabul edilir.
-4. Kabul edilen işlem, ilgili iş kayıtları ve denetim kaydıyla aynı SQLite transaction içinde yazılır. Ağ bildirimi transaction sonrasında yapılır.
-5. Diğer cihazlar kabul edilmiş işlemleri sıra numarasıyla alır, kimliğe göre tek kez uygular ve kalıcı son konumunu yazar. Eksik sıra varsa arayı doldurmadan yeni durumu göstermez.
-6. Menü, stok ve cari hareketleri aynı doğrulanmış işlem akışına alınır. Fiyat ve reçete sürümü sipariş kaleminde korunur; sonradan yapılan değişiklik geçmiş satışı değiştirmez.
-7. Cihaz pasiften aktife alınırken tüm eksik kayıtlar ve denetim zinciri doğrulanır; tamamlanmadan yeni işlem açılamaz.
+Ada değişikliği satır bazında üç yönlü karşılaştırılır: önceki görüntü (ada başlangıcı), yeni görüntü (ada), güncel satır (küme).
 
-## Kullanıcı arayüzü
+| Durum | Sonuç |
+|---|---|
+| Yeni kimlikli ekleme | Doğrudan eklenir. |
+| Güncel satır önceki görüntüyle aynı | Ada değişikliği uygulanır. |
+| Sütunu yalnız bir taraf değiştirmiş | O tarafın değeri alınır. |
+| Stok sayacı (`inventory_batches.remaining_quantity`, `inventory_items.current_stock`) iki tarafta düşmüş | Farklar toplanır. Parti eksiye düşerse açık aynı ürünün sonraki partilerinden FIFO ile düşülür; karşılanamazsa `STOCK_NEGATIVE`. |
+| Aynı sütun iki tarafta değişmiş | Küme değeri kalır, ada değeri çakışma kaydında saklanır. Adisyon/kalem/ödeme tablosunda `ORDER_CONFLICT` (çift tahsilat dahil), masada `TABLE_CONFLICT`, cari bakiyede `BALANCE_CONFLICT`, diğerlerinde `ROW_CONFLICT`. |
+| Satır kümede silinmiş | `DELETED_ELSEWHERE`; ada görüntüsü saklanır. |
+| Ekleme var olan farklı satırla çakışıyor | `ROW_CONFLICT`; küme satırı kalır. |
+| Yabancı anahtar bozuluyor | İşlemin iş satırları uygulanmaz, tamamı `REJECTED_ON_MERGE` ile saklanır; denetim satırları yine taşınır. |
 
-- Durum çubuğu: `Hazır`, `Eşitleniyor`, `Bağlantı yok`, `İşlem sonucu doğrulanıyor`, `Müdahale gerekli`.
-- Her başarısız işlemde işlem kimliği ve güvenli tekrar/sonuç sorgulama seçeneği görünür.
-- Gün sonu; açık adisyon, eksik sıra, bekleyen ödeme, eşitlenmemiş hareket ve kasa farkı kalmadığında tamamlanır.
-- Cihazlar ekranı; aktif/pasif durumunu, son görülme zamanını ve son eşitlenen işlemi gösterir.
+Çakışma `merge_conflicts` tablosuna (kiracı kapsamlı, eşitlenir) düşer; kimlik ada işleminden türetildiği için her cihazda aynıdır. Otomatik silme yoktur: çift tahsilat iade akışıyla, stok sayımla düzeltilir; kayıt MANAGER/OWNER tarafından `resolve_sync_conflict` ile notla kapatılır ve kapanış denetime yazılır. Birleştirilen her ada işlemi `merged_island_ops` tablosunda tutulur; aynı işlem ikinci kez birleşmez.
 
-## Uygulama dilimleri
+## Bulut için günlük
 
-1. İki ayrı SQLite dosyası ve iki süreçle çalışan test düzeneği kur; aynı kimliğin tekrar uygulanmadığını ve hata anında sonuç sorgulanabildiğini kanıtla.
-2. Kalıcı cihaz kimliği, eşleştirme ve kimliği doğrulanmış yerel ağ bağlantısını kur.
-3. Tek otorite, sürüm kontrolü ve kalıcı çoğunluk onayını ekle; iki/üç cihaz arızası testlerini yaz.
-4. Sipariş ve ödeme işlemlerini taşı; aynı masa ve aynı adette eşzamanlı tahsilatı sınayarak çift yazmayı engelle.
-5. Menü, stok, cari, personel ve denetim işlemlerini aynı sözleşmeye geçir.
-6. Yeniden katılım, aktif/pasif geçişi, yedekten geri dönüş ve gün sonu kapısını gerçek cihazlarda doğrula.
+`sync_operations` (`log_index` sırasıyla, `APPLIED`/`REJECTED`) bütün kiplerde işletmenin onaylı akışıdır; ada işlemleri birleşince bu akışa `ISLAND_MERGE` içinde, kendi `operation_id`'leriyle girer. Ada kaydı birleşmeden önce `sync_island_ops` içindedir. Gönderim imleci `sync_cloud_cursor` tablosundadır (cihaz ve akış başına son gönderilen konum); ağ kodu bu dilimde yoktur.
 
-Her dilim kendi testleri ve çalışan uygulama davranışıyla tamamlanır. Bütün finansal yazmalar bu sözleşmeye taşınmadan çok cihazlı kullanım üretime açılmaz.
+## Sınırlar
+
+- İki cihaz ayrıldığında cihaz arızası ile ağ bölünmesi ayırt edilemez; iki taraf da yazar ve birleşmede çakışmalar kuyruğa düşer. Kullanılabilirlik tutarlılıktan önce gelir.
+- Geri alma ile birleşme arasındaki birkaç saniyede ada kayıtları ekranda görünmez; bu arada yeni yazma birleşmeyi bekler.
+- FIFO düzeltmesi parti kalanını düzeltir; satılan malın maliyet kayıtları yeniden hesaplanmaz, düzeltme birleşme ayrıntısında görünür.
+- `take_over_device` kalıcı kayıpta üyeliği küçültmek için durur; ada modu nedeniyle günlük işletmede gerekmez. Üyelikten çıkarılan cihaz yeniden eşleştirilir.
+
+## Test planı
+
+- Sanal ağ (`engine_sim`): otorite düşmesi ve yeni seçim; iki cihaz bölünmesi, iki tarafta satış, birleşme ve iki cihazda aynı sonuç; aynı adisyonun iki adada tahsili (iki ödeme korunur, `ORDER_CONFLICT`); aynı birleşmenin tekrarı (idempotency); stok eksiye düşmesi ve FIFO düzeltmesi; birleşmeden sonra ana ve alt zincir doğrulaması; geri sarılmış ada günlüğünün reddi.
+- Gerçek TCP (`replication_fault_tests`, `network_tests`): iki cihazdan biri kapanınca kalan cihaz ada modunda yazar, dönünce birleşir.
+- Tek cihaz (`write_tx_tests`): her iş yazması günlüğe tek kayıtla girer.

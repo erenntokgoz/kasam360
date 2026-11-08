@@ -1,146 +1,86 @@
-import { useUIStore } from '../../stores/uiStore';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { useEffect, useState } from 'react';
+import { ChevronRight, Search } from 'lucide-react';
+import { formatNumber } from '../../lib/numberText';
+import { matchesProduct } from '../../lib/searchText';
 import { stockUnitLabel } from '../../lib/stockUnitLabel';
-import { useEffect, useMemo, useState } from 'react';
-import { NumberInput } from '../../ui/NumberInput';
-import { formatMoney } from '../../lib/formatMoney';
-import { parseMoneyToCents } from '../../lib/moneyParser';
 import { useStockStore } from '../../stores/stockStore';
 import { Button } from '../../ui/Button';
-import { StockItemPicker } from './StockItemPicker';
-import { StockSupplierPicker } from './StockSupplierPicker';
-import { formatNumber } from '../../lib/numberText';
-import { ReceiptOptions } from './ReceiptOptions';
-import { emptyReceiptDraft, toReceiptInput, type ReceiptDraft } from '../../lib/purchaseReceipt';
-import { setProductRaw } from '../../lib/stockCreation';
+import { Input } from '../../ui/Input';
+import { StockEntryModal } from './StockEntryModal';
+import { StockItemDetails } from './StockItemDetails';
+import { StockItemEditor } from './StockItemEditor';
 
+interface Props {
+  target: string | null;
+  onEntry: (id: string) => void;
+  onCloseEntry: () => void;
+}
 
-/** Ürün başına eldeki miktar ve maliyet. Hızlı giriş gerçek FIFO partisi açar. */
-export function StockOverview() {
-  const { products, batches, busy, error, load, quickReceive, pendingQuickReceipt } = useStockStore();
-  const [productId, setProductId] = useState('');
-  const [supplierId, setSupplierId] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [unitCost, setUnitCost] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
-  const [receipt, setReceipt] = useState<ReceiptDraft>(emptyReceiptDraft);
-  const [converting, setConverting] = useState<string | null>(null);
-  const chosen = products.find((product) => product.id === productId);
-  const gramItems = chosen?.stockUnit === 'adet' ? [{ id: chosen.id, name: chosen.name }] : [];
+export function StockOverview({ target, onEntry, onCloseEntry }: Props) {
+  const { products, batches, busy, error, load, pendingQuickReceipt } = useStockStore();
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  useEffect(() => {
-    if (pendingQuickReceipt) {
-      setProductId(pendingQuickReceipt.productId);
-      setSupplierId(pendingQuickReceipt.supplierId);
-      setQuantity(String(pendingQuickReceipt.quantity).replace('.', ','));
-      setUnitCost((pendingQuickReceipt.unitCostCents / 100).toFixed(2).replace('.', ','));
-    }
-  }, [pendingQuickReceipt]);
-
-  const rows = useMemo(
-    () =>
-      products
-        .map((product) => {
-          const own = batches.filter((batch) => batch.productId === product.id);
-          return {
-            id: product.id,
-            name: product.name,
-            unit: product.stockUnit,
-            isRaw: product.isRaw,
-            quantity: own.reduce((sum, batch) => sum + batch.remainingQuantity, 0),
-            grams: own.reduce((sum, batch) => sum + batch.remainingQuantity * (batch.usableGramsPerUnit ?? 0), 0),
-            valueCents: own.reduce((sum, batch) => sum + Math.round(batch.remainingQuantity * batch.unitCostCents), 0),
-          };
-        })
-        .sort((a, b) => a.quantity - b.quantity),
-    [products, batches],
-  );
-
-  const receive = async () => {
-    setFormError(null);
-    const amount = Number(quantity.trim().replace(',', '.'));
-    try {
-      if (!productId || !Number.isFinite(amount) || amount <= 0) throw new Error('Ürün ve miktar girin.');
-      const input = toReceiptInput(receipt, gramItems.map((item) => item.id));
-      if (await quickReceive(productId, amount, parseMoneyToCents(unitCost), supplierId, input)) {
-        useUIStore.getState().showNotice('Stok girişi kaydedildi.');
-        setQuantity('');
-        setUnitCost('');
-        setReceipt(emptyReceiptDraft());
-      }
-    } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : String(caught));
-    }
-  };
-
-  // Satış ürününe çevrilen kalem kapalı kalır; fiyatı ve satışa açılması menüden yapılır.
-  const convert = async (id: string, isRaw: boolean) => {
-    const product = products.find((item) => item.id === id);
-    if (!product) return;
-    setConverting(id);
-    setFormError(null);
-    try {
-      const updated = await setProductRaw(product, isRaw);
-      useStockStore.setState((state) => ({ products: state.products.map((item) => (item.id === id ? updated : item)) }));
-    } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setConverting(null);
-    }
-  };
+  const selectedProduct = products.find((product) => product.id === selected);
+  const quantities = new Map<string, number>();
+  for (const batch of batches) {
+    quantities.set(batch.productId, (quantities.get(batch.productId) ?? 0) + batch.remainingQuantity);
+  }
+  const visible = products
+    .filter((product) => matchesProduct(query, product.name, product.barcode, product.sku))
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+  const showProduct = selectedProduct && target === null;
 
   return (
-    <div className="page-fill flex-1 overflow-y-auto p-4 space-y-4 text-[var(--text-primary)]">
-      {error || formError ? (
-        <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
-          {error ?? formError}
-        </p>
-      ) : null}
-
-      <section className="rounded-xl border border-[var(--border)] paper p-4 space-y-3">
-        <h2 className="print-title text-sm font-bold">Hızlı stok girişi</h2>
-        {pendingQuickReceipt ? <p role="status" className="text-sm">Sipariş oluşturuldu, teslim bekliyor. Aynı kaydın teslimi yeniden denenecek.</p> : null}
-        <fieldset disabled={busy || !!pendingQuickReceipt} className="space-y-3">
-        <StockSupplierPicker value={supplierId} onChange={setSupplierId} />
-        <div className="grid gap-2 sm:grid-cols-4">
-          <StockItemPicker products={products} value={productId} onChange={setProductId} label="Giriş ürünü" />
-          <NumberInput kind="quantity" aria-label="Giriş miktarı" placeholder="Miktar" className="min-h-12" value={quantity} onValueChange={setQuantity} />
-          <NumberInput aria-label="Birim alış fiyatı" placeholder="Birim alış (₺)" className="min-h-12" value={unitCost} onValueChange={setUnitCost} />
+    <section className="page-fill flex-1 overflow-y-auto p-4 space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-bold">Mevcut Stoklar</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2">
+            <Search aria-hidden="true" className="size-4" />
+            <Input type="search" aria-label="Stok kalemi ara"
+              value={query} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          <Button disabled={busy} onClick={() => setCreating(true)}>+ Yeni Kalem</Button>
         </div>
-        </fieldset>
-        <ReceiptOptions value={receipt} onChange={setReceipt} gramItems={gramItems} disabled={busy} />
-        <Button variant="primary" className="min-h-12" disabled={busy} onClick={() => void receive()}>
-          {pendingQuickReceipt ? 'Teslimi Yeniden Dene' : 'Stoğa Ekle'}
-        </Button>
-      </section>
-
-      <section className="rounded-xl border border-[var(--border)] paper">
-        <h2 className="print-title border-b border-[var(--border)] p-4 text-sm font-bold">Eldeki stok</h2>
-        {rows.length === 0 ? <p className="p-4 text-xs text-[var(--text-secondary)]">Ürün yok.</p> : null}
-        <ul className="divide-y divide-[var(--border)]">
-          {rows.map((row) => (
-            <li key={row.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-              <span className="min-w-0">
-                <span className="block font-bold truncate">{row.name}</span>
-                <span className="block text-xs text-[var(--text-secondary)]">{row.isRaw ? 'Hammadde' : 'Satış ürünü'}</span>
-              </span>
-              <span className="flex items-center gap-4 tabular-nums">
-                <span className={row.quantity > 0 ? '' : 'font-bold text-[var(--accent-red)]'}>
-                  {row.quantity > 0 ? `${formatNumber(row.quantity)} ${stockUnitLabel(row.unit)}` : 'Stok yok'}
-                  {row.grams > 0 ? ` · ${formatNumber(Math.round(row.grams))} g` : ''}
+      </header>
+      <ErrorToast message={target === null ? error : null} />
+      {pendingQuickReceipt && target === null && (
+        <Button onClick={() => onEntry(pendingQuickReceipt.productId)}>Bekleyen Teslimi Aç</Button>
+      )}
+      {visible.length === 0 && <p role="status">{busy ? 'Stoklar yükleniyor.' : query.trim() ? 'Eşleşen stok kalemi yok.' : 'Henüz stok kalemi yok.'}</p>}
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))] gap-3">
+        {visible.map((product) => {
+          const quantity = quantities.get(product.id) ?? 0;
+          return (
+            <li key={product.id}>
+              <button type="button" onClick={() => setSelected(product.id)}
+                className="paper min-h-24 w-full rounded-xl border border-[var(--border)] p-4 text-left hover:bg-[var(--bg-hover)] focus-visible:outline-2 focus-visible:outline-[var(--accent-blue)]">
+                <span className="flex items-center justify-between gap-2 font-semibold">
+                  <span className="min-w-0 break-words">{product.name}</span>
+                  <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
                 </span>
-                <span className="text-xs text-[var(--text-secondary)]">{formatMoney(row.valueCents)}</span>
-                <Button variant="secondary" className="min-h-12" disabled={busy || converting !== null} onClick={() => void convert(row.id, !row.isRaw)}>
-                  {row.isRaw ? 'Satış Ürününe Çevir' : 'Hammaddeye Çevir'}
-                </Button>
-              </span>
+                <span className="mt-2 flex flex-wrap justify-between gap-x-3 text-sm">
+                  <span className="text-[var(--text-secondary)]">{product.isRaw ? 'Hammadde' : 'Satış Ürünü'}</span>
+                  <span className="tabular-nums">{quantity > 0 ? `${formatNumber(quantity)} ${stockUnitLabel(product.stockUnit)}` : 'Stok Yok'}</span>
+                </span>
+              </button>
             </li>
-          ))}
-        </ul>
-      </section>
-    </div>
+          );
+        })}
+      </ul>
+      {showProduct && <StockItemDetails product={selectedProduct}
+        onClose={() => setSelected(null)} onEntry={() => onEntry(selectedProduct.id)} />}
+      {creating && <StockItemEditor onClose={() => setCreating(false)} onSaved={(product) => {
+        setCreating(false);
+        setQuery('');
+        setSelected(product.id);
+      }} />}
+      <StockEntryModal target={target} onClose={onCloseEntry} />
+    </section>
   );
 }

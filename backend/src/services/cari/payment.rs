@@ -30,6 +30,7 @@ pub(super) async fn apply_payment(
     conn: &mut SqliteConnection,
     tenant_id: &str,
     input: &RecordPaymentInput,
+    allow_negative_cash: bool,
 ) -> Result<Value, ApplyError> {
     if input.amount_cents <= 0 {
         return Err(rejected("VALIDATION: ödeme tutarı 0'dan büyük olmalıdır"));
@@ -96,6 +97,16 @@ pub(super) async fn apply_payment(
                 "VALIDATION: nakit hareket için açık vardiya gerekir",
             ));
         };
+        if !allow_negative_cash {
+            crate::commands::cashier_commands::ensure_drawer_covers(
+                conn,
+                tenant_id,
+                shift_id,
+                input.amount_cents,
+            )
+            .await
+            .map_err(rejected)?;
+        }
         let (movement_type, reason) = if debt_type == "GIVEN" {
             ("IN", format!("Cari Alacak Tahsilatı: {directory_name}"))
         } else {

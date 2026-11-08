@@ -1,5 +1,5 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
 import { sessionArgs } from '../../stores/cariStore';
 import { errorText } from '../../lib/cariInput';
 import { balanceSide, debtLabel, isEditable, lineLabel, purchaseLink } from '../../lib/cariLedger';
@@ -8,6 +8,7 @@ import { formatDay, formatServerDateTime } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
+import { Modal } from '../../ui/Modal';
 import type { LedgerDebt, StatementLine } from '../../types/ledger';
 
 interface OrderLine {
@@ -40,22 +41,18 @@ const OpenDebtInfo: React.FC<{ debt: LedgerDebt }> = ({ debt }) => (
   </span>
 );
 
-const DebtButtons: React.FC<{ debt: LedgerDebt; actions: DebtActions }> = ({ debt, actions }) => (
-  <span className="flex items-center justify-end gap-1">
-    <Button variant="success" onClick={() => actions.onPay(debt)} className="min-h-12">
-      {debt.type === 'GIVEN' ? 'Tahsilat' : 'Tediye'}
-    </Button>
+const DebtButtons: React.FC<{ debt: LedgerDebt; actions: DebtActions; onClose: () => void }> = ({ debt, actions, onClose }) => (
+  <div className="flex flex-wrap justify-end gap-2">
     {isEditable(debt) ? (
       <>
-        <Button variant="ghost" aria-label="Kaydı düzenle" onClick={() => actions.onEdit(debt)} className="min-h-12">
-          <Pencil className="w-5 h-5" />
-        </Button>
-        <Button variant="ghost" aria-label="Kaydı sil" onClick={() => actions.onDelete(debt)} className="min-h-12">
-          <Trash2 className="w-5 h-5" />
-        </Button>
+        <Button type="button" onClick={() => { onClose(); actions.onEdit(debt); }}>Düzenle</Button>
+        <Button type="button" variant="danger" onClick={() => { onClose(); actions.onDelete(debt); }}>Sil</Button>
       </>
     ) : null}
-  </span>
+    <Button type="button" variant="success" onClick={() => { onClose(); actions.onPay(debt); }}>
+      {debt.type === 'GIVEN' ? 'Tahsilat' : 'Tediye'}
+    </Button>
+  </div>
 );
 
 interface StatementRowProps {
@@ -66,76 +63,106 @@ interface StatementRowProps {
 }
 
 export const StatementRow: React.FC<StatementRowProps> = ({ line, openDebt, actions }) => {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<OrderLine[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const debit = line.signedAmountCents > 0 ? line.signedAmountCents : 0;
   const credit = line.signedAmountCents < 0 ? -line.signedAmountCents : 0;
   const purchase = line.purchaseOrderId ? purchaseLink(line) : null;
 
-  const toggle = async () => {
-    if (items) {
-      setItems(null);
-      return;
-    }
+  const openDetail = async () => {
+    setOpen(true);
+    if (!line.orderId || loading || items) return;
+    setLoading(true);
+    setError(null);
     try {
       const { actorRole, tenantId } = sessionArgs();
-      setError(null);
       setItems(await invokeIPC<OrderLine[]>('get_statement_order', { actorRole, tenantId, orderId: line.orderId }));
     } catch (caught) {
       setError(errorText(caught));
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <>
-      <tr className="border-b border-[var(--border)] align-top">
-        <td className="px-3 py-2 whitespace-nowrap">{formatServerDateTime(line.createdAt)}</td>
-        <td className="px-3 py-2">
-          <span className="font-semibold">{lineLabel(line)}</span>
-          {line.description ? <span className="text-[var(--text-secondary)]"> · {line.description}</span> : null}
-          {openDebt ? <OpenDebtInfo debt={openDebt} /> : null}
-        </td>
-        <td className="px-3 py-2 text-[var(--text-secondary)]">
-          {line.orderId ? (
-            <button type="button" className="min-h-12 underline cursor-pointer" onClick={() => void toggle()}>
-              Adisyon …{line.orderId.slice(-6)}
-            </button>
-          ) : purchase ?? ''}
-        </td>
-        <td className="px-3 py-2 text-right">{debit ? formatMoney(debit) : ''}</td>
-        <td className="px-3 py-2 text-right">{credit ? formatMoney(credit) : ''}</td>
-        <td className="px-3 py-2 text-right"><BalanceCell cents={line.balanceAfterCents} /></td>
-        <td className="px-3 py-1 text-right">{openDebt ? <DebtButtons debt={openDebt} actions={actions} /> : null}</td>
-      </tr>
-      {error ? (
-        <tr><td colSpan={COLUMN_COUNT} role="alert" className="px-3 py-2 text-[var(--accent-red)]">{error}</td></tr>
-      ) : null}
-      {items ? (
-        <tr className="border-b border-[var(--border)] bg-[var(--bg-subtle)]">
-          <td colSpan={COLUMN_COUNT} className="px-3 py-2">
-            {items.length === 0 ? 'Kalem kaydı yok.' : items.map((item, index) => (
-              <span key={`${item.name}-${index}`} className="block text-[var(--text-secondary)]">
-                {item.quantity} × {item.name} · {formatMoney(item.totalCents)}
-              </span>
-            ))}
-          </td>
-        </tr>
-      ) : null}
-    </>
+    <tr className="border-b border-[var(--border)] align-top">
+      <td className="px-3 py-2 whitespace-nowrap">{formatServerDateTime(line.createdAt)}</td>
+      <td className="px-3 py-2">
+        <span className="font-semibold">{lineLabel(line)}</span>
+        {line.description ? <span className="text-[var(--text-secondary)]"> · {line.description}</span> : null}
+        {openDebt ? <OpenDebtInfo debt={openDebt} /> : null}
+      </td>
+      <td className="px-3 py-2 text-[var(--text-secondary)]">
+        {line.orderId ? `Adisyon …${line.orderId.slice(-6)}` : purchase ?? ''}
+      </td>
+      <td className="px-3 py-2 text-right">{debit ? formatMoney(debit) : ''}</td>
+      <td className="px-3 py-2 text-right">{credit ? formatMoney(credit) : ''}</td>
+      <td className="px-3 py-2 text-right"><BalanceCell cents={line.balanceAfterCents} /></td>
+      <td className="px-3 py-1 text-right">
+        <Button type="button" variant="ghost" aria-label={`${lineLabel(line)} detayını aç`} onClick={() => void openDetail()}>Detay</Button>
+        <Modal cardFlow isOpen={open} title={lineLabel(line)} subtitle={formatServerDateTime(line.createdAt)}
+          maxWidth="sm" onClose={() => setOpen(false)}>
+          <div className="space-y-4 text-left">
+            <dl className="grid grid-cols-2 gap-3 text-sm tabular-nums">
+              <div><dt className="text-[var(--text-secondary)]">{debit ? 'Borç' : 'Alacak'}</dt><dd className="font-bold">{formatMoney(debit || credit)}</dd></div>
+              <div><dt className="text-[var(--text-secondary)]">İşlem Sonrası Bakiye</dt><dd className="font-bold"><BalanceCell cents={line.balanceAfterCents} /></dd></div>
+            </dl>
+            {line.description ? <p className="text-sm break-words">{line.description}</p> : null}
+            {purchase ? <p className="text-sm">{purchase}</p> : null}
+            {loading ? <p role="status" className="text-sm">Adisyon yükleniyor.</p> : null}
+            {error ? <ErrorToast message={error} /> : null}
+            {items ? (
+              <section className="space-y-2">
+                <h4 className="text-sm font-bold">Adisyon Kalemleri</h4>
+                {items.length === 0 ? <p className="text-sm">Kalem kaydı yok.</p> : (
+                  <ul className="divide-y divide-[var(--border)]">
+                    {items.map((item, index) => (
+                      <li key={`${item.name}-${index}`} className="flex justify-between gap-2 py-2 text-sm tabular-nums">
+                        <span>{item.quantity} × {item.name}</span><span>{formatMoney(item.totalCents)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ) : null}
+            {openDebt ? <>
+              <OpenDebtInfo debt={openDebt} />
+              <DebtButtons debt={openDebt} actions={actions} onClose={() => setOpen(false)} />
+            </> : null}
+          </div>
+        </Modal>
+      </td>
+    </tr>
   );
 };
 
 /** Dönemden önce açılmış, hâlâ kapanmamış kayıt: tutarı açılış bakiyesinin içindedir. */
-export const CarriedDebtRow: React.FC<{ debt: LedgerDebt; actions: DebtActions }> = ({ debt, actions }) => (
-  <tr className="border-b border-[var(--border)] align-top">
-    <td className="px-3 py-2 whitespace-nowrap">{formatServerDateTime(debt.createdAt)}</td>
-    <td className="px-3 py-2">
-      <span className="font-semibold">{debtLabel(debt)}</span>
-      {debt.description ? <span className="text-[var(--text-secondary)]"> · {debt.description}</span> : null}
-      <OpenDebtInfo debt={debt} />
-    </td>
-    <td className="px-3 py-2 text-[var(--text-secondary)]">Önceki dönem</td>
-    <td colSpan={3} />
-    <td className="px-3 py-1 text-right"><DebtButtons debt={debt} actions={actions} /></td>
-  </tr>
-);
+export const CarriedDebtRow: React.FC<{ debt: LedgerDebt; actions: DebtActions }> = ({ debt, actions }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <tr className="border-b border-[var(--border)] align-top">
+      <td className="px-3 py-2 whitespace-nowrap">{formatServerDateTime(debt.createdAt)}</td>
+      <td className="px-3 py-2">
+        <span className="font-semibold">{debtLabel(debt)}</span>
+        {debt.description ? <span className="text-[var(--text-secondary)]"> · {debt.description}</span> : null}
+        <OpenDebtInfo debt={debt} />
+      </td>
+      <td className="px-3 py-2 text-[var(--text-secondary)]">Önceki dönem</td>
+      <td colSpan={3} />
+      <td className="px-3 py-1 text-right">
+        <Button type="button" variant="ghost" aria-label={`${debtLabel(debt)} detayını aç`} onClick={() => setOpen(true)}>Detay</Button>
+        <Modal cardFlow isOpen={open} title={debtLabel(debt)} subtitle={formatServerDateTime(debt.createdAt)}
+          maxWidth="sm" onClose={() => setOpen(false)}>
+          <div className="space-y-4 text-left">
+            <p className="font-bold tabular-nums">{formatMoney(debt.totalAmountCents)}</p>
+            {debt.description ? <p className="text-sm break-words">{debt.description}</p> : null}
+            <OpenDebtInfo debt={debt} />
+            <DebtButtons debt={debt} actions={actions} onClose={() => setOpen(false)} />
+          </div>
+        </Modal>
+      </td>
+    </tr>
+  );
+};

@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import { errorText, localDate } from '../../lib/cariInput';
@@ -184,7 +185,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               </select>
             </div>
           </div>
-          {error ? <p role="alert" className="text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
+          {error ? <ErrorToast message={error} /> : null}
           <div className="flex gap-2">
             {editingId ? <Button type="button" variant="secondary" className="flex-1" onClick={resetForm}>Vazgeç</Button> : null}
             <Button type="submit" variant="primary" className="flex-1" isLoading={isSaving}>Kaydet</Button>

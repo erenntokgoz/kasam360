@@ -166,6 +166,10 @@ impl AuditService {
         if !category::is_valid(ctx.category) {
             return Err(format!("UNKNOWN_AUDIT_CATEGORY: '{}'", ctx.category));
         }
+        // Otoritesiz (ada) yazma ana zinciri çatallamaz; cihazın alt zincirine gider.
+        if crate::services::lan_sync::island_audit::island_gate(conn).await? {
+            return crate::services::lan_sync::island_audit::append(conn, ctx).await;
+        }
 
         let latest_row = sqlx::query(
             "SELECT sequence, current_hash FROM audit_ledger ORDER BY sequence DESC LIMIT 1",

@@ -112,6 +112,11 @@ pub fn require_any(raw_role: &str, allowed: &[Role]) -> Result<Role, String> {
     }
 }
 
+/// Maaş kuralı ve payroll payment yazımı gibi yalnız işletme sahibine ait mutasyonlar.
+pub fn require_owner(raw_role: &str) -> Result<Role, String> {
+    require_any(raw_role, &[Role::Owner])
+}
+
 /// Sadece MASTER içindir: platform, tenant, feature flag, şube ve ham audit kapsamı.
 pub fn require_master(raw_role: &str) -> Result<Role, String> {
     require_any(raw_role, &[Role::Master])
@@ -160,14 +165,9 @@ pub fn require_staff_admin(raw_role: &str) -> Result<Role, String> {
     require_any(raw_role, &[Role::Owner, Role::Manager])
 }
 
-/// Maaş **tutarı** görme kapısı: yalnız işletme sahibi.
-///
-/// Neden ayrı fonksiyon: müdür bordroyu *görebilir* (toplam, model, kişi
-/// listesi) ama **tutarı göremez**. Bu ayrım personelin maaşını müdüre
-/// açıklamak zorunda kılmaz; rapor satırı yetkisi ile maaş gizliliği
-/// birbirine karıştırılmamalıdır (AGENTS.md §3.2).
+/// Maaş tutarları tenant işletme yönetiminde OWNER ve MANAGER'a açıktır.
 pub fn require_payroll_amounts(raw_role: &str) -> Result<Role, String> {
-    require_any(raw_role, &[Role::Owner])
+    require_any(raw_role, &[Role::Owner, Role::Manager])
 }
 
 /// Vardiya planı ve izin kararı kapısı: işletme sahibi ve müdür.
@@ -275,6 +275,17 @@ mod tests {
     fn master_kapisi_yalnizca_masterdan_gecer() {
         assert!(require_master("Master Admin").is_ok());
         assert!(require_master("OWNER").is_err());
+    }
+
+    #[test]
+    fn para_cikisi_ve_ucret_mutasyonlari_yalniz_owner() {
+        assert!(require_owner("OWNER").is_ok());
+        for role in ["MANAGER", "CASHIER", "WAITER", "KITCHEN", "MASTER", ""] {
+            assert!(
+                require_owner(role).is_err(),
+                "{role} OWNER kapısından geçmemeli"
+            );
+        }
     }
 
     #[test]

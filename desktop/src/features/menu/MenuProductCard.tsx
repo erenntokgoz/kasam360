@@ -32,76 +32,52 @@ export const MenuProductCard: React.FC<MenuProductCardProps> = ({
   const isInactive = !product.isActive;
 
   return (
-    <div
-      onClick={() => onSelect(product.id)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect(product.id);
-        }
-      }}
-      className={`tactile-btn p-3.5 rounded-lg text-left cursor-pointer transition-all min-h-[104px] flex flex-col justify-between ${
-        isSelected
-          ? 'bg-[var(--bg-hover)] border-[var(--accent-blue)] shadow-[inset_0_0_0_1px_var(--accent-blue)]'
-          : 'bg-[var(--bg-panel)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
-      } ${isOutOfStock || isInactive ? 'opacity-75' : ''}`}
-    >
-      <div>
-        <div className="flex items-start justify-between gap-2">
-          <input
-            type="checkbox"
-            aria-label={`${product.name} seç`}
-            className="w-5 h-5 shrink-0"
-            checked={isChecked}
-            onClick={(event) => event.stopPropagation()}
-            onChange={(event) => onCheck(event.target.checked)}
-          />
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] line-clamp-1 leading-snug">
-            {product.name}
-          </h3>
-        </div>
-
-        <div className="text-base font-bold text-[var(--text-primary)] mt-1.5 tabular-nums tracking-tight tabular-nums">
-          {formatMoney(product.priceCents)}
-        </div>
-        <div className="text-xs text-[var(--text-secondary)] mt-1 tabular-nums">
-          KDV %{(product.taxRateBp ?? 1000) / 100}{station ?? product.defaultStation ? ` · ${station ?? product.defaultStation}` : ''}
-        </div>
-        {cost != null ? (
-          <div className="text-xs text-[var(--text-secondary)] tabular-nums">
-            Maliyet {formatMoney(cost)}{margin != null ? ` · Kâr %${margin}` : ''}
-          </div>
-        ) : null}
-        {onMove ? (
-          <div className="flex gap-2 mt-2">
-            <button type="button" className="tactile-btn min-h-12 flex-1 rounded font-bold" onClick={(event) => { event.stopPropagation(); onMove(-1); }}>Öne</button>
-            <button type="button" className="tactile-btn min-h-12 flex-1 rounded font-bold" onClick={(event) => { event.stopPropagation(); onMove(1); }}>Sona</button>
-          </div>
-        ) : null}
+    <article className={`min-w-0 h-full rounded-lg border bg-[var(--bg-panel)] ${isSelected ? 'border-[var(--accent-blue)]' : 'border-[var(--border)]'}`}>
+      <div className="flex items-start">
+        <button type="button" onClick={() => onSelect(product.id)} aria-label={`${product.name} işlemleri`}
+          className="flex-1 min-w-0 p-3 text-left rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer">
+          <span className="block truncate text-sm font-bold">{product.name}</span>
+          <span className="block text-base font-bold mt-1 tabular-nums">{formatMoney(product.priceCents)}</span>
+          <span className="block text-xs text-[var(--text-secondary)] mt-1 tabular-nums">
+            KDV %{(product.taxRateBp ?? 1000) / 100}{station ?? product.defaultStation ? ` · ${station ?? product.defaultStation}` : ''}
+          </span>
+          {cost != null ? (
+            <span className="block text-xs text-[var(--text-secondary)] tabular-nums">
+              Maliyet {formatMoney(cost)}{margin != null ? ` · Kâr %${margin}` : ''}
+            </span>
+          ) : null}
+          <span className="mt-2 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-[var(--border)]">
+            {/* İki durum birlikte olabilir: satış dışı bir ürün ayrıca tükenmiş işaretli kalabilir. */}
+            {isOutOfStock ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-red)]" />
+                Tükendi
+              </span>
+            ) : null}
+            {isInactive ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-[var(--bg-subtle)] text-[var(--text-muted)] border border-[var(--border)]">
+                Satış Dışı
+              </span>
+            ) : null}
+            {isOutOfStock || isInactive ? null : (
+              <span className="inline-flex items-center gap-1 text-xs text-[var(--accent-emerald)] font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-emerald)]" />
+                Satışta
+              </span>
+            )}
+          </span>
+        </button>
+        <label className="w-12 h-12 shrink-0 flex items-center justify-center cursor-pointer">
+          <input type="checkbox" aria-label={`${product.name} seç`} checked={isChecked}
+            onChange={(event) => onCheck(event.target.checked)} />
+        </label>
       </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-[var(--border)]">
-        {/* İki durum birlikte olabilir: satış dışı bir ürün ayrıca tükenmiş işaretli kalabilir. */}
-        {isOutOfStock ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-red)]" />
-            Tükendi
-          </span>
-        ) : null}
-        {isInactive ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-[var(--bg-subtle)] text-[var(--text-muted)] border border-[var(--border)]">
-            Satış Dışı
-          </span>
-        ) : null}
-        {isOutOfStock || isInactive ? null : (
-          <span className="inline-flex items-center gap-1 text-xs text-[var(--accent-emerald)] font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-emerald)]" />
-            Satışta
-          </span>
-        )}
-      </div>
-    </div>
+      {onMove ? (
+        <div className="flex gap-2 px-3 pb-3">
+          <button type="button" className="tactile-btn min-h-12 flex-1 rounded font-bold" onClick={() => onMove(-1)}>Öne</button>
+          <button type="button" className="tactile-btn min-h-12 flex-1 rounded font-bold" onClick={() => onMove(1)}>Sona</button>
+        </div>
+      ) : null}
+    </article>
   );
 };

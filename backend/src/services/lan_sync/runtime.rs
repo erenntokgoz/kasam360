@@ -81,7 +81,7 @@ pub struct MemberStatus {
 pub struct SyncStatus {
     /// `SINGLE`: eşleştirilmemiş kurulum, `CLUSTER`: eşleştirilmiş.
     pub mode: &'static str,
-    /// `READY`, `SYNCING`, `NO_CONNECTION`, `VERIFYING`, `INTERVENTION`.
+    /// `READY`, `SYNCING`, `NO_CONNECTION`, `ISLAND`, `VERIFYING`, `INTERVENTION`.
     pub state: &'static str,
     pub role: Option<Role>,
     pub term: i64,
@@ -181,14 +181,16 @@ impl LanSync {
         Ok((row.tenant_id, device))
     }
 
-    /// Yazma komutunun erken kapısı: çoğunluk yoksa kullanıcı işlemi boşuna hazırlamaz.
-    /// Asıl güvence günlüktür; bu kapı yalnız hızlı ve anlaşılır hata verir.
+    /// Yazma komutunun erken kapısı. Bağlantı kaybı yazmayı durdurmaz: otorite yoksa
+    /// yazma ada kaydına girer ve sonra birleşir. Yalnız insan müdahalesi gereken durum
+    /// (uygulanamayan kayıt, geri sarılmış günlük, açılamayan eşitleme) yazmayı kapatır.
     pub fn require_local_write(&self) -> Result<(), String> {
         let status = self.status();
-        if status.state == "INTERVENTION"
-            || (self.replicates_writes() && status.state == "NO_CONNECTION")
-        {
-            return Err("QUORUM_LOST: çoğunluk yok; finansal yazma durduruldu".to_string());
+        if status.state == "INTERVENTION" {
+            let detail = status.detail.unwrap_or_default();
+            return Err(format!(
+                "INTERVENTION: eşitleme müdahale bekliyor; {detail}"
+            ));
         }
         Ok(())
     }
@@ -229,14 +231,15 @@ impl LanSync {
             .await
             .map_err(|e| e.to_string())?;
         let Some(row) = store::load_cluster(&mut conn).await? else {
-            // Geri yükleme kümeden ayırır; eski tetikleyici yazmaları kilitli bırakmamalı.
-            capture::sync_triggers(&mut conn, false).await?;
+            // Tek cihaz: yazmalar yakalanıp günlüğe girer, kapı yoktur. Geri yükleme
+            // kümeden ayırır; eski çok cihaz kapısı yazmaları kilitli bırakmamalı.
+            capture::sync_triggers(&mut conn, capture::TriggerMode::Local).await?;
             return conn.commit().await.map_err(|e| e.to_string());
         };
         let members = store::current_members(&mut conn, &row).await?;
         let me = ensure_local_device(&mut conn, &row.tenant_id).await?;
         let replicated = members.len() > 1 || !members.iter().any(|m| m.device_id == me);
-        capture::sync_triggers(&mut conn, replicated).await?;
+        capture::sync_triggers(&mut conn, capture::TriggerMode::for_cluster(replicated)).await?;
         conn.commit().await.map_err(|e| e.to_string())?;
         let mut status = self.status();
         status.mode = "CLUSTER";
@@ -379,6 +382,9 @@ impl LanSync {
                 .map_err(|e| e.to_string())?;
             let key = DeviceKey::load_or_create(&mut tx).await?;
             pairing::init_cluster(&mut tx, tenant_id, device_name, &key.public_key, bound).await?;
+            if capture::installed_mode(&mut tx).await? == capture::TriggerMode::Off {
+                capture::sync_triggers(&mut tx, capture::TriggerMode::Local).await?;
+            }
             tx.commit().await.map_err(|e| e.to_string())?;
             self.start_with(listener).await?;
         }
@@ -433,7 +439,7 @@ impl LanSync {
             .map_err(|e| e.to_string())?;
         pairing::accept_grant(&mut tx, local_tenant, &grant, bound).await?;
         crate::services::setup::mark_joined(&mut tx, &grant.tenant_id).await?;
-        capture::sync_triggers(&mut tx, true).await?;
+        capture::sync_triggers(&mut tx, capture::TriggerMode::Cluster).await?;
         tx.commit().await.map_err(|e| e.to_string())?;
         for member in &grant.base_members {
             if !member.address.is_empty() {

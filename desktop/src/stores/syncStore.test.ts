@@ -35,6 +35,7 @@ describe('syncStore', () => {
   });
 
   it('pasife alma kimliği ve kiracıyla gider, durum yenilenir', async () => {
+    invokeIPC.mockResolvedValueOnce({ status: 'APPLIED' });
     invokeIPC.mockResolvedValue({ mode: 'SINGLE', state: 'READY', term: 0, commitIndex: 0, members: [] });
     await useSyncStore.getState().setDevicePassive('dev_2');
     expect(invokeIPC).toHaveBeenCalledWith('set_device_passive', {
@@ -44,5 +45,12 @@ describe('syncStore', () => {
       deviceId: 'dev_2',
     });
     expect(useSyncStore.getState().status?.mode).toBe('SINGLE');
+  });
+
+  it('çoğunluk onayı bekleyen cihaz değişikliğini tamamlanmış saymaz', async () => {
+    invokeIPC.mockResolvedValueOnce({ status: 'PENDING' });
+    invokeIPC.mockResolvedValueOnce({ mode: 'CLUSTER', state: 'VERIFYING', members: [] });
+    await expect(useSyncStore.getState().setDevicePassive('dev_2')).rejects.toThrow('İşlem doğrulanamadı');
+    expect(useSyncStore.getState().status?.state).toBe('VERIFYING');
   });
 });

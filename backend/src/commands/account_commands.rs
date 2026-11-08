@@ -12,12 +12,19 @@ use crate::services::lan_sync::WritePool;
 use crate::services::setup;
 
 const ACCOUNT_ROLES: [Role; 2] = [Role::Owner, Role::Manager];
-// Geliştirme sürümü yerel siteye gider; yayındaki adres henüz denenen kodu taşımayabilir.
-pub(crate) const SITE_URL: &str = if cfg!(debug_assertions) {
-    "http://localhost:3000"
-} else {
-    "https://kasam360.com.tr"
+// Mobil debug sürümü de açıkça dev URL verilmedikçe gerçek TLS alan adını kullanır.
+#[cfg(all(debug_assertions, any(target_os = "android", target_os = "ios")))]
+pub(crate) const SITE_URL: &str = match option_env!("KASAM360_DEV_SITE_URL") {
+    Some(url) => url,
+    None => "https://kasam360.com.tr",
 };
+#[cfg(all(debug_assertions, not(any(target_os = "android", target_os = "ios"))))]
+pub(crate) const SITE_URL: &str = match option_env!("KASAM360_DEV_SITE_URL") {
+    Some(url) => url,
+    None => "http://localhost:3000",
+};
+#[cfg(not(debug_assertions))]
+pub(crate) const SITE_URL: &str = "https://kasam360.com.tr";
 
 /// Tarayıcıya yalnız bilinen sayfalar gider; IPC'den gelen metin komut satırına ulaşamaz.
 fn site_page_url(path: &str) -> Result<String, String> {
@@ -35,13 +42,24 @@ fn site_page_url(path: &str) -> Result<String, String> {
 
 /// Google girişi ve yasal metinler sistem tarayıcısında açılır.
 #[tauri::command]
-pub fn open_site_page(path: String) -> Result<(), String> {
+pub fn open_site_page(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let url = site_page_url(&path)?;
-    std::process::Command::new("rundll32")
-        .args(["url.dll,FileProtocolHandler", &url])
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .open_url(url, None::<&str>)
+            .map_err(|error| error.to_string())
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let _ = app;
+        std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", &url])
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
 }
 
 #[tauri::command]
@@ -197,6 +215,18 @@ pub async fn account_sign_out(
     tenant_id: String,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
+) -> Result<DeviceSession, String> {
+    sign_out_device(&pool, &state, actor_id, actor_role, tenant_id).await
+}
+
+/// Hesap oturumunu kapatır ve denetime yazar. Bulut çıkışı da bunu kullanır: çıkış kaydı
+/// günlüğe girer ve yerel veri silinmeden önce buluta ulaşır.
+pub(crate) async fn sign_out_device(
+    pool: &DbPool,
+    state: &crate::AppState,
+    actor_id: String,
+    actor_role: String,
+    tenant_id: String,
 ) -> Result<DeviceSession, String> {
     crate::rbac::require_any(&actor_role, &ACCOUNT_ROLES)?;
     let audit_lock = AuditLock::new(state.audit_mutex.lock().await);

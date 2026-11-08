@@ -1,25 +1,15 @@
 import type { Metadata } from 'next';
 import { JsonLd } from '@/components/JsonLd';
-import { PadStack, type PadSheet } from '@/components/PadStack';
-import { BackBoardSheet } from '@/components/sheets/BackBoardSheet';
-import { MoneySheet } from '@/components/sheets/MoneySheet';
-import { OrderSheet } from '@/components/sheets/OrderSheet';
-import { OutageSheet } from '@/components/sheets/OutageSheet';
-import { TicketSheet } from '@/components/sheets/TicketSheet';
+import { HomeFeatures, HomeHero, HomeRoute } from '@/components/home/HomeSections';
+import { pageMetadata } from '@/content/pageMetadata';
 import { siteConfig } from '@/content/siteConfig';
 
-export const metadata: Metadata = {
-  title: { absolute: 'KASAM360: İnternetsiz Çalışan Adisyon Programı' },
-  alternates: { canonical: '/' },
-};
-
-const sheets: PadSheet[] = [
-  { id: 'adisyon', label: 'Adisyon', tone: 'white' },
-  { id: 'kesinti', label: 'Kesinti', tone: 'pink' },
-  { id: 'servis', label: 'Servis', tone: 'yellow' },
-  { id: 'kasa', label: 'Kasa', tone: 'green' },
-  { id: 'durum', label: 'Durum', tone: 'board' },
-];
+export const metadata: Metadata = pageMetadata({
+  title: 'KASAM360: İnternetsiz Çalışan Adisyon Programı',
+  description: siteConfig.description,
+  path: '/',
+  absoluteTitle: true,
+});
 
 // Fiyat ve puan yazılmaz; yapılandırılmış veri sitede görünmeyen bir şey vaat edemez.
 const softwareSchema = {
@@ -31,19 +21,16 @@ const softwareSchema = {
   description: siteConfig.description,
   url: siteConfig.url,
   inLanguage: 'tr',
+  publisher: { '@type': 'Organization', name: siteConfig.sellerName, url: siteConfig.url, email: siteConfig.contactEmail },
 };
 
 export default function HomePage() {
   return (
-    <>
+    <div className="k-root">
       <JsonLd data={softwareSchema} />
-      <PadStack sheets={sheets}>
-        <OrderSheet />
-        <OutageSheet />
-        <TicketSheet />
-        <MoneySheet />
-        <BackBoardSheet />
-      </PadStack>
-    </>
+      <HomeHero />
+      <HomeRoute />
+      <HomeFeatures />
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { cn } from '../lib/cn';
 import { Button } from './Button';
+import { useExitGhost } from './useExitGhost';
 import { useFocusTrap } from './useFocusTrap';
 
 export interface DrawerProps {
@@ -22,8 +23,10 @@ export const Drawer: React.FC<DrawerProps> = ({
   footer,
   width = 'md',
 }) => {
+  const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   useFocusTrap(panelRef, isOpen);
+  useExitGhost(rootRef, isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -44,17 +47,19 @@ export const Drawer: React.FC<DrawerProps> = ({
 
   return (
     <div
+      ref={rootRef}
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-40 flex justify-end bg-black/60 overflow-hidden"
+      className="motion-backdrop fixed inset-0 z-40 flex justify-end bg-black/60 overflow-hidden"
       onClick={onClose}
     >
       <aside
         ref={panelRef}
         tabIndex={-1}
         aria-label={title}
+        data-motion-panel="drawer"
         className={cn(
-          'outline-none w-full h-full paper !rounded-none border-l border-[var(--border)] flex flex-col justify-between shadow-2xl transition-transform duration-150',
+          'motion-drawer outline-none w-full h-full paper !rounded-none border-l border-[var(--border)] flex flex-col justify-between shadow-2xl',
           widthClasses
         )}
         onClick={(e) => e.stopPropagation()}

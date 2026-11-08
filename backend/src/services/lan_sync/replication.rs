@@ -2,6 +2,7 @@
 
 use super::engine::{majority, Effects, Engine, Message, Role};
 use super::op_log::{self, Operation};
+use super::rejoin::rollback_reason;
 use super::store::{self, LogEntry};
 use crate::services::audit_service::AuditLock;
 
@@ -41,10 +42,13 @@ impl Engine {
     }
 
     /// Düzenli kalp atışı: eksik kayıtları taşır ve otoriteyi duyurur.
-    pub async fn on_heartbeat(&mut self) -> Result<Effects, String> {
+    pub async fn on_heartbeat(&mut self, now: u64) -> Result<Effects, String> {
+        self.now_hint = now;
         let mut effects = Effects::default();
         // Geçici hatayla veya kapanışla yarım kalan onaylı kayıt yeni yazma beklemez.
         self.apply_committed(&mut effects).await?;
+        // Otorite yeniden görüldüyse ada kayıtları birleşmeye yollanır.
+        self.push_merge(&mut effects).await?;
         self.replicate_all(&mut effects).await?;
         Ok(effects)
     }
@@ -246,7 +250,12 @@ impl Engine {
         Ok(())
     }
 
-    async fn apply_committed(&mut self, effects: &mut Effects) -> Result<(), String> {
+    pub(super) async fn apply_committed(&mut self, effects: &mut Effects) -> Result<(), String> {
+        // Ada değişikliği üzerine küme kaydı uygulanmaz: önce geri alınır. Otorite yoksa
+        // geri alma da yapılmaz; ada kayıtları görünür kalır, uygulama bekler.
+        if !self.settle_island().await? {
+            return Ok(());
+        }
         let row = self.cluster().await?;
         let pending = {
             let mut conn = self.pool.acquire().await.map_err(|e| e.to_string())?;
@@ -269,6 +278,9 @@ impl Engine {
             match op_log::apply_proposed(&mut tx, &lock, &operation, &self.me).await {
                 Ok(outcome) => {
                     tx.commit().await.map_err(|e| e.to_string())?;
+                    if let Some(reason) = rollback_reason(&self.me, &operation, &outcome) {
+                        self.halted = Some(reason);
+                    }
                     effects.applied.push(outcome);
                 }
                 // Yoğun anda yazma kilidi alınamadı: kayıt durur, sonraki turda uygulanır.

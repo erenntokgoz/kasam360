@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/content/pageMetadata';
 import Link from 'next/link';
 import { JsonLd } from '@/components/JsonLd';
-import { PageSheet } from '@/components/PageSheet';
+import { PageShell } from '@/components/PageShell';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Sık Sorulan Sorular',
   description: 'KASAM360 adisyon programının internet, cihaz, yazar kasa, veri ve abonelik hakkındaki yanıtları.',
-  alternates: { canonical: '/sorular' },
-};
+  path: '/sorular',
+});
 
 const questions = [
   {
@@ -47,7 +48,7 @@ const questions = [
   {
     question: 'Fiyat ne kadar, ne zaman başlayabilirim?',
     answer:
-      'Abonelik işletme başına aylık veya yıllık olacak. Tutarlar ödeme açılmadan önce yayımlanır. Gerçek cihaz testleri bitince kayıtlı işletmelere yazıyoruz.',
+      'Abonelik işletme başına aylık veya yıllıktır. Yayımlanan paketler ve tutarlar Abonelik sayfasındadır. Online ödeme gerçek cihaz testleri bitince açılır; kayıtlı işletmelere e-posta gönderilir.',
   },
 ];
 
@@ -63,24 +64,23 @@ const faqSchema = {
 
 export default function QuestionsPage() {
   return (
-    <PageSheet tone="pink" copy="Mutfak nüshası">
+    <PageShell title="Aklınızdaki sorular." layout="split"
+      intro={
+        <div className="k-row">
+          <Link href="/kayit" className="k-btn k-btn-buy k-btn-lg">Kayıt olun</Link>
+          <Link href="/iletisim" className="k-btn k-btn-line k-btn-lg">Bize yazın</Link>
+        </div>
+      }
+    >
       <JsonLd data={faqSchema} />
-      <div className="sheet-grid">
-        <div className="flex min-w-0 flex-col items-start gap-5">
-          <h1 className="sheet-title">Aklınızdaki sorular.</h1>
-          <Link href="/kayit" className="btn">
-            Kayıt Olun
-          </Link>
-        </div>
-        <div className="min-w-0 border-t-2 border-print">
-          {questions.map((item, index) => (
-            <details key={item.question} className="faq-item border-b border-print" open={index === 0}>
-              <summary>{item.question}</summary>
-              <p className="max-w-[40rem] pb-4 text-ink-soft">{item.answer}</p>
-            </details>
-          ))}
-        </div>
+      <div className="k-faq">
+        {questions.map((item, index) => (
+          <details key={item.question} open={index === 0}>
+            <summary>{item.question}</summary>
+            <p>{item.answer}</p>
+          </details>
+        ))}
       </div>
-    </PageSheet>
+    </PageShell>
   );
 }

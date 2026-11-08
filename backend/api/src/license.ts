@@ -6,7 +6,7 @@ import type { SupportConfig } from './support.js';
 // Kasa internetsiz de çalışır; bu yüzden lisans her satışta sorulmaz. Cihaz imzalı belgeyi
 // saklar ve gömülü açık anahtarla kendisi doğrular. Tolerans belgeye yazılır ki cihaz ile
 // sunucu aynı kuralı okusun.
-const GRACE_HOURS = 72;
+export const GRACE_HOURS = 72;
 const day = /^\d{4}-\d{2}-\d{2}$/;
 
 // Paket, cihazda hangi özelliklerin açılacağını ve kaç cihazın bağlanabileceğini söyler.

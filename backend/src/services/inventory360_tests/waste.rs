@@ -1,6 +1,6 @@
 //! Fire ve kör sayım testleri.
 //!
-//! Kapsam: FIFO'dan düşen gerçek maliyet, stoğu aşan firede bilinmeyen maliyet,
+//! Kapsam: FIFO'dan düşen gerçek maliyet, stoğu aşan firede ret,
 //! geçersiz gerekçenin reddi, kör sayımda beklenen miktarın gizlenmesi, kapanışta
 //! fark hesabı, beklenen miktarın bilinmediği durum ve çapraz kiracı reddi.
 //!
@@ -65,53 +65,31 @@ async fn fire_fifo_dusur_ve_gercek_maliyeti_yazar() {
     .await
     .expect("urun okunmali");
     assert_eq!(stok, None, "fire yalnız FIFO partilerini değiştirmeli");
+    nullable_kolon_dogrula(&mut conn, T).await;
 }
 
 #[tokio::test]
-async fn stoktan_fazla_fire_maliyeti_bilinmiyor_olarak_isaretlenir() {
+async fn stoktan_fazla_fire_partiye_dokunmadan_reddedilir() {
     let pool = test_pool().await;
     let mut conn = conn_of(&pool).await;
     urun_ekle(&mut conn, T, "prd_1", "Süt", 1500).await;
     parti_ekle(&mut conn, T, "bat_1", "prd_1", 5.0, 3000, None).await;
 
-    // Parti olmayan üründe fire: maliyet hesaplanamaz.
-    urun_ekle(&mut conn, T, "prd_2", "Çay", 1500).await;
-    let partsiz = record_waste(&mut conn, T, AKTOR, fire_girdisi("prd_2", "KIRILDI", 2.0))
+    let result = record_waste(&mut conn, T, AKTOR, fire_girdisi("prd_1", "BOZULDU", 10.0)).await;
+    assert!(result.is_err());
+    let remaining: f64 = sqlx::query_scalar(
+        "SELECT remaining_quantity FROM inventory_batches WHERE tenant_id = ? AND id = ?",
+    )
+    .bind(T)
+    .bind("bat_1")
+    .fetch_one(&mut conn)
+    .await
+    .expect("parti okunmalı");
+    assert_eq!(remaining, 5.0);
+    assert!(list_waste_records(&mut conn, T, None)
         .await
-        .expect("fire kaydedilmeli");
-    assert_eq!(partsiz.total_cost_cents, None);
-    assert_eq!(partsiz.unit_cost_cents, None);
-    assert_ne!(
-        partsiz.total_cost_cents,
-        Some(0),
-        "maliyet bilinmiyorsa sifir yazilmamali"
-    );
-
-    // Stoğu aşan fire: kısmen karşılanır, kalan miktarın maliyeti bilinmez.
-    let asim = record_waste(&mut conn, T, AKTOR, fire_girdisi("prd_1", "BOZULDU", 10.0))
-        .await
-        .expect("fire kaydedilmeli");
-    assert_eq!(asim.total_cost_cents, None);
-    assert_eq!(asim.unit_cost_cents, None);
-    let uyari = asim.notes.unwrap_or_default();
-    assert!(
-        uyari.contains("UYARI") && uyari.contains("karşılanamadı"),
-        "stoktan fazla fire raporlanmali: {uyari}"
-    );
-
-    let kayitlar = list_waste_records(&mut conn, T, None)
-        .await
-        .expect("kayitlar okunmali");
-    assert_eq!(kayitlar.len(), 2);
-    // Sıralama zaman damgasına göre; hangisinin önce olduğuna değil, ikisinin de
-    // raporda bulunduğuna bakılır.
-    let adlar: Vec<&str> = kayitlar.iter().map(|k| k.product_name.as_str()).collect();
-    assert!(
-        adlar.contains(&"Çay") && adlar.contains(&"Süt"),
-        "kayitlar eksik: {adlar:?}"
-    );
-
-    nullable_kolon_dogrula(&mut conn, T).await;
+        .expect("liste")
+        .is_empty());
 }
 
 #[tokio::test]

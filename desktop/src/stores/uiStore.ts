@@ -16,10 +16,22 @@ interface ModalState {
   patronWizard: boolean;
 }
 
+export type NoticeKind = 'success' | 'error' | 'warning' | 'info';
+
+export interface Notice {
+  id: number;
+  message: string;
+  kind: NoticeKind;
+  /** Aynı bildirim üst üste gelirse yeni kart açılmaz; sayı artar ve süre baştan başlar. */
+  count: number;
+}
+
 interface UIStore {
-  notice: { message: string } | null;
+  notices: Notice[];
   showNotice: (message: string) => void;
-  clearNotice: () => void;
+  showErrorNotice: (message: string) => void;
+  pushNotice: (message: string, kind: NoticeKind) => void;
+  clearNotice: (id?: number) => void;
   activeModule: AppModule;
   theme: 'dark' | 'light';
   idleSecondsLeft: number;
@@ -33,9 +45,36 @@ interface UIStore {
   decrementIdleTimer: () => void;
   openModal: (modalName: keyof ModalState) => void;
   closeModal: (modalName: keyof ModalState) => void;
+  /** Kilitte açık pencereler ve son ekran bırakılır; sonraki personel öncekinin ekranını görmez. */
+  resetForLock: () => void;
 }
 
 type Theme = 'dark' | 'light';
+
+const CLOSED_MODALS: ModalState = {
+  payment: false,
+  shiftGate: false,
+  modifier: false,
+  itemTransfer: false,
+  smartAuth: false,
+  reservation: false,
+  blindClose: false,
+  cashIn: false,
+  cashOut: false,
+  receiptPreview: false,
+  patronWizard: false,
+};
+
+let noticeId = 0;
+
+/** Tekrar eden bildirim yeni kimlik alır: eski kartın zamanlayıcısı yenisini kapatamaz. */
+function appendNotice(notices: Notice[], message: string, kind: NoticeKind): Notice[] {
+  const text = message.trim();
+  if (!text) return notices;
+  const repeated = notices.find((notice) => notice.message === text && notice.kind === kind);
+  const distinct = notices.filter((notice) => notice !== repeated);
+  return [...distinct.slice(-2), { id: ++noticeId, message: text, kind, count: (repeated?.count ?? 0) + 1 }];
+}
 
 const THEME_KEY = 'kasam360.theme';
 
@@ -61,26 +100,16 @@ const initialTheme = loadTheme();
 if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', initialTheme);
 
 export const useUIStore = create<UIStore>((set, get) => ({
-  notice: null,
-  showNotice: (message) => set({ notice: { message } }),
-  clearNotice: () => set({ notice: null }),
+  notices: [],
+  showNotice: (message) => set((state) => ({ notices: appendNotice(state.notices, message, 'success') })),
+  showErrorNotice: (message) => set((state) => ({ notices: appendNotice(state.notices, message, 'error') })),
+  pushNotice: (message, kind) => set((state) => ({ notices: appendNotice(state.notices, message, kind) })),
+  clearNotice: (id) => set((state) => ({ notices: id === undefined ? [] : state.notices.filter((notice) => notice.id !== id) })),
   activeModule: 'FLOOR',
   theme: initialTheme,
   idleSecondsLeft: 120,
   idleLimitSeconds: 120, // Varsayılan 2 dakika; 0 kalıcı personel oturumudur.
-  modals: {
-    payment: false,
-    shiftGate: false,
-    modifier: false,
-    itemTransfer: false,
-    smartAuth: false,
-    reservation: false,
-    blindClose: false,
-    cashIn: false,
-    cashOut: false,
-    receiptPreview: false,
-    patronWizard: false,
-  },
+  modals: { ...CLOSED_MODALS },
 
   setActiveModule: (activeModule) => set({ activeModule }),
 
@@ -114,4 +143,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
     set((state) => ({
       modals: { ...state.modals, [modalName]: false },
     })),
+
+  resetForLock: () => set({ modals: { ...CLOSED_MODALS }, activeModule: 'FLOOR' }),
 }));

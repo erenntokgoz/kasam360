@@ -14,6 +14,7 @@ export interface LicenseStatus {
   features: string[];
   checkedAt: string | null;
   lastError: string | null;
+  tenantId?: string | null;
 }
 
 interface LicenseStore {
@@ -26,16 +27,22 @@ interface LicenseStore {
   linkWithGoogle: (code: string) => Promise<boolean>;
 }
 
+/**
+ * Paketler 360 Labs'ta tanımlanana kadar lisans zorunlu değildir: üye olan herkes girer ve
+ * bütün modülleri görür. Paketler hazır olunca derlemede `VITE_LICENSE_ENFORCED=true` verilir.
+ */
+export const licenseEnforced = () => import.meta.env.VITE_LICENSE_ENFORCED === 'true';
+
 /** Kasa yalnız bu iki durumda açılır; tolerans süresinde uyarı gösterilir. */
 export const isUsable = (status: LicenseStatus | null) =>
-  status?.state === 'ACTIVE' || status?.state === 'GRACE';
+  !licenseEnforced() || status?.state === 'ACTIVE' || status?.state === 'GRACE';
 
 /**
  * İşletmenin modül listesi paketle kesişir: lisansta olmayan özellik açılmaz (fail-closed).
  * Platform hesabı işletme lisansına bağlı değildir.
  */
 export function licensedModules(modules: string[], role: UserRole, status: LicenseStatus | null): string[] {
-  if (role === 'MASTER') return modules;
+  if (role === 'MASTER' || !licenseEnforced()) return modules;
   if (!isUsable(status)) return [];
   const allowed = new Set(status?.features ?? []);
   return modules.filter((module) => allowed.has(module));

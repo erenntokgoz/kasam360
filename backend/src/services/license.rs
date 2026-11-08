@@ -7,11 +7,24 @@
 
 use chrono::{DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::{Row, SqliteConnection};
 
 /// Hesap servisindeki `LICENSE_SIGNING_KEY` anahtarının açık yarısı (ham 32 bayt).
 /// Anahtar değişirse bu değer de değişmeli; aksi hâlde hiçbir belge doğrulanmaz.
-const PUBLIC_KEY_HEX: &str = "edc0cbf8a83a88e7d46632da9ef95e5a3a55d5dfd8305cb0a89d385a4aea2d15";
+const PRODUCTION_PUBLIC_KEY_HEX: &str =
+    "edc0cbf8a83a88e7d46632da9ef95e5a3a55d5dfd8305cb0a89d385a4aea2d15";
+/// Yalnız debug derlemede, yerel başlatıcının ürettiği geliştirme anahtarı kabul edilir; böylece
+/// üretim özel anahtarı olmadan geliştirme kasası imzalı lisans alabilir. Yayın derlemesi
+/// (`debug_assertions` kapalı) bu değişkeni hiç okumaz ve her zaman üretim anahtarını kullanır.
+const PUBLIC_KEY_HEX: &str = if cfg!(debug_assertions) {
+    match option_env!("KASAM360_DEV_LICENSE_PUBLIC_KEY") {
+        Some(key) => key,
+        None => PRODUCTION_PUBLIC_KEY_HEX,
+    }
+} else {
+    PRODUCTION_PUBLIC_KEY_HEX
+};
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -34,6 +47,37 @@ pub struct LicenseClaims {
     pub plan: Option<LicensePlan>,
     pub issued_at: String,
     pub grace_hours: i64,
+}
+
+/// Tenant-bound V2 belgesi JSON alan sırasıyla imzalanır; bu sıra API ile aynıdır.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TenantLicenseClaims {
+    pub version: i64,
+    pub key_id: String,
+    pub tenant_id: String,
+    pub device_id: String,
+    pub product_id: String,
+    pub entitlement_revision: i64,
+    pub feature_keys: Vec<String>,
+    pub issued_at: String,
+    pub refresh_after: String,
+    pub offline_until: String,
+    pub paid_until: Option<String>,
+    pub mode: String,
+    /// Ekranda gösterim içindir. İmza alan sırasıyla yeniden kurulduğundan eski belgelerde
+    /// olmayan alanlar serileştirmeye hiç girmez; aksi hâlde eski imzalar geçersiz sayılırdı.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_limit: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SignedTenantLicense {
+    #[serde(flatten)]
+    pub claims: TenantLicenseClaims,
+    pub signature: String,
 }
 
 /// Arayüzün okuduğu durum. `Active` ve `Grace` dışında özellik açılmaz.
@@ -64,6 +108,7 @@ pub struct LicenseStatus {
     pub features: Vec<String>,
     pub checked_at: Option<String>,
     pub last_error: Option<String>,
+    pub tenant_id: Option<String>,
 }
 
 /// Belge `gövde.imza` biçimindedir; ikisi de base64url'dir ve imza gövde metni üzerindedir.
@@ -215,6 +260,22 @@ pub async fn record(
 }
 
 pub fn status(stored: &Stored, now: DateTime<Utc>) -> LicenseStatus {
+    status_with_public_key(stored, now, None)
+}
+
+pub(crate) fn status_with_public_key(
+    stored: &Stored,
+    now: DateTime<Utc>,
+    test_public_key: Option<&[u8]>,
+) -> LicenseStatus {
+    if let Some(token) = stored.token.as_deref() {
+        if let Ok(signed) = serde_json::from_str::<SignedTenantLicense>(token) {
+            let public_key = test_public_key
+                .map(|key| key.to_vec())
+                .or_else(|| hex::decode(PUBLIC_KEY_HEX).ok());
+            return tenant_status_with_key(stored, signed, now, public_key.as_deref());
+        }
+    }
     let claims = stored.token.as_deref().map(verify);
     let (state, claims) = match claims {
         None => (LicenseState::Missing, None),
@@ -238,6 +299,95 @@ pub fn status(stored: &Stored, now: DateTime<Utc>) -> LicenseStatus {
         features,
         checked_at: stored.checked_at.clone(),
         last_error: stored.last_error.clone(),
+        tenant_id: None,
+    }
+}
+
+fn tenant_status_with_key(
+    stored: &Stored,
+    signed: SignedTenantLicense,
+    now: DateTime<Utc>,
+    public_key: Option<&[u8]>,
+) -> LicenseStatus {
+    let claims = signed.claims;
+    let expected_key_id = public_key.map(|key| {
+        let digest = Sha256::digest(key);
+        format!("key_{}", hex::encode(&digest[..16]))
+    });
+    let signature = base64url(&signed.signature).ok();
+    let serialized = serde_json::to_vec(&claims).ok();
+    let valid_signature = public_key
+        .zip(signature.as_ref())
+        .zip(serialized.as_ref())
+        .is_some_and(|((key, signature), body)| {
+            ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, key)
+                .verify(body, signature)
+                .is_ok()
+        });
+    let now_text = now.to_rfc3339();
+    let issued = DateTime::parse_from_rfc3339(&claims.issued_at).ok();
+    let refresh = DateTime::parse_from_rfc3339(&claims.refresh_after).ok();
+    let offline = DateTime::parse_from_rfc3339(&claims.offline_until).ok();
+    let paid = claims
+        .paid_until
+        .as_deref()
+        .and_then(|value| DateTime::parse_from_rfc3339(value).ok());
+    let valid_time = issued.zip(refresh).zip(offline).zip(paid).is_some_and(
+        |(((issued, refresh), offline), paid)| {
+            issued <= now && refresh <= offline && offline <= paid
+        },
+    );
+    let valid_document = valid_signature
+        && expected_key_id.as_deref() == Some(claims.key_id.as_str())
+        && claims.version == 2
+        && claims.mode == "active"
+        && claims.product_id.starts_with("prd_")
+        && claims.product_id.len() == 30
+        && claims.product_id[4..]
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric())
+        && claims.device_id == stored.device_id
+        && claims.tenant_id.starts_with("tnt_")
+        && valid_time
+        && claims.feature_keys.iter().all(|feature| {
+            feature.starts_with("feat_")
+                && feature.len() <= 49
+                && feature
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+        });
+    let within_signed_window = offline
+        .zip(paid)
+        .is_some_and(|(offline, paid)| now < offline && now < paid);
+    let active = valid_document && within_signed_window;
+    let state = if active {
+        LicenseState::Active
+    } else if valid_document {
+        LicenseState::Expired
+    } else {
+        LicenseState::Invalid
+    };
+    LicenseStatus {
+        state,
+        linked: stored.license_key.is_some(),
+        email: None,
+        plan: valid_document
+            .then(|| claims.device_limit.zip(claims.package_name.clone()))
+            .flatten()
+            .map(|(device_limit, name)| LicensePlan {
+                name,
+                features: claims.feature_keys.clone(),
+                device_limit,
+            }),
+        valid_until: valid_document.then(|| claims.paid_until.clone().unwrap_or(now_text)),
+        features: if active {
+            claims.feature_keys
+        } else {
+            Vec::new()
+        },
+        checked_at: stored.checked_at.clone(),
+        last_error: stored.last_error.clone(),
+        tenant_id: Some(claims.tenant_id),
     }
 }
 
@@ -276,6 +426,25 @@ mod tests {
             }),
             issued_at: "2026-11-05T00:00:00Z".into(),
             grace_hours: 72,
+        }
+    }
+
+    fn tenant_claims(device_id: &str, key_id: String) -> TenantLicenseClaims {
+        TenantLicenseClaims {
+            version: 2,
+            key_id,
+            tenant_id: "tnt_01arz3ndektsv4rrffq69g5fav".into(),
+            device_id: device_id.into(),
+            product_id: "prd_01arz3ndektsv4rrffq69g5fa7".into(),
+            entitlement_revision: 7,
+            feature_keys: vec!["feat_kds".into()],
+            issued_at: "2026-11-07T00:00:00.000Z".into(),
+            refresh_after: "2026-11-08T00:00:00.000Z".into(),
+            offline_until: "2026-11-10T00:00:00.000Z".into(),
+            paid_until: Some("2027-11-07T00:00:00Z".into()),
+            mode: "active".into(),
+            device_limit: None,
+            package_name: None,
         }
     }
 
@@ -349,5 +518,184 @@ mod tests {
         let status = status(&stored, Utc::now());
         assert_eq!(status.state, LicenseState::Invalid);
         assert!(status.features.is_empty());
+    }
+
+    #[test]
+    fn v2_ek_alanlar_eski_imzayi_bozmaz_ve_paketi_gosterir() -> Result<(), String> {
+        let rng = ring::rand::SystemRandom::new();
+        let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rng).map_err(|_| "anahtar")?;
+        let pair = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).map_err(|_| "anahtar")?;
+        let digest = Sha256::digest(pair.public_key().as_ref());
+        let key_id = format!("key_{}", hex::encode(&digest[..16]));
+        let old = tenant_claims("dev_01arz3ndektsv4rrffq69g5fa9", key_id);
+        // Eski API'nin imzaladığı gövde: yeni alanlar yok; yeniden serileştirme aynı baytları vermeli.
+        let old_body = serde_json::to_vec(&old).map_err(|error| error.to_string())?;
+        let parsed: TenantLicenseClaims =
+            serde_json::from_slice(&old_body).map_err(|error| error.to_string())?;
+        assert_eq!(
+            serde_json::to_vec(&parsed).map_err(|e| e.to_string())?,
+            old_body
+        );
+        let fresh = TenantLicenseClaims {
+            device_limit: Some(3),
+            package_name: Some("Pilot".into()),
+            ..old
+        };
+        let body = serde_json::to_vec(&fresh).map_err(|error| error.to_string())?;
+        let signed = SignedTenantLicense {
+            claims: fresh.clone(),
+            signature: encode(pair.sign(&body).as_ref()),
+        };
+        let stored = Stored {
+            device_id: fresh.device_id.clone(),
+            license_key: Some("lk_test".into()),
+            token: None,
+            checked_at: None,
+            last_error: None,
+        };
+        let now = DateTime::parse_from_rfc3339("2026-11-07T10:00:00Z")
+            .map_err(|error| error.to_string())?
+            .with_timezone(&Utc);
+        let status = tenant_status_with_key(&stored, signed, now, Some(pair.public_key().as_ref()));
+        assert_eq!(status.state, LicenseState::Active);
+        let plan = status.plan.ok_or("paket yok")?;
+        assert_eq!((plan.name.as_str(), plan.device_limit), ("Pilot", 3));
+        Ok(())
+    }
+
+    #[test]
+    fn v2_tenant_document_requires_signature_tenant_device_and_offline_window() -> Result<(), String>
+    {
+        let rng = ring::rand::SystemRandom::new();
+        let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rng).map_err(|_| "anahtar")?;
+        let pair = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).map_err(|_| "anahtar")?;
+        let digest = Sha256::digest(pair.public_key().as_ref());
+        let key_id = format!("key_{}", hex::encode(&digest[..16]));
+        let claims = tenant_claims("dev_01arz3ndektsv4rrffq69g5fa9", key_id);
+        let body = serde_json::to_vec(&claims).map_err(|error| error.to_string())?;
+        let signed = SignedTenantLicense {
+            claims: claims.clone(),
+            signature: encode(pair.sign(&body).as_ref()),
+        };
+        let stored = Stored {
+            device_id: claims.device_id.clone(),
+            license_key: Some("lk_test".into()),
+            token: None,
+            checked_at: None,
+            last_error: None,
+        };
+        let now = DateTime::parse_from_rfc3339("2026-11-07T10:00:00Z")
+            .map_err(|error| error.to_string())?
+            .with_timezone(&Utc);
+        let valid = tenant_status_with_key(
+            &stored,
+            signed.clone(),
+            now,
+            Some(pair.public_key().as_ref()),
+        );
+        assert_eq!(valid.state, LicenseState::Active);
+        assert_eq!(valid.tenant_id.as_deref(), Some(claims.tenant_id.as_str()));
+        assert_eq!(valid.features, vec!["feat_kds"]);
+
+        let wrong_device = Stored {
+            device_id: "dev_other_device".into(),
+            ..stored
+        };
+        let invalid =
+            tenant_status_with_key(&wrong_device, signed, now, Some(pair.public_key().as_ref()));
+        assert_eq!(invalid.state, LicenseState::Invalid);
+        assert!(invalid.features.is_empty());
+
+        let claims = tenant_claims(
+            "dev_01arz3ndektsv4rrffq69g5fa9",
+            format!("key_{}", hex::encode(&digest[..16])),
+        );
+        let valid_body = serde_json::to_vec(&claims).map_err(|error| error.to_string())?;
+        let tampered = SignedTenantLicense {
+            claims: TenantLicenseClaims {
+                feature_keys: vec!["feat_admin".into()],
+                ..claims
+            },
+            signature: encode(pair.sign(&valid_body).as_ref()),
+        };
+        let invalid = tenant_status_with_key(
+            &Stored {
+                device_id: "dev_01arz3ndektsv4rrffq69g5fa9".into(),
+                license_key: Some("lk_test".into()),
+                token: None,
+                checked_at: None,
+                last_error: None,
+            },
+            tampered,
+            now,
+            Some(pair.public_key().as_ref()),
+        );
+        assert_eq!(invalid.state, LicenseState::Invalid);
+        assert!(invalid.features.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn v2_license_expires_at_exact_signed_boundaries_without_v1_grace() -> Result<(), String> {
+        let rng = ring::rand::SystemRandom::new();
+        let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rng).map_err(|_| "anahtar")?;
+        let pair = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).map_err(|_| "anahtar")?;
+        let digest = Sha256::digest(pair.public_key().as_ref());
+        let key_id = format!("key_{}", hex::encode(&digest[..16]));
+        let mut claims = tenant_claims("dev_01arz3ndektsv4rrffq69g5fa9", key_id);
+        claims.offline_until = "2026-11-10T00:00:00.000Z".into();
+        claims.paid_until = Some("2026-11-10T00:00:00.000Z".into());
+        let signed = |claims: TenantLicenseClaims| -> Result<SignedTenantLicense, String> {
+            let body = serde_json::to_vec(&claims).map_err(|error| error.to_string())?;
+            Ok(SignedTenantLicense {
+                claims,
+                signature: encode(pair.sign(&body).as_ref()),
+            })
+        };
+        let stored = Stored {
+            device_id: claims.device_id.clone(),
+            license_key: Some("lk_test".into()),
+            token: None,
+            checked_at: None,
+            last_error: None,
+        };
+        let before = DateTime::parse_from_rfc3339("2026-11-09T23:59:59.999Z")
+            .map_err(|error| error.to_string())?
+            .with_timezone(&Utc);
+        let boundary = DateTime::parse_from_rfc3339("2026-11-10T00:00:00.000Z")
+            .map_err(|error| error.to_string())?
+            .with_timezone(&Utc);
+        assert_eq!(
+            tenant_status_with_key(
+                &stored,
+                signed(claims.clone())?,
+                before,
+                Some(pair.public_key().as_ref())
+            )
+            .state,
+            LicenseState::Active
+        );
+        assert_eq!(
+            tenant_status_with_key(
+                &stored,
+                signed(claims.clone())?,
+                boundary,
+                Some(pair.public_key().as_ref())
+            )
+            .state,
+            LicenseState::Expired
+        );
+        claims.offline_until = "2026-11-10T00:00:01.000Z".into();
+        assert_eq!(
+            tenant_status_with_key(
+                &stored,
+                signed(claims)?,
+                before,
+                Some(pair.public_key().as_ref())
+            )
+            .state,
+            LicenseState::Invalid
+        );
+        Ok(())
     }
 }

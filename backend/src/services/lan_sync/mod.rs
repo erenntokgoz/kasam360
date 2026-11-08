@@ -2,11 +2,21 @@
 
 mod actor;
 pub mod capture;
+pub mod conflicts;
 mod election;
 pub mod engine;
+pub mod island;
+pub mod island_audit;
+mod island_exec;
+pub mod island_queue;
+pub mod local_log;
 mod membership;
+mod merge;
+mod merge_guard;
+mod merge_stock;
 pub mod op_log;
 pub mod pairing;
+mod rejoin;
 mod replication;
 pub mod runtime;
 pub mod secure_channel;

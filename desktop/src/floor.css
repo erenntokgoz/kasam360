@@ -88,6 +88,13 @@
   transition: border-color 90ms ease, box-shadow 90ms ease;
 }
 
+.table-spot .table-spot-name,
+.table-spot .table-spot-amount,
+.table-spot .table-spot-note {
+  display: block;
+  text-align: center;
+}
+
 .table-spot:hover {
   border-color: var(--focus);
 }
@@ -177,13 +184,14 @@
   box-shadow: none;
 }
 
-.page-fill > div:not(.paper):not([class*="flex"]):not([class*="grid"]) {
+/* Menü şeridi kendi satır düzenini korur; dikeye dönerse sekmeler sütun gibi uzar. */
+.page-fill > div:not(.paper):not(.bar):not([class*="flex"]):not([class*="grid"]) {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.page-fill > div:not(.paper):not([class*="flex"]):not([class*="grid"]) > * + * {
+.page-fill > div:not(.paper):not(.bar):not([class*="flex"]):not([class*="grid"]) > * + * {
   margin-top: 0;
 }
 

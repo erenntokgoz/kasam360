@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { Printer } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
@@ -52,7 +53,12 @@ export const ReceiptPreviewModal: React.FC = () => {
   };
   const tableName = lastSale?.tableName ?? activeTableName;
   const total = lastSale?.amountCents ?? calculateTotalCents();
+  // KDV kalemlerden hesaplanır ve adisyonun tamamına aittir; parça tahsilatta tahsil edilen tutara
+  // ait gibi gösterilirse iki fişte toplam KDV iki kez görünür. Parçaya bölmek kuruş yuvarlaması
+  // uydurmak demek olduğundan parça fişte adisyon toplamı ile bu tahsilat ayrı satırlarda gösterilir.
   const tax = items.reduce((sum, item) => sum + itemTaxCents(item), 0);
+  const orderTotal = items.reduce((sum, item) => sum + item.totalCents, 0);
+  const isPartial = Boolean(lastSale) && total !== orderTotal;
 
   const handlePrint = async () => {
     setIsPrinting(true);
@@ -139,12 +145,18 @@ export const ReceiptPreviewModal: React.FC = () => {
 
               {/* Toplamlar */}
               <div className="space-y-1 pt-1 border-b border-dashed border-gray-400">
+                {isPartial ? (
+                  <div className="flex justify-between text-gray-600 text-xs">
+                    <span>Adisyon Toplamı:</span>
+                    <span className="tabular-nums">{formatMoney(orderTotal)}</span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between text-gray-600 text-xs">
-                  <span>Hesaplanan KDV:</span>
+                  <span>{isPartial ? 'Adisyon KDV’si:' : 'Hesaplanan KDV:'}</span>
                   <span className="tabular-nums">{formatMoney(tax)}</span>
                 </div>
                 <div className="flex justify-between items-baseline text-sm font-bold pt-1 border-t border-gray-300">
-                  <span>TOPLAM TUTAR:</span>
+                  <span>{isPartial ? 'BU TAHSİLAT:' : 'TOPLAM TUTAR:'}</span>
                   <span className="tabular-nums text-base">{formatMoney(total)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-gray-600 pt-0.5">
@@ -207,7 +219,7 @@ export const ReceiptPreviewModal: React.FC = () => {
         </div>
 
         {printError ? (
-          <p role="alert" className="text-xs font-semibold text-center text-[var(--accent-red)]">{printError}</p>
+          <ErrorToast message={printError} />
         ) : null}
         {printSuccess ? <p className="text-xs font-semibold text-center text-[var(--accent-emerald)]">Fiş yazıcıya gönderildi.</p> : null}
 

@@ -87,6 +87,8 @@ pub struct Engine {
     pub last_leader_contact: Option<u64>,
     /// Doluysa cihaz yeni işlem kabul etmez; insan müdahalesi gerekir.
     pub halted: Option<String>,
+    /// Son girişin sanal saati; uygulama adımları otoritenin canlılığını buna göre ölçer.
+    pub(super) now_hint: u64,
 }
 
 pub(super) fn majority(count: usize) -> usize {
@@ -117,6 +119,7 @@ impl Engine {
             last_ack: BTreeMap::new(),
             last_leader_contact: None,
             halted: None,
+            now_hint: 0,
         }))
     }
 
@@ -184,6 +187,7 @@ impl Engine {
 
     /// Otoriteden haber yok: dönemi artırıp seçim başlatır.
     pub async fn on_election_timeout(&mut self, now: u64) -> Result<Effects, String> {
+        self.now_hint = now;
         let mut effects = Effects::default();
         if self.role == Role::Leader || self.halted.is_some() {
             return Ok(effects);
@@ -219,40 +223,6 @@ impl Engine {
         Ok(effects)
     }
 
-    pub(super) async fn become_leader(
-        &mut self,
-        now: u64,
-        effects: &mut Effects,
-    ) -> Result<(), String> {
-        let row = self.cluster().await?;
-        let (last_index, _) = self.last_position(&row).await?;
-        self.role = Role::Leader;
-        self.leader_id = Some(self.me.clone());
-        self.next_index.clear();
-        self.match_index.clear();
-        self.last_ack.clear();
-        for peer in self.peers().await? {
-            self.next_index.insert(peer.clone(), last_index + 1);
-            self.match_index.insert(peer.clone(), row.base_index);
-            // Seçimde oy veren cihazlar az önce görülmüştür.
-            if self.votes.contains(&peer) {
-                self.last_ack.insert(peer, now);
-            }
-        }
-        // Önceki dönemin kayıtları ancak bu dönemin bir kaydıyla onaylanabilir.
-        let noop = Operation {
-            operation_id: format!("noop_{}_{}", row.term, self.me),
-            tenant_id: self.tenant_id.clone(),
-            device_id: self.me.clone(),
-            actor_id: "SYSTEM".to_string(),
-            actor_role: "System".to_string(),
-            intent_sha256: String::new(),
-            op: LogOp::Noop,
-            created_at: chrono::Utc::now().to_rfc3339(),
-        };
-        self.append_local(&noop, effects).await
-    }
-
     pub(super) async fn append_local(
         &mut self,
         operation: &Operation,
@@ -275,6 +245,7 @@ impl Engine {
 
     /// Yeni işlemi kabul eder. Çoğunluk yoksa günlüğe almadan reddeder.
     pub async fn propose(&mut self, operation: &Operation, now: u64) -> Result<Effects, String> {
+        self.now_hint = now;
         let mut effects = Effects::default();
         if let Some(reason) = &self.halted {
             return Err(format!("INTERVENTION: {reason}"));
@@ -404,6 +375,7 @@ impl Engine {
         message: Message,
         now: u64,
     ) -> Result<Effects, String> {
+        self.now_hint = now;
         let mut effects = Effects::default();
         match message {
             Message::VoteRequest {
@@ -450,7 +422,10 @@ impl Engine {
                 // Kimlik bağlantıdan gelir; iletinin kendi beyanına güvenilmez.
                 let allowed = operation.tenant_id == self.tenant_id
                     && operation.device_id == from
-                    && matches!(operation.op, LogOp::Cari(_) | LogOp::Changes { .. });
+                    && matches!(
+                        operation.op,
+                        LogOp::Cari(_) | LogOp::Changes { .. } | LogOp::IslandMerge(_)
+                    );
                 let proposed = if allowed {
                     self.propose(&operation, now).await
                 } else {

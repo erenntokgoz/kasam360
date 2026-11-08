@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tahsilat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="desk.css"><script src="../theme.js"></script>
+<style>
+  .desk { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(300px, .95fr); }
+  /* Sol: neyin tahsil edildiği. */
+  .bill { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .bh { padding: 16px 18px 12px; border-bottom: 1px solid var(--edge); display: flex; justify-content: space-between; align-items: flex-end; }
+  .bh b { font-size: 36px; line-height: 36px; font-weight: 800; font-stretch: 120%; }
+  .bh a { color: var(--ink-2); font-size: 14px; }
+  .bl { overflow: auto; padding: 6px 18px; }
+  .bl div { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--edge); }
+  .bl .x { font-weight: 800; }
+  .bt { padding: 14px 18px; display: grid; gap: 6px; border-top: 1px solid var(--edge); }
+  .bt .row { display: flex; justify-content: space-between; color: var(--ink-2); font-size: 14px; }
+  .bt .total { display: flex; justify-content: space-between; align-items: baseline; }
+  .bt .total b { font-size: 34px; font-weight: 800; font-stretch: 118%; }
+  /* Orta: ödemeler defteri ve kalan. */
+  .pays { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .pays h2 { margin: 0; padding: 16px 18px 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .list { overflow: auto; padding: 0 12px; display: grid; gap: 8px; align-content: start; }
+  .pay { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 14px 16px; border-radius: 12px; background: var(--raised); box-shadow: 0 0 0 1px var(--edge); }
+  .pay b { font-size: 18px; }
+  .pay .amt { font-size: 22px; font-weight: 700; font-stretch: 112%; }
+  .pay small { grid-column: 2 / 3; grid-row: 2; color: var(--ink-2); font-size: 13px; line-height: 18px; }
+  .pay.wait { box-shadow: 0 0 0 2px var(--signal); }
+  .pay.wait .lamp { animation: pulse 1.2s ease-in-out infinite; }
+  .pay:not(.wait) small { grid-column: 2 / -1; }
+  .pay .undo { grid-column: 3; grid-row: 2; justify-self: end; min-height: 40px; padding: 0 12px; font-size: 13px; font-weight: 600; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 7px transparent; opacity: .5; } }
+  .left { margin: 12px; padding: 18px; border-radius: 14px; background: var(--well); box-shadow: inset 0 2px 4px rgba(0,0,0,.14); display: flex; justify-content: space-between; align-items: baseline; }
+  .left span { font-weight: 600; }
+  .left b { font-size: 52px; line-height: 52px; font-weight: 800; font-stretch: 122%; letter-spacing: -.02em; }
+  /* Sağ: tutar ekranı, yöntem ve tuş takımı. */
+  .pad { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 10px; padding: 12px; }
+  .entry { padding: 14px 16px; text-align: right; }
+  .entry small { display: block; text-align: left; color: var(--ink-2); font-size: 13px; }
+  .entry b { display: block; font-size: 46px; line-height: 52px; font-weight: 800; font-stretch: 122%; }
+  .entry span { display: block; font-size: 14px; color: var(--ink-2); }
+  .methods, .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .methods .key, .quick .key { min-height: 52px; font-weight: 700; }
+  .methods .key[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  .quick .key { min-height: 44px; font-weight: 600; font-size: 14px; }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(48px, 1fr); gap: 8px; }
+  .keys .key { font-size: 26px; font-weight: 700; font-stretch: 112%; }
+  .keys .key.w { font-size: 15px; font-weight: 600; font-stretch: 100%; }
+  .end { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 8px; }
+  .end .key { min-height: 60px; font-weight: 700; font-size: 16px; }
+  .why { grid-column: 1 / -1; font-size: 13px; line-height: 18px; color: var(--ink-2); text-align: right; }
+</style>
+</head>
+<body>
+<span class="tag">Tasarım örneği, sabit test verisi, ödeme almaz</span>
+<header class="bar">
+  <nav class="mods" aria-label="Modüller">
+    <a class="key" href="salon.html"><kbd>F1</kbd>Salon</a><a class="key" href="pos.html" aria-current="page"><kbd>F2</kbd>Satış</a>
+    <a class="key" href="#"><kbd>F3</kbd>Mutfak</a><a class="key" href="#"><kbd>F4</kbd>Kasa</a><a class="key" href="#"><kbd>F5</kbd>İşletme</a>
+  </nav>
+  <div class="sys">
+    <span role="status"><i class="lamp on"></i><b>Çevrimdışı</b> 2 kayıt sırada</span>
+    <span class="opt"><i class="lamp ok"></i>Kart okuyucu</span>
+    <span><b>Ayşe K.</b> Kasa 1</span>
+  </div>
+  <button class="key lock">Kilitle</button>
+</header>
+<main class="desk">
+  <div class="bezel"><section class="display bill" aria-label="Masa 12 hesabı">
+    <div class="bh"><b>Masa 12</b><a href="pos.html">Siparişe dön</a></div>
+    <div class="bl" id="lines"></div>
+    <div class="bt"><div class="row"><span>KDV</span><span>C01 kararından sonra eklenecek</span></div><div class="total"><span>Toplam</span><b class="n" id="total"></b></div></div>
+  </section></div>
+
+  <section class="panel pays" aria-label="Ödemeler">
+    <h2>Ödemeler</h2>
+    <div class="list" id="pays"></div>
+    <div class="left" aria-live="polite"><span>Kalan</span><b class="n" id="left"></b></div>
+  </section>
+
+  <section class="panel pad" aria-label="Ödeme ekle">
+    <div class="bezel"><div class="display entry"><small>Nakit, alınan</small><b class="n" id="entry"></b><span class="n" id="change"></span></div></div>
+    <div class="methods" role="group" aria-label="Yöntem"><button class="key" aria-pressed="true">Nakit</button><button class="key">Kart</button><button class="key">Diğer</button></div>
+    <div class="quick" id="quick"></div>
+    <div class="keys"><button class="key">1</button><button class="key">2</button><button class="key">3</button><button class="key">4</button><button class="key">5</button><button class="key">6</button><button class="key">7</button><button class="key">8</button><button class="key">9</button><button class="key w">Temizle</button><button class="key">0</button><button class="key w">Sil</button></div>
+    <div class="end">
+      <button class="key">Ödemeyi ekle</button>
+      <button class="key signal" aria-disabled="true" aria-describedby="why">Hesabı kapat</button>
+      <p class="why" id="why"></p>
+    </div>
+  </section>
+</main>
+<script>
+// Kuruş tamsayısı. Kart onayı gelmeden ödeme "alındı" sayılmaz; hesap kapanınca hepsi tek kayıt olur.
+const tl = c => (c / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+const lines = [[4, 'Ev usulü mantı, sarımsaklı yoğurt', 12500], [2, 'Ayran', 4000]];
+const total = lines.reduce((s, [q, , c]) => s + q * c, 0);
+const pays = [
+  { m: 'Nakit', c: 20000, lamp: 'ok', note: 'Eklendi. Hesap kapanınca kaydedilir.' },
+  { m: 'Kart', c: 30000, lamp: 'on', note: 'Kart okuyucuda, müşterinin onayı bekleniyor.', wait: true },
+];
+const left = total - pays.reduce((s, p) => s + p.c, 0);
+const given = 10000;
+document.getElementById('lines').innerHTML = lines.map(([q, n, c]) => `<div><span class="x n">${q}</span><span>${n}</span><span class="n">${tl(q * c)}</span></div>`).join('');
+document.getElementById('total').textContent = tl(total);
+document.getElementById('pays').innerHTML = pays.map(p => `<div class="pay${p.wait ? ' wait' : ''}"><i class="lamp ${p.lamp}"></i><b>${p.m}</b><span class="amt n">${tl(p.c)}</span><small>${p.note}</small>${p.wait ? '<button class="key undo">Kartı iptal et</button>' : ''}</div>`).join('');
+document.getElementById('left').textContent = tl(left);
+document.getElementById('entry').textContent = tl(given);
+document.getElementById('change').textContent = `Para üstü ${tl(given - left)}`;
+document.getElementById('quick').innerHTML = [`Kalan ${tl(left)}`, tl(10000), tl(20000)].map(t => `<button class="key n">${t}</button>`).join('');
+document.getElementById('why').textContent = `Kapatmak için kart onayı ve ${tl(left)} TL bekleniyor.`;
+</script>
+</body>
+</html>

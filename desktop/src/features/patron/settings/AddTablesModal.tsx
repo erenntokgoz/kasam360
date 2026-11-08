@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import { capitalizeRecordName } from '../../../lib/recordName';
 import React, { useMemo, useState } from 'react';
 import { Minus, Plus, X } from 'lucide-react';
@@ -75,9 +76,9 @@ export const AddTablesModal: React.FC<AddTablesModalProps> = ({ zones, initialZo
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Masa Ekle" maxWidth="5xl">
+    <Modal cardFlow isOpen onClose={() => { if (!isBusy) onClose(); }} title="Masa Ekle" maxWidth="5xl">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-        <div className="space-y-4">
+        <div className="space-y-4 rounded-lg border border-[var(--border)] p-4">
           <div>
             <span className={labelClass}>Kısım</span>
             <div className="flex flex-wrap gap-2">
@@ -123,7 +124,7 @@ export const AddTablesModal: React.FC<AddTablesModalProps> = ({ zones, initialZo
           </div>
         </div>
 
-        <div className="flex flex-col min-h-0">
+        <div className="flex flex-col min-h-0 rounded-lg border border-[var(--border)] p-4">
           <div className="flex items-baseline justify-between gap-3 mb-2">
             <h3 className="print-title">{zones.find((zone) => zone.id === zoneId)?.name}</h3>
             <span className="font-bold tabular-nums">{batch.length} masa</span>
@@ -144,10 +145,10 @@ export const AddTablesModal: React.FC<AddTablesModalProps> = ({ zones, initialZo
 
       {duplicate ? <p role="alert" className="mt-3 text-sm font-semibold text-[var(--accent-red)]">{duplicate} zaten var.</p> : null}
       {isTooMany ? <p role="alert" className="mt-3 text-sm font-semibold text-[var(--accent-red)]">Tek seferde en fazla {BATCH_LIMIT} masa eklenir.</p> : null}
-      {error ? <p role="alert" className="mt-3 text-sm font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
 
       <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2">
-        <Button type="button" variant="secondary" className="min-h-12" onClick={onClose}>Vazgeç</Button>
+        <Button type="button" variant="secondary" className="min-h-12" disabled={isBusy} onClick={onClose}>Vazgeç</Button>
         <Button type="button" variant="primary" className="min-h-12" disabled={!name.trim() || !zoneId || Boolean(duplicate) || isTooMany} isLoading={isBusy} onClick={() => void save()}>
           {batch.length} Masa Ekle
         </Button>

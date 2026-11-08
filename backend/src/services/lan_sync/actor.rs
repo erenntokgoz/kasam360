@@ -4,12 +4,11 @@
 //! baştan engeller. Kalp atışı, seçim zamanı, bağlantı arama ve bekleyen
 //! işlemlerin zaman aşımı burada yönetilir.
 
-use super::engine::{Effects, Engine, Message, Role, LEASE_MS};
+use super::engine::{Effects, Engine, Message, Role};
 use super::op_log::{lookup, Operation, OperationOutcome, OperationStatus};
 use super::pairing::{JoinGrant, JoinRequest};
-use super::runtime::{Command, LanSync, MemberStatus, SyncStatus};
+use super::runtime::{Command, LanSync};
 use super::secure_channel::DeviceKey;
-use super::store;
 use super::transport;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
@@ -33,11 +32,14 @@ fn jitter() -> u64 {
     ELECTION_MIN_MS + value % ELECTION_SPREAD_MS
 }
 
-/// Otoriteye ulaşılamayınca işlem kuyruğa alınmaz: kullanıcı beklemez, bilir.
-const NO_AUTHORITY: &str = "NO_CONNECTION: işlem otoritesine ulaşılamıyor";
-/// Otorite değişirken takipçi kısa süre hedefsiz kalır; bu anda kasiyere hata göstermemek
-/// için işlem bekletilir. Henüz gönderilmediği için süre dolunca reddi güvenlidir.
-const AUTHORITY_WAIT_MS: u64 = 2_000;
+/// Otoriteye ulaşılamadı; işlem hiçbir günlüğe girmedi. Yazma yolu bu yanıtla işlemi ada
+/// kaydına çevirir: ikinci kez yazılma ihtimali yoktur.
+pub(super) const NO_AUTHORITY: &str = "NO_CONNECTION: işlem otoritesine ulaşılamıyor";
+/// Otorite değişirken takipçi kısa süre hedefsiz kalır; seçim en geç bu sürede biter.
+/// İşlem bekletilir, süre dolunca ada yoluna düşer. Henüz gönderilmediği için güvenlidir.
+const AUTHORITY_WAIT_MS: u64 = 3_500;
+/// Otoritesiz geçen bu süreden sonra yazma beklemeden ada yolundan yapılır.
+const ISLAND_AFTER_MS: u64 = AUTHORITY_WAIT_MS;
 
 struct Waiter {
     reply: oneshot::Sender<Result<OperationOutcome, String>>,
@@ -71,6 +73,8 @@ pub(super) struct Actor {
     election_deadline: u64,
     last_heartbeat: u64,
     last_dial: u64,
+    /// Otoritenin son görüldüğü an; ada kipine geçişin ölçüsü.
+    authority_seen: u64,
 }
 
 impl Actor {
@@ -98,6 +102,7 @@ impl Actor {
             election_deadline: 0,
             last_heartbeat: 0,
             last_dial: 0,
+            authority_seen: 0,
         }
     }
 
@@ -376,7 +381,7 @@ impl Actor {
         }
         if now.saturating_sub(self.last_heartbeat) >= HEARTBEAT_MS {
             self.last_heartbeat = now;
-            let effects = self.engine.on_heartbeat().await?;
+            let effects = self.engine.on_heartbeat(now).await?;
             self.dispatch(effects);
             self.publish(now).await?;
         }
@@ -420,74 +425,7 @@ impl Actor {
         }
         Ok(())
     }
-
-    async fn publish(&self, now: u64) -> Result<(), String> {
-        let row = self.engine.cluster().await?;
-        let members = self.engine.members().await?;
-        let (last_index, membership_pending) = {
-            let mut conn = self
-                .sync
-                .inner
-                .pool
-                .acquire()
-                .await
-                .map_err(|e| e.to_string())?;
-            let (last_index, _) = store::last_position(&mut conn, &row).await?;
-            let pending = store::has_pending_membership(&mut conn, &row.tenant_id).await?;
-            (last_index, pending)
-        };
-        let is_leader = self.engine.role == Role::Leader;
-        let authority_alive = if is_leader {
-            self.engine.has_quorum(now).await?
-        } else {
-            self.engine
-                .last_leader_contact
-                .is_some_and(|seen| now.saturating_sub(seen) < LEASE_MS)
-        };
-        let behind = is_leader
-            && members.iter().any(|member| {
-                // Kapalı cihaz beklenmez: çoğunluk varken ekran "Eşitleniyor"da takılmamalı.
-                self.peers.contains_key(&member.device_id)
-                    && self.engine.match_index.get(&member.device_id).copied() != Some(last_index)
-            });
-        let state = if self.engine.halted.is_some() {
-            "INTERVENTION"
-        } else if !self.unresolved.is_empty() {
-            "VERIFYING"
-        } else if !authority_alive {
-            "NO_CONNECTION"
-        } else if behind || membership_pending {
-            "SYNCING"
-        } else {
-            "READY"
-        };
-        let mut statuses = Vec::with_capacity(members.len());
-        for member in members {
-            let last_seen: Option<Option<String>> =
-                sqlx::query_scalar("SELECT last_seen FROM sync_peers WHERE device_id = ?")
-                    .bind(&member.device_id)
-                    .fetch_optional(&self.sync.inner.pool)
-                    .await
-                    .map_err(|e| e.to_string())?;
-            statuses.push(MemberStatus {
-                connected: self.peers.contains_key(&member.device_id),
-                is_authority: self.engine.leader_id.as_deref() == Some(member.device_id.as_str()),
-                is_local: member.device_id == self.me,
-                acknowledged_index: self.engine.match_index.get(&member.device_id).copied(),
-                last_seen: last_seen.flatten(),
-                device_id: member.device_id,
-                name: member.name,
-            });
-        }
-        self.sync.publish(SyncStatus {
-            mode: "CLUSTER",
-            state,
-            role: Some(self.engine.role),
-            term: row.term,
-            commit_index: row.commit_index,
-            detail: self.engine.halted.clone(),
-            members: statuses,
-        });
-        Ok(())
-    }
 }
+
+#[path = "actor_status.rs"]
+mod status;

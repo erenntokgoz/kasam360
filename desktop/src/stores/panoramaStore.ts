@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { errorText } from '../lib/cariInput';
-import { reportPeriod, utcOffsetMinutes, type RangeKey } from '../lib/dateRange';
+import { reportPeriod, utcOffsetMinutes, type PanoramaRange } from '../lib/dateRange';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
 
@@ -74,17 +74,16 @@ export interface MonthlyTarget {
 }
 
 interface PanoramaStore {
-  range: RangeKey;
+  range: PanoramaRange;
   data: PanoramaData | null;
   metrics: MenuMetrics | null;
   /** Menü analizi ayrı okunur; hatası panonun geri kalanını düşürmez. */
   metricsError: string | null;
   error: string | null;
-  loadedAt: Date | null;
   /** Bu ayın `ALL` hedefi. `undefined`: henüz okunmadı, `null`: hedef yok. */
   target: MonthlyTarget | null | undefined;
   targetError: string | null;
-  setRange: (range: RangeKey) => void;
+  setRange: (range: PanoramaRange) => void;
   load: () => Promise<void>;
   loadTarget: () => Promise<void>;
   saveTarget: (targetCents: number) => Promise<void>;
@@ -93,59 +92,62 @@ interface PanoramaStore {
 export const currentMonth = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
+let boardRequest = 0;
+
 export const usePanoramaStore = create<PanoramaStore>((set, get) => ({
   range: 'TODAY',
   data: null,
   metrics: null,
   metricsError: null,
   error: null,
-  loadedAt: null,
   target: undefined,
   targetError: null,
 
   setRange: (range) => {
-    set({ range, data: null });
+    set({ range, data: null, metrics: null, metricsError: null, error: null });
     void get().load();
   },
 
   // Okunamayan pano boş rakam göstermez: eski veri silinir, hata görünür.
   load: async () => {
-    const { actorRole, tenantId } = sessionArgs();
-    const requested = get().range;
-    const period = reportPeriod(requested);
-    const metricsCall = invokeIPC<MenuMetrics>('get_analytics_metrics', {
-      tenantId,
-      actorRole,
-      range: { from: period.from.slice(0, 10), to: period.to.slice(0, 19).replace('T', ' ') },
-      minSupport: 2,
-    }).then(
-      (metrics) => ({ metrics, metricsError: null }),
-      (caught: unknown) => ({ metrics: null, metricsError: errorText(caught) }),
-    );
+    const request = ++boardRequest;
     try {
-      const data = await invokeIPC<PanoramaData>('get_panorama', {
-        actorRole,
-        tenantId,
-        from: period.from,
-        to: period.to,
-        compareSeconds: period.compareSeconds,
-        utcOffsetMinutes: utcOffsetMinutes(),
-      });
-      const menu = await metricsCall;
-      if (get().range === requested) {
-        set({ data, ...menu, error: null, loadedAt: new Date() });
-      }
+      const { actorRole, tenantId } = sessionArgs();
+      const period = reportPeriod(get().range);
+      const [data, menu] = await Promise.all([
+        invokeIPC<PanoramaData>('get_panorama', {
+          actorRole,
+          tenantId,
+          from: period.from,
+          to: period.to,
+          compareSeconds: period.compareSeconds,
+          utcOffsetMinutes: utcOffsetMinutes(),
+        }),
+        invokeIPC<MenuMetrics>('get_analytics_metrics', {
+          tenantId,
+          actorRole,
+          range: { from: period.from, to: period.to },
+          minSupport: 2,
+        }).then(
+          (metrics) => ({ metrics, metricsError: null }),
+          (caught: unknown) => ({ metrics: null, metricsError: errorText(caught) }),
+        ),
+      ]);
+      if (request === boardRequest) set({ data, ...menu, error: null });
     } catch (caught) {
-      set({ data: null, metrics: null, error: errorText(caught) });
+      if (request === boardRequest) {
+        set({ data: null, metrics: null, metricsError: null, error: errorText(caught) });
+      }
     }
+    if (request !== boardRequest) return;
     // Hedef dönem seçiminden bağımsızdır; pano her yenilendiğinde o da tazelenir.
     void get().loadTarget();
   },
 
   // Hedef her zaman kasanın yerel ayıdır; Bugün/Dün seçimi hedefi değiştirmez.
   loadTarget: async () => {
-    const { actorRole, tenantId } = sessionArgs();
     try {
+      const { actorRole, tenantId } = sessionArgs();
       const rows = await invokeIPC<MonthlyTarget[]>('get_monthly_targets', {
         tenantId,
         actorRole,

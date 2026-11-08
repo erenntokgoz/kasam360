@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useRef, useState, type FormEvent } from 'react';
 import { authPost, type FieldErrors } from '@/lib/authApi';
-import { FormError, GoogleButton, TextField } from './FormParts';
+import { markSent } from '@/lib/verificationResend';
+import { FormError, GoogleButton, SecureForm, SubmitButton, TextField } from './FormParts';
 
 const FIELD_ORDER = ['name', 'businessName', 'email', 'phone', 'password', 'consent'];
 
@@ -31,6 +32,8 @@ export function RegisterForm() {
     });
     setIsBusy(false);
     if (result.ok) {
+      // Kayıtta sunucu doğrulama postasını zaten gönderdi; sayaç buradan başlar.
+      markSent(String(data.get('email') ?? ''));
       setIsDone(true);
       return;
     }
@@ -43,30 +46,32 @@ export function RegisterForm() {
 
   if (isDone) {
     return (
-      <div className="flex flex-col gap-3" role="status">
-        <p className="rubber-stamp self-start text-2xl">KAYIT ALINDI</p>
-        <p className="text-ink-soft">E-postanıza doğrulama bağlantısı gönderdik. Bağlantı 1 saat geçerlidir. Mail gelmezse spam kutusuna bakın veya giriş yapmayı deneyin, bağlantıyı yeniden göndeririz.</p>
+      <div className="k-done" role="status">
+        <b>Kayıt alındı.</b>
+        <p>E-postanıza doğrulama bağlantısı gönderdik. Bağlantı 1 saat geçerlidir. Mail gelmezse spam kutusuna bakın veya giriş yapmayı deneyin, bağlantıyı yeniden göndeririz.</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="k-stack">
       <GoogleButton onError={setFormError} />
-      <p className="text-sm text-ink-soft">
+      <p className="k-muted k-small" style={{ margin: 0 }}>
         Google ile devam ederek{' '}
-        <Link href="/kullanim-sartlari" className="text-link">
+        <Link href="/kullanim-sartlari" className="k-link">
           kullanım şartlarını
         </Link>{' '}
         ve{' '}
-        <Link href="/kvkk" className="text-link">
+        <Link href="/kvkk" className="k-link">
           aydınlatma metnini
         </Link>{' '}
         kabul etmiş olursunuz.
       </p>
 
-      <form ref={formRef} onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
-        <div className="grid gap-5 sm:grid-cols-2">
+      <p className="k-divider">ya da e-postayla</p>
+
+      <SecureForm fallbackPath="/kayit" ref={formRef} onSubmit={handleSubmit} noValidate className="k-stack">
+        <div className="k-grid-2">
           <TextField id="name" label="Ad soyad" autoComplete="name" placeholder="Ayşe Yılmaz…" error={errors.name} />
           <TextField id="businessName" label="İşletme adı" autoComplete="organization" placeholder="Liman Lokantası…" error={errors.businessName} />
           <TextField id="email" label="E-posta" type="email" inputMode="email" spellCheck={false} autoComplete="email" placeholder="ayse@ornek.com…" />
@@ -74,33 +79,33 @@ export function RegisterForm() {
         </div>
         <TextField id="password" label="Şifre (en az 8 karakter)" type="password" autoComplete="new-password" />
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="consent" className="flex min-h-12 cursor-pointer items-start gap-3 text-sm text-ink-soft">
-            <input id="consent" name="consent" type="checkbox" aria-invalid={Boolean(errors.consent)} className="mt-0.5 h-6 w-6 shrink-0 accent-[var(--print)]" />
+        <div className="k-field">
+          <label htmlFor="consent" className="k-check">
+            <input id="consent" name="consent" type="checkbox" aria-invalid={Boolean(errors.consent)} aria-describedby={errors.consent ? 'consent-error' : undefined} />
             <span>
-              <Link href="/kullanim-sartlari" className="text-link">
+              <Link href="/kullanim-sartlari" className="k-link">
                 Kullanım şartlarını
               </Link>{' '}
               ve{' '}
-              <Link href="/kvkk" className="text-link">
+              <Link href="/kvkk" className="k-link">
                 aydınlatma metnini
               </Link>{' '}
               okudum. Bilgilerimin hesabım için işlenmesini ve hizmet sağlayıcıların yurt dışındaki sunucularına aktarılmasını kabul ediyorum.
             </span>
           </label>
-          {errors.consent && <p className="text-sm font-medium text-serial">{errors.consent}</p>}
+          {errors.consent && <p id="consent-error" className="k-field-error">{errors.consent}</p>}
         </div>
 
         <FormError message={formError} />
 
-        <button type="submit" className="btn" disabled={isBusy}>
-          {isBusy ? 'Gönderiliyor…' : 'Kayıt Ol'}
-        </button>
-      </form>
+        <SubmitButton className="k-btn k-btn-buy k-btn-block k-btn-lg" disabled={isBusy}>
+          {isBusy ? 'Gönderiliyor…' : 'Kayıt ol'}
+        </SubmitButton>
+      </SecureForm>
 
-      <p className="text-sm text-ink-soft">
+      <p className="k-muted k-small" style={{ margin: 0 }}>
         Hesabınız var mı?{' '}
-        <Link href="/giris" className="text-link">
+        <Link href="/giris" className="k-link">
           Giriş yapın
         </Link>
       </p>

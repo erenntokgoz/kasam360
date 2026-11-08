@@ -152,7 +152,12 @@ export const useStockStore = create<StockState>((set, get) => ({
       const key = receiptKey(orderId, receipt);
       const previous = get().receiptAttempt;
       const operationId = previous?.key === key ? previous.operationId : newOperationId();
-      set({ busy: true, error: null, receiptAttempt: { key, operationId } });
+      set((state) => ({
+        busy: true, error: null, receiptAttempt: { key, operationId },
+        pendingQuickReceipt: state.pendingQuickReceipt?.orderId === orderId
+          ? { ...state.pendingQuickReceipt, receipt }
+          : state.pendingQuickReceipt,
+      }));
       await invokeIPC('receive_purchase', {
         actorRole,
         payload: {
@@ -194,7 +199,7 @@ export const useStockStore = create<StockState>((set, get) => ({
     if (!supplier) { set({ error: 'Tedarikçi seçin veya oluşturun.' }); return false; }
     const orderNumber = `HZL-${crypto.randomUUID()}`;
     const created = await get().createOrder(supplier.id, orderNumber, [{ productId, quantity, unitCostCents }], (order) => {
-      set({ pendingQuickReceipt: { orderId: order.id, tenantId, productId, quantity, unitCostCents, supplierId } });
+      set({ pendingQuickReceipt: { orderId: order.id, tenantId, productId, quantity, unitCostCents, supplierId, receipt } });
     });
     const pendingReceipt = get().pendingQuickReceipt;
     return created && !!pendingReceipt && get().receiveOrder(pendingReceipt.orderId, receipt);

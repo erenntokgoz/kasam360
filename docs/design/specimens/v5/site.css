@@ -1,0 +1,64 @@
+/* KASAM360 v4 ortak tokenları: web ve 360 Labs aynı malzemeden yapılır.
+   Dil: çelik tezgâh, gece servisi, tek turuncu (logo). Koyu ve açık tema aynı hiyerarşiyi korur. */
+:root {
+  --font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, Consolas, monospace;
+  --orange: #FF5A1F;
+  --on-orange: #14171C;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #050608; --bg-2: #0C0E11; --panel: #121519; --panel-2: #1A1E23;
+  --line: #262A31; --line-2: #343A42;
+  --text: #F2F2EF; --text-2: #A3A8B0; --text-3: #8A9099;
+  --accent-ink: #FF8A4C;   /* turuncu metin olarak kullanılırsa */
+  --ok: #7FD39B; --warn: #F0C05A; --bad: #FF7B6E;
+  --ok-bg: #12261A; --warn-bg: #2A2310; --bad-bg: #2E1512;
+  --focus: #FF8A4C;
+  --shadow: 0 10px 40px rgba(0, 0, 0, .45);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #EEF0F3; --bg-2: #E6E9ED; --panel: #FFFFFF; --panel-2: #F5F6F8;
+  --line: #DCE0E5; --line-2: #C6CBD2;
+  --text: #14171C; --text-2: #4F5661; --text-3: #626A75;
+  --accent-ink: #B23F0C;
+  --ok: #18733F; --warn: #8A5D00; --bad: #B4231A;
+  --ok-bg: #E3F3E8; --warn-bg: #FBF0D6; --bad-bg: #FBE6E3;
+  --focus: #B23F0C;
+  --shadow: 0 10px 40px rgba(20, 23, 28, .10);
+  --orange: #F2541A;       /* açık zeminde kenar kontrastı 3:1 için logodan bir ton koyu */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font: 400 15px/1.5 var(--font); color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+[hidden] { display: none !important; }
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); font-size: .92em; }
+
+/* Düğmeler: turuncu yalnız para ve satın alma yolunda. */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid transparent;
+  font-weight: 560; font-size: 14px; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s, color .15s; }
+.btn-buy { background: var(--orange); color: var(--on-orange); }
+.btn-buy:hover { filter: brightness(1.06); }
+.btn-ink { background: var(--text); color: var(--bg); }
+.btn-line { background: transparent; border-color: var(--line-2); color: var(--text); }
+.btn-line:hover { border-color: var(--text-3); }
+.btn-ghost { background: transparent; color: var(--text-2); padding: 0 10px; }
+.btn-ghost:hover { color: var(--text); }
+.btn-danger { background: transparent; border-color: var(--line-2); color: var(--bad); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* Örnek etiketi: akışta durur, içeriği kapatmaz. */
+.specimen { position: relative; z-index: 30; display: block; padding: 5px 16px; text-align: center; font: 500 11px/16px var(--font); color: var(--text-3); background: var(--bg-2); border-bottom: 1px solid var(--line); }
+
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 560; white-space: nowrap; }
+.pill.ok { color: var(--ok); background: var(--ok-bg); }
+.pill.warn { color: var(--warn); background: var(--warn-bg); }
+.pill.bad { color: var(--bad); background: var(--bad-bg); }
+.pill.mute { color: var(--text-2); background: var(--panel-2); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }

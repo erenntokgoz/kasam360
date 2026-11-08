@@ -168,6 +168,8 @@ async fn vadeli_kabul_parti_hareket_ve_acik_borcu_birlikte_yazar() {
 async fn pesin_nakit_kabul_borcu_ayni_anda_kapatir_ve_kasadan_duser() {
     let pool = pool().await;
     order(&pool, "po_1").await;
+    sqlx::query("UPDATE shifts SET expected_amount_cents = 23000 WHERE tenant_id = 'tnt_a' AND id = 'shf_1'")
+        .execute(&pool).await.expect("açılış nakdi");
     run(&pool, &receipt("po_1", "CASH", None))
         .await
         .expect("kabul");
@@ -181,6 +183,192 @@ async fn pesin_nakit_kabul_borcu_ayni_anda_kapatir_ve_kasadan_duser() {
         23_000
     );
     assert_eq!(card_balance(&pool, "dir_sup").await, 0);
+}
+
+#[tokio::test]
+async fn sifir_kasa_ile_bin_lira_nakit_alimi_kasayi_eksiye_yazar() {
+    let pool = pool().await;
+    order(&pool, "po_eksi").await;
+    sqlx::query("UPDATE purchase_orders SET total_cents = 100_000 WHERE tenant_id = 'tnt_a' AND id = 'po_eksi'")
+        .execute(&pool).await.expect("sipariş tutarı");
+    sqlx::query("UPDATE purchase_order_items SET quantity = 1, unit_cost_cents = 100_000 WHERE tenant_id = 'tnt_a' AND purchase_order_id = 'po_eksi' AND product_id = 'prd_un'")
+        .execute(&pool).await.expect("satır tutarı");
+    sqlx::query("DELETE FROM purchase_order_items WHERE tenant_id = 'tnt_a' AND purchase_order_id = 'po_eksi' AND product_id = 'prd_marul'")
+        .execute(&pool).await.expect("fazla satır");
+    sqlx::query(
+        "UPDATE shifts SET expected_amount_cents = 0 WHERE tenant_id = 'tnt_a' AND id = 'shf_1'",
+    )
+    .execute(&pool)
+    .await
+    .expect("sıfır açılış");
+    let mut input = receipt("po_eksi", "CASH", None);
+    if let CariOp::ReceivePurchase(input) = &mut input {
+        input.lines.retain(|line| line.item_id.ends_with("_un"));
+    }
+
+    run(&pool, &input).await.expect("nakit alımı kaydedilir");
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM inventory_batches WHERE tenant_id = 'tnt_a'"
+        )
+        .await,
+        1
+    );
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM cash_movements WHERE tenant_id = 'tnt_a' AND movement_type = 'OUT' AND amount_cents = 100000"
+        )
+        .await,
+        1
+    );
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM debt_payments WHERE tenant_id = 'tnt_a'"
+        )
+        .await,
+        1
+    );
+    let status: String = sqlx::query_scalar(
+        "SELECT status FROM purchase_orders WHERE tenant_id = 'tnt_a' AND id = 'po_eksi'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("sipariş durumu");
+    assert_eq!(status, "ALINDI");
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let balance = crate::commands::cashier_commands::calculate_expected_shift_balance(
+        &mut conn,
+        TENANT,
+        "shf_1",
+        "2026-10-30T00:00:00Z",
+        None,
+        0,
+    )
+    .await
+    .expect("vardiya bakiyesi");
+    assert_eq!(balance.expected_balance, -100_000);
+    drop(conn);
+    let pnl = crate::services::pnl_service::financial_report(&pool, TENANT, &None)
+        .await
+        .expect("kâr raporu");
+    assert_eq!(pnl.total_revenue_cents, 0);
+    assert_eq!(pnl.total_expenses_cents, 0);
+    assert_eq!(pnl.total_cogs_cents, 0);
+    assert_eq!(pnl.net_profit_cents, 0);
+}
+
+#[tokio::test]
+async fn yuz_bin_kurus_nakit_ile_ayni_tutarda_pesin_alim_bakiyeyi_sifirlar() {
+    let pool = pool().await;
+    order(&pool, "po_nakit").await;
+    sqlx::query("UPDATE purchase_orders SET total_cents = 100_000 WHERE tenant_id = 'tnt_a' AND id = 'po_nakit'")
+        .execute(&pool).await.expect("sipariş tutarı");
+    sqlx::query("UPDATE purchase_order_items SET quantity = 1, unit_cost_cents = 100_000 WHERE tenant_id = 'tnt_a' AND purchase_order_id = 'po_nakit' AND product_id = 'prd_un'")
+        .execute(&pool).await.expect("satır tutarı");
+    sqlx::query("DELETE FROM purchase_order_items WHERE tenant_id = 'tnt_a' AND purchase_order_id = 'po_nakit' AND product_id = 'prd_marul'")
+        .execute(&pool).await.expect("fazla satır");
+    sqlx::query("UPDATE shifts SET expected_amount_cents = 100_000 WHERE tenant_id = 'tnt_a' AND id = 'shf_1'")
+        .execute(&pool).await.expect("açılış bakiyesi");
+    let mut input = receipt("po_nakit", "CASH", None);
+    if let CariOp::ReceivePurchase(input) = &mut input {
+        input.lines.retain(|line| line.item_id.ends_with("_un"));
+    }
+    run(&pool, &input).await.expect("mal kabulü");
+
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM inventory_batches WHERE tenant_id = 'tnt_a'"
+        )
+        .await,
+        1
+    );
+    assert_eq!(count(&pool, "SELECT COUNT(*) FROM cash_movements WHERE tenant_id = 'tnt_a' AND movement_type = 'OUT' AND amount_cents = 100000").await, 1);
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let balance = crate::commands::cashier_commands::calculate_expected_shift_balance(
+        &mut conn,
+        TENANT,
+        "shf_1",
+        "2026-10-30T00:00:00Z",
+        None,
+        100_000,
+    )
+    .await
+    .expect("vardiya bakiyesi");
+    assert_eq!(balance.expected_balance, 0);
+    drop(conn);
+    let pnl = crate::services::pnl_service::financial_report(&pool, TENANT, &None)
+        .await
+        .expect("kâr raporu");
+    assert_eq!(pnl.total_revenue_cents, 0);
+    assert_eq!(pnl.total_expenses_cents, 0);
+    assert_eq!(pnl.total_cogs_cents, 0);
+    assert_eq!(pnl.net_profit_cents, 0);
+}
+
+#[tokio::test]
+async fn onceden_eksiye_dusmus_kasadan_yeni_nakit_alimi_eksiye_devam_eder() {
+    let pool = pool().await;
+    order(&pool, "po_eksi_hareket").await;
+    sqlx::query("UPDATE purchase_orders SET total_cents = 1000 WHERE tenant_id = 'tnt_a' AND id = 'po_eksi_hareket'")
+        .execute(&pool).await.expect("sipariş tutarı");
+    sqlx::query("UPDATE purchase_order_items SET quantity = 1, unit_cost_cents = 1000 WHERE tenant_id = 'tnt_a' AND purchase_order_id = 'po_eksi_hareket' AND product_id = 'prd_un'")
+        .execute(&pool).await.expect("satır tutarı");
+    sqlx::query("DELETE FROM purchase_order_items WHERE tenant_id = 'tnt_a' AND purchase_order_id = 'po_eksi_hareket' AND product_id = 'prd_marul'")
+        .execute(&pool).await.expect("fazla satır");
+    sqlx::query(
+        "UPDATE shifts SET expected_amount_cents = 0 WHERE tenant_id = 'tnt_a' AND id = 'shf_1'",
+    )
+    .execute(&pool)
+    .await
+    .expect("sıfır açılış");
+    sqlx::query("INSERT INTO cash_movements (id, tenant_id, shift_id, movement_type, amount_cents, reason, actor_id) VALUES ('csh_eksi', 'tnt_a', 'shf_1', 'OUT', 1000, 'Önceki uyumsuz hareket', 'usr_1')")
+        .execute(&pool).await.expect("önceki çıkış");
+    let mut input = receipt("po_eksi_hareket", "CASH", None);
+    if let CariOp::ReceivePurchase(input) = &mut input {
+        input.lines.retain(|line| line.item_id.ends_with("_un"));
+    }
+
+    run(&pool, &input).await.expect("nakit alımı kaydedilir");
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM inventory_batches WHERE tenant_id = 'tnt_a'"
+        )
+        .await,
+        1
+    );
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM debt_payments WHERE tenant_id = 'tnt_a'"
+        )
+        .await,
+        1
+    );
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM cash_movements WHERE tenant_id = 'tnt_a'"
+        )
+        .await,
+        2
+    );
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    let balance = crate::commands::cashier_commands::calculate_expected_shift_balance(
+        &mut conn,
+        TENANT,
+        "shf_1",
+        "2026-10-30T00:00:00Z",
+        None,
+        0,
+    )
+    .await
+    .expect("vardiya bakiyesi");
+    assert_eq!(balance.expected_balance, -2_000);
 }
 
 #[tokio::test]
@@ -444,4 +632,28 @@ async fn iade_ve_duzeltme_sonrasi_ekstre_kapanisi_kart_bakiyesine_esittir() {
     .expect("sonraki dönem");
     assert_eq!(later.opening_balance_cents, balance);
     assert_eq!(later.closing_balance_cents, balance);
+}
+
+#[tokio::test]
+async fn teslimler_ayni_tedarikci_urun_eslesmesini_cogaltmaz() {
+    let pool = pool().await;
+    sqlx::query("INSERT INTO suppliers (id, tenant_id, name, created_by) VALUES ('sup_2', 'tnt_a', 'Diğer Gıda', 'usr_1')")
+        .execute(&pool).await.expect("ikinci tedarikçi");
+    for id in ["po_1", "po_2", "po_3"] {
+        order(&pool, id).await;
+    }
+    sqlx::query("UPDATE purchase_orders SET supplier_id = 'sup_2' WHERE tenant_id = 'tnt_a' AND id = 'po_3'")
+        .execute(&pool).await.expect("tedarikçi değişimi");
+
+    for id in ["po_1", "po_2", "po_3"] {
+        let mut op = receipt(id, SETTLEMENT_TERM, None);
+        if id == "po_3" {
+            if let CariOp::ReceivePurchase(input) = &mut op {
+                input.new_directory_id = "dir_sup_2".to_string();
+            }
+        }
+        run(&pool, &op).await.expect("kabul");
+    }
+    assert_eq!(count(&pool, "SELECT COUNT(*) FROM supplier_products WHERE tenant_id = 'tnt_a' AND product_id = 'prd_un'").await, 2);
+    assert_eq!(count(&pool, "SELECT COUNT(*) FROM inventory_batches WHERE tenant_id = 'tnt_a' AND product_id = 'prd_un'").await, 3);
 }

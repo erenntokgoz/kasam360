@@ -1,9 +1,7 @@
-import { getMigrations } from 'better-auth/db/migration';
-import { auth, pool } from './config.js';
-import { LICENSE_KEY_TABLE } from './desktopLicense.js';
+import { databases } from './config.js';
+import { closeDatabases, ensureIndexes } from './lib/mongo.js';
 
-const { runMigrations } = await getMigrations(auth.options);
-await runMigrations();
-await pool.query(LICENSE_KEY_TABLE);
-await pool.end();
-console.log('Veritabanı güncel.');
+// Belge veritabanında tablo kurulumu yoktur; tekillik ve sıra kuralları dizinlerle kurulur.
+await ensureIndexes(databases);
+await closeDatabases(databases);
+console.log('Veritabanı dizinleri güncel.');

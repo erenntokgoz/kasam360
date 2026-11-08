@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { Modal } from '../../ui/Modal';
@@ -43,9 +44,7 @@ export const MustChangePinModal: React.FC = () => {
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error ? (
-          <div className="p-2.5 rounded-lg text-xs font-medium text-center bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
-            {error}
-          </div>
+          <ErrorToast message={error} />
         ) : null}
 
         <div>

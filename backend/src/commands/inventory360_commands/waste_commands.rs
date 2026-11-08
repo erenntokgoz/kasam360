@@ -204,6 +204,13 @@ pub async fn record_waste_command(
 ) -> Result<waste::WasteRecord, String> {
     rbac::require_any(&actor_role, &[Role::Owner])?;
 
+    if !args.notes.as_deref().is_some_and(|text| {
+        let text = text.trim();
+        !text.is_empty() && text.chars().count() <= 500
+    }) {
+        return Err("VALIDATION: Fire açıklaması 1–500 karakter olmalı.".into());
+    }
+
     let lock = AuditLock::new(app_state.audit_mutex.lock().await);
     let tenant_id = require_tenant(tenant_id.as_deref())?;
     let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);

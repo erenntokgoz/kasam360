@@ -136,15 +136,18 @@ async fn avans_iptali_bordro_kaydini_da_kaldirir() {
 }
 
 #[tokio::test]
-async fn cekmecede_olmayan_nakit_gider_olarak_cikamaz() {
+async fn cekmecede_olmayan_nakit_gider_kaydi_kasayi_eksiye_indirir() {
     let pool = pool().await;
     let mut conn = pool.acquire().await.expect("bağlantı");
     let mut big = expense("CASH");
     big.amount_cents = 100_001;
-    let error = insert_expense(&mut conn, "tnt_a", &big)
+    insert_expense(&mut conn, "tnt_a", &big)
         .await
-        .expect_err("eksi kasa reddedilmeli");
-    assert!(error.starts_with("INSUFFICIENT_CASH"), "{error}");
+        .expect("nakit gider kaydedilmeli");
     drop(conn);
-    assert_eq!(cash_total(&pool, "OUT").await, 0);
+    assert_eq!(cash_total(&pool, "OUT").await, 100_001);
+    let expected: i64 = sqlx::query_scalar(
+        "SELECT expected_amount_cents - (SELECT COALESCE(SUM(amount_cents), 0) FROM cash_movements WHERE tenant_id = 'tnt_a' AND shift_id = 'shf_a' AND movement_type = 'OUT') FROM shifts WHERE tenant_id = 'tnt_a' AND id = 'shf_a'",
+    ).fetch_one(&pool).await.expect("kasa bakiyesi");
+    assert_eq!(expected, -1);
 }

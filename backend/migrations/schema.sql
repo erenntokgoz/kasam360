@@ -172,7 +172,8 @@ CREATE TABLE IF NOT EXISTS products (
     -- KDV oranı basis-point (binde) cinsinden: %10 = 1000, %20 = 2000.
     -- Eski `tax_rate REAL` kolonu kaldırıldı; migrasyon ile taşınır.
     tax_rate_bp INTEGER NOT NULL DEFAULT 1000 CHECK (tax_rate_bp >= 0),
-    category_id TEXT NOT NULL,
+    -- Hammaddenin (is_raw = 1) kategorisi yoktur; satış ürünü kategorisiz kaydedilemez.
+    category_id TEXT,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT 1,
     -- Legacy: `stock_quantity` kullanımdan kaldırıldı. Tek kaynak `inventory_batches`.
@@ -922,6 +923,38 @@ CREATE TABLE IF NOT EXISTS payroll_runs (
 
 CREATE INDEX IF NOT EXISTS idx_payroll_runs_period
     ON payroll_runs(tenant_id, period);
+
+-- Onaylanmış fiili çalışma süresi; planlanan saat bu deftere otomatik kopyalanmaz.
+CREATE TABLE IF NOT EXISTS staff_work_sessions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    break_minutes INTEGER NOT NULL DEFAULT 0 CHECK (break_minutes >= 0),
+    status TEXT NOT NULL CHECK (status IN ('OPEN', 'CLOSED')),
+    created_by TEXT NOT NULL,
+    updated_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (ended_at IS NULL OR ended_at > started_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS idx_staff_work_sessions_period
+    ON staff_work_sessions(tenant_id, user_id, started_at, ended_at);
+
+CREATE TABLE IF NOT EXISTS payroll_payments (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    payroll_run_id TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('CASH', 'BANK_TRANSFER')),
+    actor_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (payroll_run_id) REFERENCES payroll_runs(id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS idx_payroll_payments_run
+    ON payroll_payments(tenant_id, payroll_run_id, created_at);
 
 -- Bahsis havuzu: katsayili dagitim. Havuz bir kayit, dagitim bir kayit.
 CREATE TABLE IF NOT EXISTS tip_pool_entries (
@@ -2259,16 +2292,141 @@ CREATE TABLE IF NOT EXISTS sync_cluster (
 );
 
 -- Yalnız yazma transaction'ı içinde satır taşır: kapı ve yakalanan değişiklikler.
+-- `ISLAND`: otoritesiz cihazın yerelde onayladığı yazma; denetim alt zincire gider.
 CREATE TABLE IF NOT EXISTS sync_write_gate (
-    mode TEXT NOT NULL CHECK (mode IN ('CAPTURE', 'APPLY'))
+    mode TEXT NOT NULL CHECK (mode IN ('CAPTURE', 'APPLY', 'ISLAND'))
 );
 
+-- `row_old`: güncelleme ve silmede önceki görüntü; ada işleminin geri alınması için.
 CREATE TABLE IF NOT EXISTS sync_capture (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
     table_name TEXT NOT NULL,
     action TEXT NOT NULL CHECK (action IN ('I', 'U', 'D')),
     row_key TEXT,
-    row_data TEXT
+    row_data TEXT,
+    row_old TEXT
+);
+
+-- Ada modu: otoriteye ulaşılamayan cihazın yerelde onayladığı işlemler. Cihaza
+-- özeldir; birleşmede `ISLAND_MERGE` kaydıyla küme günlüğüne girer.
+CREATE TABLE IF NOT EXISTS sync_island_ops (
+    operation_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    island_epoch TEXT NOT NULL,
+    device_sequence INTEGER NOT NULL CHECK (device_sequence > 0),
+    base_commit_index INTEGER NOT NULL,
+    base_state INTEGER NOT NULL,
+    actor_id TEXT NOT NULL,
+    actor_role TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    intent_sha256 TEXT NOT NULL,
+    changes TEXT NOT NULL CHECK (json_valid(changes)),
+    result TEXT,
+    status TEXT NOT NULL DEFAULT 'LOCAL' CHECK (status IN ('LOCAL', 'QUEUED', 'MERGED')),
+    merge_operation_id TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE (tenant_id, device_id, device_sequence)
+);
+
+-- Ada döneminin denetim alt zinciri. Cihaz başına sıfır hash'ten başlar ve ana
+-- zincirle aynı kanonik biçimle mühürlenir; birleşmede satırlar olduğu gibi taşınır.
+CREATE TABLE IF NOT EXISTS audit_island_ledger (
+    id TEXT PRIMARY KEY NOT NULL,
+    tenant_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    device_sequence INTEGER NOT NULL CHECK (device_sequence > 0),
+    timestamp TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    actor_role TEXT NOT NULL,
+    category TEXT NOT NULL,
+    action TEXT NOT NULL,
+    resource_id TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    previous_hash TEXT NOT NULL,
+    current_hash TEXT NOT NULL UNIQUE,
+    hash_version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (device_id, device_sequence)
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_audit_island_prevent_update
+BEFORE UPDATE ON audit_island_ledger
+BEGIN
+    SELECT RAISE(ABORT, 'IMMUTABILITY MANDATE VIOLATION: Updates to audit_island_ledger are strictly prohibited.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_audit_island_prevent_delete
+BEFORE DELETE ON audit_island_ledger
+BEGIN
+    SELECT RAISE(ABORT, 'IMMUTABILITY MANDATE VIOLATION: Deletions from audit_island_ledger are strictly prohibited.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_audit_island_validate_insert
+BEFORE INSERT ON audit_island_ledger
+BEGIN
+    SELECT
+        CASE
+            WHEN length(NEW.current_hash) != 64 OR length(NEW.previous_hash) != 64 THEN
+                RAISE(ABORT, 'INTEGRITY VIOLATION: island hashes must be 64-character SHA-256 hex strings.')
+            WHEN NEW.device_sequence != (SELECT COALESCE(MAX(device_sequence), 0) + 1
+                                         FROM audit_island_ledger WHERE device_id = NEW.device_id) THEN
+                RAISE(ABORT, 'INTEGRITY VIOLATION: island sequence must continue from the device tip.')
+            WHEN NEW.previous_hash != COALESCE((SELECT current_hash FROM audit_island_ledger
+                                                WHERE device_id = NEW.device_id
+                                                ORDER BY device_sequence DESC LIMIT 1),
+                                               '0000000000000000000000000000000000000000000000000000000000000000') THEN
+                RAISE(ABORT, 'INTEGRITY VIOLATION: island previous_hash does not match the device tip.')
+        END;
+END;
+
+-- Birleşmede ayrışan kayıt. Her iki tarafın görüntüsü saklanır; otomatik silme
+-- yoktur. Kimlik ada işleminden türetilir, her cihazda aynıdır.
+CREATE TABLE IF NOT EXISTS merge_conflicts (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    island_operation_id TEXT NOT NULL,
+    merge_operation_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('ORDER_CONFLICT', 'TABLE_CONFLICT', 'BALANCE_CONFLICT',
+                                       'STOCK_NEGATIVE', 'ROW_CONFLICT', 'DELETED_ELSEWHERE',
+                                       'REJECTED_ON_MERGE')),
+    target_table TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    details TEXT NOT NULL CHECK (json_valid(details)),
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'RESOLVED')),
+    created_at TEXT NOT NULL,
+    resolved_by TEXT,
+    resolved_at TEXT,
+    resolution_note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_merge_conflicts_tenant_status
+    ON merge_conflicts (tenant_id, status);
+
+-- Birleştirilmiş ada işlemleri: aynı işlem ikinci kez birleşmez, geri sarılmış
+-- günlük aynı cihaz sırasını farklı kimlikle getiremez.
+CREATE TABLE IF NOT EXISTS merged_island_ops (
+    island_operation_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    device_sequence INTEGER NOT NULL,
+    merge_operation_id TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN ('CLEAN', 'CONFLICT', 'REJECTED')),
+    detail TEXT CHECK (detail IS NULL OR json_valid(detail)),
+    merged_at TEXT NOT NULL,
+    UNIQUE (tenant_id, device_id, device_sequence)
+);
+
+-- Buluta gönderim imleci: cihaz ve akış başına son gönderilen konum. `LOG` için
+-- `sync_operations.log_index`, `ISLAND` için `sync_island_ops.device_sequence`.
+CREATE TABLE IF NOT EXISTS sync_cloud_cursor (
+    tenant_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    stream TEXT NOT NULL CHECK (stream IN ('LOG', 'ISLAND')),
+    last_position INTEGER NOT NULL DEFAULT 0,
+    last_operation_id TEXT,
+    updated_at TEXT,
+    PRIMARY KEY (tenant_id, device_id, stream)
 );
 
 -- Bu cihazın imza anahtarı. Gizli anahtar cihazdan çıkmaz.
@@ -2320,4 +2478,57 @@ CREATE TABLE IF NOT EXISTS device_license (
     token TEXT,
     checked_at TEXT,
     last_error TEXT
+);
+
+-- Bulut eşitlemesinin cihaz durumu. Cihaza özeldir, eşitlenmez. `baseline_done`:
+-- günlükten önceki satırların ilk yüklemesi hazırlandı mı. `wipe_pending`: hesaptan
+-- çıkıldı, bekleyen işlemler buluta varınca yerel veri silinecek.
+CREATE TABLE IF NOT EXISTS sync_cloud_state (
+    slot INTEGER PRIMARY KEY CHECK (slot = 1),
+    pull_after INTEGER NOT NULL DEFAULT 0 CHECK (pull_after >= 0),
+    baseline_done INTEGER NOT NULL DEFAULT 0 CHECK (baseline_done IN (0, 1)),
+    wipe_pending INTEGER NOT NULL DEFAULT 0 CHECK (wipe_pending IN (0, 1)),
+    last_push_at TEXT,
+    last_pull_at TEXT,
+    last_error_code TEXT,
+    last_error TEXT
+);
+
+-- OWNER'ın bulut inceleme kararları LAN günlüğünden ayrıdır; reddedilen yerel satış verisi korunur.
+CREATE TABLE IF NOT EXISTS sync_cloud_review (
+    tenant_id TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    decision TEXT NOT NULL CHECK (decision IN ('PENDING', 'ACCEPTED', 'REJECTED')),
+    reason TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (tenant_id, operation_id)
+);
+
+-- İlk yüklemenin işlemleri: günlüğe hiç girmemiş satırlar, günlükten önce gönderilir.
+CREATE TABLE IF NOT EXISTS sync_cloud_baseline (
+    position INTEGER PRIMARY KEY CHECK (position > 0),
+    tenant_id TEXT NOT NULL,
+    operation_id TEXT NOT NULL UNIQUE,
+    operation TEXT NOT NULL CHECK (json_valid(operation)),
+    pushed INTEGER NOT NULL DEFAULT 0 CHECK (pushed IN (0, 1))
+);
+
+-- Buluttan alınıp uygulanan işlemler: aynı işlem ikinci kez uygulanmaz.
+CREATE TABLE IF NOT EXISTS sync_cloud_applied (
+    tenant_id TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('APPLIED', 'SKIPPED', 'REJECTED')),
+    error TEXT,
+    applied_at TEXT NOT NULL,
+    PRIMARY KEY (tenant_id, operation_id)
+);
+
+-- Ada birleşmesinin bulut karşılığı: birleşme sonrası satırların bu cihazdaki görüntüsü.
+-- Bir kez üretilir ve saklanır; yeniden gönderimde içerik değişmez.
+CREATE TABLE IF NOT EXISTS sync_cloud_settle (
+    merge_operation_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    operation_id TEXT NOT NULL UNIQUE,
+    operation TEXT NOT NULL CHECK (json_valid(operation))
 );

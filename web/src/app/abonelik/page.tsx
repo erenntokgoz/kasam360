@@ -1,21 +1,19 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/content/pageMetadata';
 import Link from 'next/link';
-import { PageSheet } from '@/components/PageSheet';
+import { PageShell } from '@/components/PageShell';
+import { formatMoney, formatMoneyAmount } from '@/lib/formatMoney';
+import { loadCatalog, type CatalogPackage, type CatalogResponse } from '@/lib/catalogApi';
 
-export const metadata: Metadata = {
+// Türk lirası ortak para biçimiyle ("1.250,50 TL") yazılır; diğer para birimleri kodlarıyla gösterilir.
+const priceText = (price: CatalogPackage['price']) =>
+  price.currency === 'TRY' ? formatMoney(price.amountCents) : `${formatMoneyAmount(price.amountCents)} ${price.currency}`;
+
+export const metadata: Metadata = pageMetadata({
   title: 'Abonelik',
-  description: 'İşletme başına aylık veya yıllık KASAM360 yazılım aboneliği.',
-  alternates: { canonical: '/abonelik' },
-};
-
-const terms = [
-  { label: 'Satılan ürün', value: 'KASAM360 yazılım aboneliği' },
-  { label: 'Fiyat', value: 'İşletme başına' },
-  { label: 'Ödeme dönemi', value: 'Aylık veya yıllık' },
-  { label: 'Tutar', value: 'Yakında' },
-  { label: 'Teslimat', value: 'Windows uygulaması ve lisans anahtarı' },
-  { label: 'Ödeme', value: 'Henüz açık değil' },
-];
+  description: 'Yayımlanan KASAM360 paketleri, cihaz hakları ve aylık veya yıllık tutarlar. Online satın alma henüz açık değil.',
+  path: '/abonelik',
+});
 
 const answers = [
   {
@@ -32,37 +30,56 @@ const answers = [
   },
 ];
 
-export default function SubscriptionPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function SubscriptionPage() {
+  let catalog: CatalogResponse | null = null;
+  let catalogError = false;
+  try { catalog = await loadCatalog(); } catch { catalogError = true; }
   return (
-    <PageSheet tone="green" copy="Patron nüshası">
-      <header className="flex max-w-3xl flex-col gap-3">
-        <h1 className="sheet-title">İşletme başına tek abonelik.</h1>
-        <p className="text-ink-soft">Tutarlar ödeme açılmadan önce bu sayfada yayımlanır.</p>
-      </header>
-
-      <dl>
-        {terms.map((term) => (
-          <div key={term.label} className="form-row sm:grid-cols-[14rem_1fr]">
-            <dt className="printed">{term.label}</dt>
-            <dd className="pen">{term.value}</dd>
+    <PageShell title="İşletme başına tek abonelik." lead="Aylık veya yıllık. Yalnız yazılımı kapsar. Online satın alma henüz açık değil; ödeme açıldığında kayıtlı işletmelere e-posta gönderilir.">
+      <div className="k-row k-page-cta">
+        <Link href="/kayit" className="k-btn k-btn-buy k-btn-lg">Kayıt olun</Link>
+        <Link href="/ozellikler" className="k-btn k-btn-line k-btn-lg">Bütün özellikler</Link>
+      </div>
+      <div className="k-pricing">
+        <section aria-labelledby="published-packages-title">
+          <h2 id="published-packages-title" className="k-section-title">Yayımlanan paketler</h2>
+          {catalogError && <p className="k-alert" role="alert">Paket ve fiyat bilgisi şu anda alınamıyor. Fiyatı tahmin ederek gösteremiyoruz.</p>}
+          {!catalogError && catalog?.packages.length === 0 && <p className="k-muted">Şu anda yayımlanmış paket yok.</p>}
+          {!catalogError && catalog && catalog.packages.length > 0 && <div className="k-package-grid">
+            {catalog.packages.map((item) => (
+              <article className="k-panel k-package-card" data-highlighted={item.highlighted} key={`${item.packageId}:${item.price.priceId}`}>
+                <header>
+                  {item.highlighted && <span className="k-tag">Öne çıkan</span>}
+                  <h3>{item.name}</h3>
+                  <p>{item.description}</p>
+                </header>
+                <div>
+                  <p className="k-package-price">{priceText(item.price)}</p>
+                  <p className="k-muted">{item.price.interval === 'month' ? 'Aylık' : 'Yıllık'} · Vergi {item.price.taxBehavior === 'inclusive' ? 'dahil' : 'hariç'}</p>
+                </div>
+                <p className="k-muted">En fazla {item.deviceLimit} cihaz</p>
+                <ul className="k-package-features">
+                  {item.features.map((feature) => <li key={feature.key}><strong>{feature.name}</strong><span>{feature.description}</span></li>)}
+                </ul>
+                <p className="k-package-unavailable">Satın alma henüz açık değil</p>
+              </article>
+            ))}
+          </div>}
+        </section>
+        <section aria-labelledby="subscription-questions-title">
+          <h2 id="subscription-questions-title" className="k-section-title">Abonelik hakkında</h2>
+          <div className="k-faq">
+            {answers.map((item) => (
+              <details key={item.question}>
+                <summary>{item.question}</summary>
+                <p>{item.answer}</p>
+              </details>
+            ))}
           </div>
-        ))}
-      </dl>
-
-      <div className="flex max-w-3xl flex-col gap-5">
-        {answers.map((item) => (
-          <section key={item.question} className="flex flex-col gap-1">
-            <h2 className="text-xl font-bold">{item.question}</h2>
-            <p className="text-ink-soft">{item.answer}</p>
-          </section>
-        ))}
+        </section>
       </div>
-
-      <div>
-        <Link href="/kayit" className="btn">
-          Fiyat Açıklanınca Haber Alın
-        </Link>
-      </div>
-    </PageSheet>
+    </PageShell>
   );
 }

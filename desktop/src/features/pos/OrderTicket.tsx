@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { Send, Trash2, FileText } from 'lucide-react';
 import { usePosStore } from '../../stores/posStore';
@@ -34,7 +35,7 @@ export const OrderTicket: React.FC = () => {
     calculateTotalCents,
   } = usePosStore();
 
-  const openModal = useUIStore((state) => state.openModal);
+  const { openModal, setActiveModule, showNotice } = useUIStore();
   const { playOrderBell } = useKdsStore();
   const { tables, loadFloorPlan } = useFloorStore();
 
@@ -42,6 +43,7 @@ export const OrderTicket: React.FC = () => {
   const [authModalMode, setAuthModalMode] = useState<'VOID' | 'COMP'>('VOID');
   const [transferModalItem, setTransferModalItem] = useState<OrderItem | null>(null);
   const [askClear, setAskClear] = useState(false);
+  const [askPaid, setAskPaid] = useState(false);
 
   const total = calculateTotalCents();
   const unsentCount = ticketItems.filter((i) => !i.isSentToKitchen).length;
@@ -50,6 +52,8 @@ export const OrderTicket: React.FC = () => {
     if (await sendToKitchen()) {
       playOrderBell();
       await loadFloorPlan();
+      setActiveModule('FLOOR');
+      showNotice('Sipariş mutfağa iletildi.');
     }
   };
 
@@ -59,6 +63,11 @@ export const OrderTicket: React.FC = () => {
       if (!(await sendToKitchen())) return;
       await loadFloorPlan();
     }
+    setAskPaid(true);
+  };
+
+  const continuePayment = () => {
+    setAskPaid(false);
     openModal('payment');
   };
 
@@ -75,7 +84,7 @@ export const OrderTicket: React.FC = () => {
   };
 
   return (
-    <aside className="w-[390px] shrink-0 work-surface !rounded-none border-l border-[var(--border)] flex flex-col h-full select-none">
+    <aside className="w-[clamp(260px,34%,390px)] max-sm:w-full max-sm:h-[48%] min-w-0 min-h-0 shrink-0 work-surface !rounded-none border-l border-[var(--border)] flex flex-col h-full select-none">
       {/* Başlık Barı */}
       <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between shrink-0">
         <div>
@@ -109,7 +118,7 @@ export const OrderTicket: React.FC = () => {
       </div>
 
       {/* Kalemler Listesi */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
         {ticketItems.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--text-muted)]">
             <span className="text-xs">Adisyonda henüz ürün bulunmuyor.</span>
@@ -145,9 +154,7 @@ export const OrderTicket: React.FC = () => {
       </div>
 
       {orderError ? (
-        <p role="alert" className="mx-4 mb-2 p-2 rounded-lg text-xs font-medium break-words bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
-          {orderError}
-        </p>
+        <ErrorToast message={orderError} />
       ) : null}
 
       {/* Alt Toplam ve Ödeme Alanı */}
@@ -193,6 +200,16 @@ export const OrderTicket: React.FC = () => {
           </Button>
         ) : null}
       </div>
+
+      <Modal isOpen={askPaid} onClose={() => setAskPaid(false)} title="Müşteri hesabı ödedi mi?" subtitle="Tahsilat yalnız ödeme alındıysa kaydedilir." maxWidth="sm">
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="secondary" size="lg" onClick={() => {
+            setAskPaid(false);
+            showNotice('Ödeme alınmadı. Adisyon açık bırakıldı.');
+          }}>Hayır, açık bırak</Button>
+          <Button variant="success" size="lg" onClick={continuePayment}>Evet, tahsilata geç</Button>
+        </div>
+      </Modal>
 
       <Modal isOpen={askClear} onClose={() => setAskClear(false)} title="Kalemler silinsin mi?" subtitle={`${unsentCount} kalem henüz mutfağa gitmedi.`} maxWidth="sm">
         <div className="grid grid-cols-2 gap-2">

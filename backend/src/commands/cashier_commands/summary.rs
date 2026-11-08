@@ -215,7 +215,7 @@ pub async fn ensure_drawer_covers(
     let calc =
         calculate_expected_shift_balance(conn, tenant_id, shift_id, &opened_at, None, opening)
             .await?;
-    if amount_cents > calc.expected_balance {
+    if calc.expected_balance < 0 || amount_cents > calc.expected_balance {
         return Err(format!(
             "INSUFFICIENT_CASH: çekmecede {} kuruş var, {} kuruş çıkarılamaz.",
             calc.expected_balance, amount_cents
@@ -272,15 +272,20 @@ pub async fn get_shift_summary(
         None => 0,
     };
 
+    let show_cash = closed_at.is_some()
+        || !actor_role
+            .as_deref()
+            .is_some_and(|role| role.eq_ignore_ascii_case("CASHIER"));
+
     Ok(ShiftSummaryDto {
         shift_id,
-        total_sales: calc.total_sales,
+        total_sales: show_cash.then_some(calc.total_sales),
         total_cash_in: calc.total_cash_in,
         total_cash_out: calc.total_cash_out,
-        expected_balance: calc.expected_balance,
+        expected_balance: show_cash.then_some(calc.expected_balance),
         discrepancy,
         actual_closing_balance,
-        cash_sales: calc.cash_sales,
+        cash_sales: show_cash.then_some(calc.cash_sales),
         card_sales: calc.card_sales,
         meal_card_sales: calc.meal_card_sales,
         veresiye_sales: calc.veresiye_sales,

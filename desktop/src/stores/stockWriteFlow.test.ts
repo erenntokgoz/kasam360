@@ -41,9 +41,10 @@ describe('stok yazma sonrası hata sınırları', () => {
       if (command === 'receive_purchase' && ++attempts === 1) throw new Error('QUORUM_LOST');
       return normal(command, args);
     });
-    expect(await useStockStore.getState().quickReceive('prd_test', 1, 100, 'sup_test', TERM)).toBe(false);
-    expect(useStockStore.getState().pendingQuickReceipt?.orderId).toBe('por_test');
-    expect(await useStockStore.getState().quickReceive('prd_test', 1, 100, 'sup_test', TERM)).toBe(true);
+    const card = { ...TERM, settlement: 'CREDIT_CARD' as const, documentNo: 'F-5' };
+    expect(await useStockStore.getState().quickReceive('prd_test', 1, 100, 'sup_test', card)).toBe(false);
+    expect(useStockStore.getState().pendingQuickReceipt).toMatchObject({ orderId: 'por_test', receipt: card });
+    expect(await useStockStore.getState().quickReceive('prd_test', 1, 100, 'sup_test', card)).toBe(true);
     expect(ipc.mock.calls.filter(([command]) => command === 'create_purchase_order_command')).toHaveLength(1);
     expect(useStockStore.getState().pendingQuickReceipt).toBeNull();
     // Sonucu bilinmeyen teslim aynı işlem kimliğiyle yeniden denenir: sunucu ikinci kez yazmaz.
@@ -72,7 +73,7 @@ describe('stok yazma sonrası hata sınırları', () => {
   });
 
   it('bekleyen hızlı giriş varken farklı miktarla yeni sipariş açmaz', async () => {
-    useStockStore.setState({ pendingQuickReceipt: { orderId: 'por_test', tenantId: 'tnt_test', productId: 'prd_test', quantity: 1, unitCostCents: 100, supplierId: 'sup_test' } });
+    useStockStore.setState({ pendingQuickReceipt: { orderId: 'por_test', tenantId: 'tnt_test', productId: 'prd_test', quantity: 1, unitCostCents: 100, supplierId: 'sup_test', receipt: TERM } });
     expect(await useStockStore.getState().quickReceive('prd_test', 2, 100, 'sup_test', TERM)).toBe(false);
     expect(ipc).not.toHaveBeenCalled();
   });

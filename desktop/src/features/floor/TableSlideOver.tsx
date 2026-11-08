@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
 import { ShoppingBag, CreditCard, ArrowRight, Merge, Users, Clock } from 'lucide-react';
 import type { FloorTable } from '../../types/floor';
@@ -14,6 +15,7 @@ import type { OrderBalance } from '../../stores/posStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useFloorStore } from '../../stores/floorStore';
 import { errorText } from '../../lib/cariInput';
+import { canCollectPayment } from '../../lib/roleAccess';
 
 export interface TableSlideOverProps {
   isOpen: boolean;
@@ -51,8 +53,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
   const [balance, setBalance] = useState<OrderBalance | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
-  // Garson tahsilat yapamaz; hesap düğmeleri ona gösterilmez.
-  const canSettle = useAuthStore((state) => state.user?.role !== 'WAITER');
+  const canSettle = canCollectPayment(useAuthStore((state) => state.user?.role));
   const loadFloorPlan = useFloorStore((state) => state.loadFloorPlan);
   const tableId = table?.id;
   const activeOrderId = table?.activeOrderId;
@@ -170,7 +171,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
               </Button>
             )}
           </div>
-          {closeError ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{closeError}</p> : null}
+          {closeError ? <ErrorToast message={closeError} /> : null}
         </div>
       ) : undefined}
     >

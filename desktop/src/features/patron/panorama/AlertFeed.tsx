@@ -18,7 +18,7 @@ export const AlertFeed: React.FC<{ alerts: PanoramaAlert[] }> = ({ alerts }) => 
   const shown = alerts.slice(0, VISIBLE_LIMIT);
   return (
     <Panel
-      title="Bugün İlgilen"
+      title="Uyarılar"
       aside={
         alerts.length > 0 ? (
           <span className="text-xs font-bold tabular-nums text-[var(--text-secondary)]">{alerts.length} başlık</span>

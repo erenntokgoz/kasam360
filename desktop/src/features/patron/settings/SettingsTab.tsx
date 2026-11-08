@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../../../stores/authStore';
 import { useLedgerStore } from '../../../stores/ledgerStore';
 import { BackupPanel } from '../BackupPanel';
-import type { SectionTab } from '../SectionTabs';
+import { Bar, BarTab } from '../../../ui/Bar';
+import { SectionTabs, type SectionTab } from '../SectionTabs';
+import { CloudSyncSettings } from './CloudSyncSettings';
+import { DeviceSettings } from './DeviceSettings';
+import { LicenseSettings } from './LicenseSettings';
 import { SessionSettingsTab } from '../SessionSettingsTab';
 import { LegacyArchivePanel } from './LegacyArchivePanel';
 import { StationSettings } from './StationSettings';
@@ -14,6 +18,8 @@ type SettingsSection = 'SESSION' | 'FLOOR' | 'BACKUP';
 export const SettingsTab: React.FC = () => {
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const erpSection = useLedgerStore((state) => state.erpSection);
+  const [floorSection, setFloorSection] = useState<'TABLES' | 'STATIONS' | 'RESERVATIONS'>('TABLES');
+  const [deviceSection, setDeviceSection] = useState<'ACCOUNT' | 'DEVICES'>('ACCOUNT');
   const [section, setSection] = useState<SettingsSection>('SESSION');
 
   useEffect(() => {
@@ -21,44 +27,40 @@ export const SettingsTab: React.FC = () => {
   }, [erpSection, isOwner]);
 
   const tabs: SectionTab<SettingsSection>[] = [
-    { id: 'SESSION', label: 'İşletme' },
-    { id: 'FLOOR', label: 'Salon' },
-    ...(isOwner ? [{ id: 'BACKUP' as const, label: 'Yedek' }] : []),
+    { id: 'SESSION', label: 'Bu Cihaz' },
+    { id: 'FLOOR', label: 'Salon ve Mutfak' },
+    ...(isOwner ? [{ id: 'BACKUP' as const, label: 'Yedek ve Kurtarma' }] : []),
   ];
 
   return (
-    <section className="flex-1 flex min-w-0 h-full overflow-hidden select-none text-[var(--text-primary)]">
-      <nav aria-label="Ayarlar" className="paper shrink-0 w-48 flex flex-col gap-1 p-2">
+    <section className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden text-[var(--text-primary)]">
+      <Bar label="Ayarlar" actions={<span className="px-2 text-xs text-[var(--text-secondary)]">KASAM360 {__APP_VERSION__}</span>}>
         {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            aria-current={section === tab.id ? 'page' : undefined}
-            className={`min-h-12 px-3 rounded text-left font-bold ${section === tab.id ? 'bg-[var(--marker)]' : ''}`}
-            onClick={() => setSection(tab.id)}
-          >
-            {tab.label}
-          </button>
+          <BarTab key={tab.id} active={section === tab.id} onClick={() => setSection(tab.id)}>{tab.label}</BarTab>
         ))}
-        <p className="mt-auto p-2 text-sm text-[var(--text-muted)]">KASAM360 {__APP_VERSION__}</p>
-      </nav>
-      <div className="page-fill flex-1 min-w-0 overflow-y-auto p-4 space-y-4">
+      </Bar>
+      <div className="motion-swap page-fill flex-1 overflow-y-auto p-4 space-y-4">
         {section === 'SESSION' ? (
-          <div className="space-y-4">
-            <SessionSettingsTab />
-          </div>
+          <>
+            <SectionTabs label="Bu Cihaz" active={deviceSection} onChange={setDeviceSection}
+              tabs={[{ id: 'ACCOUNT', label: 'Oturum ve Görünüm' }, { id: 'DEVICES', label: 'Cihaz Bağlantıları' }]} />
+            {deviceSection === 'ACCOUNT' ? <SessionSettingsTab /> : <><LicenseSettings /><DeviceSettings canManage={isOwner} /><CloudSyncSettings canManage={isOwner} /></>}
+          </>
         ) : null}
         {section === 'FLOOR' ? (
-          <div className="space-y-4">
-            <TablesSettings />
-            <StationSettings />
-          </div>
+          <>
+            <SectionTabs label="Salon ve Mutfak" active={floorSection} onChange={setFloorSection}
+              tabs={[{ id: 'TABLES', label: 'Masalar ve Kroki' }, { id: 'STATIONS', label: 'Mutfak İstasyonları' }, { id: 'RESERVATIONS', label: 'Rezervasyon' }]} />
+            {floorSection === 'TABLES' ? <TablesSettings /> : null}
+            {floorSection === 'STATIONS' ? <StationSettings /> : null}
+            {floorSection === 'RESERVATIONS' ? <SessionSettingsTab reservations /> : null}
+          </>
         ) : null}
-        {section === 'BACKUP' ? (
-          <div className="space-y-4">
+        {section === 'BACKUP' && isOwner ? (
+          <>
             <BackupPanel />
             <LegacyArchivePanel />
-          </div>
+          </>
         ) : null}
       </div>
     </section>

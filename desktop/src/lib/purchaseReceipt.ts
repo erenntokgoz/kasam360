@@ -1,3 +1,4 @@
+import { localDate } from './cariInput';
 import type { ReceiptInput, Settlement } from '../types/stock';
 
 export type ReceiptMode = 'TERM' | 'PAID';
@@ -12,10 +13,10 @@ export interface ReceiptDraft {
   grams: Record<string, string>;
 }
 
-export const emptyReceiptDraft = (): ReceiptDraft => ({
+export const emptyReceiptDraft = (now = new Date()): ReceiptDraft => ({
   mode: 'TERM',
   channel: 'CASH',
-  dueDate: '',
+  dueDate: localDate(now),
   documentNo: '',
   grams: {},
 });

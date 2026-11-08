@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { useCariStore } from '../../stores/cariStore';
 import { errorText, newOperationId } from '../../lib/cariInput';
@@ -42,7 +43,7 @@ const PendingReceiptRow: React.FC<{ document: AwaitingDocument; showSupplier: bo
           {showSupplier ? `${document.supplierName} · ` : ''}Sipariş {document.orderNumber}
         </span>
         <span className="block text-[var(--text-muted)]">Teslim alındı, borcu açılmadı</span>
-        {error ? <span role="alert" className="block font-semibold text-[var(--accent-red)]">{error}</span> : null}
+        {error ? <ErrorToast message={error} /> : null}
       </span>
       <span className="flex items-center gap-3">
         <span className="font-bold tabular-nums text-[var(--text-primary)]">

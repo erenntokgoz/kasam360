@@ -1,27 +1,27 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useEffect } from 'react';
-import { RefreshCw } from 'lucide-react';
-import { formatTime } from '../../../lib/date';
-import { RANGE_LABELS, reportPeriod, type RangeKey } from '../../../lib/dateRange';
+import { reportPeriod } from '../../../lib/dateRange';
+import { formatMoney } from '../../../lib/formatMoney';
 import { buildInsights } from '../../../lib/panoramaInsights';
 import { useAuthStore } from '../../../stores/authStore';
 import { usePanoramaStore } from '../../../stores/panoramaStore';
 import { useUIStore } from '../../../stores/uiStore';
-import { Button } from '../../../ui/Button';
 import { AlertFeed } from './AlertFeed';
 import { KpiStrip } from './KpiStrip';
 import { LivePanel } from './LivePanel';
 import { MenuMatrix } from './MenuMatrix';
 import { MonthlyGoal } from './MonthlyGoal';
+import { Panel } from './Panel';
+import { PeriodFilter } from './PeriodFilter';
 import { PaymentMix } from './PaymentMix';
 import { RevenueChart } from './RevenueChart';
 import { TopProducts } from './TopProducts';
 
 const REFRESH_MS = 30_000;
-const RANGES: RangeKey[] = ['TODAY', 'YESTERDAY', 'WEEK', 'MONTH'];
 
 /** Patronun tek bakışta gördüğü pano. Her rakam kayıtlı hareketten gelir. */
 export const BoardSection: React.FC = () => {
-  const { range, data, metrics, metricsError, error, loadedAt, setRange, load } = usePanoramaStore();
+  const { range, data, metrics, metricsError, error, setRange, load } = usePanoramaStore();
   const isModuleOpen = useUIStore((state) => state.activeModule === 'ERP');
   const isLocked = useAuthStore((state) => state.isLocked);
   const isVisible = isModuleOpen && !isLocked;
@@ -41,30 +41,10 @@ export const BoardSection: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5" role="group" aria-label="Dönem">
-          {RANGES.map((key) => (
-            <Button
-              key={key}
-              variant={range === key ? 'selected' : 'secondary'}
-              className="min-h-12 text-sm font-bold"
-              aria-pressed={range === key}
-              onClick={() => setRange(key)}
-            >
-              {RANGE_LABELS[key]}
-            </Button>
-          ))}
-        </div>
-        <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void load()}>
-          <RefreshCw className="w-4 h-4 mr-1.5" />
-          <span className="tabular-nums">{loadedAt ? `Güncel: ${formatTime(loadedAt)}` : 'Yükleniyor'}</span>
-        </Button>
-      </div>
+      <PeriodFilter range={range} onChange={setRange} />
 
       {error ? (
-        <p role="alert" className="p-3 rounded-lg text-sm font-semibold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
-          Pano okunamadı: {error}
-        </p>
+        <><p className="text-sm text-[var(--text-secondary)]">Pano okunamadı.</p><ErrorToast message={`Pano okunamadı: ${error}`} /></>
       ) : null}
 
       {data ? (
@@ -73,25 +53,39 @@ export const BoardSection: React.FC = () => {
             <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{insights.join(' ')}</p>
           ) : null}
           <KpiStrip current={data.current} previous={data.previous} compareLabel={compareLabel} />
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div className="xl:col-span-2">
               <RevenueChart kind={data.bucketKind} buckets={data.buckets} />
             </div>
-            <LivePanel live={data.live} current={data.current} />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            <AlertFeed alerts={data.alerts} />
             <PaymentMix channels={data.channels} />
-            <MonthlyGoal />
           </div>
-          <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-            <div className="xl:col-span-3">
-              <TopProducts products={data.products} showProfit={data.current.grossProfitCents !== null} />
-            </div>
-            <div className="xl:col-span-2">
-              <MenuMatrix metrics={metrics} error={metricsError} />
-            </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <TopProducts products={data.products} showProfit={data.current.grossProfitCents !== null} />
+            <MenuMatrix metrics={metrics} error={metricsError} />
+            <Panel title="Dönem Kesintileri">
+              <dl className="divide-y divide-[var(--border)]">
+                {([
+                  ['Ödenecek KDV', data.current.vatCents],
+                  ['İndirim', data.current.discountCents],
+                  ['İptal', data.current.voidCents],
+                  ['İade', data.current.refundCents],
+                ] as const).map(([label, amount]) => (
+                  <div key={label} className="flex items-center justify-between gap-2 py-2 text-sm">
+                    <dt className="text-[var(--text-secondary)]">{label}</dt>
+                    <dd className="font-semibold tabular-nums">{formatMoney(amount)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Panel>
           </div>
+          <section aria-label="İşletme durumu" className="space-y-2">
+            <h2 className="text-base font-semibold">İşletme Durumu</h2>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              <LivePanel live={data.live} />
+              <AlertFeed alerts={data.alerts} />
+              <MonthlyGoal />
+            </div>
+          </section>
         </>
       ) : (
         <>

@@ -85,6 +85,63 @@ pub async fn check_integrity(path: &Path) -> Result<(), BackupError> {
     }
 }
 
+/// Boş kasaya kurulacak dosyanın gerçekten bir Kasam360 kasası olduğunu doğrular.
+///
+/// Özet ve SQLite bütünlüğü doğru olan başka bir veritabanı canlı dosyanın yerine geçip
+/// şemanın üstüne kurulmasın diye zorunlu tablolar, işletme/OWNER ve denetim zincirinin
+/// kopmamış olması aranır. Dosya salt okunur açılır; hiçbir şey yazılmaz.
+pub async fn check_till_backup(path: &Path) -> Result<(), BackupError> {
+    let options = SqliteConnectOptions::new()
+        .filename(path)
+        .read_only(true)
+        .immutable(true);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .map_err(|e| BackupError::Corrupt(e.to_string()))?;
+    let result = till_shape(&pool).await;
+    pool.close().await;
+    result
+}
+
+async fn till_shape(pool: &SqlitePool) -> Result<(), BackupError> {
+    let corrupt = |text: &str| BackupError::Corrupt(text.to_string());
+    for table in ["tenants", "users", "app_setup", "orders", "audit_ledger"] {
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)",
+        )
+        .bind(table)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| BackupError::Corrupt(e.to_string()))?;
+        if !exists {
+            return Err(BackupError::Corrupt(format!(
+                "kasa yedeği değil: {table} tablosu yok"
+            )));
+        }
+    }
+    let owners: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM users u JOIN tenants t ON t.id = u.tenant_id WHERE u.role = 'OWNER'",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|e| BackupError::Corrupt(e.to_string()))?;
+    if owners == 0 {
+        return Err(corrupt("kasa yedeği değil: işletme sahibi yok"));
+    }
+    let chain: Vec<(String, String)> = sqlx::query_as(
+        "SELECT previous_hash, current_hash FROM audit_ledger ORDER BY tenant_id, sequence",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| BackupError::Corrupt(e.to_string()))?;
+    if chain.windows(2).any(|pair| pair[1].0 != pair[0].1) {
+        return Err(corrupt("denetim zinciri kopuk"));
+    }
+    Ok(())
+}
+
 /// Veritabanının tutarlı kopyasını alır ve doğrulanmış olarak yayınlar.
 pub async fn create_backup(
     pool: &SqlitePool,

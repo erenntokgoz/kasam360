@@ -11,6 +11,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
   poweredByHeader: false,
   agentRules: false,
   async headers() {
@@ -20,9 +21,13 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: '/api/auth/:path*', destination: `${apiOrigin}/api/auth/:path*` },
+      { source: '/v1/tenants', destination: `${apiOrigin}/v1/tenants` },
+      { source: '/v1/tenants/:path*', destination: `${apiOrigin}/v1/tenants/:path*` },
       { source: '/api/support/:path*', destination: `${apiOrigin}/api/support/:path*` },
       { source: '/api/license', destination: `${apiOrigin}/api/license` },
       { source: '/api/desktop-link/:path*', destination: `${apiOrigin}/api/desktop-link/:path*` },
+      // Kasa lisans anahtarını ve belgesini site adresinden ister; yönlendirme yoksa 404 çevrimdışı sayılır.
+      { source: '/api/desktop/:path*', destination: `${apiOrigin}/api/desktop/:path*` },
     ];
   },
   async redirects() {

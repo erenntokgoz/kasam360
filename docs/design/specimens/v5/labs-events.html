@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Olay kaydı · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script><script src="labs-shell.js" defer></script>
+<style>
+  .src { display: inline-block; min-width: 54px; font-size: 12px; color: var(--text-2); }
+  tr.open td, .tbl tr.open td:first-child, .tbl tr.more td:first-child { background: var(--bg-2); }
+  tr.more td { padding: 0; background: var(--bg-2); white-space: normal; }
+  .det { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 24px; padding: 14px 16px 18px; }
+  .det small { display: block; font-size: 12px; color: var(--text-3); } .det span { font-weight: 520; }
+  .det .wide { grid-column: 1 / -1; }
+  .exp { border: 0; background: none; cursor: pointer; color: var(--text-2); padding: 2px 6px; border-radius: 6px; }
+  @media (max-width: 900px) { .det { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği, sabit test verisi. Kayıtlar değiştirilemez; bu sayfa yalnız okur.</span>
+<div class="app">
+  <aside class="rail" data-page="events"></aside>
+  <div class="main">
+    <div class="bar"><span class="crumb">KASAM360 / <b>Olay kaydı</b></span>
+      <label class="search"><input placeholder="İşletme, kişi veya olay" aria-label="Olay ara"><kbd>/</kbd></label></div>
+    <div class="page">
+      <div class="ph"><div><h1>Olay kaydı</h1><p>Silinmez ve değiştirilemez. Son 24 saat, 312 olay.</p></div>
+        <div class="acts"><button class="btn btn-line sm">Tarih aralığı</button><button class="btn btn-line sm">Dışa aktar</button></div></div>
+      <div class="chips" role="group" aria-label="Kaynak">
+        <button aria-pressed="true">Tümü</button><button aria-pressed="false">Kasa</button><button aria-pressed="false">Web</button><button aria-pressed="false">Labs</button>
+        <button aria-pressed="false"><span class="warn-dot"></span>Hatalar <span class="num">3</span></button><button aria-pressed="false">Para ile ilgili</button>
+      </div>
+      <div class="wrapx">
+        <div class="tbl"><table class="grid">
+          <thead><tr><th>Zaman</th><th>Kaynak</th><th>İşletme</th><th>Olay</th><th>Kim</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="num">11.34.08</td><td><span class="src">Labs</span></td><td>TEST_A Lokanta</td><td>Destek yanıtı gönderildi</td><td>Mert D.</td><td></td></tr>
+            <tr class="open"><td class="num">11.19.42</td><td><span class="src">Kasa</span></td><td>TEST_A Lokanta</td><td style="color:var(--bad);font-weight:560">Eşitleme reddedildi</td><td class="mono">dev_a_01</td><td><button class="exp" aria-expanded="true">Kapat</button></td></tr>
+            <tr class="more"><td colspan="6"><div class="det">
+              <div><small>Olay kimliği</small><span class="mono">evt_01JD2K7R4W8B3N6P9X0Q5T2M1C</span></div>
+              <div><small>Cihaz</small><span>Kasa 1, sürüm 0.2.0</span></div>
+              <div><small>Sırada bekleyen</small><span class="num">2 kayıt</span></div>
+              <div><small>Sunucu yanıtı</small><span>Zaman damgası kabul aralığının dışında</span></div>
+              <div><small>Cihaz saati</small><span class="num">08.19.40</span></div>
+              <div><small>Sunucu saati</small><span class="num">11.19.42</span></div>
+              <div class="wide"><small>Kayıt özeti (SHA-256)</small><span class="mono">9f3c…a41e, önceki kayda bağlı</span></div>
+            </div></td></tr>
+            <tr><td class="num">09.02.15</td><td><span class="src">Kasa</span></td><td>TEST_A Lokanta</td><td>Vardiya açıldı</td><td>Ayşe K.</td><td><button class="exp" aria-expanded="false">Aç</button></td></tr>
+            <tr><td class="num">08.47.03</td><td><span class="src">Web</span></td><td>TEST_E Ocakbaşı</td><td>Kurulum kodu üretildi</td><td>Murat E.</td><td><button class="exp" aria-expanded="false">Aç</button></td></tr>
+            <tr><td class="num">08.00.00</td><td><span class="src">Web</span></td><td>TEST_A Lokanta</td><td>Abonelik yenilendi, 1.000,00 TL</td><td>Sistem</td><td><button class="exp" aria-expanded="false">Aç</button></td></tr>
+            <tr><td class="num">01.12.40</td><td><span class="src">Kasa</span></td><td>TEST_C Bar</td><td>Ödenmiş siparişe iptal denendi, reddedildi</td><td>Can Y.</td><td><button class="exp" aria-expanded="false">Aç</button></td></tr>
+          </tbody></table></div>
+        <div class="pager"><span class="num">1–6 / 312</span><button class="btn btn-line sm" disabled>Önceki</button><button class="btn btn-line sm">Sonraki</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

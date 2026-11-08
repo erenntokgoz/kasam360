@@ -148,7 +148,12 @@ impl Sim {
             if self.device(&id).engine.is_none() {
                 continue;
             }
-            let effects = self.engine(&id).on_heartbeat().await.expect("kalp atışı");
+            let now = self.now;
+            let effects = self
+                .engine(&id)
+                .on_heartbeat(now)
+                .await
+                .expect("kalp atışı");
             self.collect(&id, effects);
         }
         self.deliver().await;
@@ -335,3 +340,7 @@ pub(super) fn members_op(id: &str, ids: &[&str]) -> Operation {
         created_at: "2026-10-30T10:00:00Z".to_string(),
     }
 }
+
+#[cfg(test)]
+#[path = "engine_island_tests.rs"]
+mod island;

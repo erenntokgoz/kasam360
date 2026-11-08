@@ -32,13 +32,15 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
 
   const setActiveModule = useUIStore((state) => state.setActiveModule);
 
+  const query = searchQuery.trim();
+
   // Tükenen ürün listeden düşmez: garson neden seçemediğini görmelidir.
   const filteredProducts = useMemo(() => {
     return products.filter((prod) => {
-      if (searchQuery) return matchesProduct(searchQuery, prod.name, prod.barcode);
+      if (query) return matchesProduct(query, prod.name, prod.barcode);
       return selectedCategoryId === 'cat_all' || prod.categoryId === selectedCategoryId;
     });
-  }, [products, selectedCategoryId, searchQuery]);
+  }, [products, selectedCategoryId, query]);
 
   const handleProductClick = async (product: Product) => {
     const groups = await loadModifierGroups(product.id);
@@ -69,13 +71,13 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] select-none">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden bg-[var(--bg-canvas)] select-none">
       <Bar
         label="Adisyon"
         actions={
           <label className="bar-search">
             <Search className="w-4 h-4 shrink-0" />
-            <input type="search" aria-label="Ürün ara" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Ürün ara" />
+            <input type="search" aria-label="Ürün ara" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </label>
         }
       >
@@ -93,7 +95,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
       </Bar>
 
       {/* Ürün Kartları Izgarası */}
-      <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 content-start">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid grid-cols-[repeat(auto-fill,minmax(min(100%,150px),1fr))] gap-3 content-start">
         {filteredProducts.map((prod) => {
           const soldOut = !prod.isAvailable;
           return (
@@ -117,7 +119,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
         })}
         {filteredProducts.length === 0 ? (
           <p className="col-span-full py-10 text-center text-[var(--text-secondary)]">
-            {searchQuery ? 'Aramayla eşleşen ürün yok.' : 'Bu kategoride ürün yok.'}
+            {query ? 'Aramayla eşleşen ürün yok.' : 'Bu kategoride ürün yok.'}
           </p>
         ) : null}
       </div>

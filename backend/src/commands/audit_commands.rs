@@ -29,6 +29,9 @@ pub struct AuditLogDto {
 pub struct AuditLogFilterDto {
     #[serde(rename = "actorId", default)]
     pub actor_id: Option<String>,
+    #[serde(rename = "staffId", default)]
+    pub staff_id: Option<String>,
+    pub actions: Option<Vec<String>>,
     pub category: Option<String>,
     #[serde(rename = "startDate", default)]
     pub start_date: Option<String>,
@@ -74,9 +77,20 @@ pub async fn get_audit_logs(
     );
     builder.push_bind(tenant_id);
 
-    if let Some(actor_id) = filter.actor_id.as_deref() {
+    if let Some(actor_id) = filter.staff_id.as_deref().or(filter.actor_id.as_deref()) {
         builder.push(" AND actor_id = ");
         builder.push_bind(actor_id.to_string());
+    }
+    if let Some(actions) = filter.actions {
+        if actions.is_empty() || actions.len() > 50 {
+            return Err("VALIDATION: işlem türü filtresi geçersiz".into());
+        }
+        builder.push(" AND action IN (");
+        let mut values = builder.separated(", ");
+        for action in actions {
+            values.push_bind(action);
+        }
+        values.push_unseparated(")");
     }
     if let Some(category) = filter.category.as_deref() {
         builder.push(" AND category = ");
@@ -102,7 +116,11 @@ pub async fn get_audit_logs(
         builder.push_bind(format!("%{}%", search));
         builder.push(" OR actor_id LIKE ");
         builder.push_bind(format!("%{}%", search));
-        builder.push(")");
+        builder.push(" OR payload LIKE ");
+        builder.push_bind(format!("%{}%", search));
+        builder.push(" OR EXISTS (SELECT 1 FROM users u WHERE u.tenant_id = audit_ledger.tenant_id AND u.id = audit_ledger.actor_id AND u.name LIKE ");
+        builder.push_bind(format!("%{}%", search));
+        builder.push("))");
     }
 
     builder.push(" ORDER BY sequence DESC LIMIT ");

@@ -1,12 +1,13 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
 import { errorText } from '../../../lib/cariInput';
 import { formatDay } from '../../../lib/date';
-import { formatMoney } from '../../../lib/formatMoney';
 import { hoursText } from '../../../lib/payPeriod';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { NumberInput } from '../../../ui/NumberInput';
+import { useAuthStore } from '../../../stores/authStore';
 import type { PayrollRule } from './RuleEditor';
 
 interface HourlyEarnings {
@@ -18,9 +19,6 @@ interface HourlyEarnings {
   earnedCents: number | null;
 }
 
-/** Saat karşılığı ve saat hak edişi aylık 225, haftalık 45, günlük 7,5 saat üzerinden gelir. */
-const HOURS_OF: Record<string, string> = { MONTHLY: '225 saat', WEEKLY: '45 saat', DAILY: '7,5 saat' };
-
 const Fact: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div>
     <dt className="text-xs text-[var(--text-secondary)]">{label}</dt>
@@ -30,6 +28,7 @@ const Fact: React.FC<{ label: string; value: string }> = ({ label, value }) => (
 
 /** Kural altında kişinin saat karşılığı, bu dönem hak edişi ve bahşiş çarpanı. */
 export const RuleFacts: React.FC<{ rule: PayrollRule; onSaved: () => Promise<void> }> = ({ rule, onSaved }) => {
+  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const [earnings, setEarnings] = useState<HourlyEarnings | null>(null);
   const [multiplier, setMultiplier] = useState(String(rule.tipMultiplierPercent));
   const [error, setError] = useState<string | null>(null);
@@ -71,17 +70,11 @@ export const RuleFacts: React.FC<{ rule: PayrollRule; onSaved: () => Promise<voi
           earnings ? (
             <>
               <Fact label={`Bu dönem çalışılan · ${formatDay(earnings.from)} - ${formatDay(earnings.to)}`} value={`${hoursText(earnings.workedSeconds)} saat`} />
-              <Fact label="Bu dönem hak ediş" value={earnings.earnedCents === null ? 'Gizli' : formatMoney(earnings.earnedCents)} />
             </>
           ) : null
-        ) : (
-          <Fact
-            label={`Saat karşılığı (${HOURS_OF[rule.payPeriod] ?? ''})`}
-            value={rule.hourlyEquivalentCents === null ? 'Gizli' : formatMoney(rule.hourlyEquivalentCents)}
-          />
-        )}
+        ) : null}
       </dl>
-      <div className="flex flex-wrap items-end gap-2">
+      {isOwner ? <div className="flex flex-wrap items-end gap-2">
         <label className="block text-xs font-semibold text-[var(--text-secondary)]">
           Bahşiş çarpanı (%)
           <NumberInput
@@ -100,8 +93,8 @@ export const RuleFacts: React.FC<{ rule: PayrollRule; onSaved: () => Promise<voi
         >
           Çarpanı Kaydet
         </Button>
-      </div>
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      </div> : null}
+      {error ? <ErrorToast message={error} /> : null}
     </div>
   );
 };

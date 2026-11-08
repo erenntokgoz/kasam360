@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useRef, useState } from 'react';
 import { errorText } from '../../lib/cariInput';
 import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
@@ -56,9 +57,7 @@ export const GoogleDeviceButton: React.FC = () => {
   return (
     <div className="flex flex-col gap-2">
       {error ? (
-        <p role="alert" className="text-sm font-medium text-[var(--accent-red)]">
-          {error}
-        </p>
+        <ErrorToast message={error} />
       ) : null}
       <Button type="button" variant="secondary" className="w-full min-h-12" onClick={() => (isWaiting ? stop() : void start())}>
         {isWaiting ? 'Tarayıcıda giriş bekleniyor, iptal et' : 'Google ile Giriş Yap'}

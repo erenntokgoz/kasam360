@@ -1,4 +1,4 @@
-import { PageSheet } from '@/components/PageSheet';
+import { PageShell } from '@/components/PageShell';
 import { siteConfig } from '@/content/siteConfig';
 
 export interface LegalSection {
@@ -6,25 +6,32 @@ export interface LegalSection {
   paragraphs: string[];
 }
 
+// Bölüm başlığından Türkçe karakterleri sadeleştirilmiş bağlantı adı üretir; sayfa içi bağlantılar paylaşılabilir.
+const ASCII: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
+const slug = (text: string) =>
+  text.toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (c) => ASCII[c] ?? c)
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
 export function LegalPage({ title, sections }: { title: string; sections: LegalSection[] }) {
   return (
-    <PageSheet>
-      <header className="flex flex-col gap-2">
-        <h1 className="sheet-subtitle">{title}</h1>
-        <p className="printed">Son güncelleme: {siteConfig.legalUpdatedAt}</p>
-      </header>
-      <div className="flex max-w-3xl flex-col gap-6">
-        {sections.map((section) => (
-          <section key={section.title} className="flex flex-col gap-1.5">
-            <h2 className="text-xl font-bold">{section.title}</h2>
-            {section.paragraphs.map((paragraph) => (
-              <p key={paragraph} className="text-ink-soft">
-                {paragraph}
-              </p>
-            ))}
-          </section>
-        ))}
+    <PageShell title={title} lead={`Son güncelleme: ${siteConfig.legalUpdatedAt}`}>
+      <div className="k-legal">
+        <nav aria-label="Bölümler">
+          {sections.map((s) => (
+            <a key={s.title} href={`#${slug(s.title)}`}>{s.title}</a>
+          ))}
+        </nav>
+        <div>
+          {sections.map((section) => (
+            <section key={section.title} id={slug(section.title)}>
+              <h2>{section.title}</h2>
+              {section.paragraphs.map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
+            </section>
+          ))}
+        </div>
       </div>
-    </PageSheet>
+    </PageShell>
   );
 }

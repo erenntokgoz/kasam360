@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
     "start": "tsx --env-file-if-exists=.env src/index.ts",
+    "start:local-test": "tsx src/localTestServer.ts",
+    "acceptance:local-device-sync": "node scripts/run-local-device-sync-acceptance.mjs",
+    "acceptance:manual-entitlement": "node scripts/run-manual-entitlement-acceptance.mjs",
+    "acceptance:sync-review": "node scripts/run-sync-review-acceptance.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "migrate": "tsx --env-file-if-exists=.env src/migrate.ts",
@@ -16,15 +20,14 @@
     "@node-rs/argon2": "^2.2.2",
     "better-auth": "^1.7.15",
     "hono": "4.13.14",
+    "mongodb": "^6.22.0",
     "nodemailer": "^10.3.1",
-    "pg": "^8.23.1",
     "tsx": "4.23.15"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/nodemailer": "^8.0.2",
-    "@types/pg": "^8.23.1",
-    "embedded-postgres": "^18.6.0-beta.19",
+    "mongodb-memory-server": "^10.4.3",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
   }

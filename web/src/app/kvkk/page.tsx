@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/content/pageMetadata';
 import { LegalPage } from '@/components/LegalPage';
 import { siteConfig } from '@/content/siteConfig';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'KVKK Aydınlatma Metni',
   description: 'KASAM360 hesabı için 6698 sayılı Kanun kapsamında aydınlatma metni.',
-  alternates: { canonical: '/kvkk' },
-};
+  path: '/kvkk',
+});
 
 export default function KvkkPage() {
   return (

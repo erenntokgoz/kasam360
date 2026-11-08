@@ -1,0 +1,23 @@
+{
+  "extends": "../desktop/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["desktop/src/*"],
+      "@app/*": ["desktop/src/app/*"],
+      "@ui/*": ["desktop/src/ui/*"],
+      "@features/*": ["desktop/src/features/*"],
+      "@services/*": ["desktop/src/services/*"],
+      "@stores/*": ["desktop/src/stores/*"],
+      "@lib/*": ["desktop/src/lib/*"],
+      "react": ["desktop/node_modules/@types/react/index.d.ts"],
+      "react/*": ["desktop/node_modules/@types/react/*"],
+      "react-dom": ["desktop/node_modules/@types/react-dom/index.d.ts"],
+      "react-dom/*": ["desktop/node_modules/@types/react-dom/*"],
+      "lucide-react": ["desktop/node_modules/lucide-react/dist/lucide-react.d.ts"],
+      "write-excel-file/browser": ["desktop/node_modules/write-excel-file/browser/index.d.ts"],
+      "*": ["desktop/node_modules/*"]
+    }
+  },
+  "include": ["src", "../desktop/src/vite-env.d.ts"]
+}

@@ -4,9 +4,14 @@
 //! başka cihazda yeniden çalıştırmak farklı sonuç verirdi. Satır görüntüsü her
 //! cihazda aynı sonucu verir, denetim zinciri dahil.
 //!
-//! Tetikleyiciler yalnız çok cihazlı kurulumda vardır; tek cihazın yazma yolu ve hızı
-//! değişmez. Kapıdan geçmeyen yazmayı tetikleyici durdurur: bir yazma yolu unutulursa
-//! cihazlar sessizce ayrışmak yerine hata görünür.
+//! Tek cihazda tetikleyici yalnız yakalar: her iş yazması günlüğe girer, ama kapıdan
+//! geçmeyen yazma durdurulmaz; tek cihazın çalışması unutulmuş bir yazma yolu yüzünden
+//! kesilmez. Çok cihazda kapıdan geçmeyen yazmayı tetikleyici durdurur: bir yazma yolu
+//! unutulursa cihazlar sessizce ayrışmak yerine hata görünür.
+//!
+//! Her değişiklik anahtar taşır, ekleme dahil: bulut ve birleştirme satırı türünden
+//! bağımsız olarak anahtarla bulur. Güncelleme ve silmede önceki görüntü de yakalanır;
+//! ada işlemi birleşmeden önce bu görüntüyle geri alınır.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -28,13 +33,39 @@ pub struct RowChange {
     pub action: String,
     pub key: Option<Map<String, Value>>,
     pub row: Option<Map<String, Value>>,
+    /// Güncelleme ve silmede satırın önceki hali. Küme günlüğüne gönderilmez; ada
+    /// işleminin geri alınması ve üç yönlü birleştirme için tutulur.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub old: Option<Map<String, Value>>,
+}
+
+/// Tetikleyici kipi.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriggerMode {
+    /// Tetikleyici yok: eşitlemesiz kurulum veya geri yükleme hazırlığı.
+    Off,
+    /// Tek cihaz: her yazma yakalanır, kapı zorunlu değildir.
+    Local,
+    /// Çok cihaz: kapısız yazma durur, yalnız kapı içindeki yazma yakalanır.
+    Cluster,
+}
+
+impl TriggerMode {
+    /// Yazmalar çoğunluktan geçiyorsa kapı zorunludur; değilse yalnız yakalanır.
+    pub fn for_cluster(replicated: bool) -> Self {
+        if replicated {
+            Self::Cluster
+        } else {
+            Self::Local
+        }
+    }
 }
 
 fn text_error(error: sqlx::Error) -> String {
     error.to_string()
 }
 
-fn quoted(name: &str) -> String {
+pub(super) fn quoted(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
@@ -43,7 +74,7 @@ fn sql_text(value: &str) -> String {
 }
 
 /// Şemadan okunur: iletideki ad veya sütun doğrudan SQL'e girmez.
-async fn table_shape(
+pub(super) async fn table_shape(
     conn: &mut SqliteConnection,
     table: &str,
 ) -> Result<(Vec<String>, Vec<String>), String> {
@@ -66,7 +97,7 @@ async fn table_shape(
     Ok((columns, keys.into_iter().map(|(_, name)| name).collect()))
 }
 
-fn json_of(alias: &str, columns: &[String]) -> String {
+pub(super) fn json_of(alias: &str, columns: &[String]) -> String {
     let pairs: Vec<String> = columns
         .iter()
         .map(|column| format!("{}, {alias}.{}", sql_text(column), quoted(column)))
@@ -94,6 +125,7 @@ async fn create_triggers(
     conn: &mut SqliteConnection,
     table: &str,
     origin_only: bool,
+    mode: TriggerMode,
 ) -> Result<(), String> {
     let (columns, keys) = table_shape(conn, table).await?;
     if keys.is_empty() {
@@ -101,7 +133,7 @@ async fn create_triggers(
             "INTERNAL: birincil anahtarsız tablo eşitlenemez: {table}"
         ));
     }
-    let guard = if origin_only {
+    let guard = if origin_only || mode != TriggerMode::Cluster {
         String::new()
     } else {
         format!(
@@ -109,15 +141,23 @@ async fn create_triggers(
             sql_text(GUARD_MESSAGE)
         )
     };
-    let capturing = "WHERE EXISTS (SELECT 1 FROM sync_write_gate WHERE mode = 'CAPTURE')";
+    // Çok cihazda kapı dışı satır yakalanmaz: geri alınan transaction'ın okuduğu artık
+    // satır her öneride yeniden gönderilirdi. Tek cihazda kapı dışı yazma da bir sonraki
+    // kapılı yazmayla günlüğe girer. Uygulama (`APPLY`) hiçbir kipte yeniden yakalanmaz.
+    let capturing = if mode == TriggerMode::Cluster {
+        "WHERE EXISTS (SELECT 1 FROM sync_write_gate WHERE mode != 'APPLY')"
+    } else {
+        "WHERE NOT EXISTS (SELECT 1 FROM sync_write_gate WHERE mode = 'APPLY')"
+    };
     let name = sql_text(table);
     let events = [
         (
             "i",
             "INSERT",
             "'I'",
-            "NULL".to_string(),
+            json_of("NEW", &keys),
             json_of("NEW", &columns),
+            "NULL".to_string(),
         ),
         (
             "u",
@@ -125,6 +165,7 @@ async fn create_triggers(
             "'U'",
             json_of("OLD", &keys),
             json_of("NEW", &columns),
+            json_of("OLD", &columns),
         ),
         (
             "d",
@@ -132,13 +173,14 @@ async fn create_triggers(
             "'D'",
             json_of("OLD", &keys),
             "NULL".to_string(),
+            json_of("OLD", &columns),
         ),
     ];
-    for (suffix, event, action, key, data) in events {
+    for (suffix, event, action, key, data, old) in events {
         let statement = format!(
             "CREATE TRIGGER {trigger} AFTER {event} ON {target} BEGIN {guard}
-                 INSERT INTO sync_capture (table_name, action, row_key, row_data)
-                 SELECT {name}, {action}, {key}, {data} {capturing};
+                 INSERT INTO sync_capture (table_name, action, row_key, row_data, row_old)
+                 SELECT {name}, {action}, {key}, {data}, {old} {capturing};
              END",
             trigger = quoted(&format!("{TRIGGER_PREFIX}{table}_{suffix}")),
             target = quoted(table),
@@ -153,27 +195,70 @@ async fn create_triggers(
 
 /// Kapıyı kurar veya kaldırır. Şema değişmiş olabilir, bu yüzden her seferinde yeniden
 /// üretilir.
-pub async fn sync_triggers(conn: &mut SqliteConnection, enabled: bool) -> Result<(), String> {
+///
+/// Kip değişirken bekleyen yakalama silinir: tek cihazın kapı dışı artığı çok cihazda
+/// her öneriye karışırdı. Satırlar tablolarda kalır ve yeni cihaza anlık görüntüyle
+/// ulaşır; yalnız günlükte ayrı kayıt olarak görünmez.
+pub async fn sync_triggers(conn: &mut SqliteConnection, mode: TriggerMode) -> Result<(), String> {
     drop_triggers(conn).await?;
-    if !enabled {
+    let stray = sqlx::query("DELETE FROM sync_capture")
+        .execute(&mut *conn)
+        .await
+        .map_err(text_error)?
+        .rows_affected();
+    if stray > 0 {
+        tracing::warn!("Eşitleme kipi değişti; {stray} kapı dışı satır günlüğe alınmadı");
+    }
+    if mode == TriggerMode::Off {
         return Ok(());
     }
     for table in super::pairing::replicated_tables(conn).await? {
-        create_triggers(conn, &table, false).await?;
+        create_triggers(conn, &table, false, mode).await?;
     }
     for table in ORIGIN_ONLY {
-        create_triggers(conn, table, true).await?;
+        create_triggers(conn, table, true, mode).await?;
     }
+    Ok(())
+}
+
+/// Kurulu tetikleyicilerin kipi; kurulu değilse `Off`.
+pub async fn installed_mode(conn: &mut SqliteConnection) -> Result<TriggerMode, String> {
+    let body: Option<String> = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'sync\\_cap\\_%' ESCAPE '\\'
+         AND sql LIKE '%sync_capture%' LIMIT 1",
+    )
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(text_error)?;
+    Ok(match body {
+        None => TriggerMode::Off,
+        Some(sql) if sql.contains("mode != 'APPLY'") => TriggerMode::Cluster,
+        Some(_) => TriggerMode::Local,
+    })
+}
+
+/// Bu cihaza özel, başka cihaza taşınmayan tablo mu?
+pub fn is_origin_only(table: &str) -> bool {
+    ORIGIN_ONLY.contains(&table)
+}
+
+/// Yakalamayı boşaltır; değişiklik günlüğe yazıldıktan sonra aynı transaction'da çağrılır.
+pub async fn clear_capture(conn: &mut SqliteConnection) -> Result<(), String> {
+    sqlx::query("DELETE FROM sync_capture")
+        .execute(&mut *conn)
+        .await
+        .map_err(text_error)?;
     Ok(())
 }
 
 /// Transaction'ın yakaladığı değişiklikler, yazıldıkları sırayla.
 pub async fn read_capture(conn: &mut SqliteConnection) -> Result<Vec<RowChange>, String> {
-    let rows =
-        sqlx::query("SELECT table_name, action, row_key, row_data FROM sync_capture ORDER BY seq")
-            .fetch_all(&mut *conn)
-            .await
-            .map_err(text_error)?;
+    let rows = sqlx::query(
+        "SELECT table_name, action, row_key, row_data, row_old FROM sync_capture ORDER BY seq",
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(text_error)?;
     let parse = |text: Option<String>| -> Result<Option<Map<String, Value>>, String> {
         text.map(|text| serde_json::from_str(&text).map_err(|e| e.to_string()))
             .transpose()
@@ -185,12 +270,13 @@ pub async fn read_capture(conn: &mut SqliteConnection) -> Result<Vec<RowChange>,
                 action: row.try_get("action").map_err(text_error)?,
                 key: parse(row.try_get("row_key").map_err(text_error)?)?,
                 row: parse(row.try_get("row_data").map_err(text_error)?)?,
+                old: parse(row.try_get("row_old").map_err(text_error)?)?,
             })
         })
         .collect()
 }
 
-fn bind(arguments: &mut SqliteArguments<'_>, value: &Value) -> Result<(), String> {
+pub(super) fn bind(arguments: &mut SqliteArguments<'_>, value: &Value) -> Result<(), String> {
     let added = match value {
         Value::Null => arguments.add(Option::<String>::None),
         Value::Bool(flag) => arguments.add(i64::from(*flag)),
@@ -221,7 +307,10 @@ fn known_columns<'a>(
         .collect()
 }
 
-async fn apply_one(conn: &mut SqliteConnection, change: &RowChange) -> Result<(), String> {
+pub(super) async fn apply_one(
+    conn: &mut SqliteConnection,
+    change: &RowChange,
+) -> Result<(), String> {
     let (columns, keys) = table_shape(conn, &change.table).await?;
     let table = quoted(&change.table);
     let mut arguments = SqliteArguments::default();

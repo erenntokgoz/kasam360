@@ -87,11 +87,9 @@ pub async fn record_waste(
         .clone()
         .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
 
-    // FIFO'dan düş: en eski partiden başlayarak miktarı karşıla. Gerçek
-    // maliyet partilerden gelir; parti yoksa maliyet bilinmiyor olarak kalır.
+    // Stoğu aşan kayıtta ilk partiye bile dokunulmaz.
     let mut kalan = input.quantity;
     let mut maliyet: i64 = 0;
-    let mut maliyet_bilinmiyor = false;
 
     let partiler = sqlx::query(
         "SELECT id, remaining_quantity, unit_cost_cents
@@ -105,8 +103,19 @@ pub async fn record_waste(
     .await
     .map_err(|e| e.to_string())?;
 
+    let available = partiler
+        .iter()
+        .try_fold(0.0, |sum, row| {
+            row.try_get::<f64, _>("remaining_quantity")
+                .map(|quantity| sum + quantity)
+        })
+        .map_err(|e| e.to_string())?;
+    if available <= 0.0 || input.quantity - available > f64::EPSILON * input.quantity {
+        return Err("VALIDATION: Fire miktarı eldeki stoğu aşıyor.".into());
+    }
+
     for parti in &partiler {
-        if kalan <= f64::EPSILON {
+        if kalan <= 0.0 {
             break;
         }
         let parti_id: String = parti.try_get("id").map_err(|e| e.to_string())?;
@@ -139,25 +148,8 @@ pub async fn record_waste(
         kalan -= dusulen;
     }
 
-    // Stoktan fazla fire yazıldıysa kalan miktar karşılanmamıştır. Bu, gerçek
-    // bir veri hatasıdır: ya fazla fire girilmiştir ya da stok kaydı eksiktir.
-    // Kısmen karşılanan fire reddedilmez ama fark audit'e yazılır.
-    let mut iki_kisimli = false;
-    if kalan > f64::EPSILON {
-        iki_kisimli = true;
-        maliyet_bilinmiyor = true;
-    }
-
-    let unit_cost_cents = if maliyet_bilinmiyor {
-        None
-    } else {
-        Some(calculate_unit_cost_cents(maliyet, input.quantity)?)
-    };
-    let total_cost_cents = if maliyet_bilinmiyor {
-        None
-    } else {
-        Some(maliyet)
-    };
+    let unit_cost_cents = Some(calculate_unit_cost_cents(maliyet, input.quantity)?);
+    let total_cost_cents = Some(maliyet);
 
     let id = generate_id("wst");
     sqlx::query(
@@ -205,13 +197,7 @@ pub async fn record_waste(
         total_cost_cents,
         occurred_at,
         recorded_by: actor_id.to_string(),
-        notes: if iki_kisimli {
-            Some(format!(
-                "UYARI: stoktan fazla fire girildi, {kalan} birim karşılanamadı"
-            ))
-        } else {
-            input.notes
-        },
+        notes: input.notes,
     })
 }
 

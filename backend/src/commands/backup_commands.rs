@@ -104,6 +104,9 @@ pub async fn restore_backup(
         .await
         .map_err(|e| format!("INVALID_BACKUP: {e}"))?;
     schedule::run_backup(&pool, &db_path, "geri_donus_oncesi").await?;
+    backup::check_till_backup(Path::new(&file_path))
+        .await
+        .map_err(|e| format!("INVALID_BACKUP: {e}"))?;
     backup::restore::schedule_restore(&db_path, Path::new(&file_path))
         .await
         .map_err(|e| format!("INVALID_BACKUP: {e}"))?;
@@ -125,6 +128,10 @@ pub async fn restore_backup_on_setup(
             return Err("CONFLICT: bu cihazda kayıtlı işletme var.".to_string());
         }
     }
+    // Özeti doğru ama kasa olmayan dosya canlı veritabanının yerine geçmesin.
+    backup::check_till_backup(Path::new(&file_path))
+        .await
+        .map_err(|e| format!("INVALID_BACKUP: {e}"))?;
     backup::restore::schedule_restore(&db_path, Path::new(&file_path))
         .await
         .map_err(|e| format!("INVALID_BACKUP: {e}"))?;

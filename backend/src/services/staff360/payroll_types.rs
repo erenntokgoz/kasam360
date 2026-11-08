@@ -18,9 +18,6 @@ pub struct PayrollRule {
     pub tip_multiplier_percent: i64,
     pub pay_period: String,
     pub active: bool,
-    /// Taban ücretin saat karşılığı (aylık 225, haftalık 45, günlük 7,5 saat).
-    /// Tutar gizliyse `None`: müdür saat ücretinden maaşı geri hesaplayamasın.
-    pub hourly_equivalent_cents: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -78,6 +75,19 @@ pub struct PayrollRun {
     pub worked_seconds: i64,
     /// Hesaplanamadıysa nedeni. Sessizce 0 yazmak yerine sebep bildirilir.
     pub warning: Option<String>,
+    pub paid_cents: i64,
+    pub remaining_cents: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaffWorkSession {
+    pub id: String,
+    pub user_id: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub break_minutes: i64,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

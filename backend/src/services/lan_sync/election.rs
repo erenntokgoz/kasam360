@@ -4,6 +4,7 @@
 //! otoritede her zaman bulunur.
 
 use super::engine::{majority, Effects, Engine, Message, Role, LEADER_SILENCE_MS};
+use super::op_log::{LogOp, Operation};
 use super::store;
 
 impl Engine {
@@ -76,5 +77,39 @@ impl Engine {
             self.become_leader(now, effects).await?;
         }
         Ok(())
+    }
+
+    pub(super) async fn become_leader(
+        &mut self,
+        now: u64,
+        effects: &mut Effects,
+    ) -> Result<(), String> {
+        let row = self.cluster().await?;
+        let (last_index, _) = self.last_position(&row).await?;
+        self.role = Role::Leader;
+        self.leader_id = Some(self.me.clone());
+        self.next_index.clear();
+        self.match_index.clear();
+        self.last_ack.clear();
+        for peer in self.peers().await? {
+            self.next_index.insert(peer.clone(), last_index + 1);
+            self.match_index.insert(peer.clone(), row.base_index);
+            // Seçimde oy veren cihazlar az önce görülmüştür.
+            if self.votes.contains(&peer) {
+                self.last_ack.insert(peer, now);
+            }
+        }
+        // Önceki dönemin kayıtları ancak bu dönemin bir kaydıyla onaylanabilir.
+        let noop = Operation {
+            operation_id: format!("noop_{}_{}", row.term, self.me),
+            tenant_id: self.tenant_id.clone(),
+            device_id: self.me.clone(),
+            actor_id: "SYSTEM".to_string(),
+            actor_role: "System".to_string(),
+            intent_sha256: String::new(),
+            op: LogOp::Noop,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        self.append_local(&noop, effects).await
     }
 }

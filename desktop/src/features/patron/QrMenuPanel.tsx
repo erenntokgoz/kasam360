@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
 import { errorText } from '../../lib/cariInput';
 import { downloadFile } from '../../lib/downloadFile';
@@ -34,7 +35,7 @@ export const QrMenuPanel: React.FC = () => {
     <section className="paper border border-[var(--border)] rounded-xl p-4 space-y-2">
       <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">QR Menü Dosyası</h3>
       <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void build()}>Menü Dosyasını İndir</Button>
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
     </section>
   );
 };

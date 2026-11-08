@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ürün formu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="specimen.css"><script src="theme.js"></script>
+<style>
+  body { overflow: hidden; }
+  .page { height: 100vh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .crumbs { display: flex; align-items: center; gap: 12px; padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .crumbs a { color: var(--brand); text-decoration: none; font-weight: 600; min-height: 48px; display: inline-flex; align-items: center; }
+  .crumbs h1 { font: 700 20px/26px var(--font); margin: 0; }
+  .crumbs .status { margin-left: auto; }
+  .scroll { overflow: auto; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; max-width: 1200px; margin: 0 auto; padding: 24px; }
+  section.block { padding: 20px 0 24px; border-bottom: 1px solid var(--border); }
+  section.block:first-child { padding-top: 0; }
+  section.block h2 { font: 700 16px/22px var(--font); margin: 0 0 16px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .three { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; }
+  .money { position: relative; }
+  .money .input { text-align: right; padding-right: 44px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .money span { position: absolute; right: 14px; top: 12px; color: var(--text-2); font-weight: 600; }
+  select.input { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%); background-position: right 18px top 21px, right 13px top 21px; background-size: 5px 5px; background-repeat: no-repeat; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { min-height: 40px; padding: 0 14px; border-radius: var(--r-field); border: 1px solid var(--border-strong); background: var(--surface); display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .chip[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font: 600 13px/18px var(--font); color: var(--text-2); padding: 0 8px 8px 0; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--border); }
+  td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .side { display: grid; gap: 16px; align-content: start; position: sticky; top: 0; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-panel); padding: 20px; }
+  .panel h3 { font: 600 13px/18px var(--font); color: var(--text-2); margin: 0 0 8px; }
+  .big { font: 800 32px/38px var(--font); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; font-size: 14px; margin-top: 12px; }
+  .kv dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kv dt { color: var(--text-2); }
+  .footer { display: flex; align-items: center; gap: 12px; padding: 12px 24px; background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -4px 12px rgba(0,0,0,.04); }
+  .footer .dirty { font-size: 14px; color: var(--text-2); display: flex; gap: 8px; align-items: center; }
+  .footer .dirty::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .footer .sp { margin-left: auto; }
+  @media (max-width: 1000px) {
+    .cols { grid-template-columns: 1fr; padding: 16px; }
+    .side { position: static; }
+    .three { grid-template-columns: 1fr 1fr; }
+    .three > :first-child { grid-column: 1 / -1; }
+  }
+  @media (max-width: 560px) {
+    .two, .three { grid-template-columns: 1fr; }
+    .footer .dirty { display: none; }
+    .footer .btn { flex: 1; }
+    .crumbs .status { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="crumbs">
+    <a href="#">← Menü</a>
+    <h1>Ev usulü mantı, sarımsaklı yoğurt</h1>
+    <span class="status ok">Satışta</span>
+  </header>
+
+  <div class="scroll">
+    <div class="cols">
+      <form onsubmit="return false" novalidate>
+        <div class="banner bad" role="alert" style="margin-bottom:20px">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>
+          <span><strong>Kaydedilmedi.</strong> 1 alan düzeltilmeli; girdiğiniz bilgiler korunuyor.</span>
+        </div>
+
+        <section class="block">
+          <h2>Temel bilgiler</h2>
+          <div class="field" style="margin-bottom:16px">
+            <label for="nm">Ürün adı</label>
+            <input id="nm" class="input" value="Ev usulü mantı, sarımsaklı yoğurt">
+          </div>
+          <div class="two">
+            <div class="field">
+              <label for="cat">Kategori</label>
+              <select id="cat" class="input"><option>Ana yemek</option></select>
+            </div>
+            <div class="field">
+              <label for="st">Mutfak istasyonu</label>
+              <select id="st" class="input"><option>Sıcak mutfak</option></select>
+            </div>
+          </div>
+        </section>
+
+        <section class="block">
+          <h2>Fiyat</h2>
+          <div class="three">
+            <div class="field">
+              <label for="pr">Satış fiyatı</label>
+              <div class="money"><input id="pr" class="input" inputmode="decimal" value="125,00"><span>TL</span></div>
+            </div>
+            <div class="field">
+              <label for="vat">KDV oranı</label>
+              <select id="vat" class="input" aria-invalid="true" aria-describedby="vat-err"><option>Seçin</option></select>
+              <div id="vat-err" class="field-error">KDV oranı seçilmeli.</div>
+            </div>
+            <div class="field">
+              <label for="pk">Paket fiyatı</label>
+              <div class="money"><input id="pk" class="input" inputmode="decimal" value="135,00"><span>TL</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="block">
+          <h2>Seçenekler</h2>
+          <div class="chips" role="group" aria-label="Bağlı seçenek grupları">
+            <button type="button" class="chip" aria-pressed="true">Acı tercihi · 3</button>
+            <button type="button" class="chip" aria-pressed="true">Yoğurt · 2</button>
+            <button type="button" class="chip" aria-pressed="false">Porsiyon</button>
+            <button type="button" class="chip" aria-pressed="false">+ Grup ekle</button>
+          </div>
+        </section>
+
+        <section class="block">
+          <h2>Reçete</h2>
+          <table>
+            <thead><tr><th>Malzeme</th><th class="r">Miktar</th><th class="r">FIFO birim maliyet</th><th class="r">Tutar</th></tr></thead>
+            <tbody>
+              <tr><td>Mantı hamuru, kıymalı</td><td class="r">1 porsiyon</td><td class="r">200 → 500 kuruş</td><td class="r">3,50 TL*</td></tr>
+              <tr><td>Süzme yoğurt</td><td class="r">120 g</td><td class="r">—</td><td class="r"><span class="status warn">Maliyet yok</span></td></tr>
+              <tr><td>Tereyağı, pul biber</td><td class="r">15 g</td><td class="r">—</td><td class="r"><span class="status warn">Maliyet yok</span></td></tr>
+            </tbody>
+          </table>
+          <p class="muted" style="font-size:13px;margin:8px 0 0">* Fixture: 4 adet satışın maliyeti 1.400 kuruş (Lot A 2×200, Lot B 2×500); porsiyon başı ortalama 350 kuruş.</p>
+        </section>
+      </form>
+
+      <aside class="side">
+        <div class="panel">
+          <h3>Porsiyon başı brüt kâr</h3>
+          <div class="big muted" style="font-size:24px;line-height:30px">Hesaplanamıyor</div>
+          <p style="margin:8px 0 0;font-size:14px">Analiz için 2 malzemenin maliyetini tamamlayın.</p>
+          <dl class="kv">
+            <dt>Satış</dt><dd>125,00 TL</dd>
+            <dt>Bilinen maliyet</dt><dd>3,50 TL</dd>
+            <dt>Eksik maliyet</dt><dd>2 malzeme</dd>
+          </dl>
+        </div>
+        <div class="panel">
+          <h3>Kaydedince</h3>
+          <dl class="kv" style="margin-top:0">
+            <dt>Açık siparişler</dt><dd>Eski fiyatla kalır</dd>
+            <dt>QR menü</dt><dd>Kapalı paket</dd>
+            <dt>Son değişiklik</dt><dd>Mert Demir · 11:04</dd>
+          </dl>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span class="dirty">Kaydedilmemiş 2 değişiklik</span>
+    <button class="btn btn-secondary sp">Vazgeç</button>
+    <button class="btn btn-primary">Kaydet</button>
+  </footer>
+</div>
+<div class="specimen-tag">Tasarım örneği · sabit test verisi</div>
+</body>
+</html>

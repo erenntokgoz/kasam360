@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useEffect } from 'react';
 import { useAuthStore } from '../../../stores/authStore';
 import { useExpenseStore } from '../../../stores/expenseStore';
@@ -21,9 +22,7 @@ export const ProfitSection: React.FC = () => {
         <Input type="month" className="min-h-12 !w-44 tabular-nums" value={period} onChange={(event) => setPeriod(event.target.value)} />
       </label>
       {error ? (
-        <p role="alert" className="p-3 rounded-lg text-sm font-semibold bg-[var(--accent-red-soft)] text-[var(--accent-red)] border border-[var(--accent-red-border)]">
-          Kâr ve giderler okunamadı: {error}
-        </p>
+        <><p className="text-sm text-[var(--text-secondary)]">Kâr ve giderler okunamadı.</p><ErrorToast message={`Kâr ve giderler okunamadı: ${error}`} /></>
       ) : null}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
         {isOwner && report ? <ProfitStatement report={report} /> : null}

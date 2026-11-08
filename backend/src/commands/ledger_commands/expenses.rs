@@ -8,9 +8,7 @@
 
 use crate::commands::command_helpers::audit_actor;
 use crate::db::DbPool;
-use crate::ledger_commands::guard::{
-    require_ledger_read, require_ledger_tenant, require_ledger_write,
-};
+use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant};
 use crate::services::audit_service::{self, AuditContext, AuditService};
 use crate::services::expense_service::{self, insert_expense, NewExpense};
 use crate::services::lan_sync::WritePool;
@@ -234,7 +232,7 @@ pub async fn create_expense(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ExpenseDto, String> {
     state.lan_sync.require_local_write()?;
-    require_ledger_write(actor_role.as_deref())?;
+    crate::rbac::require_owner(actor_role.as_deref().unwrap_or_default())?;
 
     if payload.amount_cents <= 0 {
         return Err("Gider tutarı 0'dan büyük olmalıdır.".to_string());
@@ -326,7 +324,7 @@ pub async fn void_expense(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    require_ledger_write(actor_role.as_deref())?;
+    crate::rbac::require_owner(actor_role.as_deref().unwrap_or_default())?;
     let tid = require_ledger_tenant(tenant_id.as_deref())?;
     let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin_write().await?;
@@ -360,7 +358,7 @@ pub async fn record_staff_advance(
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<String, String> {
-    require_ledger_write(actor_role.as_deref())?;
+    crate::rbac::require_owner(actor_role.as_deref().unwrap_or_default())?;
     let tid = require_ledger_tenant(tenant_id.as_deref())?;
     let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin_write().await?;

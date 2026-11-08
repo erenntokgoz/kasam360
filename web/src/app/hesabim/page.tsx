@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { PageSheet } from '@/components/PageSheet';
+import { PageShell } from '@/components/PageShell';
 import { AccountPanel } from '@/components/account/AccountPanel';
 
 export const metadata: Metadata = {
@@ -10,10 +10,11 @@ export const metadata: Metadata = {
 
 export default function AccountPage() {
   return (
-    <PageSheet tone="green" copy="Patron nüshası">
-      <h1 className="sheet-subtitle">Hesabım</h1>
+    <PageShell title="Hesabım">
       <AccountPanel />
-      <Link href="/destek" className="btn">Destek Taleplerim</Link>
-    </PageSheet>
+      <div className="k-row" style={{ marginTop: 24 }}>
+        <Link href="/destek" className="k-btn k-btn-line">Destek taleplerim</Link>
+      </div>
+    </PageShell>
   );
 }

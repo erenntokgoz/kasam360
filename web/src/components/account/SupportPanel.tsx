@@ -101,43 +101,53 @@ export function SupportPanel() {
   }
 
   return (
-    <div className="grid max-w-3xl gap-6">
-      {error && <p role="alert">{error}</p>}
-      {login && <Link href="/giris" className="btn">Giriş Yap</Link>}
+    <div className="k-stack">
+      {error && <p className="k-alert" role="alert">{error}</p>}
+      {login && <div className="k-row"><Link href="/giris" className="k-btn k-btn-ink k-btn-lg">Giriş yap</Link></div>}
+      {!ready && !error && <p className="k-muted" role="status">Talepleriniz yükleniyor…</p>}
       {ready && (
-        <>
-          <form className="grid gap-3" onSubmit={(event) => void submit(event)}>
-            <h2 className="text-xl font-bold">Yeni Talep</h2>
-            <label className="grid gap-1">Konu<input className="border p-2" name="title" required maxLength={120} /></label>
-            <label className="grid gap-1">Mesaj<textarea className="border p-2" name="body" required maxLength={4000} rows={4} /></label>
-            <button className="btn justify-self-start" disabled={busy}>Talep Aç</button>
-          </form>
-          <section className="grid gap-3" aria-labelledby="support-tickets">
-            <h2 id="support-tickets" className="text-xl font-bold">Taleplerim</h2>
-            {tickets.length === 0 && <p>Henüz destek talebi yok.</p>}
-            {tickets.map((ticket) => (
-              <button type="button" key={ticket.id} className="form-row text-left" aria-pressed={selected === ticket.id} disabled={busy}
-                onClick={() => { if (selected !== ticket.id) { setThread(undefined); setError(''); setSelected(ticket.id); } }}>
-                {ticket.title} · {(thread?.id === ticket.id ? thread.closed : ticket.closed) ? 'Kapalı' : 'Açık'}
-              </button>
-            ))}
+        <div className="k-support">
+          <section className="k-stack" aria-labelledby="support-tickets">
+            <h2 id="support-tickets" className="k-section-title" style={{ margin: 0 }}>Taleplerim</h2>
+            <div className="k-tickets">
+              {tickets.length === 0 && <p className="k-empty">Henüz destek talebi yok.</p>}
+              {tickets.map((ticket) => {
+                const closed = thread?.id === ticket.id ? thread.closed : ticket.closed;
+                return (
+                  <button type="button" key={ticket.id} aria-pressed={selected === ticket.id} disabled={busy}
+                    onClick={() => { if (selected !== ticket.id) { setThread(undefined); setError(''); setSelected(ticket.id); } }}>
+                    <span>{ticket.title}</span>
+                    <span className="k-tag" data-open={!closed}>{closed ? 'Kapalı' : 'Açık'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+          <div className="k-stack">
             {thread && (
-              <article className="grid gap-3" aria-label={thread.title}>
-                <p className="whitespace-pre-wrap break-words">{thread.body}</p>
+              <article className="k-thread" aria-label={thread.title}>
+                <h2 className="k-section-title" style={{ margin: 0 }}>{thread.title}</h2>
+                <div className="k-msg"><strong>Siz</strong><p>{thread.body}</p></div>
                 {thread.messages.map((message) => (
-                  <div key={message.id} className="border-t pt-2">
+                  <div key={message.id} className="k-msg" data-staff={message.source === 'staff'}>
                     <strong>{message.source === 'staff' ? 'Destek' : 'Siz'}</strong>
-                    <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                    <p>{message.body}</p>
                   </div>
                 ))}
-                {!thread.closed && <form className="grid gap-2" onSubmit={(event) => void submit(event, thread.id)}>
-                  <label className="grid gap-1">Yanıt<textarea className="border p-2" name="body" required maxLength={4000} rows={3} /></label>
-                  <button className="btn justify-self-start" disabled={busy}>Gönder</button>
+                {!thread.closed && <form className="k-stack" onSubmit={(event) => void submit(event, thread.id)}>
+                  <div className="k-field"><label htmlFor="reply-body">Yanıtınız</label><textarea id="reply-body" className="k-input" name="body" required maxLength={4000} rows={3} /></div>
+                  <div className="k-row"><button className="k-btn k-btn-ink" disabled={busy}>{busy ? 'Gönderiliyor…' : 'Gönder'}</button></div>
                 </form>}
               </article>
             )}
-          </section>
-        </>
+            <form className="k-panel k-stack" onSubmit={(event) => void submit(event)}>
+              <h2 className="k-section-title" style={{ margin: 0 }}>Yeni talep</h2>
+              <div className="k-field"><label htmlFor="ticket-title">Konu</label><input id="ticket-title" className="k-input" name="title" required maxLength={120} /></div>
+              <div className="k-field"><label htmlFor="ticket-body">Mesaj</label><textarea id="ticket-body" className="k-input" name="body" required maxLength={4000} rows={4} /></div>
+              <div className="k-row"><button className="k-btn k-btn-ink" disabled={busy}>{busy ? 'Gönderiliyor…' : 'Talep aç'}</button></div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

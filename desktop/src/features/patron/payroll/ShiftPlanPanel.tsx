@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
@@ -119,7 +120,7 @@ export const ShiftPlanPanel: React.FC<{ userId: string }> = ({ userId }) => {
           {editingId ? 'Kaydet' : 'Plana Ekle'}
         </Button>
       </div>
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
     </Panel>
   );
 };

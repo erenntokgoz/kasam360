@@ -23,6 +23,8 @@ tauri = { version = "2", features = [] }
 # `tauri::updater` modülü imzalı paket doğrulaması yapar; manifest URL
 # `tauri.conf.json` içindeki `updater` bloğundan okunur.
 tauri-plugin-updater = "2"
+# Android/iOS hesabı Google OAuth bağlantısını sistem tarayıcısında açar.
+tauri-plugin-opener = "2"
 # Tek örnek kilidi: aynı veritabanına iki süreç yazarsa eşitleme ve kasa sayımı bozulur.
 tauri-plugin-single-instance = "2"
 # Google ile cihaz girişi: tek kullanımlık bağlantı kodu sitenin sunucusundan doğrulanır.

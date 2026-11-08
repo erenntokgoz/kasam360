@@ -286,3 +286,59 @@ async fn silme_yalniz_listedeki_yedege_ulasir() {
     delete_listed(&dirs, &backup.path).expect("silinir");
     assert!(list_backups(&dirs).is_empty());
 }
+
+/// Gerçek kasa şemasıyla: başka bir SQLite dosyası ve sahipsiz/kopuk zincirli kasa reddedilir.
+#[tokio::test]
+async fn kasa_olmayan_veya_kopuk_zincirli_yedek_kurulmaz() {
+    let dir = std::env::temp_dir().join(format!("kasam360_shape_{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&dir).expect("klasör");
+    let open = |name: &str| {
+        let path = dir.join(name);
+        async move {
+            SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(&path)
+                        .create_if_missing(true),
+                )
+                .await
+                .expect("havuz")
+        }
+    };
+    let foreign = open("yabanci.db").await;
+    sqlx::raw_sql("CREATE TABLE x (a)")
+        .execute(&foreign)
+        .await
+        .expect("tablo");
+    foreign.close().await;
+    assert!(super::check_till_backup(&dir.join("yabanci.db"))
+        .await
+        .is_err());
+
+    let till = open("kasa.db").await;
+    sqlx::raw_sql(include_str!("../../../migrations/schema.sql"))
+        .execute(&till)
+        .await
+        .expect("şema");
+    till.close().await;
+    assert!(
+        super::check_till_backup(&dir.join("kasa.db"))
+            .await
+            .is_err(),
+        "sahipsiz kasa"
+    );
+
+    let till = open("kasa.db").await;
+    sqlx::raw_sql(
+        "INSERT INTO tenants (id, name) VALUES ('tnt_a', 'A');
+         INSERT INTO users (id, tenant_id, role, name) VALUES ('usr_1', 'tnt_a', 'OWNER', 'Sahip');",
+    )
+    .execute(&till)
+    .await
+    .expect("sahip");
+    till.close().await;
+    super::check_till_backup(&dir.join("kasa.db"))
+        .await
+        .expect("geçerli kasa");
+}

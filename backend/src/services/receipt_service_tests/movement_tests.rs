@@ -113,7 +113,9 @@ async fn fis_tablosu_yoktur_kayit_uretmez() {
     seed_sale_event(&pool, TENANT_A, "txn_1", payload, "2026-05-01 12:00:00").await;
 
     let mut conn = pool.acquire().await.expect("bağlantı");
-    list(&mut conn, TENANT_A, 50).await.expect("liste okunur");
+    list(&mut conn, TENANT_A, 50, Default::default())
+        .await
+        .expect("liste okunur");
 
     // Aynı fiş tekrar okunduğunda içerik birebir aynıdır: hiçbir yazma olmadı.
     let first = find(&mut conn, TENANT_A, "txn_1")

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desktop POS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="specimen.css"><script src="theme.js"></script>
+<style>
+  body { overflow: hidden; }
+  .app { display: grid; grid-template-columns: 196px 1fr; height: 100vh; }
+  /* Sol menü: metinli, kısayol görünür. */
+  .nav { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 12px 8px; gap: 2px; }
+  .nav .logo { display: flex; gap: 10px; align-items: center; padding: 8px 10px 16px; font: 800 16px/20px var(--font); }
+  .nav .logo img { width: 28px; height: 28px; }
+  .nav a { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 10px; border-radius: var(--r-field); color: var(--text); text-decoration: none; font-weight: 500; font-size: 15px; }
+  .nav a:hover { background: var(--surface-muted); }
+  .nav a[aria-current="page"] { background: var(--brand-soft); color: var(--brand); font-weight: 700; box-shadow: inset 3px 0 0 var(--brand); }
+  .nav kbd { margin-left: auto; font: 500 12px/16px var(--font); color: var(--text-2); }
+  .nav .me { margin-top: auto; padding: 12px 10px; border-top: 1px solid var(--border); font-size: 14px; line-height: 20px; }
+  .work { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-width: 0; height: 100vh; }
+  .head { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .head h1 { font: 700 20px/26px var(--font); margin: 0; }
+  .head .search { flex: 1; max-width: 420px; margin-left: auto; position: relative; }
+  .head .search .icon { position: absolute; left: 14px; top: 14px; color: var(--text-2); }
+  .head .search input { padding-left: 42px; }
+  .offline { margin: 12px 20px 0; }
+  .body { display: grid; grid-template-columns: 168px 1fr 384px; min-height: 0; overflow: hidden; }
+  .cats { overflow: auto; padding: 12px 8px 12px 20px; display: grid; align-content: start; gap: 2px; }
+  .cats button { text-align: left; min-height: 48px; padding: 0 12px; border-radius: var(--r-field); border: 0; background: transparent; font-weight: 500; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .cats button:hover { background: var(--surface-muted); }
+  .cats button[aria-pressed="true"] { background: var(--text); color: var(--canvas); font-weight: 700; }
+  .cats small { font-size: 12px; opacity: .75; }
+  .grid { overflow: auto; padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; align-content: start; }
+  .prod { position: relative; min-height: 96px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 12px; border-radius: var(--r-field); border: 1px solid var(--border); background: var(--surface); text-align: left; cursor: pointer; }
+  .prod:hover { border-color: var(--border-strong); }
+  .prod.has-q .n { padding-right: 26px; }
+  .prod .n { font-weight: 600; font-size: 15px; line-height: 20px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .prod .p { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .prod .qty { position: absolute; top: 8px; right: 8px; min-width: 24px; height: 24px; border-radius: 12px; background: var(--brand); color: var(--on-brand); font: 700 13px/24px var(--font); text-align: center; }
+  .prod.out { opacity: 1; background: var(--surface-muted); cursor: not-allowed; }
+  .prod.out .p { color: var(--text-2); font-weight: 600; }
+  .ticket { border-left: 1px solid var(--border); background: var(--surface); display: grid; grid-template-rows: auto auto 1fr auto; min-height: 0; }
+  .t-head { padding: 14px 20px 10px; display: flex; justify-content: space-between; align-items: baseline; }
+  .t-head h2 { font: 800 24px/30px var(--font); margin: 0; letter-spacing: -.02em; }
+  .open { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 20px 12px; border-bottom: 1px solid var(--border); }
+  .open button { min-height: 44px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-field); background: transparent; font-size: 13px; cursor: pointer; text-align: left; line-height: 16px; }
+  .open button[aria-pressed="true"] { border-color: var(--brand); color: var(--brand); font-weight: 700; }
+  .lines { overflow: auto; padding: 4px 0; list-style: none; margin: 0; }
+  .lines li { display: grid; grid-template-columns: 36px 1fr auto; gap: 8px; padding: 10px 20px; align-items: start; }
+  .lines li.sel { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); }
+  .lines .q { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .lines .nm { font-weight: 600; line-height: 20px; }
+  .lines .mod { font-size: 13px; color: var(--text-2); line-height: 18px; }
+  .lines .amt { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+  .lines .kit { margin-top: 4px; }
+  .sum { border-top: 1px solid var(--border); padding: 14px 20px 16px; display: grid; gap: 10px; }
+  .sum .r { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-2); }
+  .sum .total { display: flex; justify-content: space-between; align-items: baseline; }
+  .sum .total b { font: 800 32px/38px var(--font); letter-spacing: -.02em; }
+  .acts { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
+  .acts .btn { white-space: nowrap; }
+  .acts .btn { min-height: 56px; }
+  @media (max-width: 1180px) {
+    .app { grid-template-columns: 72px 1fr; }
+    .nav a span, .nav kbd, .nav .logo b, .nav .me { display: none; }
+    .nav a { justify-content: center; }
+    .body { grid-template-columns: 140px 1fr 340px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" aria-label="Modüller">
+    <div class="logo"><img src="../../../desktop/src/assets/brand/kasam360-ikon-kucuk-renkli.svg" alt=""><b>KASAM360</b></div>
+    <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Salon</span><kbd>F1</kbd></a>
+    <a href="#" aria-current="page"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 9h6M9 13h6"/></svg><span>Sipariş</span><kbd>F2</kbd></a>
+    <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16v3a6 6 0 0 1-6 6h-4a6 6 0 0 1-6-6z"/><path d="M9 7c0-2 2-2 2-4M14 7c0-2 2-2 2-4"/></svg><span>Mutfak</span><kbd>F3</kbd></a>
+    <a href="#"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h3"/></svg><span>Kasa</span><kbd>F4</kbd></a>
+    <div class="me"><b>Ayşe Kaya</b><div class="muted">Kasiyer · Vardiya açık</div></div>
+  </nav>
+
+  <div class="work">
+    <header class="head">
+      <h1>Sipariş</h1>
+      <span class="status neutral">Salon · Masa 12</span>
+      <div class="search">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input class="input" type="search" placeholder="Ürün ara" aria-label="Ürün ara">
+      </div>
+    </header>
+    <div class="banner warn offline" role="status">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0"/><path d="M3 3l18 18"/></svg>
+      <span><strong>Buluta gönderim durdu.</strong> 2 işlem bu cihazda kayıtlı, satış devam ediyor.</span>
+      <button class="btn btn-quiet" style="margin-left:auto;min-height:40px;color:inherit;text-decoration:underline">Bağlantıyı incele</button>
+    </div>
+
+    <div class="body">
+      <div class="cats" role="group" aria-label="Kategoriler" id="cats"></div>
+      <div class="grid" id="grid" aria-label="Ürünler"></div>
+
+      <aside class="ticket" aria-label="Sipariş">
+        <div class="t-head"><h2>Masa 12</h2><span class="muted num">4 kişi · 38 dk</span></div>
+        <div class="open" role="group" aria-label="Açık siparişler">
+          <button aria-pressed="true">Masa 12<br><b class="num" id="chip"></b></button>
+          <button>Masa 7<br><b class="num">2.480,00</b></button>
+          <button>Teras 40 · Toplu<br><b class="num">1.248.750,00</b></button>
+          <button>Paket 3<br><b class="num">310,00</b></button>
+        </div>
+        <ul class="lines" id="lines"></ul>
+        <div class="sum">
+          <div class="r"><span>Ara toplam</span><span class="num" id="sub"></span></div>
+          <div class="r"><span>İçindeki KDV</span><span class="num">C01'de sabitlenecek</span></div>
+          <div class="total"><span style="font-weight:700">Toplam</span><b id="tot"></b></div>
+          <div class="acts">
+            <button class="btn btn-secondary">Mutfağa gönder</button>
+            <button class="btn btn-primary" id="pay"></button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+<div class="specimen-tag">Tasarım örneği · sabit test verisi</div>
+<script>
+  // Tutarlar tamsayı kuruş; gösterim tek yerde biçimlenir (formatMoney sözleşmesi).
+  const fmt = (c) => (Math.trunc(c / 100)).toLocaleString('tr-TR') + ',' + String(Math.abs(c % 100)).padStart(2, '0');
+  const cats = [['Ana yemek', 12], ['Izgara', 8], ['Başlangıç', 6], ['Tatlı', 5], ['Sıcak içecek', 4], ['Soğuk içecek', 7], ['Kahvaltı', 3]];
+  document.getElementById('cats').innerHTML = cats.map(([n, c], i) =>
+    `<button aria-pressed="${i === 0}">${n}<small class="num">${c}</small></button>`).join('');
+  const prods = [
+    ['Fırında kuzu tandır, iç pilav ve közlenmiş biber ile', 48500], ['Ev usulü mantı, sarımsaklı yoğurt', 12500, 4],
+    ['Közlenmiş patlıcanlı Ali Nazik kebabı', 39000], ['Hünkâr beğendi', 42000], ['Etli kuru fasulye, pilav', 21000, 1],
+    ['Karnıyarık', 23500], ['Tavuk şiş, bulgur pilavı', 26500], ['Kasap köfte (200 g)', 29000, 2],
+    ['Zeytinyağlı enginar', 18000], ['Mercimek çorbası', 9500], ['Ezogelin çorbası', 9500], ['İşkembe çorbası, sirkeli sarımsak', 14500],
+    ['Adana kebap, acılı', 36000], ['Urfa kebap', 36000], ['Kuzu pirzola (4 adet)', 68000], ['Izgara levrek', 54000, 0, true],
+    ['Çoban salata', 11000], ['Gavurdağı salatası, nar ekşili', 13500], ['Humus', 12000], ['Atom', 11500],
+    ['Fıstıklı katmer, kaymaklı', 22000], ['Fırın sütlaç', 11500], ['Künefe', 19500], ['Kazandibi', 11500],
+    ['Türk kahvesi', 7500], ['Çay (ince belli)', 2500], ['Ayran (açık)', 4500], ['Şalgam suyu, acılı', 5000],
+    ['Taze sıkılmış portakal suyu', 9000], ['Ev yapımı limonata, naneli', 8500], ['Soda', 3500], ['Serpme kahvaltı (2 kişilik)', 95000],
+  ];
+  document.getElementById('grid').innerHTML = prods.map(([n, p, q, out]) =>
+    `<button class="prod${out ? ' out' : ''}${q ? ' has-q' : ''}" ${out ? 'aria-disabled="true"' : ''}>
+      ${q ? `<span class="qty num" aria-label="${q} adet sepette">${q}</span>` : ''}
+      <span class="n">${n}</span>
+      <span class="p num">${out ? 'Tükendi' : fmt(p) + ' TL'}</span></button>`).join('');
+  // Test fixture'ı: 4 × 12500 = 50000 kuruş; diğer satırlar dolu sepet görünümü içindir.
+  const lines = [
+    [4, 'Ev usulü mantı, sarımsaklı yoğurt', 12500, 'Biri acısız', 'Mutfakta', 'warn', true],
+    [2, 'Kasap köfte (200 g)', 29000, 'Az pişmiş', 'Hazır', 'ok'],
+    [1, 'Etli kuru fasulye, pilav', 21000, '', 'Gönderilmedi', 'neutral'],
+  ];
+  let sub = 0;
+  document.getElementById('lines').innerHTML = lines.map(([q, n, p, m, s, k, sel]) => {
+    sub += q * p;
+    return `<li class="${sel ? 'sel' : ''}"><span class="q">${q}×</span>
+      <div><div class="nm">${n}</div>${m ? `<div class="mod">${m}</div>` : ''}<div class="kit"><span class="status ${k}">${s}</span></div></div>
+      <span class="amt">${fmt(q * p)}</span></li>`;
+  }).join('');
+  document.getElementById('sub').textContent = fmt(sub) + ' TL';
+  document.getElementById('tot').textContent = fmt(sub) + ' TL';
+  document.getElementById('pay').textContent = 'Tahsil et · ' + fmt(sub);
+  document.getElementById('chip').textContent = fmt(sub);
+</script>
+</body>
+</html>

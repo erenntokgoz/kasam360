@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Paketler · 360 Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="labs.css"><script src="theme.js"></script><script src="labs-shell.js" defer></script>
+<style>
+  /* Paket = açılıp kapanan özellik seti ve kasa hakkı. Ödeme sağlayıcısı eşlemesi Teknik ayarlar'da. */
+  .split { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); }
+  .plist { border-right: 1px solid var(--line); overflow: auto; }
+  .plist .h { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); font-weight: 600; }
+  .pk { display: block; padding: 14px 16px; border-bottom: 1px solid var(--line); text-decoration: none; }
+  .pk b { display: flex; justify-content: space-between; font-weight: 600; } .pk b span { font-weight: 500; }
+  .pk small { color: var(--text-3); }
+  .pk[aria-current] { background: var(--panel); box-shadow: inset 3px 0 0 var(--orange); }
+  .editor { display: flex; flex-direction: column; min-height: 0; }
+  .form { flex: 1; overflow: auto; padding: 24px 32px 40px; max-width: 920px; }
+  .form h1 { margin: 0 0 4px; font-size: 24px; font-weight: 650; letter-spacing: -.03em; }
+  .form .used { color: var(--text-3); margin: 0 0 24px; }
+  .fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 30px; }
+  label.f { display: grid; gap: 6px; font-weight: 560; font-size: 13px; }
+  .in { width: 100%; min-width: 0; min-height: 42px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel); font-size: 14px; }
+  .in.money { text-align: right; font-variant-numeric: tabular-nums; }
+  .in.changed { border-color: var(--orange); }
+  .stepper { display: grid; grid-template-columns: 42px 1fr 42px; }
+  .stepper button { border: 1px solid var(--line-2); background: var(--panel); cursor: pointer; font-size: 18px; }
+  .stepper button:first-child { border-radius: 9px 0 0 9px; } .stepper button:last-child { border-radius: 0 9px 9px 0; }
+  .stepper .in { border-radius: 0; border-left: 0; border-right: 0; text-align: center; }
+  h2 { margin: 0 0 4px; font-size: 15px; font-weight: 620; }
+  .flags { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .flag { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; align-items: center; padding: 12px 16px; }
+  .flag + .flag { border-top: 1px solid var(--line); }
+  .flag b { font-weight: 560; } .flag code { font: 400 12px var(--mono); color: var(--text-3); }
+  .flag.changed { box-shadow: inset 3px 0 0 var(--orange); }
+  .switch { grid-row: span 2; position: relative; width: 44px; height: 26px; border-radius: 999px; border: 0; background: var(--line-2); cursor: pointer; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--panel); box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .15s; }
+  .switch[aria-checked="true"] { background: var(--ok); } .switch[aria-checked="true"]::after { left: 21px; }
+  .danger { margin-top: 30px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+  .danger p { margin: 0; flex: 1 1 280px; color: var(--text-2); }
+  .save { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 32px; border-top: 1px solid var(--line); background: var(--bg-2); }
+  .save .state { color: var(--warn); font-weight: 560; margin-right: auto; display: flex; align-items: center; gap: 8px; }
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; } .plist { display: none; }
+    .form { padding: 20px 16px 32px; } .fields { grid-template-columns: 1fr 1fr; } .fields label:first-child { grid-column: 1 / -1; }
+    .save { padding: 10px 16px; } .save .state { display: none; } .save .btn { flex: 1; }
+  }
+</style>
+</head>
+<body class="labs">
+<span class="specimen">Tasarım örneği, sabit test verisi. Kaydetmez.</span>
+<div class="app">
+  <aside class="rail" data-page="packages"></aside>
+  <div class="main">
+    <div class="bar"><span class="crumb">KASAM360 / Paketler / <b>Test Paket</b></span>
+      <label class="search"><input placeholder="Mail, işletme, cihaz veya ödeme ara" aria-label="Ara"><kbd>/</kbd></label></div>
+    <div class="split">
+      <nav class="plist" aria-label="Paketler">
+        <div class="h">Paketler <button class="btn btn-line sm">Yeni paket</button></div>
+        <a class="pk" href="#" aria-current="true"><b>Test Paket <span class="num">1.000,00 TL</span></b><small>3 işletme, 2 kasa hakkı, 6 özellik</small></a>
+        <a class="pk" href="#"><b>Başlangıç <span class="muted">Taslak</span></b><small>Kullanan yok, 1 kasa hakkı, 4 özellik</small></a>
+      </nav>
+      <section class="editor">
+        <form class="form" onsubmit="return false">
+          <h1>Test Paket</h1>
+          <p class="used">3 işletme kullanıyor. Değişiklik bir sonraki lisans yenilemesinde cihazlara gider.</p>
+          <div class="fields">
+            <label class="f">Paket adı<input class="in" value="Test Paket"></label>
+            <label class="f">Aylık fiyat (TL)<input class="in money" inputmode="decimal" value="1.000,00"></label>
+            <div class="f" style="display:grid;gap:6px;font-weight:560;font-size:13px">Kasa hakkı
+              <div class="stepper"><button type="button" aria-label="Azalt">−</button><input class="in changed num" value="3" aria-label="Kasa hakkı"><button type="button" aria-label="Artır">+</button></div></div>
+          </div>
+          <h2>Özellikler</h2>
+          <p class="used" style="margin-bottom:12px">Kapalı özelliğin ekranı ve kısayolu kasada açılmaz.</p>
+          <div class="flags" id="flags"></div>
+          <div class="danger"><p>3 işletme bu paketi kullanırken silinemez. Önce işletmeleri başka pakete taşıyın.</p><button class="btn btn-danger sm" disabled>Paketi sil</button></div>
+        </form>
+        <div class="save"><span class="state"><span class="dot"></span>2 değişiklik kaydedilmedi</span><button class="btn btn-line">Vazgeç</button><button class="btn btn-ink">Kaydet</button></div>
+      </section>
+    </div>
+  </div>
+</div>
+<script>
+  // AGENTS.md bölüm 6'daki 11 bayrak; ikinci değer paketteki durum, üçüncü değer kaydedilmemiş değişiklik.
+  const flags = [['Mutfak ekranı', 'feat_kds', 1], ['QR menü', 'feat_qr_menu', 1], ['Paket servis entegrasyonu', 'feat_delivery', 0],
+    ['Arayan numara gösterme', 'feat_caller_id', 0], ['Masa bazlı sipariş', 'feat_table_order', 1], ['Sandalye bazlı hesap bölme', 'feat_seat_split', 1, 1],
+    ['Reçete ve stok maliyeti', 'feat_recipe_bom', 1], ['Dinamik fiyat', 'feat_dynamic_pricing', 0], ['Cari ve tedarikçi', 'feat_ledger_cari', 1],
+    ['Çoklu şube', 'feat_multi_branch', 0], ['Fire ve iptal radarı', 'feat_loss_radar', 1]];
+  document.getElementById('flags').innerHTML = flags.map(([n, k, on, ch]) =>
+    `<div class="flag${ch ? ' changed' : ''}"><b>${n}</b><button type="button" class="switch" role="switch" aria-checked="${!!on}" aria-label="${n}"></button><code>${k}</code></div>`).join('');
+  document.querySelectorAll('.switch').forEach((s) => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
+</script>
+</body>
+</html>

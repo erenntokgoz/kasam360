@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Labs işletme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="specimen.css"><script src="theme.js"></script>
+<style>
+  body { font-size: 14px; line-height: 20px; }
+  .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+  .nav { background: var(--surface); border-right: 1px solid var(--border); padding: 14px 10px; display: grid; align-content: start; gap: 2px; }
+  .nav .mark { font: 800 15px/1 var(--font); padding: 6px 10px 18px; display: flex; gap: 8px; align-items: center; }
+  .nav .mark i { font-style: normal; color: var(--text-2); font-weight: 600; }
+  .nav a { display: flex; align-items: center; min-height: 40px; padding: 0 10px; border-radius: 6px; color: var(--text); text-decoration: none; }
+  .nav a[aria-current="page"] { background: var(--surface-muted); font-weight: 700; }
+  .nav a .n { margin-left: auto; font: 700 12px/18px var(--font); padding: 0 7px; border-radius: 9px; background: var(--bad-fg); color: var(--surface); }
+  .main { min-width: 0; }
+  .search { display: flex; gap: 12px; align-items: center; padding: 10px 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .search .input { min-height: 40px; max-width: 480px; }
+  .search kbd { font: 600 12px/1 var(--font); color: var(--text-2); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; }
+  .id { padding: 20px 24px 0; }
+  .id .crumb { color: var(--text-2); font-size: 13px; }
+  .id h1 { font: 800 26px/32px var(--font); letter-spacing: -.02em; margin: 4px 0 6px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .id .meta { display: flex; gap: 18px; flex-wrap: wrap; color: var(--text-2); font-size: 13px; }
+  .id .meta code { font: 500 12px/18px ui-monospace, Consolas, monospace; color: var(--text); }
+  .id .acts { display: flex; gap: 8px; margin-top: 14px; }
+  .id .acts .btn { min-height: 40px; padding: 0 14px; font-size: 14px; }
+  /* Durum özeti: kimin hangi sorunu olduğu ilk satırda. */
+  .summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 18px 24px 0; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); }
+  .summary > div { padding: 12px 16px; border-right: 1px solid var(--border); }
+  .summary > div:last-child { border-right: 0; }
+  .summary dt { font: 600 12px/16px var(--font); color: var(--text-2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  .summary dd { margin: 0; font-weight: 700; font-size: 15px; }
+  .summary .alert { background: var(--bad-bg); }
+  .summary .alert dd { color: var(--bad-fg); }
+  .tabs { display: flex; gap: 2px; margin: 18px 24px 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tabs a { min-height: 44px; display: flex; align-items: center; padding: 0 14px; color: var(--text-2); text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+  .tabs a[aria-current="page"] { color: var(--text); border-bottom-color: var(--brand); }
+  .body { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; padding: 18px 24px 32px; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-panel); overflow: hidden; }
+  th { text-align: left; font: 600 12px/16px var(--font); color: var(--text-2); padding: 10px 12px; background: var(--surface-muted); text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: top; }
+  td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.hot td { background: var(--bad-bg); }
+  .tl h2, .tbl h2 { font: 700 15px/20px var(--font); margin: 0 0 10px; }
+  .tl ol { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--border); }
+  .tl li { position: relative; padding: 0 0 16px 16px; }
+  .tl li::before { content: ""; position: absolute; left: -6px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border-strong); }
+  .tl li.bad::before { border-color: var(--bad-fg); background: var(--bad-fg); }
+  .tl li.ok::before { border-color: var(--ok-fg); }
+  .tl time { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .tl b { display: block; }
+  .tl p { margin: 2px 0 0; color: var(--text-2); }
+  @media (max-width: 1100px) {
+    .summary { grid-template-columns: repeat(3, 1fr); }
+    .summary > div:nth-child(3) { border-right: 0; }
+    .summary > div:nth-child(-n+3) { border-bottom: 1px solid var(--border); }
+    .body { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; }
+    .nav { display: none; }
+    .search, .id { padding-left: 16px; padding-right: 16px; }
+    .summary { grid-template-columns: 1fr 1fr; margin: 16px; }
+    .summary > div { border-right: 0 !important; border-bottom: 1px solid var(--border); }
+    .tabs { margin: 0 16px; }
+    .body { padding: 16px; }
+    .tbl { overflow-x: auto; }
+    table { min-width: 560px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" aria-label="360 Labs">
+    <div class="mark">360 Labs <i>· KASAM360</i></div>
+    <a href="#">Gelen kutusu <span class="n num">7</span></a>
+    <a href="#" aria-current="page">İşletmeler</a>
+    <a href="#">Hesaplar</a>
+    <a href="#">Paketler</a>
+    <a href="#">Ödemeler</a>
+    <a href="#">Cihazlar</a>
+    <a href="#">Olay kaydı</a>
+  </nav>
+
+  <div class="main">
+    <div class="search">
+      <input class="input" type="search" placeholder="İşletme, e-posta, cihaz veya ödeme no" aria-label="Ara">
+      <kbd>/</kbd>
+    </div>
+
+    <header class="id">
+      <div class="crumb">İşletmeler</div>
+      <h1>TEST_A Lokanta <span class="status ok">Abonelik aktif</span><span class="status bad">Eşitleme durdu</span></h1>
+      <div class="meta">
+        <span>Kiracı <code>tnt_01JC8Z4V2Q9X7M3K5N8P0R6T1A</code></span>
+        <span>Sahibi owner.a@kasam360.invalid</span>
+        <span class="num">Kayıt 14 Eki 2026</span>
+      </div>
+      <div class="acts">
+        <button class="btn btn-primary">Destek kaydı aç</button>
+        <button class="btn btn-secondary">Cihaz haklarını düzenle</button>
+        <button class="btn btn-secondary">Hesabı görüntüle</button>
+      </div>
+    </header>
+
+    <dl class="summary">
+      <div><dt>Paket</dt><dd>Test Paket v1</dd></div>
+      <div><dt>Aylık</dt><dd class="num">1.000,00 TL</dd></div>
+      <div><dt>Cihaz</dt><dd class="num">1 / 2</dd></div>
+      <div class="alert"><dt>Son eşitleme</dt><dd class="num">3 sa 12 dk önce</dd></div>
+      <div><dt>Açık destek</dt><dd class="num">1 kayıt</dd></div>
+    </dl>
+
+    <nav class="tabs" aria-label="İşletme ayrıntısı">
+      <a href="#" aria-current="page">Özet</a><a href="#">Cihazlar</a><a href="#">Abonelik ve ödemeler</a><a href="#">Kullanıcılar</a><a href="#">Özellikler</a><a href="#">Destek</a><a href="#">Olaylar</a>
+    </nav>
+
+    <div class="body">
+      <section class="tbl">
+        <h2>Cihazlar</h2>
+        <table>
+          <thead><tr><th>Cihaz</th><th>Durum</th><th>Sürüm</th><th class="r">Bekleyen işlem</th><th class="r">Son görülme</th></tr></thead>
+          <tbody>
+            <tr class="hot"><td><b>Kasa 1</b><br><span class="muted num">dev_a_01</span></td><td><span class="status bad">Gönderemiyor</span></td><td class="num">0.2.0</td><td class="r">2</td><td class="r">11:19</td></tr>
+            <tr><td><span class="muted">Boş hak</span></td><td><span class="status neutral">Bağlanmadı</span></td><td>—</td><td class="r">—</td><td class="r">—</td></tr>
+          </tbody>
+        </table>
+
+        <h2 style="margin-top:24px">Ödemeler</h2>
+        <table>
+          <thead><tr><th>Tarih</th><th>Tür</th><th>Durum</th><th class="r">Tutar</th></tr></thead>
+          <tbody>
+            <tr><td class="num">6 Kas 2026</td><td>Aylık yenileme · test modu</td><td><span class="status ok">Onaylandı</span></td><td class="r">1.000,00 TL</td></tr>
+            <tr><td class="num">6 Eki 2026</td><td>İlk ödeme · test modu</td><td><span class="status ok">Onaylandı</span></td><td class="r">1.000,00 TL</td></tr>
+            <tr><td class="num">5 Eki 2026</td><td>İlk ödeme · test modu</td><td><span class="status bad">Reddedildi</span></td><td class="r">1.000,00 TL</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="tl">
+        <h2>Zaman çizelgesi</h2>
+        <ol>
+          <li class="bad"><time>Bugün 11:19</time><b>Kasa 1 buluta gönderemiyor</b><p>2 işlem cihazda bekliyor; yerel satış sürüyor.</p></li>
+          <li><time>Bugün 09:02</time><b>Vardiya açıldı</b><p>Ayşe Kaya · Kasa 1</p></li>
+          <li class="ok"><time>6 Kas 08:00</time><b>Abonelik yenilendi</b><p>Test Paket v1 · 1.000,00 TL</p></li>
+          <li><time>2 Kas 16:40</time><b>Destek kaydı kapandı</b><p>Yazıcı ayarı · Mert Demir</p></li>
+          <li class="ok"><time>14 Eki 10:12</time><b>Kasa 1 bağlandı</b><p>Lisans imzalandı, cihaz hakkı 1/2</p></li>
+        </ol>
+      </section>
+    </div>
+  </div>
+</div>
+<div class="specimen-tag">Tasarım örneği · sabit test verisi</div>
+</body>
+</html>

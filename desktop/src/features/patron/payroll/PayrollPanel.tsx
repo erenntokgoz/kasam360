@@ -1,11 +1,14 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
+import { parseCents } from '../../../lib/moneyInput';
 import { PAY_PERIODS, hoursText, recentPeriods, type PayPeriod } from '../../../lib/payPeriod';
 import { invokeIPC } from '../../../services/tauriClient';
 import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
+import { NumberInput } from '../../../ui/NumberInput';
 import { Panel } from '../panorama/Panel';
 import type { PayrollRule } from './RuleEditor';
 
@@ -24,6 +27,8 @@ interface PayrollRun {
   workedSeconds: number;
   amounts: Amounts | null;
   warning: string | null;
+  paidCents: number;
+  remainingCents: number;
 }
 
 const COLUMNS: { label: string; key: keyof Amounts }[] = [
@@ -35,7 +40,7 @@ const COLUMNS: { label: string; key: keyof Amounts }[] = [
 ];
 
 export const PayrollPanel: React.FC = () => {
-  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+  const canViewAmounts = useAuthStore((state) => ['OWNER', 'MANAGER'].includes(state.user?.role ?? ''));
   const [payPeriod, setPayPeriod] = useState<PayPeriod>('MONTHLY');
   const periods = recentPeriods(payPeriod);
   // Aylık bordro çoğunlukla geçen ay için hesaplanır; gün ve hafta içinde bulunandır.
@@ -44,6 +49,9 @@ export const PayrollPanel: React.FC = () => {
   const [runs, setRuns] = useState<PayrollRun[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<PayrollRun | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER'>('CASH');
 
   const loadRules = useCallback(async () => {
     const { actorRole, tenantId } = sessionArgs();
@@ -74,6 +82,28 @@ export const PayrollPanel: React.FC = () => {
 
   const hasHourly = runs?.some((run) => run.model === 'HOURLY') ?? false;
   const total = runs?.reduce((sum, run) => sum + (run.amounts?.netCents ?? 0), 0) ?? 0;
+  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+
+  const savePayment = async () => {
+    if (!paymentTarget) return;
+    const cents = parseCents(paymentAmount);
+    if (cents === null || cents <= 0 || cents > paymentTarget.remainingCents) {
+      setError('Ödeme tutarı kalan bordro borcunu aşamaz.');
+      return;
+    }
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    setIsBusy(true);
+    try {
+      await invokeIPC('pay_payroll_run', {
+        tenantId, actorId, actorRole, payrollRunId: paymentTarget.id,
+        amountCents: cents, paymentMethod,
+      });
+      setPaymentTarget(null);
+      setPaymentAmount('');
+      await calculate();
+    } catch (caught) { setError(errorText(caught)); }
+    finally { setIsBusy(false); }
+  };
 
   return (
     <Panel title="Bordro">
@@ -110,14 +140,14 @@ export const PayrollPanel: React.FC = () => {
         <Button variant="primary" className="min-h-12 text-sm font-bold" isLoading={isBusy} disabled={rules.length === 0} onClick={() => void calculate()}>
           Bordroyu Hesapla
         </Button>
-        {runs && isOwner ? (
+        {runs && canViewAmounts ? (
           <span className="ml-auto text-sm text-[var(--text-secondary)]">
             Ödenecek toplam <span className="text-xl font-bold tabular-nums text-[var(--text-primary)]">{formatMoney(total)}</span>
           </span>
         ) : null}
       </div>
-      {runs && isOwner ? <p className="text-xs text-[var(--text-muted)]">SGK ve vergi kesintisi dahil değildir; yasal bordroyu mali müşavir hesaplar.</p> : null}
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">{error}</p> : null}
+      {runs && canViewAmounts ? <p className="text-xs text-[var(--text-muted)]">SGK ve vergi kesintisi dahil değildir; yasal bordroyu mali müşavir hesaplar.</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
       {runs ? (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -128,6 +158,8 @@ export const PayrollPanel: React.FC = () => {
                 {COLUMNS.map((column) => (
                   <th key={column.key} className="font-medium py-2 pl-4 text-right">{column.label}</th>
                 ))}
+                {canViewAmounts ? <><th className="font-medium py-2 pl-4 text-right">Ödenen</th><th className="font-medium py-2 pl-4 text-right">Kalan</th></> : null}
+                {isOwner ? <th className="font-medium py-2 pl-4 text-right">İşlem</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -147,12 +179,36 @@ export const PayrollPanel: React.FC = () => {
                       {run.amounts ? formatMoney(run.amounts[column.key]) : 'Gizli'}
                     </td>
                   ))}
+                  {canViewAmounts ? <>
+                    <td className="py-2 pl-4 text-right tabular-nums">{formatMoney(run.paidCents)}</td>
+                    <td className="py-2 pl-4 text-right tabular-nums font-semibold">{formatMoney(run.remainingCents)}</td>
+                  </> : null}
+                  {isOwner ? <td className="py-2 pl-4 text-right">
+                    {run.remainingCents > 0 ? <Button type="button" variant="secondary" className="min-h-10 text-xs" onClick={() => { setPaymentTarget(run); setPaymentAmount((run.remainingCents / 100).toFixed(2).replace('.', ',')); }}>Ödeme kaydet</Button> : <span>Tamamlandı</span>}
+                  </td> : null}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       ) : null}
+      {paymentTarget ? <div role="dialog" aria-modal="true" aria-label="Bordro ödemesi" className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+        <div className="w-full max-w-sm rounded-xl bg-[var(--bg-surface)] p-4 space-y-3">
+          <h3 className="font-semibold">{paymentTarget.fullName} · kalan {formatMoney(paymentTarget.remainingCents)}</h3>
+          <label className="block text-sm">Ödeme tutarı
+            <NumberInput aria-label="Ödeme tutarı" className="mt-1 min-h-12" value={paymentAmount} onValueChange={setPaymentAmount} />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant={paymentMethod === 'CASH' ? 'selected' : 'secondary'} onClick={() => setPaymentMethod('CASH')}>Nakit</Button>
+            <Button type="button" variant={paymentMethod === 'BANK_TRANSFER' ? 'selected' : 'secondary'} onClick={() => setPaymentMethod('BANK_TRANSFER')}>Havale</Button>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)]">Kısmi ödeme kalan bordro borcunu azaltır. Nakit, açık vardiya kasasından düşer.</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" onClick={() => setPaymentTarget(null)}>Vazgeç</Button>
+            <Button type="button" variant="primary" isLoading={isBusy} onClick={() => void savePayment()}>Ödemeyi kaydet</Button>
+          </div>
+        </div>
+      </div> : null}
     </Panel>
   );
 };

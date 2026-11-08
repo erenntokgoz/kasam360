@@ -1,12 +1,16 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
 import { errorText } from '../../../lib/cariInput';
 import { invokeIPC } from '../../../services/tauriClient';
 import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { useLedgerStore } from '../../../stores/ledgerStore';
+import { foldText } from '../../../lib/searchText';
+import { Input } from '../../../ui/Input';
 import { Button } from '../../../ui/Button';
 import { LeavePanel } from '../payroll/LeavePanel';
 import { PayrollPanel } from '../payroll/PayrollPanel';
+import { RecordCard } from '../RecordCard';
 import { SectionTabs, type SectionTab } from '../SectionTabs';
 import { ROLE_LABEL, StaffFormModal, type StaffMember } from '../StaffFormModal';
 import { TipPoolPanel } from '../TipPoolPanel';
@@ -23,11 +27,14 @@ const SECTIONS: SectionTab<LedgerSection>[] = [
 
 /** Personel ve bordro tek defter. Pasif personel listede kalır: geçmiş kayıtlar ona bağlıdır. */
 export const StaffLedger: React.FC = () => {
-  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+  const role = useAuthStore((state) => state.user?.role);
+  const isOwner = role === 'OWNER';
+  const canViewPayroll = isOwner || role === 'MANAGER';
   const erpSection = useLedgerStore((state) => state.erpSection);
   const [section, setSection] = useState<LedgerSection>('PEOPLE');
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
   const [profiles, setProfiles] = useState<Record<string, ProfileRow>>({});
+  const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<StaffMember | 'NEW' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,8 +64,9 @@ export const StaffLedger: React.FC = () => {
     if (erpSection === 'LEAVE_REQUESTS') setSection('LEAVE_REQUESTS');
   }, [erpSection]);
 
-  // Sağ taraf boş bir kutu olarak kalmasın: seçim yoksa ilk kişi açık gelir.
-  const selected = staff?.find((member) => member.id === selectedId) ?? staff?.[0] ?? null;
+  const selected = staff?.find((member) => member.id === selectedId) ?? null;
+  const query = foldText(search);
+  const visible = staff?.filter((member) => foldText(member.name).includes(query) || (profiles[member.id]?.phone ?? '').includes(query)) ?? [];
   const active = staff?.filter((member) => member.is_active) ?? [];
   const editingProfile = editing && editing !== 'NEW' ? profiles[editing.id] : undefined;
 
@@ -71,64 +79,51 @@ export const StaffLedger: React.FC = () => {
         onChange={setSection}
       />
 
-      {error ? <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">Personel okunamadı: {error}</p> : null}
+      {error ? <><p className="text-sm text-[var(--text-secondary)]">Personel okunamadı.</p><ErrorToast message={`Personel okunamadı: ${error}`} /></> : null}
 
       {section === 'PEOPLE' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-          <div className="space-y-2 self-start">
-          <Button variant="primary" className="ml-auto flex min-h-12 text-sm font-bold" onClick={() => setEditing('NEW')}>
-            Personel Ekle
-          </Button>
-          <ul className="paper border border-[var(--border)] rounded-xl divide-y divide-[var(--border)]">
-            {(staff ?? []).map((member) => (
-              <li key={member.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(member.id)}
-                  aria-current={member.id === selected?.id}
-                  className={`w-full min-h-12 px-4 py-2 text-left cursor-pointer ${member.id === selected?.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'} ${member.is_active ? '' : 'opacity-60'}`}
-                >
-                  <span className="block text-sm font-bold text-[var(--text-primary)] truncate">{member.name}</span>
-                  <span className="block text-xs text-[var(--text-secondary)]">
-                    {ROLE_LABEL[member.role] ?? member.role}{member.is_active ? '' : ' · Pasif'}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+        selected ? (
+          <div className="space-y-3">
+            <Button variant="ghost" onClick={() => setSelectedId(null)}>Personel Listesine Dön</Button>
+            <StaffCard key={selected.id} member={selected} profile={profiles[selected.id]}
+              isOwner={isOwner} canViewPayroll={canViewPayroll} onEdit={() => setEditing(selected)} onChanged={load} />
           </div>
-          {selected ? (
-            <StaffCard
-              key={selected.id}
-              member={selected}
-              profile={profiles[selected.id]}
-              isOwner={isOwner}
-              onEdit={() => setEditing(selected)}
-              onChanged={load}
-            />
-          ) : (
-            <p className="p-6 text-center text-xs text-[var(--text-muted)] paper border border-[var(--border)] rounded-xl">
-              Henüz personel yok. Personel Ekle ile başlayın.
-            </p>
-          )}
-        </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input type="search" aria-label="Personel ara"
+                className="min-w-40 flex-1" value={search} onChange={(event) => setSearch(event.target.value)} />
+              <Button variant="primary" onClick={() => setEditing('NEW')}>Personel Ekle</Button>
+            </div>
+            {staff === null && !error ? <p role="status">Personel yükleniyor.</p> : null}
+            {staff && visible.length === 0 ? <p>{search.trim() ? 'Eşleşen personel yok.' : 'Henüz personel yok.'}</p> : null}
+            {visible.length > 0 ? <ul className="grid gap-2 md:grid-cols-2">
+              {visible.map((member) => (
+                <li key={member.id}>
+                  <RecordCard title={member.name}
+                    description={`${ROLE_LABEL[member.role] ?? member.role}${member.is_active ? '' : ' · Pasif'}`}
+                    onOpen={() => setSelectedId(member.id)} />
+                </li>
+              ))}
+            </ul> : null}
+          </div>
+        )
       ) : null}
 
       {section === 'LEAVE_REQUESTS' ? <LeavePanel staff={staff ?? []} /> : null}
 
-      {section === 'PAYROLL' ? <PayrollPanel /> : null}
+      {section === 'PAYROLL' && canViewPayroll ? <PayrollPanel /> : null}
 
-      {section === 'TIPS' ? <TipPoolPanel canDistribute={isOwner} staff={active} /> : null}
+      {section === 'TIPS' ? <TipPoolPanel canDistribute={role === 'OWNER'} staff={active} /> : null}
 
       {editing ? (
         <StaffFormModal
           member={editing === 'NEW' ? null : editing}
           profile={editingProfile}
-          canSetSalary={isOwner}
+          canSetSalary={role === 'OWNER'}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            setSelectedId(null);
             void load();
           }}
         />

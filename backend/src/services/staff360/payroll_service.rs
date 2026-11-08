@@ -19,14 +19,12 @@ use sqlx::SqlitePool;
 use crate::services::staff360::payroll_types::{PayrollAmounts, PayrollRule, PayrollRun};
 use crate::services::staff360::tip_service;
 
-pub use crate::services::staff360::payroll_rules::{
-    delete_rule, hourly_equivalent_cents, set_rule, set_tip_multiplier,
-};
+pub use crate::services::staff360::payroll_rules::{delete_rule, set_rule, set_tip_multiplier};
 
 pub async fn list_rules(
     pool: &SqlitePool,
     tenant_id: &str,
-    can_see_amounts: bool,
+    _can_see_amounts: bool,
 ) -> Result<Vec<PayrollRule>, String> {
     let rows = sqlx::query(
         "SELECT pr.user_id, u.name, pr.model, pr.base_salary_cents, pr.hourly_rate_cents,
@@ -47,20 +45,12 @@ pub async fn list_rules(
         let pay_period: String = r.try_get("pay_period").map_err(|e| e.to_string())?;
         let base: i64 = r.try_get("base_salary_cents").map_err(|e| e.to_string())?;
         let rate: i64 = r.try_get("hourly_rate_cents").map_err(|e| e.to_string())?;
-        // Yetkisiz çağıran için maaş ve saatlik ücret sıfırlanır: model ve
-        // çarpan görünür (yönetici planı anlamalı), tutarlar görünmez.
-        let gizli = !can_see_amounts;
         out.push(PayrollRule {
             user_id: r.try_get("user_id").map_err(|e| e.to_string())?,
             full_name: r.try_get("name").map_err(|e| e.to_string())?,
-            hourly_equivalent_cents: if gizli {
-                None
-            } else {
-                Some(hourly_equivalent_cents(&model, &pay_period, base, rate)?)
-            },
             model,
-            base_salary_cents: if gizli { 0 } else { base },
-            hourly_rate_cents: if gizli { 0 } else { rate },
+            base_salary_cents: base,
+            hourly_rate_cents: rate,
             tip_multiplier_percent: r
                 .try_get("tip_multiplier_percent")
                 .map_err(|e| e.to_string())?,
@@ -101,6 +91,19 @@ pub async fn run_payroll(
     let mut tx = pool.begin_write().await?;
     let mut out: Vec<PayrollRun> = Vec::with_capacity(rules.len());
     for kural in &rules {
+        let existing_payment: Option<(String, i64)> = sqlx::query_as(
+            "SELECT pr.id, COALESCE(SUM(pp.amount_cents), 0)
+               FROM payroll_runs pr LEFT JOIN payroll_payments pp
+                 ON pp.tenant_id = pr.tenant_id AND pp.payroll_run_id = pr.id
+              WHERE pr.tenant_id = ?1 AND pr.user_id = ?2 AND pr.period = ?3
+              GROUP BY pr.id",
+        )
+        .bind(tenant_id)
+        .bind(&kural.user_id)
+        .bind(&donem)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
         let mut uyari: Vec<String> = Vec::new();
 
         let bahsis = if kural.model == "TIP" {
@@ -147,6 +150,14 @@ pub async fn run_payroll(
         )
         .await?;
         let net = brut - kesinti.total_cents();
+        if let Some((_, paid)) = existing_payment {
+            if paid > 0 && net < paid {
+                return Err(format!(
+                    "CONFLICT: {} bordrosunun yeni neti yapılmış ödemelerden düşük; değişiklik OWNER tarafından çözümlenmeli",
+                    kural.full_name
+                ));
+            }
+        }
         if net < 0 {
             uyari.push("kesinti brütü aşıyor; fark sonraki döneme kalır".to_string());
         }
@@ -199,14 +210,16 @@ pub async fn run_payroll(
         .await
         .map_err(|e| e.to_string())?;
 
-        let role: String =
-            sqlx::query_scalar("SELECT role FROM users WHERE tenant_id = ?1 AND id = ?2")
+        let (role, paid_cents): (String, i64) =
+            sqlx::query_as("SELECT u.role, COALESCE((SELECT SUM(pp.amount_cents) FROM payroll_payments pp WHERE pp.tenant_id = pr.tenant_id AND pp.payroll_run_id = pr.id), 0) FROM payroll_runs pr JOIN users u ON u.id = pr.user_id AND u.tenant_id = pr.tenant_id WHERE pr.tenant_id = ?1 AND pr.user_id = ?2 AND pr.period = ?3")
                 .bind(tenant_id)
                 .bind(&kural.user_id)
+                .bind(&donem)
                 .fetch_optional(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?
-                .unwrap_or_else(|| "BILINMIYOR".to_string());
+                .ok_or_else(|| "bordro satırı yazılamadı".to_string())?;
+        let remaining_cents = net.saturating_sub(paid_cents).max(0);
 
         out.push(PayrollRun {
             id,
@@ -237,6 +250,8 @@ pub async fn run_payroll(
             } else {
                 Some(uyari.join("; "))
             },
+            paid_cents,
+            remaining_cents,
         });
     }
     tx.commit().await?;

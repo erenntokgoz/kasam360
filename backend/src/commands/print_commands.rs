@@ -62,6 +62,13 @@ pub async fn print_z_report(
 
     let opened_at: String = row.try_get("opened_at").map_err(|e| e.to_string())?;
     let closed_at: Option<String> = row.try_get("closed_at").map_err(|e| e.to_string())?;
+    if closed_at.is_none()
+        && actor_role
+            .as_deref()
+            .is_some_and(|role| role.eq_ignore_ascii_case("CASHIER"))
+    {
+        return Err("FORBIDDEN: kör sayım bitmeden vardiya raporu alınamaz.".into());
+    }
     let expected: i64 = row
         .try_get("expected_amount_cents")
         .map_err(|e| e.to_string())?;

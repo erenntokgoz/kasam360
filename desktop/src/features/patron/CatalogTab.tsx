@@ -28,7 +28,7 @@ export const CatalogTab: React.FC = () => {
   ];
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="motion-swap flex-1 flex flex-col min-h-0">
       {section === 'MENU' ? (
         <MenuModule
           tabs={tabs.map((tab) => (

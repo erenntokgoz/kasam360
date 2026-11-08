@@ -78,13 +78,6 @@ pub async fn insert_expense(
         let shift = shift_id
             .as_deref()
             .ok_or_else(|| "SHIFT_REQUIRED: nakit gider için açık vardiya gerekir.".to_string())?;
-        crate::commands::cashier_commands::ensure_drawer_covers(
-            conn,
-            tenant_id,
-            shift,
-            expense.amount_cents,
-        )
-        .await?;
         cash_movement(
             conn,
             tenant_id,

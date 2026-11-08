@@ -50,28 +50,6 @@ pub async fn set_tip_multiplier(
     Ok(())
 }
 
-/// Taban ücretin saat karşılığı, yarım kuruş yukarı yuvarlanır. Saatler onda bir
-/// saat birimiyle tutulur (aylık 2250, haftalık 450, günlük 75) ki 7,5 saat float'a
-/// düşmesin. Saatlik modelde ücretin kendisi döner.
-pub fn hourly_equivalent_cents(
-    model: &str,
-    pay_period: &str,
-    base_salary_cents: i64,
-    hourly_rate_cents: i64,
-) -> Result<i64, String> {
-    if model == "HOURLY" {
-        return Ok(hourly_rate_cents);
-    }
-    let tenth_hours: i128 = match pay_period {
-        payroll_period::MONTHLY => 2250,
-        payroll_period::WEEKLY => 450,
-        payroll_period::DAILY => 75,
-        other => return Err(format!("gecersiz hakedis donemi: {other}")),
-    };
-    let value = (i128::from(base_salary_cents) * 20 + tenth_hours) / (2 * tenth_hours);
-    i64::try_from(value).map_err(|_| "OVERFLOW: saat karşılığı taştı".to_string())
-}
-
 /// Maaş kuralını yazar (UPSERT). Model doğrulanır: bilinmeyen model
 /// bordroyu sessizce sıfır bırakırdı.
 pub async fn set_rule(

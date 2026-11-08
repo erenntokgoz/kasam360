@@ -180,6 +180,12 @@ describe('Menu Store Actions & Bulk Pricing', () => {
 
     store.toggleFilterSatista();
     expect(useMenuStore.getState().filters.satista).toBe(true);
+    expect(useMenuStore.getState().filters.tukendi).toBe(false);
+
+    store.toggleFilterSatisDisi();
+    expect(useMenuStore.getState().filters).toMatchObject({ tukendi: false, satista: false, satisDisi: true });
+    store.toggleFilterSatisDisi();
+    expect(useMenuStore.getState().filters.satisDisi).toBe(false);
 
     store.setCategoryFilter('cat_coffee');
     expect(useMenuStore.getState().filters.categoryId).toBe('cat_coffee');

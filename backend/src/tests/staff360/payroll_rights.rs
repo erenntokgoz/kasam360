@@ -79,18 +79,18 @@ async fn bahsis_carpani_yalniz_carpani_yazar_kural_yoksa_anlasilir_hata_verir() 
 }
 
 #[tokio::test]
-async fn saat_karsiligi_sahibe_gorunur_mudure_gizlidir() {
+async fn ucret_kuralini_sahip_yazar_mudur_tutarlari_gorur() {
     let p = pool().await;
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "WAITER").await;
     kural(&p, "usr_1", "FIXED", 3_000_000, 0, "MONTHLY").await;
     let sahip = payroll_service::list_rules(&p, "tenant_a", true)
         .await
         .expect("kurallar");
-    assert_eq!(sahip[0].hourly_equivalent_cents, Some(13_333));
     let mudur = payroll_service::list_rules(&p, "tenant_a", false)
         .await
         .expect("kurallar");
-    assert_eq!(mudur[0].hourly_equivalent_cents, None);
+    assert_eq!(sahip[0].base_salary_cents, 3_000_000);
+    assert_eq!(mudur[0].base_salary_cents, 3_000_000);
 }
 
 #[tokio::test]
@@ -99,10 +99,10 @@ async fn saatlik_hak_edis_icinde_bulunulan_haftanin_kapanmis_vardiyasindan_gelir
     kullanici(&p, "tenant_a", "usr_1", "Ayşe", "CASHIER").await;
     kural(&p, "usr_1", "HOURLY", 0, 20_000, "WEEKLY").await;
     sqlx::raw_sql(
-        "INSERT INTO shifts (id, tenant_id, cashier_id, status, opened_at, closed_at, expected_amount_cents)
-         VALUES ('shf_1','tenant_a','usr_1','CLOSED','2026-11-03 09:00:00','2026-11-03 16:30:00',0),
-                ('shf_2','tenant_a','usr_1','CLOSED','2026-10-30 09:00:00','2026-10-30 17:00:00',0),
-                ('shf_3','tenant_a','usr_1','OPEN','2026-11-04 09:00:00',NULL,0);",
+        "INSERT INTO staff_work_sessions (id, tenant_id, user_id, started_at, ended_at, break_minutes, status, created_by, updated_by, created_at, updated_at)
+         VALUES ('wks_1','tenant_a','usr_1','2026-11-03T09:00:00Z','2026-11-03T16:30:00Z',30,'CLOSED','usr_owner','usr_owner','2026-11-03','2026-11-03'),
+                ('wks_2','tenant_a','usr_1','2026-10-30T09:00:00Z','2026-10-30T17:00:00Z',0,'CLOSED','usr_owner','usr_owner','2026-10-30','2026-10-30'),
+                ('wks_3','tenant_a','usr_1','2026-11-04T09:00:00Z',NULL,0,'OPEN','usr_owner','usr_owner','2026-11-04','2026-11-04');",
     )
     .execute(&p)
     .await
@@ -113,24 +113,31 @@ async fn saatlik_hak_edis_icinde_bulunulan_haftanin_kapanmis_vardiyasindan_gelir
         .await
         .expect("hak ediş");
     assert_eq!(sahip.period, "W2026-11-02");
-    // Yalnız bu haftanın kapanmış vardiyası: 7,5 saat × 200 TL = 1.500 TL.
-    assert_eq!(sahip.worked_seconds, 27_000);
-    assert_eq!(sahip.earned_cents, Some(150_000));
+    // Yalnız bu haftanın kapanmış fiili oturumu: 7 saat × 200 TL = 1.400 TL.
+    assert_eq!(sahip.worked_seconds, 25_200);
+    assert_eq!(
+        sahip.earned_cents, None,
+        "saat karşılığı kişi kartında gösterilmez"
+    );
+    assert_eq!(sahip.hourly_rate_cents, None);
     assert_eq!(sahip.source, payroll_hours::HOURS_SOURCE);
 
     let mudur = payroll_hours::current_earnings(&p, "tenant_a", "usr_1", today, false)
         .await
         .expect("hak ediş");
-    assert_eq!(mudur.worked_seconds, 27_000, "saat müdüre görünür");
+    assert_eq!(
+        mudur.worked_seconds, 25_200,
+        "çalışma süresi müdüre görünür"
+    );
     assert_eq!((mudur.hourly_rate_cents, mudur.earned_cents), (None, None));
 
     let runs = payroll_service::run_payroll(&p, "tenant_a", "WEEKLY", "2026-11-02", true)
         .await
         .expect("bordro");
-    assert_eq!(runs[0].worked_seconds, 27_000);
+    assert_eq!(runs[0].worked_seconds, 25_200);
     assert_eq!(
         runs[0].amounts.as_ref().expect("tutar").hourly_cents,
-        150_000
+        140_000
     );
 
     kullanici(&p, "tenant_a", "usr_2", "Can", "WAITER").await;

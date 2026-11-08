@@ -1,15 +1,16 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { PageSheet } from '@/components/PageSheet';
+import { PageShell } from '@/components/PageShell';
+
+export const metadata: Metadata = { title: 'Sayfa bulunamadı', robots: { index: false } };
 
 export default function NotFound() {
   return (
-    <PageSheet tone="pink" copy="Mutfak nüshası">
-      <h1 className="sheet-title">Bu yaprak defterde yok.</h1>
-      <div>
-        <Link href="/" className="btn">
-          Ana Sayfaya Dön
-        </Link>
+    <PageShell title="Bu sayfa yok." lead="Adres değişmiş ya da yanlış yazılmış olabilir.">
+      <div className="k-row">
+        <Link href="/" className="k-btn k-btn-ink k-btn-lg">Ana sayfaya dön</Link>
+        <Link href="/sorular" className="k-btn k-btn-line k-btn-lg">Sık sorulan sorular</Link>
       </div>
-    </PageSheet>
+    </PageShell>
   );
 }

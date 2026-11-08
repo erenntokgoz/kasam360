@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Web ana sayfa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="specimen.css"><script src="theme.js"></script>
+<style>
+  body { font-size: 17px; line-height: 28px; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+  .site { display: flex; align-items: center; gap: 32px; height: 72px; }
+  .site .mark { display: flex; gap: 10px; align-items: center; font: 800 18px/1 var(--font); }
+  .site .mark img { width: 30px; height: 30px; }
+  .site nav { display: flex; gap: 28px; font-size: 15px; font-weight: 500; }
+  .site nav a { color: var(--text); text-decoration: none; }
+  .site .cta { margin-left: auto; display: flex; gap: 8px; }
+  .site .cta .btn { min-height: 44px; }
+  .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; padding-top: 64px; padding-bottom: 88px; }
+  .hero h1 { font: 900 clamp(40px, 6vw, 72px)/1.02 var(--font); letter-spacing: -.045em; margin: 0 0 24px; }
+  .hero h1 em { font-style: normal; color: var(--brand); }
+  .hero p { font-size: 19px; line-height: 30px; color: var(--text-2); max-width: 34ch; margin: 0 0 32px; }
+  .hero .go { display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero .go .btn { min-height: 52px; padding: 0 24px; }
+  /* Ürün sahnesi: tek siparişin masadan mutfağa ve kasaya akışı. */
+  .scene { position: relative; display: grid; gap: 12px; }
+  .lane { display: grid; grid-template-columns: 88px 1fr; gap: 16px; align-items: center; }
+  .lane .tag { font: 700 13px/18px var(--font); color: var(--text-2); text-align: right; }
+  .slip { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-panel); padding: 16px 18px; box-shadow: var(--shadow-pop); }
+  .slip .t { display: flex; justify-content: space-between; font-weight: 700; }
+  .slip .l { display: flex; justify-content: space-between; font-size: 15px; color: var(--text-2); margin-top: 6px; }
+  .slip.active { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft), var(--shadow-pop); }
+  .slip .sum { font: 800 28px/34px var(--font); letter-spacing: -.02em; }
+  .pay { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .pay div { border: 1px solid var(--border); border-radius: var(--r-field); padding: 8px 10px; font-size: 14px; }
+  .pay b { display: block; font-size: 16px; }
+  .rail { position: absolute; left: 103px; top: 20px; bottom: 20px; width: 2px; background: var(--border); }
+  .rail i { position: absolute; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: travel 3s ease-in-out 1 forwards; }
+  @keyframes travel { 0%, 15% { top: 0; } 45%, 60% { top: 48%; } 90%, 100% { top: calc(100% - 10px); } }
+  .band { border-top: 1px solid var(--border); padding: 72px 0; }
+  .band h2 { font: 800 clamp(30px, 4vw, 44px)/1.08 var(--font); letter-spacing: -.03em; margin: 0 0 40px; max-width: 18ch; }
+  .plan { display: grid; grid-template-columns: 1.2fr 1fr; gap: 0; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); overflow: hidden; }
+  .plan .l { padding: 36px; border-right: 1px solid var(--border); }
+  .plan .r { padding: 36px; background: var(--surface-muted); display: grid; align-content: space-between; gap: 24px; }
+  .plan h3 { font: 800 24px/30px var(--font); margin: 0 0 6px; }
+  .price { font: 900 56px/1 var(--font); letter-spacing: -.04em; }
+  .price small { font-size: 18px; font-weight: 600; letter-spacing: 0; color: var(--text-2); }
+  .feat { list-style: none; padding: 0; margin: 24px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; font-size: 15px; }
+  .feat li { display: flex; gap: 10px; align-items: flex-start; }
+  .feat li svg { margin-top: 4px; color: var(--ok-fg); }
+  .feat li.off { color: var(--text-2); }
+  .feat li.off svg { color: var(--text-2); }
+  .trust { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .trust h4 { font: 700 18px/24px var(--font); margin: 0 0 8px; }
+  .trust p { margin: 0; color: var(--text-2); font-size: 15px; line-height: 24px; }
+  .trust .k { font: 800 15px/1 var(--font); color: var(--brand); margin-bottom: 14px; }
+  @media (max-width: 900px) {
+    .wrap { padding: 0 16px; }
+    .site nav, .site .cta .btn-secondary { display: none; }
+    .hero { grid-template-columns: 1fr; padding-top: 32px; padding-bottom: 56px; gap: 40px; }
+    .lane { grid-template-columns: 1fr; gap: 6px; }
+    .lane .tag { text-align: left; }
+    .rail { display: none; }
+    .plan { grid-template-columns: 1fr; }
+    .plan .l { border-right: 0; border-bottom: 1px solid var(--border); padding: 24px; }
+    .plan .r { padding: 24px; }
+    .feat { grid-template-columns: 1fr; }
+    .trust { grid-template-columns: 1fr; gap: 24px; }
+    .band { padding: 48px 0; }
+  }
+</style>
+</head>
+<body>
+<header class="wrap site">
+  <div class="mark"><img src="../../../desktop/src/assets/brand/kasam360-ikon-kucuk-renkli.svg" alt="">KASAM360</div>
+  <nav aria-label="Site"><a href="#">Özellikler</a><a href="#">Paketler</a><a href="#">Sorular</a><a href="#">Destek</a></nav>
+  <div class="cta"><a class="btn btn-secondary" href="#">Giriş</a><a class="btn btn-primary" href="#">Başla</a></div>
+</header>
+
+<main>
+  <section class="wrap hero">
+    <div>
+      <h1>İnternet gitse de <em>adisyon</em> durmaz.</h1>
+      <p>Sipariş, mutfak ve kasa aynı cihazda çalışır; bağlantı geri gelince buluta geçer.</p>
+      <div class="go">
+        <a class="btn btn-primary" href="#">Paketleri gör</a>
+        <a class="btn btn-secondary" href="#">Nasıl çalışır</a>
+      </div>
+    </div>
+
+    <div class="scene" aria-label="Masa 12 siparişinin akışı">
+      <div class="rail" aria-hidden="true"><i></i></div>
+      <div class="lane"><span class="tag">Masa</span>
+        <div class="slip"><div class="t"><span>Masa 12</span><span class="num muted">14:02</span></div>
+          <div class="l"><span>4× Ev usulü mantı</span><span class="num">500,00</span></div>
+          <div class="l"><span>2× Kasap köfte</span><span class="num">580,00</span></div></div></div>
+      <div class="lane"><span class="tag">Mutfak</span>
+        <div class="slip active"><div class="t"><span>Sıcak mutfak</span><span class="status warn">8 dk</span></div>
+          <div class="l"><span>4× Ev usulü mantı · biri acısız</span><span>Hazırlanıyor</span></div></div></div>
+      <div class="lane"><span class="tag">Kasa</span>
+        <div class="slip"><div class="t"><span>Tahsilat</span><span class="sum num">500,00 TL</span></div>
+          <div class="pay"><div>Nakit<b class="num">200,00</b></div><div>Kart<b class="num">300,00</b></div></div></div></div>
+    </div>
+  </section>
+
+  <section class="band"><div class="wrap">
+    <h2>Tek paket, tüm cihazlarınızda aynı kurallar.</h2>
+    <div class="plan">
+      <div class="l">
+        <h3>Test Paket</h3>
+        <span class="muted">Sürüm 1 · aylık</span>
+        <ul class="feat">
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>Masa bazlı sipariş</li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>Mutfak ekranı</li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>Reçete ve FIFO maliyet</li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>Cari ve tedarikçi</li>
+          <li class="off"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg>Paket servis entegrasyonu</li>
+          <li class="off"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg>Çoklu şube</li>
+        </ul>
+      </div>
+      <div class="r">
+        <div><div class="price num">1.000 <small>TL / ay</small></div>
+          <p class="muted" style="margin:8px 0 0;font-size:15px">2 cihaz dahil</p></div>
+        <a class="btn btn-primary" href="#" style="width:100%">Bu paketle başla</a>
+      </div>
+    </div>
+  </div></section>
+
+  <section class="band"><div class="wrap trust">
+    <div><div class="k">01</div><h4>Satış cihazda kalır</h4><p>Bağlantı yokken kayıtlar yerel veritabanına yazılır, sırası bozulmadan gönderilir.</p></div>
+    <div><div class="k">02</div><h4>Para kuruşuna kadar</h4><p>Tutarlar tamsayı kuruş olarak tutulur; nakit ve kart kasada ayrı sayılır.</p></div>
+    <div><div class="k">03</div><h4>Silinmeyen kayıt</h4><p>İptal ve iadeler değiştirilemeyen işlem kaydına eklenir.</p></div>
+  </div></section>
+</main>
+<div class="specimen-tag">Tasarım örneği · sabit test verisi</div>
+</body>
+</html>

@@ -13,6 +13,8 @@ export function ulid(now = Date.now()): string {
   return time + random;
 }
 
-const PREFIXES: Record<string, string> = { user: 'usr', session: 'ses', account: 'acc', verification: 'ver' };
+const PREFIXES: Record<string, string> = {
+  user: 'usr', session: 'ses', account: 'acc', verification: 'ver', tenant: 'tnt', membership: 'mem',
+};
 
 export const prefixedId = (model: string) => `${PREFIXES[model] ?? 'rec'}_${ulid()}`;

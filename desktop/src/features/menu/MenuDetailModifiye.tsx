@@ -134,16 +134,18 @@ export const MenuDetailModifiye: React.FC<MenuDetailModifiyeProps> = ({
             {/* Seçenek Ekle Alanı */}
             {addingOptionGroupId === grp.id ? (
               <div className="pt-2 border-t border-[var(--border)] space-y-2">
+                <span className="block text-sm font-semibold">Seçenek adı</span>
                 <input
                   type="text"
+                  aria-label="Seçenek adı"
                   value={optName}
                   onChange={(e) => setOptName(e.target.value)}
-                  placeholder="Seçenek adı (örn: Ekstra Sos)"
                   className="w-full paper border border-[var(--border)] rounded min-h-12 px-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none"
                   autoFocus
                 />
                 <div className="flex items-center gap-1.5">
-                  <NumberInput aria-label="Fiyat farkı" className="flex-1" value={optDeltaInput} onValueChange={setOptDeltaInput} placeholder="Fiyat farkı (₺)" />
+                  <span className="text-sm font-semibold">Fiyat farkı</span>
+                  <NumberInput aria-label="Fiyat farkı" className="flex-1" value={optDeltaInput} onValueChange={setOptDeltaInput} />
                   <button
                     type="button"
                     onClick={() => handleAddOptionSubmit(grp.id)}

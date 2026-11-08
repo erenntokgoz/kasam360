@@ -1,5 +1,5 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
 import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
@@ -35,14 +35,17 @@ const CreateAccountForm: React.FC = () => {
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
       {error ? (
-        <div role="alert" className="p-3 rounded-lg text-xs font-medium border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center gap-1.5">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <ErrorToast message={error} />
       ) : null}
-      <Input aria-label="E-posta" type="email" placeholder="E-posta" className="min-h-12" value={email} onChange={(event) => setEmail(event.target.value)} required />
-      <Input aria-label="Şifre" type="password" placeholder="Şifre (en az 8 karakter)" className="min-h-12" value={password} onChange={(event) => setPassword(event.target.value)} required />
-      <NumberInput kind="digits" aria-label="Sahip PIN" type="password" placeholder="Sahip PIN" className="min-h-12" value={ownerPin} onValueChange={setOwnerPin} required />
+      <label className="block space-y-1"><span className="text-sm font-semibold">E-posta</span>
+        <Input aria-label="E-posta" type="email" className="min-h-12" value={email} onChange={(event) => setEmail(event.target.value)} required />
+      </label>
+      <label className="block space-y-1"><span className="text-sm font-semibold">Şifre</span>
+        <Input aria-label="Şifre" type="password" className="min-h-12" value={password} onChange={(event) => setPassword(event.target.value)} required />
+      </label>
+      <label className="block space-y-1"><span className="text-sm font-semibold">Sahip PIN</span>
+        <NumberInput kind="digits" aria-label="Sahip PIN" type="password" className="min-h-12" value={ownerPin} onValueChange={setOwnerPin} required />
+      </label>
       <Button type="submit" variant="primary" className="w-full min-h-12" isLoading={isBusy}>
         Hesabı Oluştur
       </Button>
@@ -57,8 +60,9 @@ export const AccountGate: React.FC = () => {
   return (
     <AuthShell title={session?.accountMissing ? 'Hesap oluştur' : 'İşletme girişi'}>
       {error ? (
-        <div role="alert" className="space-y-3">
-          <p className="text-sm text-[var(--accent-red)] break-words">{error}</p>
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--text-secondary)]">İşletme oturumu okunamadı.</p>
+          <ErrorToast message={error} />
           <Button variant="primary" className="w-full min-h-12" onClick={() => void load()}>
             Yeniden Dene
           </Button>

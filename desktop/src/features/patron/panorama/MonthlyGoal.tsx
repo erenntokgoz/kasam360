@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
 import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
@@ -71,10 +72,10 @@ export const MonthlyGoal: React.FC = () => {
       }
     >
       {editing ? (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">Hedef</span>
           <NumberInput
             aria-label="Aylık ciro hedefi"
-            placeholder="Hedef (₺)"
             className="min-h-12 tabular-nums"
             value={text}
             onValueChange={setText}
@@ -85,15 +86,11 @@ export const MonthlyGoal: React.FC = () => {
         </div>
       ) : null}
       {saveError ? (
-        <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
-          Hedef kaydedilemedi: {saveError}
-        </p>
+        <ErrorToast message={`Hedef kaydedilemedi: ${saveError}`} />
       ) : null}
       {targetError ? (
         <div className="flex items-center justify-between gap-2">
-          <p role="alert" className="text-xs font-semibold text-[var(--accent-red)]">
-            Hedef okunamadı: {targetError}
-          </p>
+          <><p className="text-sm text-[var(--text-secondary)]">Hedef okunamadı.</p><ErrorToast message={`Hedef okunamadı: ${targetError}`} /></>
           <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void loadTarget()}>
             Tekrar Dene
           </Button>

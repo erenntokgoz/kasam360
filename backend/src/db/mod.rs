@@ -14,14 +14,19 @@ mod campaign_seeds;
 pub(crate) mod floor_plan_migration;
 mod inventory_migration;
 mod migrate;
+mod products_category_migration;
 mod seeds;
 mod stock_unit_migration;
 mod tables_migration;
 
 #[cfg(test)]
+mod acceptance_fixtures;
+#[cfg(test)]
 mod floor_plan_migration_tests;
 #[cfg(test)]
 mod inventory_migration_tests;
+#[cfg(test)]
+mod products_category_migration_tests;
 #[cfg(test)]
 mod tests;
 
@@ -285,6 +290,7 @@ pub async fn init_db(database_url: &str) -> Result<DbPool, sqlx::Error> {
     // yeniden kurulur.
     inventory_migration::migrate_products_for_86d(&pool).await?;
     stock_unit_migration::migrate_stock_units(&pool).await?;
+    products_category_migration::migrate_products_nullable_category(&pool).await?;
     inventory_migration::migrate_inventory_batches_for_shelf_life(&pool).await?;
     inventory_migration::migrate_stock_movements_for_products(&pool).await?;
     floor_plan_migration::migrate_floor_plan_layout(&pool).await?;

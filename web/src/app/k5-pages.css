@@ -1,0 +1,125 @@
+/* İç sayfalar: başlık, iki sütunlu form düzeni, form alanları, durum kutuları, tanım satırları, soru-cevap,
+   yasal metin ve destek konuşması. Tokenlar k5.css'tedir. */
+.k-page { padding: 56px 0 96px; min-height: 62vh; }
+.k-page-head { margin-bottom: 40px; max-width: 760px; }
+.k-page-head h1, .k-split-head h1 { margin: 0; font-size: clamp(34px, 4vw, 56px); line-height: 1.04; letter-spacing: -0.035em; font-weight: 650; text-wrap: balance; }
+.k-page-head p, .k-split-head > p { margin: 14px 0 0; font-size: 18px; line-height: 1.55; color: var(--k-text-2); max-width: 60ch; }
+.k-section-title { margin: 0 0 12px; font-size: 20px; font-weight: 620; letter-spacing: -0.02em; }
+.k-split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 64px; align-items: start; }
+.k-split-head { display: grid; gap: 24px; align-content: start; }
+.k-panel { background: var(--k-panel); border: 1px solid var(--k-line); border-radius: 16px; padding: 28px; }
+.k-stack { display: grid; gap: 18px; }
+.k-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.k-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.k-muted { color: var(--k-text-2); }
+.k-small { font-size: 14px; line-height: 1.5; }
+.k-link { color: var(--k-text); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--k-line-2); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.k-link:hover { text-decoration-color: currentColor; }
+.k-btn-ink { background: var(--k-text); color: var(--k-bg); }
+.k-btn-ink:hover { filter: brightness(1.1); }
+.k-btn-block { width: 100%; }
+.k-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.k-btn-danger { border-color: var(--k-line-2); color: var(--k-bad); }
+
+/* Form alanları: görünür etiket, 48px yükseklik, hata alanın altında ve alana bağlı. */
+.k-field { display: grid; gap: 6px; min-width: 0; }
+.k-field label, .k-label { font-size: 13px; font-weight: 560; color: var(--k-text); }
+.k-input { width: 100%; min-width: 0; min-height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--k-line-2); background: var(--k-panel);
+  color: var(--k-text); font: 400 16px/1.4 var(--font-geist), sans-serif; }
+textarea.k-input { padding: 12px 14px; min-height: 120px; resize: vertical; line-height: 1.5; }
+.k-input:focus { outline: none; border-color: var(--k-text-3); box-shadow: 0 0 0 3px color-mix(in srgb, var(--k-focus) 30%, transparent); }
+.k-input[aria-invalid="true"] { border-color: var(--k-bad); }
+.k-input[readonly] { color: var(--k-text-2); background: var(--k-panel-2); }
+.k-field-hint { margin: 0; font-size: 13px; line-height: 1.45; color: var(--k-text-2); }
+.k-field-error { margin: 0; font-size: 13px; font-weight: 520; color: var(--k-bad); }
+.k-check { display: flex; gap: 12px; align-items: flex-start; min-height: 48px; cursor: pointer; font-size: 14px; line-height: 1.5; color: var(--k-text-2); }
+.k-check input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: var(--k-orange); cursor: pointer; }
+.k-divider { display: flex; align-items: center; gap: 12px; color: var(--k-text-3); font-size: 13px; }
+.k-divider::before, .k-divider::after { content: ""; flex: 1; height: 1px; background: var(--k-line); }
+
+/* Durum kutuları: hata kalıcı durur, başarı ne olduğunu ve sıradaki adımı söyler. */
+.k-alert { margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--k-bad-bg); color: var(--k-text); overflow-wrap: anywhere; }
+.k-alert::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--k-bad); margin-right: 8px; vertical-align: 1px; }
+.k-done { display: grid; gap: 8px; padding: 18px; border-radius: 12px; background: color-mix(in srgb, var(--k-ok) 14%, var(--k-panel)); }
+.k-done b { font-size: 18px; font-weight: 640; color: var(--k-ok); }
+.k-done p { margin: 0; color: var(--k-text-2); line-height: 1.55; }
+.k-notice { margin: 0; color: var(--k-ok); font-weight: 560; }
+
+/* Tanım satırları ve sıralı adımlar */
+.k-dl { margin: 0; border-top: 1px solid var(--k-line); }
+.k-dl > div { display: grid; grid-template-columns: 14rem minmax(0, 1fr); gap: 16px; padding: 16px 2px; border-bottom: 1px solid var(--k-line); }
+.k-dl dt { color: var(--k-text-2); } .k-dl dd { margin: 0; font-weight: 560; overflow-wrap: anywhere; }
+.k-steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--k-line); }
+.k-steps li { display: grid; grid-template-columns: 2.5rem 1fr; padding: 14px 2px; border-bottom: 1px solid var(--k-line); }
+.k-steps li span:first-child { font: 500 13px/1.6 var(--font-geist-mono), monospace; color: var(--k-accent-ink); }
+
+/* Özellik grupları */
+.k-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 56px; }
+.k-groups h2 { margin: 0; padding-bottom: 12px; font-size: 22px; font-weight: 640; letter-spacing: -0.02em; border-bottom: 2px solid var(--k-text); }
+.k-groups ul { list-style: none; margin: 0; padding: 0; }
+.k-groups li { padding: 13px 2px; border-bottom: 1px solid var(--k-line); line-height: 1.45; }
+.k-note { margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--k-line); max-width: 760px; }
+.k-note p { margin: 0; color: var(--k-text-2); line-height: 1.6; }
+.k-page-cta { margin: -16px 0 56px; }
+.k-pricing { display: grid; gap: 64px; }
+.k-pricing > section { min-width: 0; }
+.k-package-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.k-package-card { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.k-package-card[data-highlighted="true"] { border-color: var(--k-orange); }
+.k-package-card header h3 { margin: 10px 0 4px; font-size: 22px; }
+.k-package-card header p, .k-package-card p { margin: 0; color: var(--k-text-2); }
+.k-package-price { color: var(--k-text) !important; font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.k-package-features { list-style: none; display: grid; gap: 12px; margin: 0; padding: 0; }
+.k-package-features li { display: grid; gap: 2px; border-top: 1px solid var(--k-line); padding-top: 10px; }
+.k-package-features span { color: var(--k-text-3); font-size: 13px; }
+.k-package-card .k-package-unavailable { margin-top: auto; border-top: 1px solid var(--k-line); padding-top: 12px; font-weight: 600; }
+
+/* Soru-cevap */
+.k-faq { border-top: 1px solid var(--k-line); }
+.k-faq details { border-bottom: 1px solid var(--k-line); }
+.k-faq summary { display: flex; justify-content: space-between; gap: 16px; align-items: center; min-height: 64px; padding: 14px 2px; cursor: pointer; list-style: none; font-size: 18px; font-weight: 580; }
+.k-faq summary::-webkit-details-marker { display: none; }
+.k-faq summary::after { content: "+"; flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--k-line-2); color: var(--k-text-2); font-weight: 400; }
+.k-faq details[open] summary::after { content: "−"; }
+.k-faq details p { margin: 0; padding: 0 2px 20px; max-width: 64ch; color: var(--k-text-2); line-height: 1.6; }
+
+/* Yasal metin: solda bölüm listesi, sağda okunur genişlikte metin. */
+.k-legal { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 56px; align-items: start; }
+.k-legal nav { position: sticky; top: 96px; display: grid; gap: 2px; }
+.k-legal nav a { display: flex; align-items: center; min-height: 48px; padding: 0 10px; border-radius: 8px; color: var(--k-text-2); text-decoration: none; font-size: 14px; }
+.k-legal nav a:hover { background: var(--k-panel-2); color: var(--k-text); }
+.k-legal section { max-width: 68ch; padding-bottom: 28px; scroll-margin-top: 96px; }
+.k-legal h2 { margin: 0 0 8px; font-size: 20px; font-weight: 620; letter-spacing: -0.015em; }
+.k-legal p { margin: 0 0 10px; color: var(--k-text-2); line-height: 1.7; }
+
+/* Destek: talep listesi ve konuşma */
+.k-support { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.k-tickets { display: grid; border: 1px solid var(--k-line); border-radius: 14px; background: var(--k-panel); overflow: hidden; }
+.k-tickets button { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; min-height: 56px; padding: 12px 16px; border: 0; border-top: 1px solid var(--k-line);
+  background: none; color: var(--k-text); text-align: left; font: 500 15px/1.4 var(--font-geist), sans-serif; cursor: pointer; }
+.k-tickets button:first-of-type { border-top: 0; }
+.k-tickets button[aria-pressed="true"] { background: var(--k-panel-2); box-shadow: inset 3px 0 0 var(--k-orange); }
+.k-tickets .k-empty { margin: 0; padding: 18px 16px; color: var(--k-text-2); }
+.k-tag { font-size: 12px; font-weight: 560; padding: 3px 9px; border-radius: 999px; background: var(--k-panel-2); color: var(--k-text-2); }
+.k-tag[data-open="true"] { color: var(--k-ok); background: color-mix(in srgb, var(--k-ok) 14%, var(--k-panel)); }
+.k-thread { display: grid; gap: 14px; }
+.k-msg { padding: 16px 18px; border-radius: 12px; background: var(--k-panel); border: 1px solid var(--k-line); }
+.k-msg[data-staff="true"] { background: var(--k-panel-2); }
+.k-msg strong { display: block; margin-bottom: 6px; font-size: 13px; color: var(--k-text-2); }
+.k-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+
+@media (max-width: 900px) {
+  .k-page { padding: 32px 0 64px; }
+  .k-page-head { margin-bottom: 28px; }
+  .k-split, .k-legal, .k-support { grid-template-columns: 1fr; gap: 28px; }
+  .k-legal nav { position: static; display: none; }
+  .k-panel { padding: 20px; }
+  .k-grid-2, .k-groups { grid-template-columns: 1fr; }
+  .k-page-cta { margin: -8px 0 40px; }
+  .k-pricing { gap: 48px; }
+  .k-dl > div { grid-template-columns: 1fr; gap: 2px; }
+}
+.k-account { display: grid; gap: 18px; max-width: 860px; }
+/* Onay kutusunun metni etiket değil açıklamadır; form etiketi kalınlığını almaz. */
+.k-field label.k-check { font-weight: 400; font-size: 14px; color: var(--k-text-2); }
+:root[data-theme="dark"] .k-input, :root:not([data-theme]) .k-input { background: var(--k-bg-2); }

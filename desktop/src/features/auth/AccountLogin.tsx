@@ -1,5 +1,6 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useState } from 'react';
-import { AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
 import { invokeIPC } from '../../services/tauriClient';
 import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
@@ -51,10 +52,7 @@ export const AccountLogin: React.FC<AccountLoginProps> = ({ onNotOnDevice, onFor
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
       {error ? (
-        <div role="alert" className="p-3 rounded-lg text-sm font-medium border bg-[var(--accent-red-soft)] text-[var(--accent-red)] border-[var(--accent-red-border)] flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <ErrorToast message={error} />
       ) : null}
       <div>
         <label htmlFor="account-email" className="block text-sm font-medium mb-1 text-[var(--text-secondary)]">

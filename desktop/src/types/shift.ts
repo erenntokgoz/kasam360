@@ -28,14 +28,14 @@ export interface ShiftSummary {
   cashierName: string;
   openedAt: string;
   openingCashCents: number;
-  totalCashSalesCents: number;
+  totalCashSalesCents: number | null;
   totalCardSalesCents: number;
   totalMealCardSalesCents: number;
   totalVeresiyeCents: number;
   totalCashInCents: number;
   totalCashOutCents: number;
-  expectedCashInDrawerCents: number;
-  totalSalesCents: number;
+  expectedCashInDrawerCents: number | null;
+  totalSalesCents: number | null;
 }
 
 export interface ZReportData {

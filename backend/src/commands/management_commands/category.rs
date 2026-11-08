@@ -26,18 +26,41 @@ pub struct CategoryDto {
     pub default_station: Option<String>,
 }
 
+/// Ürünün bağlanacağı kategoriyi çözer. Hammadde menüde yer almaz, kategorisi
+/// `NULL` kalır: kategori seçtirmek stok kalemini menü kategorilerine karıştırır.
+/// Satış ürünü kategorisiz kalamaz; POS kataloğu ürünü kategorisiyle listeler.
+pub(crate) async fn product_category(
+    conn: &mut sqlx::SqliteConnection,
+    category_id: Option<String>,
+    is_raw: bool,
+    tenant_id: &str,
+) -> Result<Option<String>, String> {
+    if is_raw {
+        return Ok(None);
+    }
+    let category_id = category_id
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| "VALIDATION: satış ürünü için kategori gerekli".to_string())?;
+    // Kategori başka işletmeye aitse ürün o işletmenin menüsünde görünür.
+    ensure_owned(conn, "categories", &category_id, tenant_id).await?;
+    Ok(Some(category_id))
+}
+
+/// Yalnız satış ürünleri kategoriyi dolu sayar. Eski kurulumda kategoriye bağlı
+/// kalmış hammadde menüde görünmez; silmeyi engellerse kategori kurtarılamaz.
 pub(crate) async fn ensure_empty_category(
     conn: &mut sqlx::SqliteConnection,
     category_id: &str,
     tenant_id: &str,
 ) -> Result<(), String> {
-    let product_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM products WHERE category_id = ? AND tenant_id = ?")
-            .bind(category_id)
-            .bind(tenant_id)
-            .fetch_one(conn)
-            .await
-            .map_err(|e| e.to_string())?;
+    let product_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM products WHERE category_id = ? AND tenant_id = ? AND is_raw = 0",
+    )
+    .bind(category_id)
+    .bind(tenant_id)
+    .fetch_one(conn)
+    .await
+    .map_err(|e| e.to_string())?;
     if product_count > 0 {
         return Err("VALIDATION: Ürün içeren kategori silinemez. Önce ürünleri taşıyın.".into());
     }
@@ -258,6 +281,16 @@ pub async fn delete_category(
 
     let result: Result<(), String> = async {
         ensure_empty_category(&mut conn, &id, &tenant_id).await?;
+        // Eski kurulumda kategoriye bağlı hammadde kalemi kategorisiz kalır; stok
+        // ve reçete kaydı korunur, yabancı anahtar silmeyi kırmaz.
+        sqlx::query(
+            "UPDATE products SET category_id = NULL WHERE category_id = ? AND tenant_id = ? AND is_raw = 1",
+        )
+        .bind(&id)
+        .bind(&tenant_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
 
         sqlx::query("DELETE FROM categories WHERE id = ? AND tenant_id = ?")
             .bind(&id)

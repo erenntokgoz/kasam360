@@ -2,7 +2,7 @@ const MESSAGES: Record<string, string> = {
   INVALID_EMAIL_OR_PASSWORD: 'E-posta veya şifre hatalı.',
   INVALID_PASSWORD: 'Mevcut şifreniz hatalı.',
   INVALID_EMAIL: 'Geçerli bir e-posta adresi yazın.',
-  EMAIL_NOT_VERIFIED: 'E-postanız doğrulanmadı. Doğrulama bağlantısını yeniden gönderdik.',
+  EMAIL_NOT_VERIFIED: 'E-postanız henüz doğrulanmadı. Gelen kutunuzdaki bağlantıyı açın.',
   PASSWORD_TOO_SHORT: 'Şifre en az 8 karakter olmalı.',
   PASSWORD_TOO_LONG: 'Şifre en fazla 128 karakter olabilir.',
   INVALID_TOKEN: 'Bağlantı geçersiz veya süresi dolmuş. Yeni bağlantı isteyin.',
@@ -15,6 +15,8 @@ export interface AuthResult<T> {
   ok: boolean;
   data?: T;
   error?: string;
+  /** Sunucu hata kodu; ekran bazı hatalarda (doğrulanmamış hesap gibi) ek eylem sunar. */
+  code?: string;
   errors?: FieldErrors;
 }
 
@@ -24,7 +26,7 @@ async function readResponse<T>(response: Response): Promise<AuthResult<T>> {
   if (response.ok) return { ok: true, data: body ?? undefined };
   if (body?.errors) return { ok: false, errors: body.errors };
   if (response.status === 429) return { ok: false, error: 'Çok fazla deneme yapıldı. Birkaç dakika sonra tekrar deneyin.' };
-  return { ok: false, error: MESSAGES[body?.code ?? ''] ?? 'İşlem tamamlanamadı. Biraz sonra tekrar deneyin.' };
+  return { ok: false, code: body?.code, error: MESSAGES[body?.code ?? ''] ?? 'İşlem tamamlanamadı. Biraz sonra tekrar deneyin.' };
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<AuthResult<T>> {

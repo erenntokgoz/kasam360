@@ -1,0 +1,9 @@
+{
+  "name": "kasam360-mobile",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../desktop/node_modules/typescript/bin/tsc --project tsconfig.json && node ../desktop/node_modules/vite/bin/vite.js build --config vite.config.mts",
+    "sync:android-brand": "node scripts/sync-android-brand.mjs"
+  }
+}
