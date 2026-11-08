@@ -48,7 +48,7 @@ jobs:
             --file backend/api/Dockerfile --tag "$API_IMAGE" .
           docker build --platform linux/amd64 --build-arg "VCS_REF=${SOURCE_SHA}" \
             --build-arg API_ORIGIN=http://api:4000 \
-            --file web/Dockerfile --tag "$WEB_IMAGE" web
+            --file web/Dockerfile --tag "$WEB_IMAGE" .
 
       - name: Smoke test API and web containers
         env:

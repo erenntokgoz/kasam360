@@ -1,7 +1,7 @@
 FROM node:24-bookworm-slim AS dependencies
 
-WORKDIR /app
-COPY package.json package-lock.json ./
+WORKDIR /app/web
+COPY web/package.json web/package-lock.json ./
 RUN npm ci
 
 FROM node:24-bookworm-slim AS builder
@@ -11,9 +11,9 @@ ARG VCS_REF=unknown
 ENV API_ORIGIN=$API_ORIGIN \
     NEXT_TELEMETRY_DISABLED=1
 
-WORKDIR /app
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY . .
+WORKDIR /app/web
+COPY --from=dependencies /app/web/node_modules ./node_modules
+COPY web/ ./
 RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime
@@ -28,9 +28,9 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR /app
-COPY --from=builder --chown=node:node /app/public ./public
-COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/web/public ./public
+COPY --from=builder --chown=node:node /app/web/.next/standalone ./
+COPY --from=builder --chown=node:node /app/web/.next/static ./.next/static
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
