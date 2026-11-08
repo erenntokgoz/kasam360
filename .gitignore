@@ -80,6 +80,7 @@ backend/api/.test-db/
 
 # Yerel kabul verisi, derleme çıktısı ve imzalama malzemesi repoya girmez.
 /work/
+/deploy/.env
 /web/.next-*/
 /backend/mobile-dist/
 /mobile/.icon-preview/

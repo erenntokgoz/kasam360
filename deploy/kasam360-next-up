@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -ne 0 ]; then
+  echo "Bu wrapper argüman kabul etmez." >&2
+  exit 64
+fi
+
+project_dir=/opt/kasam360-next
+cd "$project_dir"
+
+compose() {
+  /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root \
+  docker compose \
+    --project-name kasam360-next \
+    --project-directory "$project_dir" \
+    --file "$project_dir/deploy/compose.yaml" \
+    --env-file "$project_dir/deploy/.env" "$@"
+}
+
+compose config --quiet
+exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root \
+  docker compose \
+    --project-name kasam360-next \
+    --project-directory "$project_dir" \
+    --file "$project_dir/deploy/compose.yaml" \
+    --env-file "$project_dir/deploy/.env" \
+    up --detach --no-build --pull never
