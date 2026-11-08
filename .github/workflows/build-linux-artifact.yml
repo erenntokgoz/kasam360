@@ -67,6 +67,10 @@ jobs:
             if docker exec mongo mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '1'; then
               break
             fi
+            if ! docker inspect --format '{{.State.Running}}' mongo 2>/dev/null | grep -q true; then
+              docker logs mongo
+              exit 1
+            fi
             sleep 2
           done
           docker exec mongo mongosh --quiet --eval \
@@ -79,7 +83,7 @@ jobs:
             fi
             sleep 2
           done
-          test "$ready" = true
+          if [ "$ready" != true ]; then docker logs mongo; exit 1; fi
 
           auth_secret=$(openssl rand -hex 32)
           docker run --detach --name api --network "$network" \
