@@ -61,7 +61,7 @@ jobs:
           docker network create "$network"
           trap 'docker rm -f web api mongo >/dev/null 2>&1 || true; docker network rm "$network" >/dev/null 2>&1 || true' EXIT
 
-          docker run --detach --name mongo --network "$network" mongo:8.0 \
+          docker run --detach --name mongo --network "$network" mongo:7.0 \
             mongod --replSet ci-rs --bind_ip_all
           for attempt in $(seq 1 30); do
             if docker exec mongo mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '1'; then
