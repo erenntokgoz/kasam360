@@ -7,10 +7,14 @@ RUN npm ci --omit=dev
 FROM node:24-bookworm-slim AS runtime
 
 ARG VCS_REF=unknown
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
 LABEL org.opencontainers.image.source="https://github.com/erenntokgoz/kasam360" \
       org.opencontainers.image.revision="$VCS_REF"
 
-ENV NODE_ENV=production \
+ENV GIT_SHA=$GIT_SHA \
+    BUILD_TIME=$BUILD_TIME \
+    NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=4000
 

@@ -8,6 +8,7 @@ import { mountTenantMembership } from './tenantMembership.js';
 import { mountTenantCommercial, type TenantCommercialConfig } from './tenantCommercial.js';
 import { mountCatalog } from './catalog.js';
 import type { Databases } from './lib/mongo.js';
+import { mountVersion } from './version.js';
 
 const LINK_CODE = /^[0-9a-f-]{36}$/;
 const LINK_TTL_MS = 5 * 60 * 1000;
@@ -34,6 +35,7 @@ export function createApp(
   const desktopLinks = new Map<string, DesktopLink>();
 
   app.get('/health', (context) => context.json({ ok: true }));
+  mountVersion(app);
   if (databases) {
     mountTenantMembership(app, auth, databases.accountClient, databases.account);
     mountTenantCommercial(app, auth, databases.account, tenantCommercialConfig);

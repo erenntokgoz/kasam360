@@ -8,13 +8,15 @@ FROM node:24-bookworm-slim AS builder
 
 ARG API_ORIGIN=http://api:4000
 ARG VCS_REF=unknown
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
 ENV API_ORIGIN=$API_ORIGIN \
     NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR /app/web
 COPY --from=dependencies /app/web/node_modules ./node_modules
 COPY web/ ./
-RUN npm run build
+RUN printf '{"commit":"%s","builtAt":"%s"}' "$GIT_SHA" "$BUILD_TIME" > public/version.json && npm run build
 
 FROM node:24-bookworm-slim AS runtime
 

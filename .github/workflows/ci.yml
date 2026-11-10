@@ -151,9 +151,12 @@ jobs:
           set -euo pipefail
           API_IMAGE="kasam360-api:${SOURCE_SHA}"
           WEB_IMAGE="kasam360-web:${SOURCE_SHA}"
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           docker build --platform linux/amd64 --build-arg "VCS_REF=${SOURCE_SHA}" \
+            --build-arg "GIT_SHA=${SOURCE_SHA}" --build-arg "BUILD_TIME=${BUILD_TIME}" \
             --file backend/api/Dockerfile --tag "$API_IMAGE" .
           docker build --platform linux/amd64 --build-arg "VCS_REF=${SOURCE_SHA}" \
+            --build-arg "GIT_SHA=${SOURCE_SHA}" --build-arg "BUILD_TIME=${BUILD_TIME}" \
             --build-arg API_ORIGIN=http://api:4000 \
             --file web/Dockerfile --tag "$WEB_IMAGE" .
 
@@ -270,3 +273,36 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+  deploy:
+    name: Deploy to server
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: kasam360-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Prepare SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy this commit (rolls back on failed smoke test)
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "kasamdeploy@${DEPLOY_HOST}" "$SOURCE_SHA"
+          echo "Deployed commit: ${SOURCE_SHA}"

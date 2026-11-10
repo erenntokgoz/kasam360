@@ -181,3 +181,55 @@ Geri almak için yalnız yeni site bağlantılarını kaldır ve Nginx'i yeniden
 ```bash
 rm /etc/nginx/sites-enabled/kasam360next.conf /etc/nginx/sites-enabled/labs360.conf && nginx -t && systemctl reload nginx
 ```
+
+## 10. Otomatik kurulum
+
+`develop` dalına her push'ta GitHub Actions, imajlar GHCR'ye gidince sunucuya bağlanıp o commit'i kurar. Kurulum betiği önceki etiketleri kaydeder, yeni etiketi çeker, duman testini en çok 90 saniye dener ve başarısız olursa önceki sürüme döner (çıkış kodu 1). Anahtar yalnız bu betiği çalıştırabilir.
+
+Anahtar çiftini kendi bilgisayarında (PowerShell) üret; özel anahtar sunucuya hiç girmez.
+```powershell
+ssh-keygen -t ed25519 -N '""' -C kasam360-deploy -f "$env:USERPROFILE\.ssh\kasam360_deploy"
+```
+
+Açık anahtarı göster ve kopyala (tek satır, `ssh-ed25519 ...` ile başlar).
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\kasam360_deploy.pub"
+```
+
+Sunucuda root olarak betiği kurulum konumuna al; sahibi root, yalnız root yazabilir.
+```bash
+curl -fsSL https://raw.githubusercontent.com/erenntokgoz/kasam360/develop/deploy/kasam360-next-up -o /usr/local/sbin/kasam360-next-up && chown root:root /usr/local/sbin/kasam360-next-up && chmod 755 /usr/local/sbin/kasam360-next-up
+```
+
+`kasamdeploy` yalnız bu betiği parolasız çalıştırabilsin; dosya `visudo -cf` ile doğrulanmadan yerinde bırakılmaz.
+```bash
+echo 'kasamdeploy ALL=(root) NOPASSWD: /usr/local/sbin/kasam360-next-up *' > /etc/sudoers.d/kasamdeploy.tmp && visudo -cf /etc/sudoers.d/kasamdeploy.tmp && chown root:root /etc/sudoers.d/kasamdeploy.tmp && chmod 440 /etc/sudoers.d/kasamdeploy.tmp && mv /etc/sudoers.d/kasamdeploy.tmp /etc/sudoers.d/kasamdeploy
+```
+
+Açık anahtarı kısıtlı satırla ekle. `AÇIK_ANAHTAR` yerine PC'de kopyaladığın satırın tamamını yaz (komut satırının ortasında `ssh-ed25519 ...` olacak).
+```bash
+install -d -m 700 -o kasamdeploy -g kasamdeploy /home/kasamdeploy/.ssh && echo 'command="sudo /usr/local/sbin/kasam360-next-up $SSH_ORIGINAL_COMMAND",no-port-forwarding,no-agent-forwarding,no-pty,no-X11-forwarding AÇIK_ANAHTAR' >> /home/kasamdeploy/.ssh/authorized_keys && chown kasamdeploy:kasamdeploy /home/kasamdeploy/.ssh/authorized_keys && chmod 600 /home/kasamdeploy/.ssh/authorized_keys
+```
+
+Sunucunun ana makine anahtarını al (çıktı `DEPLOY_KNOWN_HOSTS` olacak). `SUNUCU_ADRESI` yerine sunucunun IP'sini ya da alan adını yaz.
+```bash
+ssh-keyscan -t ed25519 SUNUCU_ADRESI
+```
+
+GitHub'da iki depoya da (`erenntokgoz/kasam360` ve `erenntokgoz/360labs`) Settings, Secrets and variables, Actions, New repository secret yolundan aynı üç gizli değeri gir.
+
+- `DEPLOY_SSH_KEY`: PC'deki `kasam360_deploy` dosyasının (`.pub` olmayan özel anahtar) tüm içeriği, `-----BEGIN` ve `-----END` satırları dahil.
+- `DEPLOY_HOST`: sunucunun IP'si ya da alan adı (`kasamdeploy@` öneki olmadan).
+- `DEPLOY_KNOWN_HOSTS`: `ssh-keyscan` çıktısındaki `ssh-ed25519` satırı.
+
+Elle deneme: PC'den bir commit'i kurmak için aşağıdaki biçim kullanılır; betik yalnız 40 haneli küçük harfli hex commit kabul eder (Labs için başına `labs:` konur).
+```powershell
+ssh -i "$env:USERPROFILE\.ssh\kasam360_deploy" kasamdeploy@SUNUCU_ADRESI 0123456789abcdef0123456789abcdef01234567
+```
+
+Yayınlanan etiket `.env` dosyasına değil `/opt/kasam360-next/deploy/current-tag` (api ve web) ile `current-labs-tag` (Labs) dosyalarına yazılır; `.env` içindeki `IMAGE_TAG` değerine dokunulmaz. Sunucuda daha önce geçici olarak oluşturulmuş `compose.override.yaml` varsa sil; kurulum artık `compose.yaml` ile çalışır.
+```bash
+rm -f /opt/kasam360-next/deploy/compose.override.yaml
+```
+
+Sürüm kontrolü: API için `curl -fsS http://127.0.0.1:4100/version`, web için `curl -fsS http://127.0.0.1:3100/version.json`, Labs için sunucu içinden `curl -fsS http://127.0.0.1:3610/version` (Nginx üzerinden gelen istekte 404 döner).

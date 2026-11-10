@@ -1,30 +1,137 @@
 #!/bin/sh
+# Kullanım: kasam360-next-up <40 hex commit>        api + web etiketini günceller
+#           kasam360-next-up labs:<40 hex commit>   Labs etiketini günceller
+# SSH kısıtlı anahtarı bu betiği sudo ile çağırır; SSH_ORIGINAL_COMMAND tek argüman olarak gelir.
+# Neden: dağıtım anahtarı çalınsa bile yalnız geçerli bir commit etiketi dağıtılabilir.
 set -eu
 
-if [ "$#" -ne 0 ]; then
-  echo "Bu wrapper argüman kabul etmez." >&2
+umask 022
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+project_dir=/opt/kasam360-next
+deploy_dir="$project_dir/deploy"
+api_state="$deploy_dir/current-tag"
+labs_state="$deploy_dir/current-labs-tag"
+registry=ghcr.io/erenntokgoz
+
+if [ "$#" -ne 1 ]; then
+  echo "Tam olarak bir argüman gerekir: <40 hex sha> ya da labs:<40 hex sha>." >&2
   exit 64
 fi
 
-# Yalnız kasam360next projesine dokunur; eski uygulama ve Mailu etkilenmez.
-project_dir=/opt/kasam360-next
-cd "$project_dir/deploy"
+kind=api
+sha=$1
+case "$1" in
+  labs:*) kind=labs; sha=${1#labs:} ;;
+esac
+case "$sha" in
+  *[!0-9a-f]*|"") echo "Geçersiz commit." >&2; exit 64 ;;
+esac
+if [ "${#sha}" -ne 40 ]; then
+  echo "Commit tam 40 küçük harfli hex olmalı." >&2
+  exit 64
+fi
 
-run() {
-  /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root \
-  docker compose \
-    --project-name kasam360next \
-    --project-directory "$project_dir/deploy" \
-    --file "$project_dir/deploy/compose.yaml" \
-    --env-file "$project_dir/deploy/.env" "$@"
+# Aynı anda iki kurulum çalışmasın.
+exec 9>/run/lock/kasam360-next-up.lock
+flock -n 9 || { echo "Başka bir kurulum sürüyor." >&2; exit 75; }
+
+cd "$deploy_dir"
+
+compose() {
+  /usr/bin/env -i PATH="$PATH" HOME=/root \
+    IMAGE_TAG="$tag_api" LABS_IMAGE_TAG="$tag_labs" \
+    docker compose \
+      --project-name kasam360next \
+      --project-directory "$deploy_dir" \
+      --file "$deploy_dir/compose.yaml" \
+      --env-file "$deploy_dir/.env" "$@"
 }
 
-run config --quiet
-run pull
-exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root \
-  docker compose \
-    --project-name kasam360next \
-    --project-directory "$project_dir/deploy" \
-    --file "$project_dir/deploy/compose.yaml" \
-    --env-file "$project_dir/deploy/.env" \
-    up --detach --no-build
+# Çalışan kapsayıcının etiketi; yoksa state dosyası, o da yoksa develop.
+running_tag() {
+  svc=$1
+  state=$2
+  tag=
+  cid=$(tag_api=develop tag_labs=develop compose ps -q "$svc" 2>/dev/null | head -n 1 || true)
+  if [ -n "$cid" ]; then
+    img=$(docker inspect --format '{{.Config.Image}}' "$cid" 2>/dev/null || true)
+    case "$img" in *:*) tag=${img##*:} ;; esac
+  fi
+  if [ -z "$tag" ] && [ -f "$state" ]; then tag=$(head -n 1 "$state"); fi
+  echo "${tag:-develop}"
+}
+
+tag_api=develop
+tag_labs=develop
+prev_api=$(running_tag api "$api_state")
+prev_labs=$(running_tag labs "$labs_state")
+prev_api_id=$(docker images --no-trunc --format '{{.ID}}' "$registry/kasam360-api:$prev_api" 2>/dev/null | head -n 1 || true)
+echo "Önceki etiketler: api/web=$prev_api labs=$prev_labs (api image ${prev_api_id:-yok})"
+
+if [ "$kind" = labs ]; then
+  tag_api=$prev_api
+  tag_labs=$sha
+  services="labs"
+else
+  tag_api=$sha
+  tag_labs=$prev_labs
+  services="api web"
+fi
+
+compose config --quiet
+
+smoke() {
+  fetch_code() { curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$@" || true; }
+  if [ "$kind" = labs ]; then
+    [ "$(fetch_code http://127.0.0.1:3610/giris)" = 200 ] || return 1
+    curl -fsS --max-time 5 http://127.0.0.1:3610/version | grep -q "\"commit\":\"$sha\"" || return 1
+  else
+    curl -fsS --max-time 5 http://127.0.0.1:4100/health >/dev/null || return 1
+    curl -fsS --max-time 5 http://127.0.0.1:4100/version | grep -q "\"commit\":\"$sha\"" || return 1
+    [ "$(fetch_code http://127.0.0.1:3100/)" = 200 ] || return 1
+    curl -fsS --max-time 5 http://127.0.0.1:3100/version.json | grep -q "\"commit\":\"$sha\"" || return 1
+    [ "$(fetch_code -H 'Host: menu.kasam360.com.tr' http://127.0.0.1:3100/)" = 404 ] || return 1
+  fi
+}
+
+wait_smoke() {
+  deadline=$(( $(date +%s) + 90 ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if smoke; then return 0; fi
+    sleep 3
+  done
+  return 1
+}
+
+rollback() {
+  echo "Duman testi başarısız; önceki etiketlere dönülüyor." >&2
+  tag_api=$prev_api
+  tag_labs=$prev_labs
+  compose up --detach --no-build $services || echo "Geri alma başarısız oldu." >&2
+}
+
+# shellcheck disable=SC2086
+if ! compose pull $services; then
+  echo "Image çekilemedi; mevcut çalışan sürüm korunuyor." >&2
+  exit 1
+fi
+# shellcheck disable=SC2086
+if ! compose up --detach --no-build $services; then
+  rollback
+  exit 1
+fi
+
+if ! wait_smoke; then
+  rollback
+  exit 1
+fi
+
+# Kalıcı .env'ye dokunulmaz; yayınlanan etiket ayrı state dosyasında tutulur.
+if [ "$kind" = labs ]; then
+  printf '%s\n' "$sha" > "$labs_state.tmp" && mv "$labs_state.tmp" "$labs_state"
+else
+  printf '%s\n' "$sha" > "$api_state.tmp" && mv "$api_state.tmp" "$api_state"
+fi
+echo "Yayınlanan commit ($kind): $sha"

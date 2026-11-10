@@ -99,3 +99,4 @@ backend/api/.test-db/
 *.keystore
 *.mobileprovision
 backend/work/
+web/public/version.json
