@@ -56,6 +56,8 @@ done
 ```
 
 Kalan değerleri (SITE_URL, ALLOWED_ORIGINS, LABS_APP_ORIGIN, Labs yönetici e-postası ve parolası) nano ile doldur.
+
+Compose içinde Labs, API'ye Docker iç ağından `http://api:4000` ile bağlanır; bu yüzden `LABS_INTERNAL_HTTP_HOSTS: api` tanımlıdır ve yalnız noktasız tek etiketli ad için düz HTTP kabul edilir.
 ```bash
 nano .env
 ```
