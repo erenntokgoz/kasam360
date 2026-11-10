@@ -102,3 +102,80 @@ Yalnız yeni yığını durdurup kaldırır; volume'lar (veri) silinmez, eski uy
 ```bash
 cd /opt/kasam360-next/deploy && docker compose -p kasam360next down
 ```
+
+## 9. Alan adı ve TLS
+
+Nginx site dosyalarını GitHub'dan `sites-available` altına al; mevcut `kasam360` ve `mailu.conf` dosyalarına dokunulmaz.
+```bash
+curl -fsSL https://raw.githubusercontent.com/erenntokgoz/kasam360/develop/deploy/nginx/kasam360next.conf -o /etc/nginx/sites-available/kasam360next.conf
+```
+
+Labs site dosyasını aynı dizine al.
+```bash
+curl -fsSL https://raw.githubusercontent.com/erenntokgoz/kasam360/develop/deploy/nginx/labs360.conf -o /etc/nginx/sites-available/labs360.conf
+```
+
+Yeni dosyaları `sites-enabled` altına sembolik bağla.
+```bash
+ln -s /etc/nginx/sites-available/kasam360next.conf /etc/nginx/sites-enabled/kasam360next.conf && ln -s /etc/nginx/sites-available/labs360.conf /etc/nginx/sites-enabled/labs360.conf
+```
+
+Yapılandırmayı doğrula ve Nginx'i yeniden yükle; restart kullanılmaz, eski bağlantılar kesilmez.
+```bash
+nginx -t && systemctl reload nginx
+```
+
+Certbot kurulu mu kontrol et; yoksa kur.
+```bash
+which certbot || apt install -y certbot python3-certbot-nginx
+```
+
+Ana alan adları ve alt alanlar için sertifika al ve 443 bloklarını ekletirken HTTP'den HTTPS'e yönlendirmeyi seç.
+```bash
+certbot --nginx -d kasam360.com.tr -d www.kasam360.com.tr -d menu.kasam360.com.tr -d api.kasam360.com.tr
+```
+
+Labs alan adı için ayrı sertifika al.
+```bash
+certbot --nginx -d 360labs.com.tr
+```
+
+Ana sitenin HTTPS üzerinden yanıt verdiğini doğrula.
+```bash
+curl -I https://kasam360.com.tr
+```
+
+API sağlık ucunun HTTPS üzerinden yanıt verdiğini doğrula.
+```bash
+curl -fsS https://api.kasam360.com.tr/health
+```
+
+Labs'ın HTTPS üzerinden yanıt verdiğini doğrula.
+```bash
+curl -I https://360labs.com.tr
+```
+
+Ortam değişkenlerini kamu alan adlarına göre güncelle.
+```bash
+cd /opt/kasam360-next/deploy && sed -i -e 's|^SITE_URL=.*|SITE_URL=https://kasam360.com.tr|' -e 's|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=https://kasam360.com.tr,https://www.kasam360.com.tr,https://menu.kasam360.com.tr|' .env
+```
+
+Yeni ortam değerleriyle yığını başlat.
+```bash
+docker compose -p kasam360next up -d
+```
+
+Labs'a ilk yönetici girişini yaptıktan sonra bootstrap bilgilerini .env'den boşalt.
+```bash
+sed -i -e 's|^LABS_ADMIN_BOOTSTRAP_EMAIL=.*|LABS_ADMIN_BOOTSTRAP_EMAIL=|' -e 's|^LABS_ADMIN_BOOTSTRAP_PASSWORD=.*|LABS_ADMIN_BOOTSTRAP_PASSWORD=|' .env
+```
+
+Boşaltılan değerleri Labs servisine yeniden okutmak için yalnız labs servisini yeniden oluştur.
+```bash
+cd /opt/kasam360-next/deploy && docker compose -p kasam360next up -d labs
+```
+
+Geri almak için yalnız yeni site bağlantılarını kaldır ve Nginx'i yeniden yükle; eski uygulama ve Mailu etkilenmez.
+```bash
+rm /etc/nginx/sites-enabled/kasam360next.conf /etc/nginx/sites-enabled/labs360.conf && nginx -t && systemctl reload nginx
+```
