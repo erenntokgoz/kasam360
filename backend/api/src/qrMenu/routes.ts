@@ -39,7 +39,7 @@ export interface QrMenuDeps {
 interface SlugDoc { _id: string; tenant_id: string; slug: string; enabled: boolean; created_at: Date; updated_at: Date }
 interface PublicationDoc { _id: string; tenant_id: string; version: number; etag: string; menu: MenuSnapshot; published_at: Date; published_by_device: string }
 interface ImageDoc { _id: string; tenant_id: string; sha256: string; size: number; width: number; height: number; created_at: Date }
-interface TenantDoc { _id: string; currency: string; status: string }
+interface TenantDoc { _id: string; name: string; currency: string; status: string }
 
 type ErrorStatus = 400 | 401 | 403 | 404 | 409 | 413 | 415 | 422 | 503;
 
@@ -212,7 +212,7 @@ export function mountQrMenu(app: Hono, deps: QrMenuDeps) {
     context.header('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
     context.header('X-Content-Type-Options', 'nosniff');
     if (context.req.header('if-none-match') === publication.etag) return context.body(null, 304);
-    const tenant = await deps.account.collection<TenantDoc>('tenant').findOne({ _id: found.tenantId }, { projection: { currency: 1 } });
+    const tenant = await deps.account.collection<TenantDoc>('tenant').findOne({ _id: found.tenantId }, { projection: { currency: 1, name: 1 } });
     const items = publication.menu.products.filter((product) => product.active);
     const categories = publication.menu.categories
       .map((category) => ({
@@ -225,7 +225,7 @@ export function mountQrMenu(app: Hono, deps: QrMenuDeps) {
       }))
       .filter((category) => category.products.length > 0);
     return context.json({
-      schema: MENU_SCHEMA, slug, version: publication.version, publishedAt: publication.published_at.toISOString(),
+      schema: MENU_SCHEMA, slug, name: publication.menu.businessName ?? tenant?.name ?? null, version: publication.version, publishedAt: publication.published_at.toISOString(),
       currency: tenant?.currency ?? 'TRY', categories,
     });
   });

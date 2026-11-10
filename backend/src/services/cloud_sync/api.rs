@@ -135,7 +135,7 @@ impl HttpApi {
     }
 }
 
-async fn send(request: reqwest::RequestBuilder) -> Result<Value, ApiError> {
+pub(crate) async fn send(request: reqwest::RequestBuilder) -> Result<Value, ApiError> {
     let response = request
         .send()
         .await
@@ -151,7 +151,7 @@ async fn send(request: reqwest::RequestBuilder) -> Result<Value, ApiError> {
         )));
     }
     let parsed: Option<Value> = serde_json::from_str(&text).ok();
-    if status == 200 {
+    if status == 200 || status == 201 {
         // Başarı yanıtı okunamazsa işlem bulutta olabilir; aynı gönderim aynen yinelenir.
         return parsed.ok_or_else(|| ApiError::Transient("Bulut yanıtı okunamadı.".to_string()));
     }

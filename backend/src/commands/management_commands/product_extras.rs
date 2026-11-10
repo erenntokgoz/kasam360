@@ -11,8 +11,9 @@ use crate::db::DbPool;
 use crate::rbac::{self, Role};
 use crate::services::lan_sync::WritePool;
 
-/// Veritabanına gömülen görsel satırı şişirmesin: küçük bir menü fotoğrafı yeter.
-const MAX_IMAGE_BYTES: usize = 400_000;
+/// Yerel görsel de yayınlanan WebP'nin aynısıdır (en çok 1,5 MiB). Satıra base64 metni
+/// olarak girdiği için sınır 1.572.864 baytın base64 karşılığı artı `data:` önekidir.
+const MAX_IMAGE_BYTES: usize = 2_097_152 + 64;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

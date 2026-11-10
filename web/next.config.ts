@@ -29,6 +29,8 @@ const nextConfig: NextConfig = {
       { source: '/api/desktop-link/:path*', destination: `${apiOrigin}/api/desktop-link/:path*` },
       // Kasa lisans anahtarını ve belgesini site adresinden ister; yönlendirme yoksa 404 çevrimdışı sayılır.
       { source: '/api/desktop/:path*', destination: `${apiOrigin}/api/desktop/:path*` },
+      // Müşteri menüsünün görselleri menü alt alanının kendi adresinden okunur (sözleşme: /public/menu/{slug}/images/...).
+      { source: '/public/menu/:path*', destination: `${apiOrigin}/public/menu/:path*` },
     ];
   },
   async redirects() {

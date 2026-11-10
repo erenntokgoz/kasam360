@@ -76,7 +76,7 @@ beforeEach(async () => {
 const desktopHeaders = (key: string, device: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${key}`, 'x-device-id': device, ...extra });
 
 interface TestProduct { id: string; name: string; description: string | null; priceCents: number; categoryId: string; sortOrder: number; imageKey: string | null; active: boolean; inStock: boolean }
-interface TestMenu { schema: string; categories: { id: string; name: string; sortOrder: number }[]; products: TestProduct[] }
+interface TestMenu { schema: string; businessName?: string; categories: { id: string; name: string; sortOrder: number }[]; products: TestProduct[] }
 const menuBody = (overrides: Partial<TestMenu> = {}): TestMenu => ({
   schema: 'kasam360.qrmenu.v1',
   categories: [{ id: 'cat_b', name: 'Tatlılar', sortOrder: 20 }, { id: 'cat_a', name: 'İçecekler', sortOrder: 10 }],
@@ -181,6 +181,17 @@ describe('QR menü yayınlama', () => {
     expect(await status.json()).toMatchObject({ tenantId: A.tenantId, slug: 'kafe-a', enabled: true, entitled: true, version: 1 });
     const write = await app.request(`/api/desktop/tenants/${A.tenantId}/menu/slug`, { method: 'PUT', headers: desktopHeaders(keyA, DEVICE_A), body: '{}' });
     expect(write.status).toBe(404);
+  });
+});
+
+describe('QR menü işletme adı', () => {
+  it('yayındaki businessName öncelikli, yoksa tenant adı public yanıttaki name olur', async () => {
+    await assign(A.tenantId, { slug: 'kafe-a', enabled: true });
+    await publish(menuBody());
+    expect(await (await app.request('/public/menu/kafe-a')).json()).toMatchObject({ name: A.businessName });
+    expect(await (await publish(menuBody({ businessName: ' Kafe Güzel ' }))).json()).toMatchObject({ version: 2, changed: true });
+    expect(await (await app.request('/public/menu/kafe-a')).json()).toMatchObject({ name: 'Kafe Güzel' });
+    expect((await publish(menuBody({ businessName: '' }))).status).toBe(422);
   });
 });
 

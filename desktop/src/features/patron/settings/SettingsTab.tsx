@@ -9,6 +9,7 @@ import { DeviceSettings } from './DeviceSettings';
 import { LicenseSettings } from './LicenseSettings';
 import { SessionSettingsTab } from '../SessionSettingsTab';
 import { LegacyArchivePanel } from './LegacyArchivePanel';
+import { QrMenuSettings } from './QrMenuSettings';
 import { StationSettings } from './StationSettings';
 import { TablesSettings } from './TablesSettings';
 
@@ -44,7 +45,7 @@ export const SettingsTab: React.FC = () => {
           <>
             <SectionTabs label="Bu Cihaz" active={deviceSection} onChange={setDeviceSection}
               tabs={[{ id: 'ACCOUNT', label: 'Oturum ve Görünüm' }, { id: 'DEVICES', label: 'Cihaz Bağlantıları' }]} />
-            {deviceSection === 'ACCOUNT' ? <SessionSettingsTab /> : <><LicenseSettings /><DeviceSettings canManage={isOwner} /><CloudSyncSettings canManage={isOwner} /></>}
+            {deviceSection === 'ACCOUNT' ? <SessionSettingsTab /> : <><LicenseSettings /><DeviceSettings canManage={isOwner} /><CloudSyncSettings canManage={isOwner} /><QrMenuSettings /></>}
           </>
         ) : null}
         {section === 'FLOOR' ? (

@@ -30,6 +30,7 @@ pub mod payment_approval;
 pub mod payment_service;
 pub mod pnl_service;
 pub mod pos_gateway;
+pub mod qr_menu_publish;
 pub mod receipt_service;
 pub mod refund_service;
 pub mod report_service;

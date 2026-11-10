@@ -7,7 +7,7 @@ export interface MenuProduct {
   id: string; name: string; description: string | null; priceCents: number; categoryId: string;
   sortOrder: number; imageKey: string | null; active: boolean; inStock: boolean;
 }
-export interface MenuSnapshot { categories: MenuCategory[]; products: MenuProduct[] }
+export interface MenuSnapshot { businessName: string | null; categories: MenuCategory[]; products: MenuProduct[] }
 
 export class MenuInvalid extends Error {
   constructor(public readonly field: string) {
@@ -44,7 +44,7 @@ function integer(value: unknown, min: number, max: number, field: string) {
 /** Yayın gövdesini doğrular; ihlalde alan yolu ile birlikte fırlatır. Para yalnız tamsayı kuruştur. */
 export function parseMenu(input: unknown): MenuSnapshot {
   if (!isRecord(input)) throw new MenuInvalid('body');
-  exact(input, ['schema', 'categories', 'products'], 'body');
+  exact(input, ['schema', 'businessName', 'categories', 'products'], 'body');
   if (input.schema !== MENU_SCHEMA) throw new MenuInvalid('schema');
   if (!Array.isArray(input.categories) || input.categories.length > MAX_CATEGORIES) throw new MenuInvalid('categories');
   if (!Array.isArray(input.products) || input.products.length > MAX_PRODUCTS) throw new MenuInvalid('products');
@@ -77,7 +77,8 @@ export function parseMenu(input: unknown): MenuSnapshot {
       imageKey, active: raw.active, inStock: raw.inStock,
     };
   });
-  return { categories, products };
+  const businessName = input.businessName === undefined || input.businessName === null ? null : text(input.businessName, 120, 'businessName');
+  return { businessName, categories, products };
 }
 
 const compareId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -87,6 +88,7 @@ const order = <T extends { sortOrder: number; id: string }>(items: T[]) =>
 /** Aynı içerik her zaman aynı etag'i verir: sıra ve anahtar düzeni sabitlenir. */
 export function canonicalMenu(menu: MenuSnapshot): MenuSnapshot {
   return {
+    businessName: menu.businessName ?? null,
     categories: order(menu.categories).map(({ id, name, sortOrder }) => ({ id, name, sortOrder })),
     products: order(menu.products).map(({ id, name, description, priceCents, categoryId, sortOrder, imageKey, active, inStock }) => (
       { id, name, description, priceCents, categoryId, sortOrder, imageKey, active, inStock }

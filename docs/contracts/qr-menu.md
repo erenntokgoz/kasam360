@@ -39,6 +39,7 @@ Mevcut tenant sync / cihaz lisansı mekanizması aynen kullanılır, atlama yokt
 ```json
 {
   "schema": "kasam360.qrmenu.v1",
+  "businessName": "Kafe Güzel",
   "categories": [ { "id": "cat_…", "name": "İçecekler", "sortOrder": 10 } ],
   "products": [
     {
@@ -53,7 +54,7 @@ Mevcut tenant sync / cihaz lisansı mekanizması aynen kullanılır, atlama yokt
 
 Kurallar (ihlal `422 INVALID_MENU`, ayrıntı `{field}`):
 
-- Tam anlık görüntüdür; kısmi güncelleme yoktur. Önceki yayının yerini alır. En çok 100 kategori, 2.000 ürün.
+- `businessName` isteğe bağlı: yok/`null` veya 1-120 karakter (kırpılmış). Menünün içeriğine dahildir (değişirse sürüm artar). Tam anlık görüntüdür; kısmi güncelleme yoktur. Önceki yayının yerini alır. En çok 100 kategori, 2.000 ürün.
 - `id`: `^[A-Za-z0-9_-]{1,64}$`, kendi listesinde tekil. `name` 1-120, kategori adı 1-80 karakter (kırpılmış). `description` yok/`null` veya en çok 1.000 karakter. `sortOrder` 0..1.000.000 tamsayı.
 - `priceCents` negatif olmayan güvenli tamsayı, en çok 10.000.000 (100.000,00); float reddedilir.
 - `categoryId` listedeki bir kategoriye işaret etmelidir. `imageKey` yok/`null` veya bu işletmeye daha önce yüklenmiş bir görselin sha256'sı; yoksa `422 UNKNOWN_IMAGE`.
@@ -89,7 +90,7 @@ Kimlik yoktur. `404` (gövde `{code:'NOT_FOUND'}`, `Cache-Control: public, max-a
 
 ```json
 {
-  "schema": "kasam360.qrmenu.v1", "slug": "kafe-x", "version": 7, "publishedAt": "2026-11-10T09:00:00.000Z",
+  "schema": "kasam360.qrmenu.v1", "slug": "kafe-x", "name": "Kafe Güzel", "version": 7, "publishedAt": "2026-11-10T09:00:00.000Z",
   "currency": "TRY",
   "categories": [ { "id": "cat_…", "name": "İçecekler", "sortOrder": 10, "products": [
     { "id": "prd_…", "name": "Türk Kahvesi", "description": "…"|null, "priceCents": 12500, "sortOrder": 10, "inStock": true, "image": "/public/menu/kafe-x/images/<sha256>.webp"|null }
@@ -97,6 +98,7 @@ Kimlik yoktur. `404` (gövde `{code:'NOT_FOUND'}`, `Cache-Control: public, max-a
 }
 ```
 
+- `name`: yayındaki `businessName`, yoksa işletmenin kayıtlı adı (tenant adı).
 - Gizli alan yoktur: `tenantId`, cihaz, yayıncı, `active`, etkin hak bilgisi dönmez. Yalnız `active:true` ürünler, kategori ve ürünler `sortOrder` sonra `id` sıralıdır. `currency` işletme kaydındandır.
 - Başlıklar: `ETag` (yayın etag'i), `Cache-Control: public, max-age=30, stale-while-revalidate=60`, `Access-Control-Allow-Origin: *`, `X-Content-Type-Options: nosniff`. `If-None-Match` eşleşirse `304`.
 - Görsel: `GET /public/menu/{slug}/images/{sha256}.webp` aynı üç koşulu denetler ve yalnız **yayınlanmış menüde kullanılan** görseli verir (yüklenip yayına girmemiş görsel `404`). `Content-Type: image/webp`, `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`. İçerik-adresli olduğu için immutable güvenlidir; hak sonradan kapanırsa önbelleğe girmiş kopyalar süresi dolana kadar görünebilir (bilinen sınır).

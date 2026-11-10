@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { errorText } from '../../lib/cariInput';
+import { IMAGE_ACCEPT, prepareProductImage } from '../../lib/productImage';
 import { useMenuExtrasStore } from '../../stores/menuExtrasStore';
 import { useMenuStore } from '../../stores/menuStore';
 import { useStationStore } from '../../stores/stationStore';
@@ -9,7 +10,6 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import { Modal } from '../../ui/Modal';
 
 const field = 'w-full min-h-12 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] px-3 text-sm';
-const photoTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 /** Ürün fiyatı ve reçetesi bu karttan değiştirilemez; burada menü bilgileri düzenlenir. */
 export const ProductMenuSettings: React.FC<{
@@ -43,24 +43,11 @@ export const ProductMenuSettings: React.FC<{
     setReading(false);
     setImage(null);
     setError(null);
-    if (!photoTypes.includes(file.type) || file.size > 299_900) {
-      setError('En fazla 299 KB boyutunda bir JPG, PNG, WebP veya GIF seçin.');
-      return;
-    }
     setReading(true);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (currentFile.current !== file) return;
-      if (typeof reader.result === 'string') setImage(reader.result);
-      else setError('Ürün görseli okunamadı.');
-      setReading(false);
-    };
-    reader.onerror = () => {
-      if (currentFile.current !== file) return;
-      setError('Ürün görseli okunamadı.');
-      setReading(false);
-    };
-    reader.readAsDataURL(file);
+    prepareProductImage(file)
+      .then((dataUrl) => { if (currentFile.current === file) setImage(dataUrl); })
+      .catch((caught: unknown) => { if (currentFile.current === file) setError(errorText(caught)); })
+      .finally(() => { if (currentFile.current === file) setReading(false); });
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -113,7 +100,7 @@ export const ProductMenuSettings: React.FC<{
               onChange={(event) => setDescription(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm">Ürün Görseli
-            <input type="file" accept={photoTypes.join(',')} className={`${field} py-2`}
+            <input type="file" accept={IMAGE_ACCEPT} className={`${field} py-2`}
               onChange={(event) => pickImage(event.target.files?.[0])} />
           </label>
           {preview ? <img src={preview} alt={product.name} className="w-full max-h-40 object-contain rounded-lg" /> : null}

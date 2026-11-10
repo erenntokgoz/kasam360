@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import type { ReactNode } from 'react';
-import { SiteFooter } from '@/components/SiteFooter';
-import { SiteHeader } from '@/components/SiteHeader';
 import { siteConfig } from '@/content/siteConfig';
 import './globals.css';
 import './k5.css';
@@ -32,25 +30,18 @@ export const viewport: Viewport = {
 };
 
 // Tema boyamadan önce kurulur: kayıtlı seçim, yoksa açık tema. Böylece sayfa yanlış temada yanıp sönmez.
+// Müşteri menüsü (menu)/layout.tsx içinde bunun üstüne, kayıt yoksa cihaz temasını izleyen kendi betiğini ekler.
 const themeInit =
   "try{var s=localStorage.getItem('k360-theme');document.documentElement.dataset.theme=s==='dark'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}";
 
+// Üst menü ve alt bilgi burada değil (site)/layout.tsx içindedir: müşteri menüsü sitenin çerçevesini taşımaz.
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="tr" data-scroll-behavior="smooth" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
-      <body>
-        <a href="#icerik" className="skip-link">
-          İçeriğe geç
-        </a>
-        <SiteHeader />
-        <main id="icerik" tabIndex={-1}>
-          {children}
-        </main>
-        <SiteFooter />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

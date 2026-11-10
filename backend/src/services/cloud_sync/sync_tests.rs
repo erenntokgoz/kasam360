@@ -400,3 +400,40 @@ async fn cikistan_once_yeniden_girilirse_silme_iptal_edilir() {
     assert!(!sync.status().await.expect("durum").wipe_pending);
     assert_eq!(count(sync.pool(), "SELECT COUNT(*) FROM products").await, 1);
 }
+
+/// 1,5 MiB WebP'nin base64 metni; yerel `image_url` bu boyutta olabilir.
+fn big_image() -> String {
+    format!("data:image/webp;base64,{}", "A".repeat(2_097_152))
+}
+
+#[tokio::test]
+async fn buyuk_gorselli_uc_urun_degisikligi_kuyrugu_ilerletir() {
+    let sync = till("a", false).await;
+    for index in 0..3 {
+        write(sync.pool(), &product(&format!("prd_{index}"))).await;
+    }
+    let api = FakeApi::default();
+    sync.sync_once(&api, false).await.expect("ilk tur");
+    for index in 0..3 {
+        write(
+            sync.pool(),
+            &format!(
+                "UPDATE products SET image_url = '{}' WHERE id = 'prd_{index}'",
+                big_image()
+            ),
+        )
+        .await;
+    }
+    sync.sync_once(&api, false).await.expect("görselli tur");
+    assert_eq!(pending(&sync).await, 0);
+    // Görsel eşitleme yüküyle gider ama grup 3,5 MB'ı aşmaz: üç işlem birden değil bölünerek gider.
+    let cloud = api.cloud();
+    assert!(
+        cloud.push_calls >= 3,
+        "görselli işlemler tek gövdede toplanmamalı"
+    );
+    assert!(cloud
+        .log
+        .iter()
+        .all(|op| op.to_string().len() <= super::outbox::LIMITS.bytes));
+}

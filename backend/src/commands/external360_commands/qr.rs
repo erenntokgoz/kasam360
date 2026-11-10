@@ -95,6 +95,51 @@ pub async fn qr_menu_build(
     Ok(cikti)
 }
 
+/// Menüyü buluta yayınlar (görseller önce, sonra tam anlık görüntü). Yayın satıştan
+/// bağımsızdır: internet yoksa yalnız bu çağrı hata verir.
+#[tauri::command]
+pub async fn qr_menu_publish(
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
+    active_modules: Option<Vec<String>>,
+    pool: State<'_, DbPool>,
+) -> Result<crate::services::qr_menu_publish::PublishOutcome, String> {
+    require_qr_menu(active_modules.as_ref())?;
+    require_any(
+        &audit_actor(None, actor_role).1,
+        &[Role::Owner, Role::Manager],
+    )?;
+    let tenant = require_tenant_id(tenant_id.as_deref())?;
+    crate::services::qr_menu_publish::publish(
+        &pool,
+        crate::commands::account_commands::SITE_URL,
+        &tenant,
+    )
+    .await
+}
+
+/// Menü adresi, hak ve yayın sürümü (sunucudaki durum).
+#[tauri::command]
+pub async fn qr_menu_status(
+    actor_role: Option<String>,
+    tenant_id: Option<String>,
+    active_modules: Option<Vec<String>>,
+    pool: State<'_, DbPool>,
+) -> Result<crate::services::qr_menu_publish::MenuStatus, String> {
+    require_qr_menu(active_modules.as_ref())?;
+    require_any(
+        &audit_actor(None, actor_role).1,
+        &[Role::Owner, Role::Manager],
+    )?;
+    let tenant = require_tenant_id(tenant_id.as_deref())?;
+    crate::services::qr_menu_publish::status(
+        &pool,
+        crate::commands::account_commands::SITE_URL,
+        &tenant,
+    )
+    .await
+}
+
 /// Bekleyen müşteri taleplerini listeler.
 #[tauri::command]
 pub async fn qr_pending_requests(

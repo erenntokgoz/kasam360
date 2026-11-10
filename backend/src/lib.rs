@@ -502,6 +502,8 @@ pub fn run() {
         commands::external360_commands::qr_customer_session_open,
         commands::external360_commands::qr_customer_session_revoke,
         commands::external360_commands::qr_menu_build,
+        commands::external360_commands::qr_menu_publish,
+        commands::external360_commands::qr_menu_status,
         commands::external360_commands::qr_pending_requests,
         commands::external360_commands::qr_request_accept,
         commands::external360_commands::qr_request_reject,
