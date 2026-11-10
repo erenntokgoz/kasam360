@@ -95,6 +95,68 @@ pub async fn count_open_work(pool: &SqlitePool, tenant_id: &str) -> Result<(i64,
     Ok((shifts, orders))
 }
 
+/// Güncelleme öncesi yedeklerinin etiket öneki; sürüm etikete eklenir.
+const PRE_UPDATE_TAG: &str = "guncelleme_oncesi";
+/// Saklanan güncelleme öncesi yedek sayısı (sürümden bağımsız, en yeniler).
+const KEEP_PRE_UPDATE: usize = 3;
+
+/// Sürümü dosya adına güvenli hale getirir; `_` ayraç olduğundan etikette kullanılmaz.
+fn version_tag_part(version: &str) -> String {
+    version
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
+/// En yeni `keep` güncelleme öncesi yedek kalır, eskileri silinir.
+/// Neden sürümden bağımsız: her sürümün etiketi farklı olduğundan genel temizlik bunları saymaz.
+pub fn prune_pre_update_backups(dir: &std::path::Path, keep: usize) {
+    let prefix = format!("{PRE_UPDATE_TAG}_");
+    let files = crate::services::backup::list_backups(&[dir.to_path_buf()]);
+    for file in files
+        .into_iter()
+        .filter(|file| file.tag.starts_with(&prefix))
+        .skip(keep)
+    {
+        let path = std::path::PathBuf::from(&file.path);
+        let mut sidecar = path.as_os_str().to_os_string();
+        sidecar.push(".sha256");
+        let _ = std::fs::remove_file(sidecar);
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Kurulumdan hemen önce geçerli ve doğrulanmış yerel yedek alır. Fail-closed: yedek
+/// alınamazsa veya doğrulanamazsa hata döner ve çağıran kurulumu başlatmaz; kurulum
+/// sonrası veri sorunu çıkarsa dönülecek bir kopya olmadan güncelleme yapılmaz.
+pub async fn ensure_pre_update_backup(
+    pool: &SqlitePool,
+    db_path: Option<&std::path::Path>,
+    version: &str,
+) -> Result<(), String> {
+    use crate::services::backup::{backup_dir_for, schedule, verify_file};
+    let db_path = db_path.ok_or_else(|| {
+        "UPDATE_BACKUP_FAILED: veritabanı dosya üzerinde değil, yedek alınamadı.".to_string()
+    })?;
+    let tag = format!("{PRE_UPDATE_TAG}_{}", version_tag_part(version));
+    let file = schedule::run_backup(pool, db_path, &tag)
+        .await
+        .map_err(|error| {
+            format!("UPDATE_BACKUP_FAILED: kurulum yapılmadı, yedek alınamadı: {error}")
+        })?;
+    verify_file(std::path::Path::new(&file.path))
+        .await
+        .map_err(|error| format!("UPDATE_BACKUP_FAILED: yedek doğrulanamadı: {error}"))?;
+    prune_pre_update_backups(&backup_dir_for(db_path), KEEP_PRE_UPDATE);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,5 +217,53 @@ mod tests {
         .expect("vardiya yazılmalı");
         assert_eq!(count_open_work(&pool, "tnt_a").await, Ok((1, 0)));
         assert_eq!(count_open_work(&pool, "tnt_b").await, Ok((0, 0)));
+    }
+
+    async fn file_pool() -> (SqlitePool, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("kasam360_upd_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("klasör açılmalı");
+        let db_path = dir.join("test.db");
+        let options = sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(&db_path)
+            .create_if_missing(true);
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .expect("dosya veritabanı açılmalı");
+        sqlx::raw_sql(include_str!("../../migrations/schema.sql"))
+            .execute(&pool)
+            .await
+            .expect("şema uygulanmalı");
+        (pool, db_path)
+    }
+
+    #[tokio::test]
+    async fn yedek_basarisizsa_kurulum_reddedilir() {
+        let (pool, db_path) = file_pool().await;
+        pool.close().await;
+        let result = ensure_pre_update_backup(&pool, Some(&db_path), "9.9.9").await;
+        assert!(result.is_err_and(|e| e.starts_with("UPDATE_BACKUP_FAILED")));
+        let no_file = ensure_pre_update_backup(&pool, None, "9.9.9").await;
+        assert!(no_file.is_err_and(|e| e.starts_with("UPDATE_BACKUP_FAILED")));
+    }
+
+    #[tokio::test]
+    async fn yedek_alinir_ve_en_yeni_uc_kalir() {
+        let (pool, db_path) = file_pool().await;
+        for version in ["1.0.0", "1.0.1", "1.0.2", "1.0.3", "1.0.4"] {
+            ensure_pre_update_backup(&pool, Some(&db_path), version)
+                .await
+                .expect("yedek alınmalı");
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        let dir = crate::services::backup::backup_dir_for(&db_path);
+        let kept: Vec<_> = crate::services::backup::list_backups(&[dir])
+            .into_iter()
+            .filter(|file| file.tag.starts_with("guncelleme_oncesi_"))
+            .collect();
+        assert_eq!(kept.len(), 3);
+        assert!(kept.iter().any(|file| file.tag.ends_with("1.0.4")));
+        assert!(!kept.iter().any(|file| file.tag.ends_with("1.0.0")));
     }
 }

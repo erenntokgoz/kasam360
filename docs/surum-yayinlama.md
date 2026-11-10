@@ -1,6 +1,6 @@
 # Sürüm yayınlama
 
-Masaüstü uygulaması açılışta (ve her 6 saatte bir) GitHub Releases üzerindeki `latest.json` dosyasına bakar. Yeni sürüm varsa OWNER/MANAGER'a kapatılabilir "Güncelleme hazır" bildirimi çıkar; kullanıcı onaylamadan hiçbir şey kurulmaz. Kurulumdan önce paketin imzası `backend/tauri.conf.json` içindeki genel anahtarla doğrulanır; doğrulanamayan paket kurulmaz. Açık vardiya veya açık sipariş varken kurulum backend tarafından da reddedilir. İnternet yoksa denetim sessiz geçer.
+Masaüstü uygulaması açılışta (ve her 6 saatte bir) GitHub Releases üzerindeki `latest.json` dosyasına bakar. Yeni sürüm varsa OWNER/MANAGER'a kapatılabilir "Güncelleme hazır" bildirimi çıkar; kullanıcı onaylamadan hiçbir şey kurulmaz. Kurulumdan önce paketin imzası `backend/tauri.conf.json` içindeki genel anahtarla doğrulanır; doğrulanamayan paket kurulmaz. Açık vardiya veya açık sipariş varken kurulum backend tarafından da reddedilir. Kurulumdan hemen önce doğrulanmış bir yerel yedek (`backups/kasam360_guncelleme_oncesi_<sürüm>_<zaman>.db`) alınır; yedek alınamazsa kurulum reddedilir ve en yeni 3 güncelleme öncesi yedek tutulur. İnternet yoksa denetim sessiz geçer.
 
 ## Bir kez yapılacaklar
 

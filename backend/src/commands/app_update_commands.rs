@@ -7,8 +7,8 @@
 use crate::commands::command_helpers::require_tenant_id;
 use crate::rbac::{require_any, Role};
 use crate::services::app_update::{
-    blocker_message, classify_error, count_open_work, is_pubkey_configured, UpdateCheck,
-    UpdateStatus,
+    blocker_message, classify_error, count_open_work, ensure_pre_update_backup,
+    is_pubkey_configured, UpdateCheck, UpdateStatus,
 };
 use crate::DbPool;
 use tauri::State;
@@ -82,6 +82,7 @@ pub async fn install_app_update(
     tenant_id: String,
     app: tauri::AppHandle,
     pool: State<'_, DbPool>,
+    state: State<'_, crate::AppState>,
 ) -> Result<(), String> {
     use tauri_plugin_updater::UpdaterExt;
     require_any(&actor_role, &[Role::Owner, Role::Manager])?;
@@ -105,6 +106,8 @@ pub async fn install_app_update(
             update.version
         ));
     }
+    // Yedek kurulumdan hemen önce alınır; başarısızsa indirme/kurulum hiç başlamaz.
+    ensure_pre_update_backup(&pool, state.db_path.as_deref(), &update.version).await?;
     // İmza burada doğrulanır; uyuşmazsa `download_and_install` hata verir ve hiçbir şey kurulmaz.
     update
         .download_and_install(|_, _| {}, || {})
@@ -120,6 +123,7 @@ pub async fn install_app_update(
     _actor_role: String,
     _tenant_id: String,
     _pool: State<'_, DbPool>,
+    _state: State<'_, crate::AppState>,
 ) -> Result<(), String> {
     Err("UPDATE_UNSUPPORTED: mobil sürüm mağaza üzerinden güncellenir.".to_string())
 }
