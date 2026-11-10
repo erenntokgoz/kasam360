@@ -74,6 +74,8 @@ Servisleri başlat.
 docker compose -p kasam360next up -d
 ```
 
+Not: Sunucuda geçici olarak oluşturulmuş bir `compose.override.yaml` varsa, bir sonraki compose güncellemesinden sonra silinebilir (`API_ORIGIN` artık `compose.yaml` içinde).
+
 ## 6. Duman testi
 
 API sağlık ucu `{"ok":true}` dönmeli.

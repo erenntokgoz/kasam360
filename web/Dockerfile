@@ -18,14 +18,17 @@ RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime
 
+ARG API_ORIGIN=http://api:4000
 ARG VCS_REF=unknown
 LABEL org.opencontainers.image.source="https://github.com/erenntokgoz/kasam360" \
       org.opencontainers.image.revision="$VCS_REF"
 
+# API_ORIGIN çalışma anında da gerekli; builder aşamasındaki ENV yalnız build'de kalır.
 ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    API_ORIGIN=$API_ORIGIN
 
 WORKDIR /app
 COPY --from=builder --chown=node:node /app/web/public ./public
