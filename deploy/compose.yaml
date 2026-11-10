@@ -1,20 +1,47 @@
-name: kasam360-next
+# Sabit proje adı: eski uygulamanın container ve volume adlarıyla çakışmayı önler.
+name: kasam360next
 
 services:
-  api:
-    image: kasam360-api:${KASAM360_SHA:?Set KASAM360_SHA in deploy/.env}
+  mongo:
+    image: mongo:7
     restart: unless-stopped
+    mem_limit: 600m
+    # Tek düğümlü replica set; port dışarı açılmaz, yalnız iç ağdan erişilir.
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.25"]
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      # Replica set yoksa sağlık denetimi başlatır; böylece elle rs.initiate gerekmez.
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok }"
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 15s
+
+  api:
+    image: ghcr.io/erenntokgoz/kasam360-api:${IMAGE_TAG:-develop}
+    restart: unless-stopped
+    mem_limit: 300m
+    depends_on:
+      mongo:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "4000"
-      SITE_URL: ${SITE_URL:?Set SITE_URL in deploy/.env}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set ALLOWED_ORIGINS in deploy/.env}
-      MONGODB_ACCOUNT_URI: ${MONGODB_ACCOUNT_URI:?Set a separate staging account URI}
-      MONGODB_ACCOUNT_DB: ${MONGODB_ACCOUNT_DB:-kasam360_account_staging}
-      MONGODB_BUSINESS_URI: ${MONGODB_BUSINESS_URI:?Set a separate staging business URI}
-      MONGODB_BUSINESS_DB: ${MONGODB_BUSINESS_DB:-kasam360_business_staging}
-      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in deploy/.env}
+      SITE_URL: ${SITE_URL:?SITE_URL tanımlı değil}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS tanımlı değil}
+      MONGODB_ACCOUNT_URI: mongodb://mongo:27017/?replicaSet=rs0
+      MONGODB_ACCOUNT_DB: ${MONGODB_ACCOUNT_DB:-kasam360_account}
+      MONGODB_BUSINESS_URI: mongodb://mongo:27017/?replicaSet=rs0
+      MONGODB_BUSINESS_DB: ${MONGODB_BUSINESS_DB:-kasam360_business}
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET tanımlı değil}
+      MENU_MEDIA_DIR: /data/menu-media
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -27,14 +54,17 @@ services:
       LABS_SUPPORT_TOKEN: ${LABS_SUPPORT_TOKEN:-}
       LABS_CATALOG_ORIGIN: http://labs:3600
       LABS_CATALOG_TOKEN: ${LABS_CATALOG_TOKEN:-}
-      LABS_CUSTOMER_SECRET: ${LABS_CUSTOMER_SECRET:-}
+      LABS_CUSTOMER_SECRET: ${LABS_CUSTOMER_SECRET:?LABS_CUSTOMER_SECRET tanımlı değil}
       LICENSE_SIGNING_KEY: ${LICENSE_SIGNING_KEY:-}
+    volumes:
+      - menu-media:/data/menu-media
     ports:
       - "127.0.0.1:4100:4000"
 
   web:
-    image: kasam360-web:${KASAM360_SHA:?Set KASAM360_SHA in deploy/.env}
+    image: ghcr.io/erenntokgoz/kasam360-web:${IMAGE_TAG:-develop}
     restart: unless-stopped
+    mem_limit: 350m
     depends_on:
       api:
         condition: service_healthy
@@ -42,19 +72,30 @@ services:
       - "127.0.0.1:3100:3000"
 
   labs:
-    image: labs360:${LABS360_SHA:?Set LABS360_SHA in deploy/.env}
+    image: ghcr.io/erenntokgoz/labs360:${LABS_IMAGE_TAG:-develop}
     restart: unless-stopped
+    mem_limit: 150m
     environment:
       NODE_ENV: production
       BIND_ADDR: 0.0.0.0:3600
       DATA_DIR: /data
-      APP_ORIGIN: ${LABS_APP_ORIGIN:?Set LABS_APP_ORIGIN in deploy/.env}
+      APP_ORIGIN: ${LABS_APP_ORIGIN:?LABS_APP_ORIGIN tanımlı değil}
+      LABS_SECRET_KEY: ${LABS_SECRET_KEY:?LABS_SECRET_KEY tanımlı değil}
+      KASAM_CUSTOMER_ORIGIN: http://api:4000
+      KASAM_CUSTOMER_SECRET: ${LABS_CUSTOMER_SECRET:?LABS_CUSTOMER_SECRET tanımlı değil}
+      MAILU_SMTP_HOST: ${MAILU_SMTP_HOST:-}
+      MAILU_IMAP_HOST: ${MAILU_IMAP_HOST:-}
+      MAILU_ACCOUNTS: ${MAILU_ACCOUNTS:-}
+      MAILU_MAILBOXES: ${MAILU_MAILBOXES:-}
       ADMIN_BOOTSTRAP_EMAIL: ${LABS_ADMIN_BOOTSTRAP_EMAIL:-}
       ADMIN_BOOTSTRAP_PASSWORD: ${LABS_ADMIN_BOOTSTRAP_PASSWORD:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     ports:
       - "127.0.0.1:3610:3600"
     volumes:
       - labs-data:/data
 
 volumes:
+  mongo-data:
+  menu-media:
   labs-data:

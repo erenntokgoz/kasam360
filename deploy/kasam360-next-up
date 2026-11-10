@@ -6,23 +6,25 @@ if [ "$#" -ne 0 ]; then
   exit 64
 fi
 
+# Yalnız kasam360next projesine dokunur; eski uygulama ve Mailu etkilenmez.
 project_dir=/opt/kasam360-next
-cd "$project_dir"
+cd "$project_dir/deploy"
 
-compose() {
+run() {
   /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root \
   docker compose \
-    --project-name kasam360-next \
-    --project-directory "$project_dir" \
+    --project-name kasam360next \
+    --project-directory "$project_dir/deploy" \
     --file "$project_dir/deploy/compose.yaml" \
     --env-file "$project_dir/deploy/.env" "$@"
 }
 
-compose config --quiet
+run config --quiet
+run pull
 exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root \
   docker compose \
-    --project-name kasam360-next \
-    --project-directory "$project_dir" \
+    --project-name kasam360next \
+    --project-directory "$project_dir/deploy" \
     --file "$project_dir/deploy/compose.yaml" \
     --env-file "$project_dir/deploy/.env" \
-    up --detach --no-build --pull never
+    up --detach --no-build
