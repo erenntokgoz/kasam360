@@ -82,6 +82,8 @@ services:
       BIND_ADDR: 0.0.0.0:3600
       DATA_DIR: /data
       APP_ORIGIN: ${LABS_APP_ORIGIN:?LABS_APP_ORIGIN tanımlı değil}
+      # Yalnız 127.0.0.1 portuna bağlı Labs için SSH tünelinden gelen döngü kaynağını kabul eder.
+      LABS_TRUSTED_LOOPBACK: "1"
       LABS_SECRET_KEY: ${LABS_SECRET_KEY:?LABS_SECRET_KEY tanımlı değil}
       KASAM_CUSTOMER_ORIGIN: http://api:4000
       LABS_INTERNAL_HTTP_HOSTS: api
