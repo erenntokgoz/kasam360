@@ -6,6 +6,7 @@
 
 pub mod account_commands;
 pub mod analytics_commands;
+pub mod app_update_commands;
 pub mod approval_commands;
 pub mod archive_commands;
 pub mod audit_commands;

@@ -4,6 +4,7 @@ import { useLedgerStore } from '../../../stores/ledgerStore';
 import { BackupPanel } from '../BackupPanel';
 import { Bar, BarTab } from '../../../ui/Bar';
 import { SectionTabs, type SectionTab } from '../SectionTabs';
+import { AppUpdateSettings } from './AppUpdateSettings';
 import { CloudSyncSettings } from './CloudSyncSettings';
 import { DeviceSettings } from './DeviceSettings';
 import { LicenseSettings } from './LicenseSettings';
@@ -45,7 +46,7 @@ export const SettingsTab: React.FC = () => {
           <>
             <SectionTabs label="Bu Cihaz" active={deviceSection} onChange={setDeviceSection}
               tabs={[{ id: 'ACCOUNT', label: 'Oturum ve Görünüm' }, { id: 'DEVICES', label: 'Cihaz Bağlantıları' }]} />
-            {deviceSection === 'ACCOUNT' ? <SessionSettingsTab /> : <><LicenseSettings /><DeviceSettings canManage={isOwner} /><CloudSyncSettings canManage={isOwner} /><QrMenuSettings /></>}
+            {deviceSection === 'ACCOUNT' ? <SessionSettingsTab /> : <><AppUpdateSettings /><LicenseSettings /><DeviceSettings canManage={isOwner} /><CloudSyncSettings canManage={isOwner} /><QrMenuSettings /></>}
           </>
         ) : null}
         {section === 'FLOOR' ? (

@@ -1,0 +1,132 @@
+name: Release
+
+# Yalnız elle atılan `v*` etiketinde çalışır. Önce CI ile aynı testler geçer, sonra
+# Windows'ta imzalı NSIS kurulumu ve updater manifesti (`latest.json`) GitHub Release'e yüklenir.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kasam360-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Etiket ve testler
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Etiket ile sürümler aynı mı
+        run: |
+          node --test scripts/releaseTools.test.mjs
+          node scripts/releaseTools.mjs check-version "$GITHUB_REF_NAME"
+          node scripts/releaseTools.mjs check-pubkey
+
+      - name: Install Tauri Linux system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            pkg-config build-essential libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libxdo-dev
+
+      - name: Desktop build and tests
+        run: |
+          npm ci --prefix desktop
+          npm run build --prefix desktop
+          cd desktop && npx vitest run
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Clippy
+        working-directory: backend
+        run: cargo clippy --lib --tests -- -D warnings
+
+      - name: Unit tests
+        working-directory: backend
+        run: cargo test --lib
+
+      - name: Format check
+        working-directory: backend
+        run: cargo fmt --check
+
+  release:
+    name: Windows imzalı kurulum
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: İmza anahtarı tanımlı mı
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          # Değer yazdırılmaz; boşsa imzasız paket üretilmesin diye burada durulur.
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret'ı tanımlı değil (docs/surum-yayinlama.md)."
+            exit 1
+          fi
+
+      - name: Sürüm ve açık anahtar kontrolü
+        run: |
+          node scripts/releaseTools.mjs check-version "$GITHUB_REF_NAME"
+          node scripts/releaseTools.mjs check-pubkey
+
+      - name: Build signed NSIS installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          npm ci --prefix desktop
+          echo '{"bundle":{"createUpdaterArtifacts":true}}' > "$RUNNER_TEMP/updaterBundle.json"
+          cd backend
+          npx --yes @tauri-apps/cli@2.11.4 build --bundles nsis --config "$RUNNER_TEMP/updaterBundle.json"
+
+      - name: Updater manifestini üret
+        run: |
+          node scripts/releaseTools.mjs manifest "$GITHUB_REF_NAME" backend/target/release/bundle/nsis release-assets/latest.json
+          cp backend/target/release/bundle/nsis/*_"${GITHUB_REF_NAME#v}"_*-setup.exe release-assets/
+          cp backend/target/release/bundle/nsis/*_"${GITHUB_REF_NAME#v}"_*-setup.exe.sig release-assets/
+          ls -l release-assets
+
+      - name: GitHub Release oluştur
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --verify-tag --title "KASAM360 ${GITHUB_REF_NAME}" \
+            --notes "Masaüstü kurulumu ve otomatik güncelleme paketi. Kurulum dosyası imzalıdır."

@@ -115,6 +115,9 @@ pub fn run() {
             let _ = window.set_focus();
         }
     }));
+    // Güncelleyici yalnız masaüstünde; açık anahtar `tauri.conf.json` içinde, gizli anahtar derleme ortamındadır.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     let builder = builder.setup(|app| {
         tauri::async_runtime::block_on(async {
             let database_url = resolve_database_url(app)?;
@@ -239,6 +242,9 @@ pub fn run() {
         commands::sync_commands::take_over_device,
         commands::account_commands::get_device_session,
         commands::account_commands::open_site_page,
+        commands::app_update_commands::get_app_version,
+        commands::app_update_commands::get_app_update,
+        commands::app_update_commands::install_app_update,
         commands::account_commands::account_sign_in,
         commands::account_commands::account_sign_in_link,
         commands::license_commands::get_license_status,

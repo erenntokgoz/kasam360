@@ -24,6 +24,8 @@ import { ShiftGateModal } from '../features/shift/ShiftGateModal';
 import { PaymentModal } from '../features/payment/PaymentModal';
 import { ReceiptPreviewModal } from '../features/receipt/ReceiptPreviewModal';
 import { canUseOperations } from './access';
+import { UpdateNotice } from '../features/shell/UpdateNotice';
+import { useUpdateStore } from '../stores/updateStore';
 
 export const App: React.FC = () => {
   const { isAuthenticated, isLocked, mustChangePin, lock, logout, user } = useAuthStore();
@@ -55,6 +57,16 @@ export const App: React.FC = () => {
     const timer = window.setInterval(() => void refreshLicense(), 6 * 60 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, [deviceSignedIn, loadLicense, refreshLicense]);
+
+  // Güncelleme denetimi açılışta ve her altı saatte arka planda yapılır; ağ yoksa sessiz geçer
+  // ve hiçbir zaman kendiliğinden kurmaz (kurulum yalnız bildirimden onayla başlar).
+  const checkUpdateSilently = useUpdateStore((state) => state.checkSilently);
+  useEffect(() => {
+    if (setupPhase !== 'COMPLETE') return;
+    void checkUpdateSilently();
+    const timer = window.setInterval(() => void checkUpdateSilently(), 6 * 60 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [setupPhase, checkUpdateSilently]);
 
   // Paket değişirse açık oturumun özellikleri de hemen güncellenir.
   useEffect(() => {
@@ -177,6 +189,7 @@ export const App: React.FC = () => {
     <div className="h-full w-full overflow-hidden bg-[var(--bg-canvas)]">
     {/* Kilit oturumu kapatmaz: açık ekranlar ve sepet korunur, ama erişilemez olur. */}
     <div {...lockedProps} className="flex flex-col h-full w-full overflow-hidden text-[var(--text-primary)] select-none">
+      <UpdateNotice />
       {/* Ana Çalışma Alanı: Sol Menü + Merkez Modül */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
         <SidebarNav />

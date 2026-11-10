@@ -55,7 +55,7 @@ impl StaffSessions {
 
 /// Oturum açılmadan çalışması gereken komutlar: kurulum, hesap girişi ve PIN ekranı.
 /// Liste kapalıdır: yeni komut buraya eklenmedikçe oturum ister.
-const NO_SESSION: [&str; 23] = [
+const NO_SESSION: [&str; 25] = [
     "get_setup_status",
     "save_setup_draft",
     "complete_business_setup",
@@ -83,6 +83,9 @@ const NO_SESSION: [&str; 23] = [
     "auth_lock",
     "get_sync_status",
     "take_over_device",
+    // Açılışta oturumdan önce denetlenir; yalnız sürüm okur, kurulum ayrı ve yetkilidir.
+    "get_app_version",
+    "get_app_update",
 ];
 
 /// Parametresi kullanıcı kimliği olan ve yalnız kişinin kendisi için çalışan komutlar.

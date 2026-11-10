@@ -28,12 +28,13 @@
   },
   "plugins": {
     "updater": {
-      "active": true,
+      "pubkey": "",
       "endpoints": [
-        "https://updates.kasam360.dev/update/{{target}}/{{arch}}/{{os}}/{{version}}"
+        "https://github.com/erenntokgoz/kasam360/releases/latest/download/latest.json"
       ],
-      "dialog": true,
-      "pubkey": "YOUR_UPDATE_PUBLIC_KEY_BASE64"
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

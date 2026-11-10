@@ -8,7 +8,7 @@
 //! yazan komut açılmamalıdır. Tek cihazda kapı devre dışıdır.
 
 /// Yerel tablolara yazar veya oturumla ilgilidir; işletme verisini değiştirmez.
-const DEVICE_LOCAL: [&str; 24] = [
+const DEVICE_LOCAL: [&str; 25] = [
     "create_backup_now",
     "delete_backup",
     "set_backup_mirror",
@@ -33,6 +33,7 @@ const DEVICE_LOCAL: [&str; 24] = [
     "print_order_slip",
     "print_void_slip",
     "print_payment_receipt",
+    "install_app_update",
 ];
 
 /// İşlem günlüğünden geçen veya eşitlemeyi yöneten komutlar. Kendi kapıları vardır.
