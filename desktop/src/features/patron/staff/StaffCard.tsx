@@ -2,10 +2,9 @@ import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { errorText, localDate } from '../../../lib/cariInput';
-import { formatDay } from '../../../lib/date';
+import { formatDay, formatInstantDay } from '../../../lib/date';
 import { formatMoney } from '../../../lib/formatMoney';
 import { formatNumber } from '../../../lib/numberText';
-import { NumberInput } from '../../../ui/NumberInput';
 import { recentPeriods } from '../../../lib/payPeriod';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
@@ -17,6 +16,8 @@ import { AdvanceForm } from '../payroll/AdvanceForm';
 import { LeavePanel } from '../payroll/LeavePanel';
 import { RuleEditor, type PayrollRule } from '../payroll/RuleEditor';
 import { ShiftPlanPanel } from '../payroll/ShiftPlanPanel';
+import { StaffDebtPanel } from '../payroll/StaffDebtPanel';
+import { WorkSessionPanel } from '../payroll/WorkSessionPanel';
 import { SectionTabs, type SectionTab } from '../SectionTabs';
 import { ROLE_LABEL, type StaffMember } from '../StaffFormModal';
 
@@ -47,16 +48,7 @@ interface MoneySummary {
   tipCents: number;
 }
 
-type CardTab = 'PROFILE' | 'PERFORMANCE' | 'SHIFTS' | 'LEAVE' | 'ADVANCE' | 'SALARY' | 'TIPS';
-
-interface WorkSession {
-  id: string;
-  userId: string;
-  startedAt: string;
-  endedAt: string | null;
-  breakMinutes: number;
-  status: 'OPEN' | 'CLOSED';
-}
+type CardTab = 'PROFILE' | 'PERFORMANCE' | 'SHIFTS' | 'LEAVE' | 'ADVANCE' | 'SALARY' | 'DEBT' | 'TIPS';
 
 interface StaffCardProps {
   member: StaffMember;
@@ -89,9 +81,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
   const [selectedAdvance, setSelectedAdvance] = useState<MoneySummary['advances'][number] | null>(null);
   const [deletingAdvance, setDeletingAdvance] = useState<MoneySummary['advances'][number] | null>(null);
   const [editingAdvance, setEditingAdvance] = useState<MoneySummary['advances'][number] | null>(null);
-  const [sessions, setSessions] = useState<WorkSession[]>([]);
-  const [breakMinutes, setBreakMinutes] = useState('0');
-  const [savingSession, setSavingSession] = useState(false);
+  const [debtKey, setDebtKey] = useState(0);
 
   const loadRules = useCallback(async () => {
     const { actorRole, tenantId } = sessionArgs();
@@ -115,10 +105,6 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
     }
     if (tab === 'SALARY') loadRules().catch(fail);
     if (tab === 'ADVANCE' || tab === 'TIPS') loadMoney().catch(fail);
-    if (tab === 'SHIFTS') {
-      invokeIPC<WorkSession[]>('list_staff_work_sessions', { tenantId, actorRole, userId: member.id })
-        .then(setSessions).catch(fail);
-    }
   }, [tab, member.id, loadRules, loadMoney]);
 
   const toggleApproval = async () => {
@@ -132,27 +118,6 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
     }
   };
 
-  const saveWorkSession = async (session: WorkSession) => {
-    const { actorId, actorRole, tenantId } = sessionArgs();
-    setSavingSession(true);
-    setError(null);
-    try {
-      await invokeIPC('save_staff_work_session', {
-        tenantId, actorId, actorRole,
-        input: {
-          id: session.id, userId: member.id, startedAt: session.startedAt,
-          endedAt: session.endedAt, breakMinutes: session.breakMinutes,
-        },
-      });
-      setSessions(await invokeIPC<WorkSession[]>('list_staff_work_sessions', { tenantId, actorRole, userId: member.id }));
-      setBreakMinutes('0');
-    } catch (caught) {
-      setError(errorText(caught));
-    } finally {
-      setSavingSession(false);
-    }
-  };
-
   const tabs: SectionTab<CardTab>[] = [
     { id: 'PROFILE', label: 'Profil' },
     { id: 'PERFORMANCE', label: 'Performans' },
@@ -162,6 +127,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
       ? ([
           { id: 'ADVANCE', label: 'Avans' },
           { id: 'SALARY', label: 'Maaş' },
+          { id: 'DEBT', label: 'Borç' },
         ] as SectionTab<CardTab>[])
       : []),
     ...(isOwner ? ([{ id: 'TIPS', label: 'Bahşiş' }] as SectionTab<CardTab>[]) : []),
@@ -227,29 +193,8 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
       {tab === 'SHIFTS' ? (
         <div className="space-y-4">
           <ShiftPlanPanel userId={member.id} />
-          <div className="border-t border-[var(--border)] pt-3 space-y-3">
-            <h4 className="text-sm font-semibold">Fiili giriş ve çıkış</h4>
-            <p className="text-xs text-[var(--text-secondary)]">Planlanan vardiya hatırlatmadır; saatlik ücret yalnız kaydedilen gerçek giriş/çıkıştan hesaplanır.</p>
-            {sessions.find((session) => session.status === 'OPEN') ? (
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="block text-xs">Mola (dakika)
-                  <NumberInput kind="integer" aria-label="Mola dakikası" className="min-h-12 mt-1" value={breakMinutes} onValueChange={setBreakMinutes} />
-                </label>
-                <Button type="button" variant="primary" isLoading={savingSession} onClick={() => {
-                  const open = sessions.find((session) => session.status === 'OPEN');
-                  if (!open) return;
-                  void saveWorkSession({ ...open, endedAt: new Date().toISOString(), breakMinutes: Number(breakMinutes) });
-                }}>Çıkış ve molayı kaydet</Button>
-              </div>
-            ) : (
-              <Button type="button" variant="primary" isLoading={savingSession} onClick={() => void saveWorkSession({
-                id: `wks_${crypto.randomUUID()}`, userId: member.id, startedAt: new Date().toISOString(),
-                endedAt: null, breakMinutes: 0, status: 'OPEN',
-              })}>Gerçek Giriş Kaydet</Button>
-            )}
-            <ul className="space-y-1 text-xs text-[var(--text-secondary)]">
-              {sessions.slice(0, 8).map((session) => <li key={session.id}>{formatDay(session.startedAt)} · {new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} → {session.endedAt ? new Date(session.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Açık'} · mola {session.breakMinutes} dk</li>)}
-            </ul>
+          <div className="border-t border-[var(--border)] pt-3">
+            <WorkSessionPanel userId={member.id} fullName={member.name} onSettled={() => setDebtKey((key) => key + 1)} />
           </div>
         </div>
       ) : null}
@@ -290,7 +235,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
               {money.advances.map((advance) => (
                 <li key={advance.id}>
                   <RecordCard title={METHOD_LABEL[advance.paymentMethod] ?? advance.paymentMethod}
-                    description={formatDay(advance.createdAt)} value={formatMoney(advance.amountCents)}
+                    description={formatInstantDay(advance.createdAt)} value={formatMoney(advance.amountCents)}
                     onOpen={() => setSelectedAdvance(advance)} />
                 </li>
               ))}
@@ -300,7 +245,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
       ) : null}
 
       {selectedAdvance ? (
-        <Modal cardFlow isOpen title="Avans Detayı" subtitle={formatDay(selectedAdvance.createdAt)}
+        <Modal cardFlow isOpen title="Avans Detayı" subtitle={formatInstantDay(selectedAdvance.createdAt)}
           maxWidth="sm" onClose={() => setSelectedAdvance(null)}>
           <div className="space-y-4">
             <dl className="grid grid-cols-2 gap-3">
@@ -309,7 +254,7 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
             </dl>
             <div className="flex justify-end gap-2">
               <Button type="button" onClick={() => { setEditingAdvance(selectedAdvance); setSelectedAdvance(null); }}>Düzenle</Button>
-              <Button type="button" variant="danger" onClick={() => { setDeletingAdvance(selectedAdvance); setSelectedAdvance(null); }}>Sil</Button>
+              {isOwner ? <Button type="button" variant="danger" onClick={() => { setDeletingAdvance(selectedAdvance); setSelectedAdvance(null); }}>Sil</Button> : null}
             </div>
           </div>
         </Modal>
@@ -329,6 +274,8 @@ export const StaffCard: React.FC<StaffCardProps> = ({ member, profile, isOwner, 
       ) : null}
 
       {tab === 'SALARY' ? <RuleEditor userId={member.id} rules={rules} onSaved={loadRules} /> : null}
+
+      {tab === 'DEBT' ? <StaffDebtPanel userId={member.id} refreshKey={debtKey} /> : null}
 
       {tab === 'TIPS' ? <Fact label={`${moneyPeriod} dağıtılan bahşiş`} value={money ? formatMoney(money.tipCents) : '-'} /> : null}
     </section>

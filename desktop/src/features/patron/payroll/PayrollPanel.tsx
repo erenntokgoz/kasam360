@@ -11,6 +11,8 @@ import { Button } from '../../../ui/Button';
 import { NumberInput } from '../../../ui/NumberInput';
 import { Panel } from '../panorama/Panel';
 import type { PayrollRule } from './RuleEditor';
+import { refreshCashAfterPayout } from './refreshCash';
+import { useOwnerApproval } from './useOwnerApproval';
 
 interface Amounts {
   baseCents: number;
@@ -82,7 +84,8 @@ export const PayrollPanel: React.FC = () => {
 
   const hasHourly = runs?.some((run) => run.model === 'HOURLY') ?? false;
   const total = runs?.reduce((sum, run) => sum + (run.amounts?.netCents ?? 0), 0) ?? 0;
-  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+  const canPay = canViewAmounts;
+  const approval = useOwnerApproval();
 
   const savePayment = async () => {
     if (!paymentTarget) return;
@@ -94,12 +97,19 @@ export const PayrollPanel: React.FC = () => {
     const { actorId, actorRole, tenantId } = sessionArgs();
     setIsBusy(true);
     try {
+      // Bordro ödemesi para çıkışıdır: müdür için sahibin PIN'i istenir.
+      const decision = await approval.ask(
+        { operation: 'PAYROLL_PAY', resourceId: `PAYROLL_PAY:${paymentTarget.id}`, amountCents: cents },
+        'Bordro ödemesi',
+      );
+      if (!decision.approved) return;
       await invokeIPC('pay_payroll_run', {
         tenantId, actorId, actorRole, payrollRunId: paymentTarget.id,
-        amountCents: cents, paymentMethod,
+        amountCents: cents, paymentMethod, approvalToken: decision.token ?? null,
       });
       setPaymentTarget(null);
       setPaymentAmount('');
+      refreshCashAfterPayout();
       await calculate();
     } catch (caught) { setError(errorText(caught)); }
     finally { setIsBusy(false); }
@@ -159,7 +169,7 @@ export const PayrollPanel: React.FC = () => {
                   <th key={column.key} className="font-medium py-2 pl-4 text-right">{column.label}</th>
                 ))}
                 {canViewAmounts ? <><th className="font-medium py-2 pl-4 text-right">Ödenen</th><th className="font-medium py-2 pl-4 text-right">Kalan</th></> : null}
-                {isOwner ? <th className="font-medium py-2 pl-4 text-right">İşlem</th> : null}
+                {canPay ? <th className="font-medium py-2 pl-4 text-right">İşlem</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -183,7 +193,7 @@ export const PayrollPanel: React.FC = () => {
                     <td className="py-2 pl-4 text-right tabular-nums">{formatMoney(run.paidCents)}</td>
                     <td className="py-2 pl-4 text-right tabular-nums font-semibold">{formatMoney(run.remainingCents)}</td>
                   </> : null}
-                  {isOwner ? <td className="py-2 pl-4 text-right">
+                  {canPay ? <td className="py-2 pl-4 text-right">
                     {run.remainingCents > 0 ? <Button type="button" variant="secondary" className="min-h-10 text-xs" onClick={() => { setPaymentTarget(run); setPaymentAmount((run.remainingCents / 100).toFixed(2).replace('.', ',')); }}>Ödeme kaydet</Button> : <span>Tamamlandı</span>}
                   </td> : null}
                 </tr>
@@ -209,6 +219,7 @@ export const PayrollPanel: React.FC = () => {
           </div>
         </div>
       </div> : null}
+      {approval.prompt}
     </Panel>
   );
 };

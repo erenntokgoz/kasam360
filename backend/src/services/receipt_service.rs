@@ -104,14 +104,16 @@ pub async fn list(
             .push(" AND json_extract(payload, '$.orderId') = ")
             .push_bind(order_id);
     }
+    // Kayıt zamanı UTC saklanır, ekrandaki tarih seçici yerel gündür; yerel saate çevrilmezse
+    // gece 00:00-03:00 arası tahsilatlar önceki günün listesine düşer.
     if let Some(from) = filter.from {
         query
-            .push(" AND substr(created_at, 1, 10) >= ")
+            .push(" AND date(created_at, 'localtime') >= ")
             .push_bind(from);
     }
     if let Some(to) = filter.to {
         query
-            .push(" AND substr(created_at, 1, 10) <= ")
+            .push(" AND date(created_at, 'localtime') <= ")
             .push_bind(to);
     }
     if let Some(search) = filter

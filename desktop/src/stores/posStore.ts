@@ -68,6 +68,7 @@ interface PosStore {
   loadActiveOrder: () => Promise<void>;
   watchActiveOrder: () => Promise<void>;
   dismissRemoteNotice: () => void;
+  dismissOrderError: () => void;
   openOrderForTable: (tableId: string, tableName: string, guests?: number) => Promise<void>;
   openWalkinOrder: () => Promise<void>;
   bindWalkinToTable: (tableId: string, tableName: string) => Promise<void>;
@@ -230,6 +231,8 @@ export const usePosStore = create<PosStore>((set, get) => ({
   },
 
   dismissRemoteNotice: () => set({ remoteNotice: null }),
+
+  dismissOrderError: () => set({ orderError: null }),
 
   openOrderForTable: async (tableId, tableName, guests = 2) => {
     set({

@@ -4,13 +4,13 @@ import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
 import { centsToText, parseCents } from '../../../lib/moneyInput';
-import { EXPENSE_CATEGORIES, needsDescription, useExpenseStore, type Expense } from '../../../stores/expenseStore';
+import { EXPENSE_CATEGORIES, EXPENSE_LABELS, needsDescription, useExpenseStore, type Expense } from '../../../stores/expenseStore';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Panel } from '../panorama/Panel';
 import { Modal } from '../../../ui/Modal';
 import { RecordCard } from '../RecordCard';
-import { formatDay } from '../../../lib/date';
+import { formatInstantDay } from '../../../lib/date';
 
 const monthOf = (offset: number) => {
   const date = new Date();
@@ -218,8 +218,8 @@ export const FinanceTab: React.FC = () => {
         <ul className="grid gap-2 md:grid-cols-2">
           {expenses?.map((item) => (
             <li key={item.id}>
-              <RecordCard title={EXPENSE_CATEGORIES[item.category] ?? item.category}
-                description={[formatDay(item.expenseDate), item.description].filter(Boolean).join(' · ')}
+              <RecordCard title={EXPENSE_LABELS[item.category] ?? item.category}
+                description={[formatInstantDay(item.expenseDate), item.description].filter(Boolean).join(' · ')}
                 value={formatMoney(item.amountCents)} onOpen={() => {
                   setFormError(null);
                   setVoiding(false);
@@ -230,8 +230,8 @@ export const FinanceTab: React.FC = () => {
         </ul>
       </Panel>
       {selected && !isFormOpen ? (
-        <Modal cardFlow isOpen title={EXPENSE_CATEGORIES[selected.category] ?? selected.category}
-          subtitle={formatDay(selected.expenseDate)} maxWidth="sm"
+        <Modal cardFlow isOpen title={EXPENSE_LABELS[selected.category] ?? selected.category}
+          subtitle={formatInstantDay(selected.expenseDate)} maxWidth="sm"
           onClose={() => { if (!inFlight.current) setSelectedId(null); }}>
           <div className="space-y-4">
             <div className="flex justify-between gap-3 text-sm">

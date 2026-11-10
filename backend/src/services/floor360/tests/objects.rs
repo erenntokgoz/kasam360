@@ -37,6 +37,73 @@ async fn obje_olusurulur_ve_kiracili_donus() {
 }
 
 #[tokio::test]
+async fn pencere_objesi_kalici_olarak_olusturulur() {
+    let p = pool().await;
+    let mut c = conn(&p).await;
+    let mut pencere = obje_girdisi("WINDOW", 200, 300);
+    pencere.label = Some("Balkon penceresi".into());
+    pencere.width = 140;
+    pencere.height = 24;
+
+    let id = objects::create_object(&mut c, "tenant-a", &pencere)
+        .await
+        .unwrap();
+    let kayit = layout::list_objects(&mut c, "tenant-a", None)
+        .await
+        .unwrap();
+    assert_eq!(kayit[0].id, id);
+    assert_eq!(kayit[0].kind, "WINDOW");
+    assert_eq!(kayit[0].label.as_deref(), Some("Balkon penceresi"));
+}
+
+#[tokio::test]
+async fn bir_kisim_kaydi_diger_kismin_objelerini_korur_ve_yeni_objeyi_ekler() {
+    let p = pool().await;
+    let mut c = conn(&p).await;
+    let bahce = layout::create_zone(&mut c, "tenant-a", "Bahçe", 1)
+        .await
+        .unwrap();
+    let mut mevcut = obje_girdisi("DOOR", 400, 300);
+    mevcut.zone_id = Some(bahce.clone());
+    mevcut.label = Some("Bahçe kapısı".into());
+    let bahce_id = objects::create_object(&mut c, "tenant-a", &mevcut)
+        .await
+        .unwrap();
+
+    let salon = layout::create_zone(&mut c, "tenant-a", "Salon", 0)
+        .await
+        .unwrap();
+    let mut pencere = obje_girdisi("WINDOW", 200, 300);
+    pencere.zone_id = Some(salon.clone());
+    pencere.label = Some("Balkon penceresi".into());
+    pencere.width = 140;
+    pencere.height = 24;
+    layout::save_layout(
+        &mut c,
+        "tenant-a",
+        &SaveLayoutInput {
+            tables: vec![],
+            objects: vec![],
+            new_objects: vec![pencere],
+            delete_object_ids: vec![],
+        },
+    )
+    .await
+    .unwrap();
+
+    let saved = layout::list_objects(&mut c, "tenant-a", None)
+        .await
+        .unwrap();
+    assert_eq!(saved.len(), 2);
+    assert!(saved
+        .iter()
+        .any(|object| object.id == bahce_id && object.zone_id.as_deref() == Some(&bahce)));
+    assert!(saved
+        .iter()
+        .any(|object| object.kind == "WINDOW" && object.zone_id.as_deref() == Some(&salon)));
+}
+
+#[tokio::test]
 async fn obje_kiraciya_sinirlidir() {
     let p = pool().await;
     let mut c = conn(&p).await;
@@ -84,6 +151,8 @@ async fn obje_tasinar_ve_dondurulur() {
         &SaveLayoutInput {
             tables: vec![],
             objects: vec![tasima],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await
@@ -155,6 +224,8 @@ async fn olmayan_obje_tasinamaz() {
         &SaveLayoutInput {
             tables: vec![],
             objects: vec![obje_yerlesim("obj_yok", "DOOR", 100, 100)],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await;
@@ -169,7 +240,8 @@ async fn obje_obturler_cataloglari() {
     // Her obje türünün bir varsayılan ölçüsü olmalı; "kapı ekle" diyen
     // kullanıcı 1 piksel kapı çizmemelidir.
     let turler = [
-        ("DOOR", (80, 80)),
+        ("DOOR", (140, 24)),
+        ("WINDOW", (140, 24)),
         ("BAR", (400, 60)),
         ("WALL", (400, 20)),
         ("COLUMN", (40, 40)),

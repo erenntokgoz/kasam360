@@ -82,17 +82,22 @@ interface PanoramaStore {
   error: string | null;
   /** Bu ayın `ALL` hedefi. `undefined`: henüz okunmadı, `null`: hedef yok. */
   target: MonthlyTarget | null | undefined;
+  targetMonth: string;
   targetError: string | null;
   setRange: (range: PanoramaRange) => void;
   load: () => Promise<void>;
-  loadTarget: () => Promise<void>;
-  saveTarget: (targetCents: number) => Promise<void>;
+  loadTarget: (month?: string) => Promise<void>;
+  saveTarget: (targetCents: number, month?: string) => Promise<void>;
 }
 
 export const currentMonth = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 let boardRequest = 0;
+let targetRequest = 0;
+
+const targetMonthFor = (range: PanoramaRange) =>
+  typeof range === 'object' && 'month' in range ? range.month : currentMonth();
 
 export const usePanoramaStore = create<PanoramaStore>((set, get) => ({
   range: 'TODAY',
@@ -101,6 +106,7 @@ export const usePanoramaStore = create<PanoramaStore>((set, get) => ({
   metricsError: null,
   error: null,
   target: undefined,
+  targetMonth: currentMonth(),
   targetError: null,
 
   setRange: (range) => {
@@ -140,34 +146,35 @@ export const usePanoramaStore = create<PanoramaStore>((set, get) => ({
       }
     }
     if (request !== boardRequest) return;
-    // Hedef dönem seçiminden bağımsızdır; pano her yenilendiğinde o da tazelenir.
-    void get().loadTarget();
+    // Takvim ayı seçildiyse hedef aynı aya bağlanır; hareketli aralıklarda cari ay hedefi korunur.
+    void get().loadTarget(targetMonthFor(get().range));
   },
 
-  // Hedef her zaman kasanın yerel ayıdır; Bugün/Dün seçimi hedefi değiştirmez.
-  loadTarget: async () => {
+  loadTarget: async (month = currentMonth()) => {
+    const request = ++targetRequest;
+    set({ target: undefined, targetMonth: month, targetError: null });
     try {
       const { actorRole, tenantId } = sessionArgs();
       const rows = await invokeIPC<MonthlyTarget[]>('get_monthly_targets', {
         tenantId,
         actorRole,
-        month: currentMonth(),
+        month,
         utcOffsetMinutes: utcOffsetMinutes(),
       });
-      set({ target: rows.find((item) => item.category === 'ALL') ?? null, targetError: null });
+      if (request === targetRequest) set({ target: rows.find((item) => item.category === 'ALL') ?? null, targetError: null });
     } catch (caught) {
-      set({ target: undefined, targetError: errorText(caught) });
+      if (request === targetRequest) set({ target: undefined, targetError: errorText(caught) });
     }
   },
 
   // Kaydetme hatası çağırana fırlatılır; panel onu gösterir.
-  saveTarget: async (targetCents) => {
+  saveTarget: async (targetCents, month = currentMonth()) => {
     const { actorRole, tenantId } = sessionArgs();
     await invokeIPC('set_monthly_target', {
       tenantId,
       actorRole,
-      input: { month: currentMonth(), category: 'ALL', target_cents: targetCents },
+      input: { month, category: 'ALL', target_cents: targetCents },
     });
-    await get().loadTarget();
+    await get().loadTarget(month);
   },
 }));

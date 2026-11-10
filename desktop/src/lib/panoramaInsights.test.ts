@@ -59,9 +59,9 @@ describe('rapor dönemi', () => {
     expect(toLocalIso(now).slice(0, 19)).toBe('2026-10-31T14:30:00');
   });
 
-  it('dün tam gündür, bugün şimdiki saatte biter', () => {
+  it('dün tam gündür ve bitiş sınırı hariçtir; bugün seçimi şimdiki ana kadar gelir', () => {
     const yesterday = reportPeriod('YESTERDAY', now);
-    expect(yesterday.to.slice(0, 19)).toBe('2026-10-30T23:59:59');
+    expect(yesterday.to.slice(0, 19)).toBe('2026-10-31T00:00:00');
     expect(reportPeriod('TODAY', now).to.slice(0, 19)).toBe('2026-10-31T14:30:00');
   });
 
@@ -71,11 +71,33 @@ describe('rapor dönemi', () => {
 });
 
 describe('pano takvim aralığı', () => {
+  it('takvim ayını yerel ay sınırlarıyla alır; açık ayı bugüne kadar ve exclusive bitişle sınırlar', () => {
+    const now = new Date(2026, 10, 8, 18, 45, 0);
+    const openMonth = reportPeriod({ month: '2026-11' }, now);
+    expect(openMonth.from.slice(0, 19)).toBe('2026-11-01T00:00:00');
+    expect(openMonth.to.slice(0, 19)).toBe('2026-11-09T00:00:00');
+
+    const pastMonth = reportPeriod({ month: '2026-10' }, now);
+    expect(pastMonth.from.slice(0, 19)).toBe('2026-10-01T00:00:00');
+    expect(pastMonth.to.slice(0, 19)).toBe('2026-11-01T00:00:00');
+    const sameMonthPreviousYear = reportPeriod({ month: '2025-11' }, now);
+    expect(sameMonthPreviousYear.from.slice(0, 19)).toBe('2025-11-01T00:00:00');
+    expect(sameMonthPreviousYear.to.slice(0, 19)).toBe('2025-12-01T00:00:00');
+  });
+
+  it('şubat ve yıl değişiminde bir sonraki ayın yerel gece yarısını hariç tutar', () => {
+    const leap = reportPeriod({ month: '2024-02' }, new Date(2026, 10, 8));
+    expect(leap.from.slice(0, 19)).toBe('2024-02-01T00:00:00');
+    expect(leap.to.slice(0, 19)).toBe('2024-03-01T00:00:00');
+    const newYear = reportPeriod({ month: '2025-12' }, new Date(2026, 10, 8));
+    expect(newYear.to.slice(0, 19)).toBe('2026-01-01T00:00:00');
+  });
+
   it('artık yılda ayın son gününü ve tek günlük aralığın sınırlarını doğru bulur', () => {
-    expect(calendarMonthRange('2024-02')).toEqual({ from: '2024-02-01', to: '2024-02-29' });
+    expect(calendarMonthRange('2024-02')).toEqual({ from: '2024-02-01', to: '2024-03-01' });
     const single = reportPeriod({ from: '2024-02-29', to: '2024-02-29' });
     expect(single.from.slice(0, 19)).toBe('2024-02-29T00:00:00');
-    expect(single.to.slice(0, 19)).toBe('2024-02-29T23:59:59');
+    expect(single.to.slice(0, 19)).toBe('2024-03-01T00:00:00');
     expect(single.compareSeconds).toBe(86_400);
   });
 

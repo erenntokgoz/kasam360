@@ -110,4 +110,19 @@ export interface FinancialProfitSummary {
   netProfitCents: number;
   receivablesCents: number;
   payablesCents: number;
+  expensesByCategory?: ExpenseCategorySummary[];
+  monthlyTrend?: MonthlyFinancialTrend[];
+}
+
+export interface ExpenseCategorySummary {
+  category: string;
+  totalCents: number;
+  count: number;
+}
+
+export interface MonthlyFinancialTrend {
+  month: string;
+  revenueCents: number;
+  expenseCents: number;
+  profitCents: number;
 }

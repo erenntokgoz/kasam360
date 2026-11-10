@@ -28,9 +28,9 @@ const Change: React.FC<{ change: number | null; compareLabel: string }> = ({ cha
 };
 
 const Tile: React.FC<TileProps> = ({ label, value, note, change, compareLabel }) => (
-  <div className="paper border border-[var(--border)] rounded-xl p-4 flex flex-col gap-1.5 min-w-0">
+  <div className="paper border border-[var(--border)] rounded-xl px-4 py-3 flex flex-col gap-1 min-w-0">
     <span className="text-xs font-semibold text-[var(--text-secondary)]">{label}</span>
-    <span className="text-3xl font-bold tabular-nums text-[var(--text-primary)] truncate">{value}</span>
+    <span className="text-2xl font-bold tabular-nums text-[var(--text-primary)] truncate">{value}</span>
     <Change change={change} compareLabel={compareLabel} />
     {note ? <span className="text-xs text-[var(--text-muted)]">{note}</span> : null}
   </div>
@@ -51,7 +51,7 @@ export const KpiStrip: React.FC<KpiStripProps> = ({ current, previous, compareLa
       ? `Tahsilatın %${margin} kadarı, KDV ve maliyet düşülmüş`
       : 'KDV ve maliyet düşülmüş';
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
       <Tile
         label="Tahsil Edilen"
         value={formatMoney(current.collectedCents)}

@@ -159,6 +159,7 @@ export const StaffFormModal: React.FC<StaffFormModalProps> = ({
         const isHourly = rule?.model === 'HOURLY';
         await invokeIPC('set_payroll_rule', {
           tenantId,
+          actorId,
           actorRole,
           input: {
             userId,

@@ -14,8 +14,8 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  width: min(1000px, 100%);
-  min-height: min(580px, 100%);
+  width: min(1200px, 100%);
+  min-height: min(700px, 100%);
   margin: auto;
   color: var(--text);
   background-color: var(--surface);

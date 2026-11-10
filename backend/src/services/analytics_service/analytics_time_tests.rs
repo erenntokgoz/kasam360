@@ -44,7 +44,7 @@ async fn category(pool: &SqlitePool, tenant: &str, id: &str, name: &str) {
 /// `None` aralığı "içinde bulunulan ay" demektir; testler Mart 2026 verisi
 /// kullandığı için aralık açıkça verilir.
 fn mart() -> super::analytics_types::AnalyticsRange {
-    Some(("2026-03-01".to_string(), "2026-03-31".to_string()))
+    Some(("2026-03-01".to_string(), "2026-04-01".to_string()))
 }
 
 async fn product(

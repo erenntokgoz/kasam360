@@ -17,8 +17,8 @@ export function StockSupplierPicker({ value, onChange }: { value: string; onChan
   const existing = name.trim() ? suppliers.filter((supplier) => foldText(supplier.name).includes(foldText(name))) : [];
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <label className="block flex-1 min-w-48">Tedarikçi
-        <select aria-label="Tedarikçi" className="w-full min-h-12 border border-[var(--border)] bg-[var(--bg-subtle)] rounded px-3" value={value} onChange={(event) => onChange(event.target.value)}>
+      <label className="flex flex-col gap-1 flex-1 min-w-48 text-xs font-semibold text-[var(--text-secondary)]">Tedarikçi
+        <select aria-label="Tedarikçi" className="w-full min-h-12 border border-[var(--border)] bg-[var(--bg-subtle)] rounded px-3 text-sm font-normal text-[var(--text-primary)]" value={value} onChange={(event) => onChange(event.target.value)}>
           <option value="">Tedarikçi seçin</option>
           {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
         </select>

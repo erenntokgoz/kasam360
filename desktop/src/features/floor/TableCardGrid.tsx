@@ -6,14 +6,16 @@ export interface TableCardGridProps {
   tables: FloorTable[];
   onOpenTable: (table: FloorTable, guestCount: number) => void;
   onInspectTable: (table: FloorTable) => void;
+  /** Liste boşken gösterilir: masa hiç tanımlı değil ile süzgeç sonucu boş ayrı durumlardır. */
+  empty?: React.ReactNode;
 }
 
 /** Birden çok bölüm varsa masalar bölüm adıyla ayrılır: garson yerini aramaz. */
-export const TableCardGrid: React.FC<TableCardGridProps> = ({ tables, onOpenTable, onInspectTable }) => {
+export const TableCardGrid: React.FC<TableCardGridProps> = ({ tables, onOpenTable, onInspectTable, empty }) => {
   if (tables.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 text-center">
-        <span className="text-[var(--text-secondary)]">Masa yok.</span>
+        {empty ?? <span className="text-[var(--text-secondary)]">Bu durumda masa yok.</span>}
       </div>
     );
   }

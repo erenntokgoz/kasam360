@@ -6,7 +6,7 @@
 use crate::services::lan_sync::WritePool;
 use crate::services::staff360::payroll_period;
 use crate::services::staff360::payroll_types::PayrollRuleInput;
-use sqlx::SqlitePool;
+use sqlx::{SqliteConnection, SqlitePool};
 
 pub const MODELS: [&str; 3] = ["FIXED", "TIP", "HOURLY"];
 
@@ -58,6 +58,17 @@ pub async fn set_rule(
     input: &PayrollRuleInput,
 ) -> Result<(), String> {
     let mut tx = pool.begin_write().await?;
+    set_rule_in(&mut tx, tenant_id, input).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Çağıranın işleminde yazar: onay jetonu tüketimi ve denetim kaydı aynı işlemde kalsın.
+pub async fn set_rule_in(
+    tx: &mut SqliteConnection,
+    tenant_id: &str,
+    input: &PayrollRuleInput,
+) -> Result<(), String> {
     if !MODELS.contains(&input.model.as_str()) {
         return Err(format!("gecersiz maas modeli: {}", input.model));
     }
@@ -119,19 +130,27 @@ pub async fn set_rule(
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
-    tx.commit().await?;
     Ok(())
 }
 
 /// Kuralı kaldırır. Hesaplanmış bordrolar kalır; kişi yeni bordroda görünmez.
 pub async fn delete_rule(pool: &SqlitePool, tenant_id: &str, user_id: &str) -> Result<(), String> {
     let mut tx = pool.begin_write().await?;
+    delete_rule_in(&mut tx, tenant_id, user_id).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn delete_rule_in(
+    tx: &mut SqliteConnection,
+    tenant_id: &str,
+    user_id: &str,
+) -> Result<(), String> {
     sqlx::query("DELETE FROM payroll_rules WHERE tenant_id = ?1 AND user_id = ?2")
         .bind(tenant_id)
         .bind(user_id)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-    tx.commit().await?;
     Ok(())
 }

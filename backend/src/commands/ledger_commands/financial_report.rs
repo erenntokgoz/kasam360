@@ -12,6 +12,16 @@ use crate::ledger_commands::guard::require_ledger_tenant;
 use crate::services::ledger_statement::format_cents;
 use serde::{Deserialize, Serialize};
 
+/// Yerel gün ofseti (dakika). Gelmezse UTC günü kabul edilir; makul saat dilimi dışı reddedilir,
+/// çünkü ofset gün sınırını kaydırır ve uç değer dönemi tamamen yanlış güne taşırdı.
+fn require_utc_offset(value: Option<i64>) -> Result<i64, String> {
+    match value {
+        None => Ok(0),
+        Some(minutes) if (-14 * 60..=14 * 60).contains(&minutes) => Ok(minutes),
+        Some(_) => Err("INVALID_ARGUMENT: utcOffsetMinutes -840 ile 840 arasında olmalıdır".into()),
+    }
+}
+
 /// İşletmenin net kâr/zarar, gelir, gider ve borç/alacak bilançosunu hesaplar.
 ///
 /// Neden delegasyon: çift sayım kuralı ve sessiz hata yasağı (AGENTS.md §3.4)
@@ -24,6 +34,7 @@ pub async fn get_financial_report(
     tenant_id: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
+    utc_offset_minutes: Option<i64>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<FinancialReportDto, String> {
     // Kâr yalnız işletme sahibinindir: Panorama da müdüre kâr göstermez, iki kapı
@@ -34,7 +45,9 @@ pub async fn get_financial_report(
     let tid = require_ledger_tenant(tenant_id.as_deref())?;
     let owned: Option<(String, String)> = range.map(|(s, e)| (s.clone(), e.clone()));
 
-    let report = crate::services::pnl_service::financial_report(&pool, &tid, &owned).await?;
+    let offset = require_utc_offset(utc_offset_minutes)?;
+    let report =
+        crate::services::pnl_service::financial_report_at(&pool, &tid, &owned, offset).await?;
 
     Ok(FinancialReportDto {
         total_revenue_cents: report.total_revenue_cents,
@@ -101,6 +114,7 @@ pub async fn export_financial_report(
     tenant_id: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
+    utc_offset_minutes: Option<i64>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<FinancialExportDto, String> {
     crate::rbac::require_any_present(
@@ -112,7 +126,9 @@ pub async fn export_financial_report(
     let tid = require_ledger_tenant(tenant_id.as_deref())?;
     let owned: Option<(String, String)> = range.map(|(s, e)| (s.clone(), e.clone()));
 
-    let report = crate::services::pnl_service::financial_report(&pool, &tid, &owned).await?;
+    let offset = require_utc_offset(utc_offset_minutes)?;
+    let report =
+        crate::services::pnl_service::financial_report_at(&pool, &tid, &owned, offset).await?;
 
     let rows = financial_export_rows(&report, owned.as_ref());
 

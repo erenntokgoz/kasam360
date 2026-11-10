@@ -6,6 +6,7 @@ import { usePosStore } from '../../stores/posStore';
 import { useKdsStore } from '../../stores/kdsStore';
 import { useUIStore } from '../../stores/uiStore';
 import type { FloorTable } from '../../types/floor';
+import { filterFloorTables, matchesTableFilter, type TableFilter } from './floorView';
 import { TableCardGrid } from './TableCardGrid';
 import { FloorBlueprint } from './FloorBlueprint';
 import { TableSlideOver } from './TableSlideOver';
@@ -15,8 +16,9 @@ import { OrderStatusBanner } from '../pos/OrderStatusBanner';
 import { useSyncStore } from '../../stores/syncStore';
 import { Modal } from '../../ui/Modal';
 import { Button } from '../../ui/Button';
-
-type TableFilter = 'ALL' | 'EMPTY' | 'OCCUPIED' | 'BILL_REQUESTED' | 'RESERVED';
+import { getBlueprintZoneId } from './blueprintView';
+import { canOpenModule } from '../../lib/roleAccess';
+import { useAuthStore } from '../../stores/authStore';
 
 const FILTERS: { id: TableFilter; label: string }[] = [
   { id: 'ALL', label: 'Tümü' },
@@ -25,8 +27,6 @@ const FILTERS: { id: TableFilter; label: string }[] = [
   { id: 'BILL_REQUESTED', label: 'Hesap' },
   { id: 'RESERVED', label: 'Rezerve' },
 ];
-
-const matchesFilter = (table: FloorTable, filter: TableFilter) => filter === 'ALL' || table.status === filter || (filter === 'RESERVED' && Boolean(table.reservationId));
 
 const CLUSTER_REFRESH_MS = 3000;
 
@@ -38,6 +38,7 @@ export const FloorModule: React.FC = () => {
   const {
     zones,
     tables,
+    objects,
     selectedZoneId,
     selectedTableId,
     viewMode,
@@ -104,10 +105,24 @@ export const FloorModule: React.FC = () => {
     return () => clearInterval(timer);
   }, [isSalonOpen, loadKitchen]);
 
-  // Seçili bölgeye göre masaları filtrele
-  const filteredTables = selectedZoneId
-    ? tables.filter((t) => t.zoneId === selectedZoneId)
-    : tables;
+  const blueprintZoneId = getBlueprintZoneId(selectedZoneId, zones);
+  const effectiveZoneId = viewMode === 'KROKI' ? blueprintZoneId : selectedZoneId;
+  const scopedTables = effectiveZoneId ? tables.filter((table) => table.zoneId === effectiveZoneId) : tables;
+  const visibleTables = filterFloorTables(tables, effectiveZoneId, filter);
+
+  const role = useAuthStore((state) => state.user?.role);
+  const canSetupTables = canOpenModule(role, 'SETTINGS');
+  const emptyView = tables.length === 0 ? (
+    <div className="space-y-3">
+      <p className="text-lg font-semibold text-[var(--text-primary)]">Salonda masa tanımlı değil.</p>
+      {canSetupTables ? <Button variant="primary" size="lg" onClick={() => setActiveModule('SETTINGS')}>Ayarlar</Button> : null}
+    </div>
+  ) : (
+    <div className="space-y-3">
+      <p className="text-lg font-semibold text-[var(--text-primary)]">Bu durumda masa yok.</p>
+      <Button variant="secondary" size="lg" onClick={() => setFilter('ALL')}>Tüm masalar</Button>
+    </div>
+  );
 
   const currentSelectedTable = tables.find((t) => t.id === selectedTableId) || null;
 
@@ -115,6 +130,12 @@ export const FloorModule: React.FC = () => {
     void openOrderForTable(table.id, table.tableNumber, guestCount);
     setActiveModule('POS');
   };
+
+  useEffect(() => {
+    if (viewMode === 'KROKI' && selectedZoneId === null && blueprintZoneId) {
+      setSelectedZoneId(blueprintZoneId);
+    }
+  }, [viewMode, selectedZoneId, blueprintZoneId, setSelectedZoneId]);
 
   const handleInspectTable = (table: FloorTable) => {
     openTableSlideOver(table.id);
@@ -159,9 +180,9 @@ export const FloorModule: React.FC = () => {
           </>
         }
       >
-        <BarTab active={selectedZoneId === null} onClick={() => setSelectedZoneId(null)}>Tümü</BarTab>
+        {viewMode === 'CARDS' ? <BarTab active={selectedZoneId === null} onClick={() => setSelectedZoneId(null)}>Tümü</BarTab> : null}
         {zones.map((zone) => (
-          <BarTab key={zone.id} active={selectedZoneId === zone.id} onClick={() => setSelectedZoneId(zone.id)}>
+          <BarTab key={zone.id} active={effectiveZoneId === zone.id} onClick={() => setSelectedZoneId(zone.id)}>
             {zone.name}
           </BarTab>
         ))}
@@ -170,7 +191,7 @@ export const FloorModule: React.FC = () => {
       <div className="floor-tools">
         {FILTERS.map((item) => (
           <button key={item.id} type="button" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
-            {item.label} <span className="tabular-nums">{filteredTables.filter((table) => matchesFilter(table, item.id)).length}</span>
+            {item.label} <span className="tabular-nums">{scopedTables.filter((table) => matchesTableFilter(table, item.id)).length}</span>
           </button>
         ))}
         <span className="flex-1" />
@@ -182,7 +203,8 @@ export const FloorModule: React.FC = () => {
         <div>
           <div ref={cardsRef} className="floor-view" data-active={viewMode === 'CARDS'}>
             <TableCardGrid
-              tables={filteredTables.filter((table) => matchesFilter(table, filter))}
+              tables={visibleTables}
+              empty={emptyView}
               onOpenTable={handleOpenTable}
               onInspectTable={handleInspectTable}
             />
@@ -191,8 +213,9 @@ export const FloorModule: React.FC = () => {
             <FloorBlueprint
               zones={zones}
               tables={tables}
-              zoneId={selectedZoneId}
-              matches={(table) => matchesFilter(table, filter)}
+              objects={objects}
+              zoneId={blueprintZoneId}
+              showTable={(table) => matchesTableFilter(table, filter)}
               isEditMode={false}
               onTablePositionChange={updateTablePosition}
               onOpenTable={handleOpenTable}

@@ -6,7 +6,7 @@
 use crate::db::DbPool;
 use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant};
 use crate::services::ledger_statement::{
-    directory_statement, format_cents, method_label, payment_receipt_lines, StatementLine,
+    directory_statement_at, format_cents, method_label, payment_receipt_lines, StatementLine,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -95,6 +95,7 @@ pub async fn get_directory_statement(
     directory_id: String,
     from: String,
     to: String,
+    utc_offset_minutes: Option<i64>,
     actor_role: Option<String>,
     tenant_id: Option<String>,
     pool: tauri::State<'_, DbPool>,
@@ -102,7 +103,15 @@ pub async fn get_directory_statement(
     require_ledger_read(actor_role.as_deref())?;
     let tid = require_ledger_tenant(tenant_id.as_deref())?;
 
-    let s = directory_statement(&pool, &tid, &directory_id, &from, &to).await?;
+    // Gelmeyen ofset UTC günü demektir; makul saat dilimi dışı gün sınırını yanlış güne taşır.
+    let offset = match utc_offset_minutes {
+        None => 0,
+        Some(minutes) if (-14 * 60..=14 * 60).contains(&minutes) => minutes,
+        Some(_) => {
+            return Err("INVALID_ARGUMENT: utcOffsetMinutes -840 ile 840 arasında olmalıdır".into())
+        }
+    };
+    let s = directory_statement_at(&pool, &tid, &directory_id, &from, &to, offset).await?;
 
     Ok(DirectoryStatementDto {
         opening_balance_label: format_cents(s.opening_balance_cents),

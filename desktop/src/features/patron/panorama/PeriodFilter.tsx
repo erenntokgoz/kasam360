@@ -4,8 +4,16 @@ import { formatDay } from '../../../lib/date';
 import { MAX_CALENDAR_RANGE_DAYS, RANGE_LABELS, reportPeriod, validCalendarRange, type PanoramaRange, type RangeKey } from '../../../lib/dateRange';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
+import { MonthPicker } from '../../../ui/MonthPicker';
 
 const RANGES: RangeKey[] = ['TODAY', 'YESTERDAY', 'WEEK', 'MONTH'];
+const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+function visibleEndDate(to: string): string {
+  const end = new Date(to);
+  if (to.slice(11, 19) === '00:00:00') end.setDate(end.getDate() - 1);
+  return dateKey(end);
+}
 
 interface PeriodFilterProps {
   range: PanoramaRange;
@@ -25,13 +33,14 @@ export function PeriodFilter({ range, onChange }: PeriodFilterProps) {
   const activeCustom = typeof range === 'object' && 'from' in range;
   const validRange = validCalendarRange(dates) && dates.to <= today;
   const applied = reportPeriod(range);
-  const periodLabel = applied.from.slice(0, 10) === applied.to.slice(0, 10)
+  const visibleTo = visibleEndDate(applied.to);
+  const periodLabel = applied.from.slice(0, 10) === visibleTo
     ? formatDay(applied.from)
-    : [formatDay(applied.from), formatDay(applied.to)].join(' – ');
+    : [formatDay(applied.from), formatDay(visibleTo)].join(' – ');
 
   return (
     <section aria-label="Rapor dönemi" className="paper space-y-3 rounded-xl border border-[var(--border)] p-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div role="group" aria-label="Hazır dönemler" className="flex flex-wrap gap-2">
           {RANGES.map((key) => (
             <Button key={key} type="button" variant={range === key ? 'selected' : 'secondary'} aria-pressed={range === key}
@@ -39,18 +48,10 @@ export function PeriodFilter({ range, onChange }: PeriodFilterProps) {
               {RANGE_LABELS[key]}
             </Button>
           ))}
+          <MonthPicker value={month} current={currentMonth}
+            onSelect={(value) => { setShowCustom(false); onChange({ month: value }); }} />
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)]">
-            Ay seçimi
-            <Input type="month" className="!w-auto tabular-nums" value={month} max={currentMonth}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                if (!value || value > currentMonth) return;
-                setShowCustom(false);
-                onChange({ month: value });
-              }} />
-          </label>
           <Button type="button" variant={activeCustom ? 'selected' : 'secondary'} aria-expanded={showCustom}
             aria-controls="panorama-custom-period" onClick={() => setShowCustom(!showCustom)}>
             Tarih Aralığı

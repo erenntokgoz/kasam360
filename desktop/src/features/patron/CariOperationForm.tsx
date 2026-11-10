@@ -22,12 +22,17 @@ export function useOperationSubmit(onDone: () => void) {
     isSaving: false,
   });
 
-  const run = async (operationId: string, action: () => Promise<void>) => {
+  /**
+   * `REJECTED` kesin red demektir: sunucu aynı işlem kimliğini farklı içerikle kabul etmez, bu
+   * yüzden çağıran yeni kimlik üretmeli. `PENDING` sonucu bilinmeyen işlemdir; kimlik korunur.
+   */
+  const run = async (operationId: string, action: () => Promise<void>): Promise<'DONE' | 'PENDING' | 'REJECTED'> => {
     setState({ error: null, pendingOperationId: null, isSaving: true });
     try {
       await action();
       setState({ error: null, pendingOperationId: null, isSaving: false });
       onDone();
+      return 'DONE';
     } catch (caught) {
       const pending = errorCode(caught) === 'PENDING_RESULT';
       setState({
@@ -35,6 +40,7 @@ export function useOperationSubmit(onDone: () => void) {
         pendingOperationId: pending ? operationId : null,
         isSaving: false,
       });
+      return pending ? 'PENDING' : 'REJECTED';
     }
   };
 

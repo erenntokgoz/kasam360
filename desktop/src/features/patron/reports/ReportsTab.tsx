@@ -8,6 +8,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
+import { MonthPicker } from '../../../ui/MonthPicker';
 import { OWNER_ONLY_REPORTS, REPORTS, type ReportKey, type ReportTable } from './reportDefinitions';
 import type { ReportFileMeta } from './reportCsv';
 import { exportReport } from './reportXlsx';
@@ -23,9 +24,17 @@ const daysAgo = (days: number) => {
 const QUICK: { label: string; from: () => string; to: () => string }[] = [
   { label: 'Bugün', from: () => daysAgo(0), to: () => daysAgo(0) },
   { label: 'Dün', from: () => daysAgo(1), to: () => daysAgo(1) },
-  { label: '7 Gün', from: () => daysAgo(6), to: () => daysAgo(0) },
-  { label: '30 Gün', from: () => daysAgo(29), to: () => daysAgo(0) },
+  { label: 'Son 7 Gün', from: () => daysAgo(6), to: () => daysAgo(0) },
+  { label: 'Son 30 Gün', from: () => daysAgo(29), to: () => daysAgo(0) },
 ];
+
+/** Seçili ay: ayın ilk günü ile son günü (açık ayda bugün). Tarih alanları bu aralığı gösterir. */
+function monthRange(month: string) {
+  const [year, mon] = month.split('-').map(Number);
+  const last = dayText(new Date(year, mon, 0));
+  const today = dayText(new Date());
+  return { from: `${month}-01`, to: last < today ? last : today };
+}
 
 /** Yerel gün sınırları: `YYYY-AA-GG` 00:00 ile 23:59:59 arası, yerel ofsetle. */
 function dayBounds(from: string, to: string) {
@@ -44,6 +53,8 @@ export const ReportsTab: React.FC = () => {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Seçili aralık tam bir takvim ayıysa ay düğmesi seçili görünür.
+  const monthValue = from.slice(0, 7) === to.slice(0, 7) && from === `${from.slice(0, 7)}-01` && to === monthRange(from.slice(0, 7)).to ? from.slice(0, 7) : '';
   const rangeError = from === '' || to === '' ? 'Başlangıç ve bitiş seçin.' : from > to ? 'Başlangıç bitişten sonra olamaz.' : null;
 
   useEffect(() => {
@@ -109,6 +120,11 @@ export const ReportsTab: React.FC = () => {
               </Button>
             );
           })}
+          <MonthPicker value={monthValue} current={dayText(new Date()).slice(0, 7)} onSelect={(month) => {
+            const range = monthRange(month);
+            setFrom(range.from);
+            setTo(range.to);
+          }} />
         </div>
         <Button
           variant="secondary"

@@ -22,7 +22,7 @@ pub const MIN_SEATS: i64 = 1;
 pub const MAX_SEATS: i64 = 30;
 
 /// Mimari obje türleri. `floor_objects.kind` CHECK kısıtıyla aynı küme.
-pub const OBJECT_KINDS: [&str; 4] = ["DOOR", "BAR", "WALL", "COLUMN"];
+pub const OBJECT_KINDS: [&str; 5] = ["DOOR", "WINDOW", "BAR", "WALL", "COLUMN"];
 
 /// Mevcut masaların okunduğu DTO. Kart görünümünün verisinden ayrıdır:
 /// burada krokinin çizimi için gereken geometri taşınır.
@@ -105,6 +105,10 @@ pub struct ObjectPlacement {
 pub struct SaveLayoutInput {
     pub tables: Vec<TablePlacement>,
     pub objects: Vec<ObjectPlacement>,
+    #[serde(default)]
+    pub new_objects: Vec<CreateObjectInput>,
+    #[serde(default)]
+    pub delete_object_ids: Vec<String>,
 }
 
 /// Yeni mimari obje açma gövdesi.
@@ -129,7 +133,7 @@ pub struct CreateObjectInput {
 /// kullanıcı 1 piksel kapı çizmemelidir; ölçü buradan gelir.
 pub fn default_object_size(kind: &str) -> (i64, i64) {
     match kind {
-        "DOOR" => (80, 80),
+        "DOOR" | "WINDOW" => (140, 24),
         "BAR" => (400, 60),
         "WALL" => (400, 20),
         _ => (40, 40),

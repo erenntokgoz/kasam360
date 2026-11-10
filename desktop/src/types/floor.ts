@@ -44,6 +44,23 @@ export interface FloorTable {
   width: number;
   height: number;
   shape?: 'ROUND' | 'RECT';
+  /** Saat yönünde derece (0-359, 45 adım). Kayıtta yoksa 0. */
+  rotation?: number;
+}
+
+export type FloorObjectKind = 'DOOR' | 'WINDOW' | 'BAR' | 'WALL' | 'COLUMN';
+
+export interface FloorObject {
+  id: string;
+  zoneId: string | null;
+  kind: FloorObjectKind;
+  label: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  isActive: boolean;
 }
 
 export interface Reservation {

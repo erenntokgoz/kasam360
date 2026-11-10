@@ -22,6 +22,7 @@ import { useLedgerStore } from '../../stores/ledgerStore';
 import { ReceiptsTab } from './ReceiptsTab';
 import { ShiftHistory } from './ShiftHistory';
 import { ShiftMovements } from './ShiftMovements';
+import { ShiftTotals } from './ShiftTotals';
 
 /** Okunamayan tutar sıfır gösterilmez: kasa farkı sanılır. */
 const money = (cents?: number | null) => (cents == null ? '—' : formatMoney(cents));
@@ -36,7 +37,11 @@ type CashAction = (typeof CASH_ACTIONS)[number]['id'];
 
 export const CashierModule: React.FC = () => {
   const { activeShift, summary, lastZReport: latestReport, isLoading, shiftError, loadShiftData, recordCashMovement, closeDay } = useShiftStore();
-  const canCloseDay = useAuthStore((state) => state.user?.role === 'OWNER' || state.user?.role === 'MANAGER');
+  const role = useAuthStore((state) => state.user?.role);
+  const isOwner = role === 'OWNER';
+  const canStartCashAction = isOwner || role === 'CASHIER' || role === 'MANAGER';
+  const canRecordCashMovement = isOwner || role === 'CASHIER';
+  const canCloseDay = isOwner || role === 'MANAGER';
   // Kör sayım: kasiyer çekmecede olması gereken tutarı ve onu türeten toplamları görmez.
   const isBlind = useAuthStore((state) => state.user?.role === 'CASHIER');
   const [selectedReport, setSelectedReport] = useState<ZReportData | null>(null);
@@ -48,6 +53,7 @@ export const CashierModule: React.FC = () => {
   const financeAsked = useLedgerStore((state) => state.activeErpTab === 'FINANCE');
   const [cashAction, setCashAction] = useState<CashAction | 'CHOOSE' | null>(null);
   const [isActionBusy, setIsActionBusy] = useState(false);
+  const [isActionUncertain, setIsActionUncertain] = useState(false);
   const [showExpenses, setShowExpenses] = useState(false);
 
   useEffect(() => {
@@ -61,11 +67,11 @@ export const CashierModule: React.FC = () => {
     loadShiftData();
   }, [loadShiftData]);
 
-  const handleCashMovementSubmit = async (type: 'IN' | 'OUT', cents: number, reason: string) => {
-    await recordCashMovement(type, cents, reason);
+  const handleCashMovementSubmit = async (type: 'IN' | 'OUT', cents: number, reason: string, movementId: string, approvalToken?: string) => {
+    await recordCashMovement(type, cents, reason, movementId, approvalToken);
   };
 
-  const closeCashAction = () => { if (!isActionBusy) setCashAction(null); };
+  const closeCashAction = () => { if (!isActionBusy && !isActionUncertain) setCashAction(null); };
   const currentAction = CASH_ACTIONS.find((action) => action.id === cashAction);
 
   const isShiftOpen = activeShift?.isOpen === true;
@@ -97,7 +103,7 @@ export const CashierModule: React.FC = () => {
         actions={
           isShiftOpen ? (
             <>
-              <BarAction onClick={() => setCashAction('CHOOSE')}>İşlem Ekle</BarAction>
+              {canStartCashAction ? <BarAction onClick={() => setCashAction('CHOOSE')}>İşlem Ekle</BarAction> : null}
               <BarAction tone="primary" onClick={() => openModal('blindClose')}>Vardiyayı Kapat</BarAction>
             </>
           ) : undefined
@@ -117,9 +123,14 @@ export const CashierModule: React.FC = () => {
                 <h2 className="text-base font-bold">
                   {shiftError ? 'Vardiya Durumu Okunamadı' : isLoading ? 'Vardiya Yükleniyor' : isShiftOpen ? 'Vardiya Açık' : 'Vardiya Kapalı'}
                 </h2>
-                {isShiftOpen && <p className="text-sm text-[var(--text-secondary)]">
+                {isShiftOpen && <p className="text-sm tabular-nums text-[var(--text-secondary)]">
                   {activeShift.cashierName} · {formatDateTime(activeShift.openedAt)}
                 </p>}
+                {!isShiftOpen && !isLoading && !shiftError && latestReport && !isBlind ? (
+                  <p className="text-sm tabular-nums text-[var(--text-secondary)]">
+                    Son kapanış {formatDateTime(latestReport.closedAt)} · Fark {formatMoney(latestReport.differenceCents)}
+                  </p>
+                ) : null}
                 {shiftError && <ErrorToast message={errorText(shiftError)} />}
               </div>
               {shiftError ? <Button onClick={() => void loadShiftData()}>Tekrar Dene</Button> : null}
@@ -128,27 +139,11 @@ export const CashierModule: React.FC = () => {
               ) : null}
             </div>
             {summary ? <ShiftMovements summary={summary} blind={isBlind} /> : null}
-            {summary ? (
-              <details className="work-surface rounded-lg border border-[var(--border)]">
-                <summary className="min-h-12 cursor-pointer px-4 py-3 font-semibold">Vardiya Toplamları</summary>
-                <dl className="flex flex-wrap gap-x-8 gap-y-3 px-4 pb-4">
-                  {[
-                    ...(!isBlind ? [
-                      ['Beklenen Kasa Nakdi', summary.expectedCashInDrawerCents],
-                      ['Ciro', summary.totalSalesCents],
-                      ['Nakit', summary.totalCashSalesCents],
-                    ] as const : []),
-                    ['Kart', summary.totalCardSalesCents] as const,
-                    ['Yemek Kartı', summary.totalMealCardSalesCents] as const,
-                    ['Veresiye', summary.totalVeresiyeCents] as const,
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <dt className="text-sm text-[var(--text-secondary)]">{label}</dt>
-                      <dd className="font-bold tabular-nums">{money(value)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </details>
+            {summary ? <ShiftTotals summary={summary} blind={isBlind} /> : null}
+            {!isShiftOpen && !isLoading && !shiftError && canCloseDay ? (
+              <section className="work-surface rounded-lg border border-[var(--border)] p-4">
+                <ShiftHistory key={latestReport?.shiftId} onSelect={(id) => { void handleSelectReport(id).then(() => setActiveTab('DAY_CLOSE')); }} />
+              </section>
             ) : null}
             {canCloseDay ? (
               <details className="work-surface rounded-lg border border-[var(--border)]" open={showExpenses}
@@ -162,20 +157,13 @@ export const CashierModule: React.FC = () => {
           <ReceiptsTab onRefunded={() => void loadShiftData()} />
         ) : (
           /* Gün Sonu / Z Raporu Sekmesi */
-          <div className="paper border border-[var(--border)] rounded-xl p-4 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
-              <div>
-                <h2 className="print-title text-sm font-bold text-[var(--text-primary)]">Gün Sonu Kapanışı (Z Raporu)</h2>
-              </div>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => window.print()}
-                disabled={!canShowReport}
-                className="text-xs"
-              >
-                <Printer className="w-4 h-4 mr-1.5" />
-                <span>Z Raporunu Yazdır</span>
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+          <section className="work-surface space-y-4 rounded-lg border border-[var(--border)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3">
+              <h2 className="print-title text-base font-bold text-[var(--text-primary)]">Z Raporu</h2>
+              <Button variant="primary" onClick={() => window.print()} disabled={!canShowReport}>
+                <Printer className="w-4 h-4" aria-hidden="true" />
+                <span>Yazdır</span>
               </Button>
             </div>
 
@@ -267,16 +255,19 @@ export const CashierModule: React.FC = () => {
               <div className="text-center pt-1 text-xs text-[var(--text-muted)]">
                 Bilgi amaçlıdır, mali belge değildir.
               </div>
-            </div> : <p className="text-sm text-[var(--text-secondary)]">Rapor, vardiya sayımla kapatıldığında açılır.</p>}
+            </div> : <p className="text-sm text-[var(--text-secondary)]">Kapanmış vardiya raporu yok.</p>}
+          </section>
 
-            {canCloseDay ? <ShiftHistory key={latestReport?.shiftId} onSelect={(id) => void handleSelectReport(id)} /> : null}
-            {canCloseDay ? (
-              <Button variant="danger" className="w-full min-h-12" onClick={() => void handleCloseDay()}>
-                Günü Kapat
-              </Button>
-            ) : null}
-            {dayCloseNotice?.ok ? <p role="status" className="text-xs font-semibold text-[var(--accent-emerald)]">{dayCloseNotice.text}</p> : null}
-            <ErrorToast message={dayCloseNotice && !dayCloseNotice.ok ? dayCloseNotice.text : null} />
+          {canCloseDay ? (
+            <section className="work-surface space-y-4 rounded-lg border border-[var(--border)] p-4">
+              <ShiftHistory key={latestReport?.shiftId} onSelect={(id) => void handleSelectReport(id)} />
+              <div className="flex justify-end border-t border-[var(--border)] pt-4">
+                <Button variant="danger" onClick={() => void handleCloseDay()}>Günü Kapat</Button>
+              </div>
+              {dayCloseNotice?.ok ? <p role="status" className="text-sm font-semibold text-[var(--accent-emerald)]">{dayCloseNotice.text}</p> : null}
+            </section>
+          ) : null}
+          <ErrorToast message={dayCloseNotice && !dayCloseNotice.ok ? dayCloseNotice.text : null} />
           </div>
         )}
       </div>
@@ -284,23 +275,25 @@ export const CashierModule: React.FC = () => {
       {/* Kör Sayım Modalı */}
       <BlindCloseModal onShowZ={() => { setSelectedReport(null); setActiveTab('DAY_CLOSE'); }} />
 
-      <Modal cardFlow isOpen={cashAction !== null && isShiftOpen}
+      <Modal cardFlow isOpen={cashAction !== null && isShiftOpen && canStartCashAction}
         title={currentAction?.title ?? 'İşlem Ekle'} onClose={closeCashAction} maxWidth="sm">
         {cashAction === 'CHOOSE' ? (
           <div className="grid gap-2">
-            {CASH_ACTIONS.filter((action) => action.id !== 'EXPENSE' || canCloseDay).map(({ id, label, icon: Icon }) => (
-              <Button key={id} type="button" className="!justify-start" onClick={() => setCashAction(id)}>
+            {CASH_ACTIONS.filter((action) => isOwner || (action.id === 'IN' && role === 'CASHIER') || (action.id === 'OUT' && role === 'MANAGER')).map(({ id, label, icon: Icon }) => (
+              <Button key={id} type="button" className="!justify-start" onClick={() => { setIsActionUncertain(false); setCashAction(id); }}>
                 <Icon size={18} aria-hidden="true" />
                 {label}
               </Button>
             ))}
           </div>
-        ) : cashAction === 'EXPENSE' && canCloseDay ? (
+        ) : cashAction === 'EXPENSE' && isOwner ? (
           <CashExpenseForm busy={isActionBusy} setBusy={setIsActionBusy} onBack={() => setCashAction('CHOOSE')}
             onSaved={() => { setCashAction(null); void loadShiftData(); }} />
-        ) : cashAction === 'IN' || cashAction === 'OUT' ? (
+        ) : (cashAction === 'IN' && canRecordCashMovement) || (cashAction === 'OUT' && (isOwner || role === 'MANAGER')) ? (
           <CashMovementForm type={cashAction} busy={isActionBusy} setBusy={setIsActionBusy}
-            onBack={() => setCashAction('CHOOSE')} onSaved={() => setCashAction(null)} onSubmit={handleCashMovementSubmit} />
+            uncertain={isActionUncertain} setUncertain={setIsActionUncertain}
+            onBack={() => { setIsActionUncertain(false); setCashAction('CHOOSE'); }}
+            onSaved={() => { setIsActionUncertain(false); setCashAction(null); }} onSubmit={handleCashMovementSubmit} />
         ) : null}
       </Modal>
     </section>

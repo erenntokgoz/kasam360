@@ -2,12 +2,17 @@
 
 pub mod kpi_service;
 pub mod payroll_deductions;
+pub mod payroll_gate;
 pub mod payroll_hours;
 pub mod payroll_period;
 pub mod payroll_rules;
+pub mod payroll_run_payment;
 pub mod payroll_service;
 pub mod payroll_types;
+pub mod settlement_accrual;
+pub mod shift_math;
 pub mod staff_service;
+pub mod staff_settlement;
 pub mod staff_types;
 pub mod suspicious_service;
 pub mod tip_service;

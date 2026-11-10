@@ -15,7 +15,7 @@
 //! testler o sözleşmeyi denetler.
 
 use crate::cashier_commands::{cash_hareket_kapisi, vardiya_oku_kapisi};
-use crate::commands::kds_commands::kds_kapisi;
+use crate::commands::kds_commands::{kds_kapisi, kds_okuma_kapisi};
 use crate::kitchen_commands::{istasyon_okuma_kapisi, istasyon_yazma_kapisi, kds_durum_kapisi};
 use crate::waiter_commands::{masa_okuma_kapisi, siparis_kapisi};
 
@@ -327,4 +327,34 @@ fn kasa_hareketi_kapisi_yalniz_sahip_ve_kasier() {
             role
         );
     }
+}
+
+#[test]
+fn kds_fis_listesi_kasiyer_ve_garsona_okuma_icin_acik_mutfak_rolu_disinda_yazamazlar() {
+    // Kasiyer salonda mutfak durumunu izler; listeyi okuyamazsa ekran "fiş yok" gibi boş görünür.
+    for role in ["OWNER", "MANAGER", "KITCHEN", "WAITER", "CASHIER"] {
+        assert!(
+            kds_okuma_kapisi(Some(role)).is_ok(),
+            "'{}' fiş listesini okuyabilmeli",
+            role
+        );
+    }
+    for role in ["WAITER", "CASHIER"] {
+        assert!(
+            kds_kapisi(Some(role)).is_err(),
+            "'{}' fişi ilerletememeli",
+            role
+        );
+    }
+    for role in ["MASTER", "", "SuperUser"] {
+        assert!(
+            kds_okuma_kapisi(Some(role)).is_err(),
+            "'{}' fiş listesini okuyamamalı",
+            role
+        );
+    }
+    assert!(
+        kds_okuma_kapisi(None).is_err(),
+        "rol alanı olmadan liste açılmamalı"
+    );
 }

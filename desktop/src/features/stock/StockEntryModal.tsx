@@ -100,18 +100,18 @@ export function StockEntryModal({ target, onClose }: { target: string | null; on
             : <StockItemPicker products={products} value={productId} onChange={setProductId} label="Giriş ürünü" allowCreate={false} />}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1">
-              <span>Miktar{chosen ? ` (${unit})` : ''}</span>
+              <span className="text-xs font-semibold text-[var(--text-secondary)]">Miktar{chosen ? ` (${unit})` : ''}</span>
               <NumberInput kind="quantity" disabled={!chosen} value={quantity} onValueChange={setQuantity} />
             </label>
             <label className="block space-y-1">
-              <span>Birim Alış Fiyatı (₺)</span>
+              <span className="text-xs font-semibold text-[var(--text-secondary)]">Birim Alış Fiyatı (₺)</span>
               <NumberInput disabled={!chosen} value={unitCost} onValueChange={setUnitCost} />
             </label>
           </div>
         </fieldset>
         {gramItems.length > 0 && (
           <label className="block space-y-1">
-            <span>1 Adetten Çıkan Kullanılabilir Gram (isteğe bağlı)</span>
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">1 Adetten Çıkan Kullanılabilir Gram (isteğe bağlı)</span>
             <NumberInput kind="quantity" disabled={busy} value={receipt.grams[productId] ?? ''}
               onValueChange={(value) => setReceipt({ ...receipt, grams: { ...receipt.grams, [productId]: value } })} />
           </label>

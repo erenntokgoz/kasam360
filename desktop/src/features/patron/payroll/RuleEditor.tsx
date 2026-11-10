@@ -11,6 +11,7 @@ import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { RuleFacts } from './RuleFacts';
 import { useAuthStore } from '../../../stores/authStore';
+import { useOwnerApproval } from './useOwnerApproval';
 
 export interface PayrollRule {
   userId: string;
@@ -31,9 +32,10 @@ export const MODELS: Record<string, string> = {
 
 const fieldClass = 'min-h-12 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]';
 
-/** Maaş kuralı yalnız patronda: rakam müdüre görünmez. */
+/** Ücret kuralı. Sahip doğrudan değiştirir; müdür kaydederken sahibin PIN'i istenir. */
 export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSaved: () => Promise<void> }> = ({ userId, rules, onSaved }) => {
-  const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+  const canEdit = useAuthStore((state) => state.user?.role === 'OWNER' || state.user?.role === 'MANAGER');
+  const approval = useOwnerApproval();
   const [model, setModel] = useState('FIXED');
   const [payPeriod, setPayPeriod] = useState<PayPeriod>('MONTHLY');
   const [salary, setSalary] = useState('');
@@ -50,10 +52,15 @@ export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSave
   }, [rule]);
 
   const remove = async () => {
-    const { actorRole, tenantId } = sessionArgs();
+    const { actorId, actorRole, tenantId } = sessionArgs();
     setError(null);
     try {
-      await invokeIPC('delete_payroll_rule', { tenantId, actorRole, userId });
+      const decision = await approval.ask(
+        { operation: 'PAYROLL_RULE', resourceId: `PAYROLL_RULE:${userId}`, amountCents: 0 },
+        'Ücret kuralını sil',
+      );
+      if (!decision.approved) return;
+      await invokeIPC('delete_payroll_rule', { tenantId, actorId, actorRole, userId, approvalToken: decision.token ?? null });
       setSalary('');
       await onSaved();
     } catch (caught) {
@@ -64,12 +71,19 @@ export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSave
   const cents = parseCents(salary);
 
   const save = async () => {
-    const { actorRole, tenantId } = sessionArgs();
+    const { actorId, actorRole, tenantId } = sessionArgs();
     setError(null);
     try {
+      const decision = await approval.ask(
+        { operation: 'PAYROLL_RULE', resourceId: `PAYROLL_RULE:${userId}`, amountCents: cents ?? 0 },
+        'Ücret kuralını değiştir',
+      );
+      if (!decision.approved) return;
       await invokeIPC('set_payroll_rule', {
         tenantId,
+        actorId,
         actorRole,
+        approvalToken: decision.token ?? null,
         input: {
           userId,
           model,
@@ -97,7 +111,7 @@ export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSave
       ) : (
         <p className="text-sm text-[var(--text-secondary)]">Bu kişi için maaş kuralı yok.</p>
       )}
-      {isOwner ? <div className="flex flex-wrap gap-2">
+      {canEdit ? <div className="flex flex-wrap gap-2">
         <select aria-label="Maaş modeli" className={fieldClass} value={model} onChange={(event) => setModel(event.target.value)}>
           {Object.entries(MODELS).map(([id, label]) => (
             <option key={id} value={id}>{label}</option>
@@ -121,6 +135,7 @@ export const RuleEditor: React.FC<{ userId: string; rules: PayrollRule[]; onSave
         ) : null}
       </div> : null}
       {error ? <ErrorToast message={error} /> : null}
+      {approval.prompt}
       {rule ? <RuleFacts rule={rule} onSaved={onSaved} /> : null}
     </div>
   );

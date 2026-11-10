@@ -69,6 +69,8 @@ describe('oturum sınırı', () => {
     expect(await useAuthStore.getState().loginWithPin('5931')).toBe(true);
     expect(useAuthStore.getState()).toMatchObject({ isLocked: false, isAuthenticated: true });
     expect(useAuthStore.getState().user?.userId).toBe('usr_2');
+    // Önceki kullanıcının (kasiyer) yetkisi taşınmaz: oturum yeni personelin rolünü taşır.
+    expect(useAuthStore.getState().user?.role).toBe('WAITER');
   });
 
   it('özellik bayraklarını yalnız oturum yanıtından açar ve çıkışta kapatır', async () => {

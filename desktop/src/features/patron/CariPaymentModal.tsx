@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { useCariStore, type PaymentInput } from '../../stores/cariStore';
 import { newOperationId, parseCents } from '../../lib/cariInput';
+import { centsToText } from '../../lib/moneyInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
@@ -34,7 +35,8 @@ export const CariPaymentModal: React.FC<CariPaymentModalProps> = ({ debt, onClos
 
   useEffect(() => {
     if (!debt) return;
-    setAmount(formatMoney(debt.remainingAmountCents).replace(' ₺', ''));
+    // Ham metin (1850,50): biçimli metindeki binlik noktası parseCents'te geçersiz sayılırdı.
+    setAmount(centsToText(debt.remainingAmountCents));
     setMethod('CASH');
     setInputError(null);
     setOperationId(newOperationId());
@@ -61,7 +63,9 @@ export const CariPaymentModal: React.FC<CariPaymentModalProps> = ({ debt, onClos
         amountCents,
         paymentMethod: method,
       })
-    );
+    ).then((outcome) => {
+      if (outcome === 'REJECTED') setOperationId(newOperationId());
+    });
   };
 
   // Sonuç bilinmezken yeni deneme ikinci ödeme riski taşır.

@@ -34,6 +34,7 @@ export interface ShiftSummary {
   totalVeresiyeCents: number;
   totalCashInCents: number;
   totalCashOutCents: number;
+  totalCashRefundsCents: number | null;
   expectedCashInDrawerCents: number | null;
   totalSalesCents: number | null;
 }

@@ -58,7 +58,9 @@ export const CariOpenDebtModal: React.FC<CariOpenDebtModalProps> = ({ card, type
         dueDate: dueDate || undefined,
         description: description.trim() || undefined,
       })
-    );
+    ).then((outcome) => {
+      if (outcome === 'REJECTED') setOperationId(newOperationId());
+    });
   };
 
   return (

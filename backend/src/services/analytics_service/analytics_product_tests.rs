@@ -63,7 +63,7 @@ async fn batch(
 /// kullandığı için aralık açıkça verilir. Böylece test, takvim gününe değil
 /// üretilebilir veriye bağlı kalır.
 fn mart() -> AnalyticsRange {
-    Some(("2026-03-01".to_string(), "2026-03-31".to_string()))
+    Some(("2026-03-01".to_string(), "2026-04-01".to_string()))
 }
 
 async fn product(
@@ -205,6 +205,12 @@ fn bcg_maliyeti_bilinmeyen_urun_kovaya_yazilir_ama_marji_null_kalir() {
 }
 
 #[test]
+fn bcg_satis_yokken_bos_matris_doner_hata_degil() {
+    let out = bcg_classify(&[]).expect("bos donem hata degildir");
+    assert!(out.is_empty());
+}
+
+#[test]
 fn bcg_maliyeti_olmayan_tek_urun_hata_dondurur() {
     let margins = vec![margin("a", 10, None)];
     // Tek bilinen marj yoksa medyan tanımsızdır; 0 kabul etmek yanlış kova üretirdi.
@@ -247,6 +253,28 @@ async fn urun_marji_fifo_ortalamasindan_hesaplanir() {
     // 2 adet x 140 = 280 ciro 4000 -> 3720 kâr, marj %93.
     assert_eq!(m[0].gross_profit_cents, Some(3720));
     assert_eq!(m[0].margin_percent, Some(93));
+}
+
+#[tokio::test]
+async fn tarih_araligi_bitis_anindaki_satisi_haric_tutar() {
+    let pool = test_pool().await;
+    product(&pool, "t1", "p1", "Kahve", "c1", 1000).await;
+    paid_order(&pool, "t1", "before", "2026-03-31T23:59:59Z").await;
+    line(&pool, "t1", "before", "p1", 1, 1000).await;
+    paid_order(&pool, "t1", "fractional", "2026-03-31T23:59:59.500Z").await;
+    line(&pool, "t1", "fractional", "p1", 1, 2000).await;
+    paid_order(&pool, "t1", "boundary", "2026-04-01T00:00:00Z").await;
+    line(&pool, "t1", "boundary", "p1", 1, 9000).await;
+    let range = Some((
+        "2026-03-01T00:00:00Z".to_string(),
+        "2026-04-01T00:00:00Z".to_string(),
+    ));
+
+    let rows = product_margins(&pool, "t1", &range)
+        .await
+        .expect("marj okunmali");
+    assert_eq!(rows[0].units_sold, 2);
+    assert_eq!(rows[0].revenue_cents, 3000);
 }
 
 #[tokio::test]
@@ -395,7 +423,7 @@ async fn kombinasyon_tarih_araligini_honourlar() {
     line(&pool, "t1", "o1", "p1", 1, 1000).await;
     line(&pool, "t1", "o1", "p2", 1, 500).await;
 
-    let aralik: AnalyticsRange = Some(("2026-04-01".to_string(), "2026-04-30".to_string()));
+    let aralik: AnalyticsRange = Some(("2026-04-01".to_string(), "2026-05-01".to_string()));
     let combos = combinations(&pool, "t1", &aralik, 1)
         .await
         .expect("okunmali");

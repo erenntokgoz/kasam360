@@ -33,13 +33,15 @@ export function StockItemPicker({ products, value, onChange, label = 'Ürün', d
 
   return (
     <div className="space-y-2 min-w-0">
-      <Input disabled={disabled} aria-label={`${label} ara`} type="search" value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
-          event.preventDefault();
-          if (searching && matches.length === 1) selectProduct(matches[0].id);
-        }} />
+      <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)]">{label} ara
+        <Input disabled={disabled} type="search" value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            if (searching && matches.length === 1) selectProduct(matches[0].id);
+          }} />
+      </label>
       {searching && matches.length === 0 ? (
         <p role="status" className="text-sm">Eşleşen kayıt yok.</p>
       ) : (

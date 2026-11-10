@@ -28,6 +28,9 @@ export const LockScreen: React.FC = () => {
       {loginError ? (
         <ErrorToast message={loginError} />
       ) : null}
+      <p className="text-sm text-[var(--text-secondary)]">
+        <span className="font-bold text-[var(--text-primary)]">{user.name}</span> kilitledi. Her personel kendi PIN'iyle açar.
+      </p>
       <PinEntry value={pin} onChange={setPin} onSubmit={() => void submit()} isBusy={isBusy} />
     </AuthShell>
   );

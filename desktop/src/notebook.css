@@ -192,7 +192,7 @@
   width: 220px;
   max-width: 100%;
   min-width: 0;
-  height: 38px;
+  height: 44px;
   padding: 0 8px;
   margin: auto 0;
   color: var(--muted);
@@ -200,17 +200,28 @@
   border-radius: 6px;
   background-color: var(--surface);
 }
-.bar-search input {
+/* Genel input kuralı daha özgül olduğundan kapsayıcı çerçeve tek kalır: içte ikinci kutu çizilmez. */
+.bar-search input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
   min-width: 0;
   height: 100%;
   min-height: auto;
   border: 0;
+  border-radius: 0;
   padding: 0;
   background: transparent;
   outline: none;
   font-size: 0.875rem;
   color: var(--text);
+}
+.bar-search input:not([type="checkbox"]):not([type="radio"]):focus {
+  outline: none;
+  border: 0;
+}
+.bar-search:focus-within {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 .bar-search input::placeholder {
   color: var(--muted);
@@ -323,8 +334,8 @@
 
 /* Kroki yerleşimi */
 .kroki-mat {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  min-width: 0;
   display: flex;
   overflow: auto;
   padding: 24px;
@@ -364,17 +375,14 @@
   background: none;
 }
 .kroki-zoom {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
+  position: relative;
   display: flex;
   gap: 4px;
-  padding: 4px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 16px;
   color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  box-shadow: var(--lift);
+  background: transparent;
 }
 .kroki-zoom button {
   display: flex;
@@ -389,6 +397,38 @@
 }
 .kroki-zoom button:hover {
   background: var(--hover);
+}
+
+.kroki-object {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  min-height: 20px;
+  max-width: 360px;
+  padding: 0 8px;
+  overflow: visible;
+  color: var(--text);
+  font-size: 0.7rem;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--action);
+  border-radius: 2px;
+  box-shadow: var(--lift);
+}
+.kroki-object-door {
+  border-style: dashed;
+}
+.kroki-object-window {
+  border-style: double;
+  border-width: 3px;
+}
+.kroki-object.is-selected {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
 }
 .kroki-room .table-spot,
 .kroki-room .table-spot svg,
@@ -450,6 +490,10 @@ input[data-empty-date]:not(:focus)::before {
 }
 .table-spot[data-state="reserved"] .table-top {
   fill: var(--accent-blue-soft);
+}
+/* Masa döndüğünde yazılar okunur kalır: iç metinler masa açısının tersiyle döner. */
+.kroki-room .table-spot > span {
+  rotate: calc(var(--rot, 0) * -1deg);
 }
 .kroki-room .table-spot-name {
   font-size: 1rem;

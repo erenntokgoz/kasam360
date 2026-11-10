@@ -7,7 +7,7 @@
 
 /// Dönem filtresi: `None` = bu ay (tüm zaman değil, çünkü rapor ekranı
 /// varsayılan olarak içinde bulunulan ayı gösterir), `Some((from, to))` =
-/// ISO-8601 aralık (`from <= to` sözleşini komut katmanı doğrular).
+/// ISO-8601 yarı açık aralık (`from <= created_at < to`).
 pub type AnalyticsRange = Option<(String, String)>;
 
 /// Ürün kâr marjı satırı.

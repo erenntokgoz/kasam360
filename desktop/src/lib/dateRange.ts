@@ -18,8 +18,8 @@ const DAY_SECONDS = 86_400;
 export const RANGE_LABELS: Record<RangeKey, string> = {
   TODAY: 'Bugün',
   YESTERDAY: 'Dün',
-  WEEK: '7 Gün',
-  MONTH: '30 Gün',
+  WEEK: 'Son 7 Gün',
+  MONTH: 'Son 30 Gün',
 };
 
 export const utcOffsetMinutes = (date = new Date()): number => -date.getTimezoneOffset();
@@ -42,18 +42,14 @@ function dayStart(date: Date, daysAgo: number): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() - daysAgo);
 }
 
-function dayEnd(date: Date, daysAgo: number): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate() - daysAgo, 23, 59, 59);
-}
-
 function calendarDay(value: string): Date {
   return new Date(`${value}T00:00:00`);
 }
 
 export function calendarMonthRange(month: string): CalendarRange {
   const first = calendarDay(`${month}-01`);
-  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
-  return { from: `${month}-01`, to: toLocalIso(last).slice(0, 10) };
+  const next = new Date(first.getFullYear(), first.getMonth() + 1, 1);
+  return { from: `${month}-01`, to: toLocalIso(next).slice(0, 10) };
 }
 
 export function validCalendarRange({ from, to }: CalendarRange): boolean {
@@ -71,12 +67,13 @@ export function reportPeriod(key: PanoramaRange, now = new Date()): ReportPeriod
   if (typeof key !== 'string') {
     const range = 'month' in key ? calendarMonthRange(key.month) : key;
     const start = calendarDay(range.from);
-    const lastDay = calendarDay(range.to);
-    const nextDay = dayStart(lastDay, -1);
+    const end = 'month' in key
+      ? new Date(Math.min(calendarDay(range.to).getTime(), dayStart(now, -1).getTime()))
+      : dayStart(calendarDay(range.to), -1);
     return {
       from: toLocalIso(start),
-      to: toLocalIso(dayEnd(lastDay, 0)),
-      compareSeconds: (nextDay.getTime() - start.getTime()) / 1000,
+      to: toLocalIso(end),
+      compareSeconds: Math.floor((end.getTime() - start.getTime()) / 1000),
       compareLabel: 'önceki eşit döneme göre',
     };
   }
@@ -84,7 +81,7 @@ export function reportPeriod(key: PanoramaRange, now = new Date()): ReportPeriod
     case 'TODAY':
       return { from: toLocalIso(dayStart(now, 0)), to: toLocalIso(now), compareSeconds: DAY_SECONDS, compareLabel: 'dün aynı saate göre' };
     case 'YESTERDAY':
-      return { from: toLocalIso(dayStart(now, 1)), to: toLocalIso(dayEnd(now, 1)), compareSeconds: DAY_SECONDS, compareLabel: 'önceki güne göre' };
+      return { from: toLocalIso(dayStart(now, 1)), to: toLocalIso(dayStart(now, 0)), compareSeconds: DAY_SECONDS, compareLabel: 'önceki güne göre' };
     case 'WEEK':
       return { from: toLocalIso(dayStart(now, 6)), to: toLocalIso(now), compareSeconds: 7 * DAY_SECONDS, compareLabel: 'önceki 7 güne göre' };
     case 'MONTH':

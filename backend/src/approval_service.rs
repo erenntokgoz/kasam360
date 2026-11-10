@@ -38,6 +38,22 @@ pub mod operation {
     pub const CLOSE_DAY: &str = "CLOSE_DAY";
     /// Ödeme toplamı (D3): eşiği aşan ödeme.
     pub const PAYMENT: &str = "PAYMENT";
+    /// Bordro ve personel hesabı ödemesi: müdür yapacaksa işletme sahibi onaylar.
+    pub const PAYROLL_PAY: &str = "PAYROLL_PAY";
+    /// Ücret kuralı değişikliği veya silinmesi: müdür yapacaksa işletme sahibi onaylar.
+    pub const PAYROLL_RULE: &str = "PAYROLL_RULE";
+    /// Personel avansı: kasadan veya bankadan para çıkar.
+    pub const STAFF_ADVANCE: &str = "STAFF_ADVANCE";
+
+    /// Onayı yalnız işletme sahibinden kabul edilen para çıkışı işlemleri.
+    /// Neden tek liste: onay verme ve tüketme yolları aynı kuralı paylaşmalı, biri
+    /// güncellenip diğeri unutulursa müdür kendi PIN'iyle kendi işlemini onaylardı.
+    pub fn owner_only(operation: &str) -> bool {
+        matches!(
+            operation,
+            CASH_OUT | PAYROLL_PAY | PAYROLL_RULE | STAFF_ADVANCE
+        )
+    }
 }
 
 /// %20 veya 500 TL üzeri indirimlerde onaylayan yalnız işletme sahibi veya
@@ -206,8 +222,11 @@ pub fn requires_privileged_approver_with(
         }
         // Eşiğe bağlı para çıkışları: onaylayanın rolleri aynı daralır.
         operation::PAYMENT | operation::CASH_OUT | operation::CLOSE_DAY => {
-            esik_cents.is_some_and(|esik| request.amount_cents >= esik)
+            request.operation == operation::CASH_OUT
+                || esik_cents.is_some_and(|esik| request.amount_cents >= esik)
         }
+        // Bordro, ücret kuralı ve avans eşiğe bağlı değildir; onaylayan her zaman sahiptir.
+        operation::PAYROLL_PAY | operation::PAYROLL_RULE | operation::STAFF_ADVANCE => true,
         operation::COMPLIMENTARY => true,
         // VOID_ORDER eşik tablosunda değil; onaylayan herhangi bir onay
         // rolü olabilir (bugünkü davranış).
@@ -247,7 +266,9 @@ pub async fn verify_and_issue(
 
     // Rol kapısı işleme göre daralır: büyük indirimde MASTER da onaylayamaz.
     // Eşik kiracının DB kaydından okunur (D3).
-    let allowed: Vec<Role> = if requires_privileged_approver_db(conn, request).await? {
+    let allowed: Vec<Role> = if operation::owner_only(&request.operation) {
+        vec![Role::Owner]
+    } else if requires_privileged_approver_db(conn, request).await? {
         vec![Role::Owner, Role::Manager]
     } else {
         rbac::APPROVER_ROLES.to_vec()
@@ -380,7 +401,9 @@ pub async fn consume_token(
     // tutar büyük eşiğe girdiyse jeton kabul edilmez. Eşik **yeniden okunur**:
     // onay anındaki eşik ile yürütme anındaki eşik farklıysa yürütme anındaki
     // geçerlidir, çünkü o andaki kural uygulanmaktadır.
-    let allowed: Vec<Role> = if requires_privileged_approver_db(conn, request).await? {
+    let allowed: Vec<Role> = if operation::owner_only(&request.operation) {
+        vec![Role::Owner]
+    } else if requires_privileged_approver_db(conn, request).await? {
         vec![Role::Owner, Role::Manager]
     } else {
         rbac::APPROVER_ROLES.to_vec()

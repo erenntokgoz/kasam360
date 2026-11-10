@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { errorText } from '../lib/cariInput';
+import { utcOffsetMinutes } from '../lib/dateRange';
 import { invokeIPC } from '../services/tauriClient';
 import type { FinancialProfitSummary } from '../types/ledger';
 import { sessionArgs } from './cariStore';
@@ -14,6 +15,9 @@ export const EXPENSE_CATEGORIES: Record<string, string> = {
   MAINTENANCE: 'Bakım',
   OTHER: 'Diğer',
 };
+
+/** Listede gösterilen etiketler. Personel ücreti ödemeden otomatik yazılır; elle seçilen kategorilere girmez. */
+export const EXPENSE_LABELS: Record<string, string> = { ...EXPENSE_CATEGORIES, STAFF_PAY: 'Personel Ücreti' };
 
 export interface Expense {
   id: string;
@@ -75,6 +79,8 @@ export async function createExpense(category: string, amountCents: number, payme
   });
 }
 
+let loadRequest = 0;
+
 export const useExpenseStore = create<ExpenseStore>((set, get) => ({
   period: monthKey(),
   setPeriod: (period) => {
@@ -88,22 +94,24 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
   error: null,
 
   // Okunamayan gider sıfır gösterilmez: liste boşaltılır, hata görünür.
+  // Eski ayın geç gelen yanıtı yeni seçimi ezmez.
   load: async () => {
+    const request = ++loadRequest;
     const { actorRole, tenantId } = sessionArgs();
     const month = get().period;
     const startDate = `${month}-01`;
     const endDate = `${month}-${lastDay(month)}`;
     try {
       const report = actorRole === 'OWNER'
-        ? await invokeIPC<FinancialProfitSummary>('get_financial_report', { actorRole, tenantId, startDate, endDate })
+        ? await invokeIPC<FinancialProfitSummary>('get_financial_report', { actorRole, tenantId, startDate, endDate, utcOffsetMinutes: utcOffsetMinutes() })
         : null;
       const [expenses, recurring] = await Promise.all([
         invokeIPC<Expense[]>('get_expenses', { actorRole, tenantId, startDate, endDate: `${endDate} 23:59:59` }),
         invokeIPC<RecurringRow[]>('get_recurring_expenses', { actorRole, tenantId, asOf: today() }),
       ]);
-      set({ report, expenses, recurring, error: null });
+      if (request === loadRequest) set({ report, expenses, recurring, error: null });
     } catch (caught) {
-      set({ report: null, expenses: null, recurring: [], error: errorText(caught) });
+      if (request === loadRequest) set({ report: null, expenses: null, recurring: [], error: errorText(caught) });
     }
   },
 

@@ -37,6 +37,8 @@ pub struct ShiftSummaryDto {
     pub veresiye_sales: i64,
     #[serde(alias = "total_refunds", default)]
     pub total_refunds: i64,
+    #[serde(alias = "cash_refunds", default)]
+    pub cash_refunds: Option<i64>,
     #[serde(alias = "total_discounts", default)]
     pub total_discounts: i64,
 }

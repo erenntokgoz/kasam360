@@ -12,6 +12,7 @@ use crate::ledger_commands::guard::{require_ledger_read, require_ledger_tenant};
 use crate::services::audit_service::{self, AuditContext, AuditService};
 use crate::services::expense_service::{self, insert_expense, NewExpense};
 use crate::services::lan_sync::WritePool;
+use crate::services::staff360::payroll_gate;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -190,11 +191,18 @@ pub async fn get_expenses(
     if category.is_some() {
         query_str.push_str(" AND e.category = ?");
     }
+    // Sınırlar gün karşılaştırır: `YYYY-MM-DD 23:59:59` gibi gün sonu metni de aynı güne denk gelir.
     if start_date.is_some() {
-        query_str.push_str(" AND e.expense_date >= ?");
+        query_str.push_str(&format!(
+            " AND {} >= substr(?, 1, 10)",
+            expense_service::LOCAL_DAY_SQL
+        ));
     }
     if end_date.is_some() {
-        query_str.push_str(" AND e.expense_date <= ?");
+        query_str.push_str(&format!(
+            " AND {} <= substr(?, 1, 10)",
+            expense_service::LOCAL_DAY_SQL
+        ));
     }
     query_str.push_str(" ORDER BY e.expense_date DESC");
 
@@ -345,8 +353,10 @@ pub async fn void_expense(
     tx.commit().await
 }
 
-/// Personel avansı verir; döneminin bordrosundan düşülür.
+/// Personel avansı verir; döneminin bordrosundan düşülür. Para çıkışı olduğu için müdür
+/// yalnız işletme sahibi onay jetonuyla verebilir.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn record_staff_advance(
     user_id: String,
     period: String,
@@ -355,13 +365,31 @@ pub async fn record_staff_advance(
     actor_id: String,
     actor_role: Option<String>,
     tenant_id: Option<String>,
+    approval_token: Option<String>,
     pool: tauri::State<'_, DbPool>,
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<String, String> {
-    crate::rbac::require_owner(actor_role.as_deref().unwrap_or_default())?;
+    let role = actor_role.as_deref().unwrap_or_default();
+    crate::rbac::require_staff_admin(role)?;
     let tid = require_ledger_tenant(tenant_id.as_deref())?;
     let audit_lock = audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin_write().await?;
+    let resource = payroll_gate::resource(
+        crate::approval_service::operation::STAFF_ADVANCE,
+        &format!("{user_id}:{period}"),
+    );
+    payroll_gate::authorize_money_out(
+        &mut tx,
+        &audit_lock,
+        &tid,
+        &actor_id,
+        role,
+        crate::approval_service::operation::STAFF_ADVANCE,
+        &resource,
+        amount_cents,
+        approval_token.as_deref(),
+    )
+    .await?;
     let id = expense_service::record_staff_advance(
         &mut tx,
         &tid,

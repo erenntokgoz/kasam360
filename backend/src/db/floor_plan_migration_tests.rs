@@ -68,6 +68,46 @@ async fn legacy_real_tables_pool() -> sqlx::Pool<sqlx::Sqlite> {
     pool
 }
 
+#[tokio::test]
+async fn existing_floor_objects_schema_adds_window_without_losing_labels() {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .unwrap();
+    sqlx::raw_sql(
+        "CREATE TABLE tables (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+         CREATE TABLE floor_objects (
+             id TEXT NOT NULL PRIMARY KEY, tenant_id TEXT NOT NULL, zone_id TEXT,
+             kind TEXT NOT NULL CHECK (kind IN ('DOOR','BAR','WALL','COLUMN')),
+             label TEXT, x INTEGER NOT NULL DEFAULT 0, y INTEGER NOT NULL DEFAULT 0,
+             width INTEGER NOT NULL DEFAULT 80, height INTEGER NOT NULL DEFAULT 80,
+             rotation INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
+             created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+         );
+         INSERT INTO floor_objects (id, tenant_id, kind, label, created_at, updated_at)
+         VALUES ('old-door', 'tenant-a', 'DOOR', 'Giriş', 'now', 'now');",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    migrate_floor_plan_layout(&pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO floor_objects (id, tenant_id, kind, label, width, height, created_at, updated_at)
+         VALUES ('new-window', 'tenant-a', 'WINDOW', 'Balkon', 140, 24, 'now', 'now')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let preserved: String =
+        sqlx::query_scalar("SELECT label FROM floor_objects WHERE id = 'old-door'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(preserved, "Giriş");
+}
+
 /// Kolonun bildirilen tipi. `REAL` kaldıysa rebuild çalışmamıştır.
 async fn column_type(pool: &sqlx::Pool<sqlx::Sqlite>, table: &str, column: &str) -> String {
     let sql = format!("SELECT type FROM pragma_table_info('{table}') WHERE name = '{column}'");

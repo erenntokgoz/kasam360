@@ -2,6 +2,9 @@
 //!
 //! Ücretli süre yalnız onaylanmış personel çalışma kayıtlarından gelir. Kasa vardiyası
 //! veya planlanan bitiş, tek başına çalışılmış süre kanıtı değildir.
+//!
+//! Gece yarısını aşan kayıt dönem sınırında zamana göre bölünür; çıkışta personel hesabı
+//! kesilmiş kayıt ise tamamen o hesapta kalır ve buradan çıkarılır (çifte ödeme olmasın).
 
 use chrono::NaiveDate;
 use sqlx::SqlitePool;
@@ -28,6 +31,10 @@ pub async fn worked_seconds(
            FROM staff_work_sessions
           WHERE tenant_id = ?1 AND user_id = ?2 AND status = 'CLOSED'
             AND ended_at IS NOT NULL
+            -- Çıkışta hesabı kesilen kayıt personel hesabında ödenir; bordroda ikinci kez sayılmaz.
+            AND NOT EXISTS (SELECT 1 FROM staff_settlements s
+                             WHERE s.tenant_id = staff_work_sessions.tenant_id
+                               AND s.work_session_id = staff_work_sessions.id)
             AND CAST(strftime('%s', started_at) AS INTEGER) < CAST(strftime('%s', ?4) AS INTEGER)
             AND CAST(strftime('%s', ended_at) AS INTEGER) > CAST(strftime('%s', ?3) AS INTEGER)",
     )

@@ -47,3 +47,16 @@ export function minutesElapsed(startTime?: string): number {
 
 /** ISO tarihi gün.ay.yıl yazar; saat varsa atılır. */
 export const formatDay = (iso: string) => iso.slice(0, 10).split('-').reverse().join('.');
+
+/**
+ * Kayıt anının yerel gününü gün.ay.yıl yazar. Saat taşıyan kayıt UTC anıdır: ilk on karakteri
+ * almak gece 00:00-03:00 arası kayıtları bir önceki güne yazardı. Yalnız tarih taşıyan metin
+ * zaten yerel gündür ve olduğu gibi yazılır.
+ */
+export const formatInstantDay = (iso: string): string => {
+  if (iso.length <= 10) return formatDay(iso);
+  const date = toDate(iso);
+  if (isNaN(date.getTime())) return formatDay(iso);
+  const two = (value: number) => String(value).padStart(2, '0');
+  return `${two(date.getDate())}.${two(date.getMonth() + 1)}.${date.getFullYear()}`;
+};

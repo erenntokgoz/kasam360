@@ -4,7 +4,7 @@ import { reportPeriod } from '../../../lib/dateRange';
 import { formatMoney } from '../../../lib/formatMoney';
 import { buildInsights } from '../../../lib/panoramaInsights';
 import { useAuthStore } from '../../../stores/authStore';
-import { usePanoramaStore } from '../../../stores/panoramaStore';
+import { currentMonth, usePanoramaStore } from '../../../stores/panoramaStore';
 import { useUIStore } from '../../../stores/uiStore';
 import { AlertFeed } from './AlertFeed';
 import { KpiStrip } from './KpiStrip';
@@ -25,6 +25,8 @@ export const BoardSection: React.FC = () => {
   const isModuleOpen = useUIStore((state) => state.activeModule === 'ERP');
   const isLocked = useAuthStore((state) => state.isLocked);
   const isVisible = isModuleOpen && !isLocked;
+  const selectedCalendarMonth = typeof range === 'object' && 'month' in range;
+  const goalMonth = selectedCalendarMonth ? range.month : currentMonth();
 
   useEffect(() => {
     if (!isVisible) return undefined;
@@ -37,10 +39,29 @@ export const BoardSection: React.FC = () => {
   }, [isVisible, load]);
 
   const compareLabel = reportPeriod(range).compareLabel;
+  const hasSales = data ? data.current.collectedCents > 0 || data.current.orders > 0 || data.buckets.some((item) => item.currentCents > 0 || item.previousCents > 0) : false;
   const insights = data ? buildInsights(data, compareLabel) : [];
 
+  const deductions = data ? (
+    <Panel title="Dönem Kesintileri">
+      <dl className="divide-y divide-[var(--border)]">
+        {([
+          ['Ödenecek KDV', data.current.vatCents],
+          ['İndirim', data.current.discountCents],
+          ['İptal', data.current.voidCents],
+          ['İade', data.current.refundCents],
+        ] as const).map(([label, amount]) => (
+          <div key={label} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+            <dt className="text-[var(--text-secondary)]">{label}</dt>
+            <dd className="font-semibold tabular-nums">{formatMoney(amount)}</dd>
+          </div>
+        ))}
+      </dl>
+    </Panel>
+  ) : null;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PeriodFilter range={range} onChange={setRange} />
 
       {error ? (
@@ -53,46 +74,46 @@ export const BoardSection: React.FC = () => {
             <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{insights.join(' ')}</p>
           ) : null}
           <KpiStrip current={data.current} previous={data.previous} compareLabel={compareLabel} />
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <div className="xl:col-span-2">
-              <RevenueChart kind={data.bucketKind} buckets={data.buckets} />
-            </div>
-            <PaymentMix channels={data.channels} />
-          </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <TopProducts products={data.products} showProfit={data.current.grossProfitCents !== null} />
-            <MenuMatrix metrics={metrics} error={metricsError} />
-            <Panel title="Dönem Kesintileri">
-              <dl className="divide-y divide-[var(--border)]">
-                {([
-                  ['Ödenecek KDV', data.current.vatCents],
-                  ['İndirim', data.current.discountCents],
-                  ['İptal', data.current.voidCents],
-                  ['İade', data.current.refundCents],
-                ] as const).map(([label, amount]) => (
-                  <div key={label} className="flex items-center justify-between gap-2 py-2 text-sm">
-                    <dt className="text-[var(--text-secondary)]">{label}</dt>
-                    <dd className="font-semibold tabular-nums">{formatMoney(amount)}</dd>
-                  </div>
-                ))}
-              </dl>
-            </Panel>
-          </div>
-          <section aria-label="İşletme durumu" className="space-y-2">
-            <h2 className="text-base font-semibold">İşletme Durumu</h2>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
-              <LivePanel live={data.live} />
-              <AlertFeed alerts={data.alerts} />
-              <MonthlyGoal />
-            </div>
-          </section>
+          {hasSales ? (
+            <>
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
+                <div className="xl:col-span-8">
+                  <RevenueChart kind={data.bucketKind} buckets={data.buckets} />
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:col-span-4 xl:grid-cols-1">
+                  <PaymentMix channels={data.channels} />
+                  {deductions}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
+                <div className="xl:col-span-5"><TopProducts products={data.products} showProfit={data.current.grossProfitCents !== null} /></div>
+                <div className="xl:col-span-4"><MenuMatrix metrics={metrics} error={metricsError} /></div>
+                <div className="xl:col-span-3"><LivePanel live={data.live} /></div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <AlertFeed alerts={data.alerts} />
+                <MonthlyGoal month={goalMonth} rangeSelected={selectedCalendarMonth} />
+              </div>
+            </>
+          ) : (
+            <>
+              <p role="status" className="paper rounded-xl border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                Bu dönemde tahsilat ve kapanan satış yok.
+              </p>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                <LivePanel live={data.live} />
+                <AlertFeed alerts={data.alerts} />
+                <MonthlyGoal month={goalMonth} rangeSelected={selectedCalendarMonth} />
+              </div>
+            </>
+          )}
         </>
       ) : (
         <>
           {!error ? <p className="text-sm text-[var(--text-secondary)]">Pano hazırlanıyor…</p> : null}
           {/* Hedef panodan bağımsız okunur; pano düşse de görünür kalır. */}
           <div className="max-w-md">
-            <MonthlyGoal />
+            <MonthlyGoal month={goalMonth} rangeSelected={selectedCalendarMonth} />
           </div>
         </>
       )}

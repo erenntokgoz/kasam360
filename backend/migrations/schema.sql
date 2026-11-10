@@ -253,7 +253,7 @@ CREATE TABLE IF NOT EXISTS floor_objects (
     tenant_id   TEXT NOT NULL,
     zone_id     TEXT,
     template_id TEXT,
-    kind        TEXT NOT NULL CHECK (kind IN ('DOOR','BAR','WALL','COLUMN')),
+    kind        TEXT NOT NULL CHECK (kind IN ('DOOR','WINDOW','BAR','WALL','COLUMN')),
     label       TEXT,
     x           INTEGER NOT NULL DEFAULT 0,
     y           INTEGER NOT NULL DEFAULT 0,
@@ -715,7 +715,7 @@ CREATE INDEX IF NOT EXISTS idx_debt_payments_debt_id ON debt_payments(debt_id);
 CREATE TABLE IF NOT EXISTS general_expenses (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'DEFAULT_TENANT',
-    category TEXT NOT NULL CHECK(category IN ('RENT', 'UTILITIES', 'SUPPLIER', 'STAFF_ADVANCE', 'TAX', 'PERSONAL', 'MAINTENANCE', 'OTHER')),
+    category TEXT NOT NULL CHECK(category IN ('RENT', 'UTILITIES', 'SUPPLIER', 'STAFF_ADVANCE', 'STAFF_PAY', 'TAX', 'PERSONAL', 'MAINTENANCE', 'OTHER')),
     amount_cents INTEGER NOT NULL,
     payment_method TEXT NOT NULL CHECK(payment_method IN ('CASH', 'BANK_TRANSFER', 'CREDIT_CARD', 'VERESIYE')),
     directory_id TEXT,
@@ -955,6 +955,51 @@ CREATE TABLE IF NOT EXISTS payroll_payments (
 );
 CREATE INDEX IF NOT EXISTS idx_payroll_payments_run
     ON payroll_payments(tenant_id, payroll_run_id, created_at);
+
+-- Çıkışta kesilen personel hesabı: kapanan çalışma kaydının ücreti. Ödenmeyen kısım
+-- personel borcudur; ödeme satırları ayrı tutulur ki kısmi ve sonradan ödeme borcu
+-- düşürsün, ücret tutarı değişmesin. UPDATE yalnız ödenmemiş hesapta yeniden
+-- hesaplamak içindir.
+CREATE TABLE IF NOT EXISTS staff_settlements (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    work_session_id TEXT NOT NULL,
+    -- Vardiyanın başladığı yerel gün; gece yarısını aşan vardiya başladığı güne yazılır.
+    work_date TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('HOURLY', 'DAILY')),
+    worked_seconds INTEGER NOT NULL CHECK (worked_seconds >= 0),
+    -- Saatlik ücret ya da günlük ücret; hesap anındaki kural tutarı denetim için saklanır.
+    rate_cents INTEGER NOT NULL CHECK (rate_cents >= 0),
+    earned_cents INTEGER NOT NULL CHECK (earned_cents >= 0),
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (tenant_id, work_session_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_settlements_daily
+    ON staff_settlements(tenant_id, user_id, work_date) WHERE kind = 'DAILY';
+CREATE INDEX IF NOT EXISTS idx_staff_settlements_user
+    ON staff_settlements(tenant_id, user_id, work_date);
+
+-- Her ödeme tek gider ve (nakitse) tek kasa çıkışıyla bağlıdır. `request_id` tekrar
+-- gönderilen aynı isteğin ikinci gider yazmasını engeller.
+CREATE TABLE IF NOT EXISTS staff_settlement_payments (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    settlement_id TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('CASH', 'BANK_TRANSFER')),
+    expense_id TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    approver_id TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE (tenant_id, request_id),
+    FOREIGN KEY (settlement_id) REFERENCES staff_settlements(id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS idx_staff_settlement_payments_settlement
+    ON staff_settlement_payments(tenant_id, settlement_id, created_at);
 
 -- Bahsis havuzu: katsayili dagitim. Havuz bir kayit, dagitim bir kayit.
 CREATE TABLE IF NOT EXISTS tip_pool_entries (

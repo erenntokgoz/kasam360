@@ -14,6 +14,14 @@ const QUADRANTS = [
 
 /** Menü kararını rakamdan öneriye çevirir: hangi ürüne ne yapılacağı tek bakışta görünür. */
 export const MenuMatrix: React.FC<{ metrics: MenuMetrics | null; error: string | null }> = ({ metrics, error }) => {
+  // Maliyeti bilinen ürün yoksa matris kurulamaz; bu veri eksikliğidir, okuma hatası değil.
+  if (!metrics && error?.includes('maliyeti bilinmeli')) {
+    return (
+      <Panel title="Menü Analizi">
+        <p className="text-sm text-[var(--text-secondary)]">Satılan ürünlerin maliyeti bilinmiyor. Menü ve Stok bölümünden stok girişi ya da reçete ekleyin.</p>
+      </Panel>
+    );
+  }
   if (!metrics) {
     return (
       <Panel title="Menü Analizi">

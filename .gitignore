@@ -98,3 +98,4 @@ backend/api/.test-db/
 *.jks
 *.keystore
 *.mobileprovision
+backend/work/

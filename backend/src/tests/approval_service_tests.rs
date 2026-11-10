@@ -322,6 +322,170 @@ async fn her_tutarda_indirim_icin_onay_zorunlu_ve_ust_rol_yeterlidir() {
 }
 
 #[tokio::test]
+async fn manager_cash_out_requires_owner_pin_even_below_threshold() {
+    let pool = approval_pool().await;
+    seed_user(&pool, "usr_manager_actor", "tenant_a", "MANAGER", "3331", 1).await;
+    seed_user(
+        &pool,
+        "usr_manager_approver",
+        "tenant_a",
+        "MANAGER",
+        "3332",
+        1,
+    )
+    .await;
+    seed_user(&pool, "usr_owner", "tenant_a", "OWNER", "2222", 1).await;
+    let mut conn = pool.acquire().await.expect("bağlantı alınır");
+    let cash_out = ApprovalRequest {
+        actor_role: "MANAGER".to_string(),
+        resource_id: "CASH_OUT:shf_01:cmout_000000000000000000000000".to_string(),
+        ..request("usr_manager_actor", operation::CASH_OUT, 100)
+    };
+
+    assert!(requires_privileged_approver(&cash_out));
+    let err = verify_and_issue(&mut conn, &cash_out, "3332")
+        .await
+        .expect_err("başka müdür, kasa çıkışı onaylayamaz");
+    assert_eq!(err, error::NOT_APPROVER);
+
+    let owner_approval = verify_and_issue(&mut conn, &cash_out, "2222")
+        .await
+        .expect("işletme sahibi onaylar");
+    assert_eq!(owner_approval.approver_role, Role::Owner);
+    consume_token(&mut conn, &owner_approval.token, &cash_out)
+        .await
+        .expect("işleme bağlı onay tek kullanımlık tüketilir");
+}
+
+#[tokio::test]
+async fn manager_cash_out_owner_approval_persists_once_and_allows_only_scoped_replay() {
+    use crate::commands::cashier_commands::movements::{
+        find_approved_cash_out_replay, persist_movement,
+    };
+    use crate::services::audit_service::{AuditContext, AuditLock, AuditService};
+
+    let pool = approval_pool().await;
+    seed_user(&pool, "usr_manager_actor", "tenant_a", "MANAGER", "3331", 1).await;
+    seed_user(&pool, "usr_owner", "tenant_a", "OWNER", "2222", 1).await;
+    sqlx::query("INSERT INTO shifts (id, tenant_id, cashier_id, status) VALUES ('shf_01', 'tenant_a', 'usr_manager_actor', 'OPEN')")
+        .execute(&pool)
+        .await
+        .expect("vardiya eklenir");
+
+    let movement_id = "cmout_000000000000000000000000";
+    let amount_cents = 2500;
+    let reason = "Kasa dışı ödeme";
+    let resource_id = format!("CASH_OUT:shf_01:{movement_id}");
+    let request = ApprovalRequest {
+        tenant_id: "tenant_a".to_string(),
+        operation: operation::CASH_OUT.to_string(),
+        resource_id,
+        actor_id: "usr_manager_actor".to_string(),
+        actor_role: "MANAGER".to_string(),
+        amount_cents,
+        approved_percent_hint: 0,
+        terminal_id: "terminal_payment".to_string(),
+    };
+
+    let mut conn = pool.acquire().await.expect("bağlantı alınır");
+    assert_eq!(
+        verify_and_issue(&mut conn, &request, "3331")
+            .await
+            .expect_err("müdür kendi PIN'iyle nakit çıkışını onaylayamaz"),
+        error::NOT_APPROVER
+    );
+    let issued = verify_and_issue(&mut conn, &request, "2222")
+        .await
+        .expect("işletme sahibi onay jetonu üretir");
+
+    let mut consumer_request = request.clone();
+    consumer_request.terminal_id = "terminal_cash".to_string();
+    let approver = consume_token(&mut conn, &issued.token, &consumer_request)
+        .await
+        .expect("cash out tüketicisi onayı kabul eder");
+    assert_eq!(approver.approver_role, Role::Owner);
+    assert_eq!(
+        consume_token(&mut conn, &issued.token, &consumer_request)
+            .await
+            .expect_err("onay jetonu tekrar tüketilemez"),
+        error::TOKEN_USED
+    );
+
+    let audit_mutex = tokio::sync::Mutex::new(());
+    let lock = AuditLock::new(audit_mutex.lock().await);
+    let ctx = AuditContext::new(
+        "tenant_a".to_string(),
+        approver.approver_id.clone(),
+        "OWNER".to_string(),
+        crate::services::audit_service::category::GUVENLIK,
+        "approval:consumed",
+        movement_id.to_string(),
+        serde_json::json!({ "operation": operation::CASH_OUT, "actorId": request.actor_id, "approverRole": "OWNER", "amountCents": amount_cents }),
+        chrono::Utc::now().to_rfc3339(),
+    )
+    .expect("onay denetimi");
+    AuditService::append(&mut conn, &lock, &ctx)
+        .await
+        .expect("onay tüketimi kaydedilir");
+    let (movement, inserted) = persist_movement(
+        &mut conn,
+        movement_id,
+        "tenant_a",
+        "shf_01",
+        "OUT",
+        amount_cents,
+        reason,
+        "usr_manager_actor",
+        "MANAGER",
+        "cash:movement_out",
+        &lock,
+    )
+    .await
+    .expect("kasa çıkışı kaydedilir");
+    assert!(inserted);
+    assert_eq!(movement.amount_cents, amount_cents);
+
+    let replay = find_approved_cash_out_replay(
+        &mut conn,
+        movement_id,
+        "tenant_a",
+        "shf_01",
+        amount_cents,
+        reason,
+        "usr_manager_actor",
+        "MANAGER",
+    )
+    .await
+    .expect("yetkili tekrar");
+    assert_eq!(
+        replay.as_ref().map(|row| row.id.as_str()),
+        Some(movement_id)
+    );
+
+    let cross_tenant_replay = find_approved_cash_out_replay(
+        &mut conn,
+        movement_id,
+        "tenant_b",
+        "shf_01",
+        amount_cents,
+        reason,
+        "usr_manager_actor",
+        "MANAGER",
+    )
+    .await
+    .expect("başka tenant kaydı göstermez");
+    assert!(cross_tenant_replay.is_none());
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM cash_movements WHERE id = ? AND tenant_id = 'tenant_a'",
+    )
+    .bind(movement_id)
+    .fetch_one(&mut *conn)
+    .await
+    .expect("tek hareket sayılır");
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
 async fn buyuk_indirimde_kasa_onaylayamaz_ustelik_master_da() {
     let pool = approval_pool().await;
     seed_user(&pool, "usr_cashier", "tenant_a", "CASHIER", "4444", 1).await;

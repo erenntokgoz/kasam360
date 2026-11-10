@@ -143,19 +143,19 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
             {table.status === 'BILL_REQUESTED' ? 'Hesap İsteğini Kaldır' : 'Hesap İstendi'}
           </Button>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className={canSettle ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 gap-2'}>
             <Button
               variant="secondary"
               size="lg"
               onClick={() => onGoToPos(table)}
-              className="w-full text-xs"
+              className="w-full text-sm"
             >
               <ShoppingBag className="w-4 h-4" />
               <span>Siparişe Git</span>
             </Button>
 
             {!canSettle ? null : isZeroBalance ? (
-              <Button variant="primary" size="lg" className="w-full text-xs" isLoading={isClosing} onClick={() => void handleCloseZero()}>
+              <Button variant="primary" size="lg" className="w-full text-sm" isLoading={isClosing} onClick={() => void handleCloseZero()}>
                 <span>Masayı Kapat</span>
               </Button>
             ) : (
@@ -163,7 +163,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
                 variant="success"
                 size="lg"
                 onClick={() => onPayTable(table)}
-                className="w-full text-xs"
+                className="w-full text-sm"
                 disabled={remainingCents <= 0}
               >
                 <CreditCard className="w-4 h-4" />

@@ -7,7 +7,8 @@
 
 use super::types::{
     validate_object_placement, validate_table_placement, FloorLayout, FloorObject, FloorZone,
-    LayoutTable, SaveLayoutInput, CANVAS_HEIGHT, CANVAS_WIDTH, GRID, ROTATION_STEP,
+    LayoutTable, ObjectPlacement, SaveLayoutInput, CANVAS_HEIGHT, CANVAS_WIDTH, GRID,
+    ROTATION_STEP,
 };
 use crate::id_generator::generate_id;
 use sqlx::{Row, SqliteConnection};
@@ -242,6 +243,32 @@ pub async fn save_layout(
     for yerlesim in &giris.objects {
         validate_object_placement(yerlesim)?;
     }
+    for object in &giris.new_objects {
+        validate_object_placement(&ObjectPlacement {
+            object_id: "draft".into(),
+            zone_id: object.zone_id.clone(),
+            kind: object.kind.clone(),
+            label: object.label.clone(),
+            x: object.x,
+            y: object.y,
+            width: object.width,
+            height: object.height,
+            rotation: object.rotation,
+        })?;
+    }
+    for object_id in &giris.delete_object_ids {
+        let object_id = require_key(object_id)?;
+        let exists: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM floor_objects WHERE id = ? AND tenant_id = ?")
+                .bind(&object_id)
+                .bind(tenant_id)
+                .fetch_one(&mut *conn)
+                .await
+                .map_err(|error| error.to_string())?;
+        if exists == 0 {
+            return Err(format!("NOT_FOUND: obje bulunamadı ({object_id})"));
+        }
+    }
 
     // Bölüm referansları da yazmadan önce doğrulanır.
     for yerlesim in &giris.tables {
@@ -251,6 +278,11 @@ pub async fn save_layout(
     }
     for yerlesim in &giris.objects {
         if let Some(bolum) = &yerlesim.zone_id {
+            zone_belongs_to_tenant(conn, tenant_id, bolum).await?;
+        }
+    }
+    for object in &giris.new_objects {
+        if let Some(bolum) = &object.zone_id {
             zone_belongs_to_tenant(conn, tenant_id, bolum).await?;
         }
     }
@@ -306,6 +338,13 @@ pub async fn save_layout(
         if sonuc.rows_affected() == 0 {
             return Err(format!("NOT_FOUND: obje bulunamadı ({object_id})"));
         }
+    }
+
+    for object in &giris.new_objects {
+        super::objects::create_object(conn, tenant_id, object).await?;
+    }
+    for object_id in &giris.delete_object_ids {
+        super::objects::delete_object(conn, tenant_id, object_id).await?;
     }
 
     Ok(())

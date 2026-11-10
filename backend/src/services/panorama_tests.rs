@@ -81,7 +81,7 @@ async fn board(pool: &SqlitePool, from: &str, to: &str) -> Panorama {
 }
 
 const DAY_FROM: &str = "2026-10-30T00:00:00+03:00";
-const DAY_TO: &str = "2026-10-30T23:59:59+03:00";
+const DAY_TO: &str = "2026-10-31T00:00:00+03:00";
 
 #[tokio::test]
 async fn ciro_tahsilattan_kar_kdv_haric_hesaplanir() {
@@ -138,6 +138,19 @@ async fn cok_gunlu_donem_gunlere_bolunur_bos_gun_silinmez() {
     assert_eq!(result.buckets[6].label, "2026-10-30");
     assert_eq!(result.buckets[6].current_cents, 10000);
     assert_eq!(result.buckets[0].current_cents, 0);
+}
+
+#[tokio::test]
+async fn exclusive_bitis_anindaki_satis_doneme_ve_grafige_girmez() {
+    let pool = pool().await;
+    sale(&pool, "txn_1", "2026-10-30T20:00:00+00:00", 10000, 0).await;
+    sale(&pool, "txn_2", "2026-10-30T23:59:59.500+03:00", 3000, 0).await;
+    sale(&pool, "txn_3", "2026-10-31T00:00:00+03:00", 7000, 0).await;
+    let result = board(&pool, DAY_FROM, DAY_TO).await;
+    assert_eq!(result.current.collected_cents, 13000);
+    assert_eq!(result.buckets.len(), 24);
+    assert_eq!(result.buckets[23].label, "23");
+    assert_eq!(result.buckets[23].current_cents, 13000);
 }
 
 #[tokio::test]

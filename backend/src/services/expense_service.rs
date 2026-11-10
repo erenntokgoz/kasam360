@@ -9,6 +9,13 @@ use sqlx::{Row, SqliteConnection};
 
 use crate::id_generator::generate_id;
 
+/// Giderin yerel takvim günü (`e` takma adlı `general_expenses`). Saat taşıyan kayıtlar UTC
+/// anıdır; yerel güne çevrilmezse gece 00:00-03:00 arası ödenen gider önceki günün listesine
+/// düşer. Yalnız tarih taşıyan kayıt (elle girilen gider) zaten yerel gündür, olduğu gibi kalır.
+/// `receipt_service` aynı gerekçeyle `date(created_at, 'localtime')` kullanır.
+pub const LOCAL_DAY_SQL: &str = "CASE WHEN length(e.expense_date) > 10
+         THEN date(e.expense_date, 'localtime') ELSE substr(e.expense_date, 1, 10) END";
+
 pub struct NewExpense<'a> {
     pub category: &'a str,
     pub amount_cents: i64,

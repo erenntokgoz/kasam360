@@ -92,7 +92,7 @@ pub async fn run_migrations(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
 
 /// Güncellemeler uygulamaya gömülür: kurulu cihazda `migrations` klasörü yoktur, klasörden
 /// okunsaydı yükseltilen işletmenin şeması sessizce eski kalırdı.
-const MIGRATIONS: [(i64, &str, &str); 18] = [
+const MIGRATIONS: [(i64, &str, &str); 19] = [
     (
         1,
         "tax_rate_bp",
@@ -183,6 +183,11 @@ const MIGRATIONS: [(i64, &str, &str); 18] = [
         "tip_recipients",
         include_str!("../../migrations/0018_tip_recipients.sql"),
     ),
+    (
+        19,
+        "staff_pay_category",
+        include_str!("../../migrations/0019_staff_pay_category.sql"),
+    ),
 ];
 
 /// Version numarasına göre sıralı `(version, name, sql_content)` listesi.
@@ -200,7 +205,7 @@ mod tests {
     #[test]
     fn list_migration_files_test() {
         let files = list_migration_files();
-        assert_eq!(files.len(), 18);
+        assert_eq!(files.len(), 19);
         for (version, name, sql) in &files {
             assert!(*version > 0, "version must be positive: {}", version);
             assert!(!name.is_empty(), "name must not be empty");

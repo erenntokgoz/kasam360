@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canCollectPayment, canOpenModule, homeModule } from './roleAccess';
+import { canAdvanceKitchen, canCollectPayment, canOpenModule, homeModule } from './roleAccess';
 
 describe('roleAccess', () => {
   it('mutfak yalnız mutfak ekranını açar', () => {
@@ -37,5 +37,12 @@ describe('roleAccess', () => {
     expect(canOpenModule('MASTER', 'FLOOR')).toBe(false);
     expect(canOpenModule('MASTER', 'ERP')).toBe(false);
     expect(canOpenModule(undefined, 'FLOOR')).toBe(false);
+  });
+
+  it('mutfak fişini yalnız mutfak hattı ilerletir; kasiyer ve garson izler', () => {
+    expect(['OWNER', 'MANAGER', 'KITCHEN'].map((role) => canAdvanceKitchen(role as never))).toEqual([true, true, true]);
+    expect(canAdvanceKitchen('CASHIER')).toBe(false);
+    expect(canAdvanceKitchen('WAITER')).toBe(false);
+    expect(canAdvanceKitchen(undefined)).toBe(false);
   });
 });

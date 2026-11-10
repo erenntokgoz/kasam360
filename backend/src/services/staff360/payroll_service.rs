@@ -17,6 +17,7 @@ use sqlx::Row;
 use sqlx::SqlitePool;
 
 use crate::services::staff360::payroll_types::{PayrollAmounts, PayrollRule, PayrollRun};
+use crate::services::staff360::staff_settlement;
 use crate::services::staff360::tip_service;
 
 pub use crate::services::staff360::payroll_rules::{delete_rule, set_rule, set_tip_multiplier};
@@ -137,7 +138,16 @@ pub async fn run_payroll(
             (0, 0)
         };
 
-        let brut = kural.base_salary_cents + bahsis + saat_ucreti;
+        // Günlük ücretli personelin o günü çıkışta hesaplandıysa taban tekrar yazılmaz.
+        let taban = if pay_period == payroll_period::DAILY
+            && staff_settlement::daily_settled(&mut tx, tenant_id, &kural.user_id, &donem).await?
+        {
+            uyari.push("gunluk ucret cikista personel hesabina yazildi".to_string());
+            0
+        } else {
+            kural.base_salary_cents
+        };
+        let brut = taban + bahsis + saat_ucreti;
         let kesinti = payroll_deductions::for_user(
             &mut tx,
             tenant_id,
@@ -165,7 +175,7 @@ pub async fn run_payroll(
         let not = with_deductions(
             basis_note(
                 &kural.model,
-                kural.base_salary_cents,
+                taban,
                 kural.hourly_rate_cents,
                 bahsis,
                 saat,
@@ -199,7 +209,7 @@ pub async fn run_payroll(
         .bind(&kural.user_id)
         .bind(&donem)
         .bind(&kural.model)
-        .bind(kural.base_salary_cents)
+        .bind(taban)
         .bind(bahsis)
         .bind(saat_ucreti)
         .bind(brut)
@@ -230,7 +240,7 @@ pub async fn run_payroll(
             model: kural.model.clone(),
             amounts: if can_see_amounts {
                 Some(PayrollAmounts {
-                    base_cents: kural.base_salary_cents,
+                    base_cents: taban,
                     commission_cents: 0,
                     tip_cents: bahsis,
                     hourly_cents: saat_ucreti,

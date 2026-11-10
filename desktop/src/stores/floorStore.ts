@@ -1,9 +1,8 @@
 import { create } from 'zustand';
-import type { FloorTable, FloorZone, Reservation } from '../types/floor';
+import type { FloorObject, FloorTable, FloorZone, Reservation } from '../types/floor';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
 import { errorText } from '../lib/cariInput';
-import { settledPositions } from '../lib/krokiLayout';
 import { compareTableNames, type NewTable } from '../lib/tableBatch';
 
 interface FloorRow {
@@ -26,6 +25,22 @@ interface FloorRow {
   reservationPartySize?: number | null;
   activeOrderId?: string | null;
   remainingCents?: number | null;
+}
+
+interface FloorObjectRow {
+  id: string; zone_id: string | null; kind: FloorObject['kind']; label: string | null;
+  x: number; y: number; width: number; height: number; rotation: number; is_active: boolean;
+}
+
+export interface FloorLayoutDraft {
+  tables: FloorTable[];
+  objects: FloorObject[];
+  newObjects: FloorObject[];
+  deletedObjectIds: string[];
+}
+
+export function mapFloorObject(row: FloorObjectRow): FloorObject {
+  return { id: row.id, zoneId: row.zone_id, kind: row.kind, label: row.label, x: row.x, y: row.y, width: row.width, height: row.height, rotation: row.rotation, isActive: row.is_active };
 }
 
 const DEFAULT_ZONE = 'Salon';
@@ -70,6 +85,7 @@ export function mapFloorRow(row: FloorRow): FloorTable {
 interface FloorStore {
   zones: FloorZone[];
   tables: FloorTable[];
+  objects: FloorObject[];
   selectedZoneId: string | null;
   selectedTableId: string | null;
   viewMode: 'CARDS' | 'KROKI';
@@ -92,7 +108,7 @@ interface FloorStore {
   setViewMode: (mode: 'CARDS' | 'KROKI') => void;
   setKrokiEditMode: (editing: boolean) => void;
   updateTablePosition: (tableId: string, posX: number, posY: number) => void;
-  saveFloorLayout: () => Promise<boolean>;
+  saveFloorLayout: (draft: FloorLayoutDraft) => Promise<boolean>;
   moveTable: (sourceTableId: string, targetTableId: string) => Promise<boolean>;
   mergeTables: (sourceTableId: string, targetTableId: string) => Promise<boolean>;
   addReservation: (res: Omit<Reservation, 'id' | 'status'>) => Promise<void>;
@@ -103,6 +119,7 @@ interface FloorStore {
 export const useFloorStore = create<FloorStore>((set, get) => ({
   zones: [],
   tables: [],
+  objects: [],
   selectedZoneId: null,
   selectedTableId: null,
   viewMode: 'CARDS',
@@ -116,12 +133,14 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
       const { tenantId, actorRole } = sessionArgs();
       const [rows, layout] = await Promise.all([
         invokeIPC<FloorRow[]>('get_floor_plan', { tenantId }),
-        invokeIPC<{ zones: { id: string; name: string }[] }>('get_floor_layout', { tenantId, actorRole }),
+        invokeIPC<{ zones: { id: string; name: string }[]; tables?: { id: string; rotation: number }[]; objects: FloorObjectRow[] }>('get_floor_layout', { tenantId, actorRole }),
       ]);
       const names = new Map(layout.zones.map((zone) => [zone.id, zone.name]));
+      // Masa açısı yalnız düzen okumasında gelir; kart listesi açıyı taşımaz.
+      const angles = new Map((layout.tables ?? []).map((table) => [table.id, table.rotation]));
       const tables = rows
         .map(mapFloorRow)
-        .map((table) => ({ ...table, zoneName: names.get(table.zoneId) ?? table.zoneName }))
+        .map((table) => ({ ...table, zoneName: names.get(table.zoneId) ?? table.zoneName, rotation: angles.get(table.id) ?? 0 }))
         .sort((left, right) => compareTableNames(left.tableNumber, right.tableNumber));
       // Kısmı silinmiş masa kaybolmasın: varsayılan kısımda görünür.
       const orphanIds = [...new Set(tables.map((table) => table.zoneId))].filter((id) => !names.has(id));
@@ -130,7 +149,7 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
         name: zone.name,
         tableCount: tables.filter((table) => table.zoneId === zone.id).length,
       }));
-      set({ zones, tables, floorError: null });
+      set({ zones, tables, objects: layout.objects.map(mapFloorObject), floorError: null });
     } catch (error) {
       // Kilitliyken düşen okuma hatası kilit açılınca ekranda kalmaz; sonraki okuma tazeler.
       if (!/SESSION_LOCKED/.test(String(error))) set({ floorError: errorText(error) });
@@ -206,32 +225,49 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
     }));
   },
 
-  saveFloorLayout: async () => {
+  saveFloorLayout: async (draft) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
-    const settled = settledPositions(get().zones, get().tables);
-    const tables = get().tables.map((table) => {
-      const position = settled.get(table.id);
-      return position ? { ...table, posX: position.x, posY: position.y } : table;
-    });
     try {
       await invokeIPC('save_floor_layout', {
         actorRole,
         actorId,
         tenantId,
         args: {
-          tables: tables.map((table) => ({
+          tables: draft.tables.map((table) => ({
             table_id: table.id,
             x: Math.round(table.posX),
             y: Math.round(table.posY),
-            rotation: 0,
+            rotation: table.rotation ?? 0,
             seats: table.capacity,
             // Kısım korunur: boş gönderilirse kayıt masaları kısımsız bırakır.
             zone_id: get().zones.some((zone) => zone.id === table.zoneId) ? table.zoneId : null,
           })),
-          objects: [],
+          objects: draft.objects.map((object) => ({
+            object_id: object.id,
+            zone_id: object.zoneId,
+            kind: object.kind,
+            label: object.label,
+            x: Math.round(object.x),
+            y: Math.round(object.y),
+            width: Math.round(object.width),
+            height: Math.round(object.height),
+            rotation: object.rotation,
+          })),
+          new_objects: draft.newObjects.map((object) => ({
+            zone_id: object.zoneId,
+            kind: object.kind,
+            label: object.label,
+            x: Math.round(object.x),
+            y: Math.round(object.y),
+            width: Math.round(object.width),
+            height: Math.round(object.height),
+            rotation: object.rotation,
+          })),
+          delete_object_ids: draft.deletedObjectIds,
         },
       });
-      set({ tables, isKrokiEditMode: false, floorError: null });
+      set({ isKrokiEditMode: false, floorError: null });
+      await get().loadFloorPlan();
       return true;
     } catch (error) {
       set({ floorError: String(error) });

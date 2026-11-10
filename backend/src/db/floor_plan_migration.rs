@@ -5,6 +5,7 @@
 //! başka tabloların şemasıyla karışmamalıdır.
 
 use crate::db::DbPool;
+use sqlx::Connection;
 
 /// Kroki şemasını kuran migration.
 ///
@@ -82,7 +83,7 @@ pub(crate) async fn migrate_floor_plan_layout(pool: &DbPool) -> Result<(), sqlx:
             tenant_id   TEXT NOT NULL,
             zone_id     TEXT,
             template_id TEXT,
-            kind        TEXT NOT NULL CHECK (kind IN ('DOOR','BAR','WALL','COLUMN')),
+            kind        TEXT NOT NULL CHECK (kind IN ('DOOR','WINDOW','BAR','WALL','COLUMN')),
             label       TEXT,
             x           INTEGER NOT NULL DEFAULT 0,
             y           INTEGER NOT NULL DEFAULT 0,
@@ -101,6 +102,50 @@ pub(crate) async fn migrate_floor_plan_layout(pool: &DbPool) -> Result<(), sqlx:
     let _ = sqlx::raw_sql("ALTER TABLE floor_objects ADD COLUMN template_id TEXT;")
         .execute(pool)
         .await;
+
+    // Eski kurulumların CHECK kısıtı WINDOW türünü reddeder. Tabloyu
+    // transaction içinde yeniden kurarken mevcut mimari öğeleri koru.
+    let mut connection = pool.acquire().await?;
+    let schema: String = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'floor_objects'",
+    )
+    .fetch_one(&mut *connection)
+    .await?;
+    if !schema.contains("'WINDOW'") {
+        let mut tx = connection.begin().await?;
+        sqlx::raw_sql(
+            "DROP INDEX IF EXISTS idx_floor_objects_tenant_zone;
+             DROP INDEX IF EXISTS idx_floor_objects_template;
+             ALTER TABLE floor_objects RENAME TO floor_objects_without_window;
+             CREATE TABLE floor_objects (
+                 id TEXT NOT NULL PRIMARY KEY,
+                 tenant_id TEXT NOT NULL,
+                 zone_id TEXT,
+                 template_id TEXT,
+                 kind TEXT NOT NULL CHECK (kind IN ('DOOR','WINDOW','BAR','WALL','COLUMN')),
+                 label TEXT,
+                 x INTEGER NOT NULL DEFAULT 0,
+                 y INTEGER NOT NULL DEFAULT 0,
+                 width INTEGER NOT NULL DEFAULT 80,
+                 height INTEGER NOT NULL DEFAULT 80,
+                 rotation INTEGER NOT NULL DEFAULT 0,
+                 is_active INTEGER NOT NULL DEFAULT 1,
+                 created_at TEXT NOT NULL,
+                 updated_at TEXT NOT NULL
+             );
+             INSERT INTO floor_objects
+                 (id, tenant_id, zone_id, template_id, kind, label, x, y, width, height, rotation, is_active, created_at, updated_at)
+             SELECT id, tenant_id, zone_id, template_id, kind, label, x, y, width, height, rotation, is_active, created_at, updated_at
+               FROM floor_objects_without_window;
+             DROP TABLE floor_objects_without_window;
+             CREATE INDEX idx_floor_objects_tenant_zone ON floor_objects(tenant_id, zone_id);
+             CREATE INDEX idx_floor_objects_template ON floor_objects(tenant_id, template_id);",
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+    }
+    drop(connection);
 
     let _ = sqlx::raw_sql(
         "CREATE INDEX IF NOT EXISTS idx_floor_objects_tenant_zone ON floor_objects(tenant_id, zone_id);",

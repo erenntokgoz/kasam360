@@ -149,6 +149,7 @@ export const TablesSettings: React.FC = () => {
               </li>
             ))}
           </ul>
+          {!activeZone ? <p className="text-sm text-[var(--text-secondary)]">Masa eklemek için önce kısım ekleyin.</p> : null}
           {activeZone && zoneTables.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">Bu kısımda masa yok.</p> : null}
         </section>
       </div>

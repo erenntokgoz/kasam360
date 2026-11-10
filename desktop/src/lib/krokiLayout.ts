@@ -1,4 +1,5 @@
 import type { FloorTable } from '../types/floor';
+import { rotatedBounds } from './krokiGeometry';
 
 export const TABLE_SIZE = 110;
 const CELL = 140;
@@ -21,9 +22,6 @@ export interface KrokiRoom {
   top: number;
   width: number;
   height: number;
-  /** Yukarı ve sola çekilen masa için oda bu kadar genişler; konumlara eklenir. */
-  offsetX: number;
-  offsetY: number;
   tables: PlacedTable[];
 }
 
@@ -33,19 +31,18 @@ export interface KrokiLayout {
   height: number;
 }
 
+const isPlaced = (table: FloorTable) => Boolean(table.posX || table.posY);
+
 const overlaps = (x: number, y: number, placed: PlacedTable[]) =>
   placed.some((item) => Math.abs(item.x - x) < CELL - 10 && Math.abs(item.y - y) < CELL - 10);
 
-/** Yerleştirilmemiş masalar boş hücrelere dizilir: kullanıcı sürükleyene kadar üst üste binmez. */
-function placeTables(tables: FloorTable[]): PlacedTable[] {
-  const placed: PlacedTable[] = [];
-  const waiting: FloorTable[] = [];
-  // Üst üste kaydedilmiş masa okunamaz: ikincisi boş hücreye dizilir.
-  for (const table of tables) {
-    const isPlaced = Boolean(table.posX || table.posY);
-    if (isPlaced && !overlaps(table.posX, table.posY, placed)) placed.push({ table, x: table.posX, y: table.posY });
-    else waiting.push(table);
-  }
+/**
+ * Kayıtlı konum olduğu gibi çizilir: başka masa yakında diye ya da oda büyüdü diye kaymaz.
+ * Yalnız hiç yerleştirilmemiş (0,0) masalar boş hücrelere dizilir; bu yerleşim aynı veriyle her zaman aynıdır.
+ */
+export function placeTables(tables: FloorTable[]): PlacedTable[] {
+  const placed: PlacedTable[] = tables.filter(isPlaced).map((table) => ({ table, x: table.posX, y: table.posY }));
+  const waiting = tables.filter((table) => !isPlaced(table));
   const columns = Math.max(3, Math.ceil(Math.sqrt(tables.length * 1.5)));
   let cell = 0;
   for (const table of waiting) {
@@ -61,23 +58,49 @@ function placeTables(tables: FloorTable[]): PlacedTable[] {
   return placed;
 }
 
+/** Editör açılırken yerleşmemiş masalara ekranda görünen yer kalıcı taslak konumu olur; sonradan sıçramaz. */
+export function materializeAutoPlacement(zones: { id: string }[], tables: FloorTable[]): { tables: FloorTable[]; placedIds: string[] } {
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const zone of zones) {
+    for (const item of placeTables(tables.filter((table) => table.zoneId === zone.id))) {
+      if (!isPlaced(item.table)) positions.set(item.table.id, { x: item.x, y: item.y });
+    }
+  }
+  return {
+    tables: tables.map((table) => {
+      const position = positions.get(table.id);
+      return position ? { ...table, posX: position.x, posY: position.y } : table;
+    }),
+    placedIds: [...positions.keys()],
+  };
+}
+
+interface KrokiObjectBox {
+  zoneId: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+}
+
 /**
  * Kısımlar kareye yakın ızgaraya dizilir: 2 yan yana, 3-4 iki satır, 5-6 üç sütun.
- * Tek yöne uzayan kroki ekrana sığmaz; sütun ve satır en büyük odaya göre genişler.
+ * Oda boyutu yalnız içeriğe göre büyür; masa ve kapı koordinatları odadan bağımsızdır.
  */
-export function buildKroki(zones: { id: string; name: string }[], tables: FloorTable[]): KrokiLayout {
+export function buildKroki(zones: { id: string; name: string }[], tables: FloorTable[], objects: KrokiObjectBox[] = []): KrokiLayout {
   const columns = Math.max(1, Math.ceil(Math.sqrt(zones.length)));
   const sized = zones.map((zone) => {
     const placed = placeTables(tables.filter((table) => table.zoneId === zone.id));
-    const offsetX = PADDING - Math.min(PADDING, ...placed.map((item) => item.x));
-    const offsetY = PADDING - Math.min(PADDING, ...placed.map((item) => item.y));
+    const bounds = [
+      ...placed.map((item) => rotatedBounds({ x: item.x, y: item.y, width: TABLE_SIZE, height: TABLE_SIZE }, item.table.rotation ?? 0)),
+      ...objects.filter((object) => object.zoneId === zone.id).map((object) => rotatedBounds(object, object.rotation ?? 0)),
+    ];
     return {
       zone,
       placed,
-      offsetX,
-      offsetY,
-      width: Math.max(ROOM_MIN_WIDTH, ...placed.map((item) => item.x + offsetX + TABLE_SIZE + PADDING)),
-      height: Math.max(ROOM_MIN_HEIGHT, ...placed.map((item) => item.y + offsetY + TABLE_SIZE + PADDING + HEADER)),
+      width: Math.max(ROOM_MIN_WIDTH, ...bounds.map((box) => box.x + box.width + PADDING)),
+      height: Math.max(ROOM_MIN_HEIGHT, ...bounds.map((box) => box.y + box.height + PADDING + HEADER)),
     };
   });
 
@@ -90,7 +113,7 @@ export function buildKroki(zones: { id: string; name: string }[], tables: FloorT
   );
   const offset = (sizes: number[], index: number) => sizes.slice(0, index).reduce((total, size) => total + size + ROOM_GAP, 0);
 
-  const rooms = sized.map(({ zone, placed, offsetX, offsetY }, index) => {
+  const rooms = sized.map(({ zone, placed }, index) => {
     const column = index % columns;
     const row = Math.floor(index / columns);
     return {
@@ -100,8 +123,6 @@ export function buildKroki(zones: { id: string; name: string }[], tables: FloorT
       top: offset(rowHeights, row),
       width: columnWidths[column],
       height: rowHeights[row],
-      offsetX,
-      offsetY,
       tables: placed,
     };
   });
@@ -111,13 +132,4 @@ export function buildKroki(zones: { id: string; name: string }[], tables: FloorT
     width: offset(columnWidths, columns) - ROOM_GAP,
     height: Math.max(0, offset(rowHeights, rowCount) - ROOM_GAP),
   };
-}
-
-/** Kayıt konumu oda içidir ve negatif olamaz: geçici taşma kalıcı düzene çevrilir. */
-export function settledPositions(zones: { id: string; name: string }[], tables: FloorTable[]): Map<string, { x: number; y: number }> {
-  const settled = new Map<string, { x: number; y: number }>();
-  for (const room of buildKroki(zones, tables).rooms) {
-    for (const { table, x, y } of room.tables) settled.set(table.id, { x: x + room.offsetX, y: y + room.offsetY });
-  }
-  return settled;
 }

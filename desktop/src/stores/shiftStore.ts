@@ -15,7 +15,7 @@ interface ShiftStore {
   closeShift: (countedCashCents: number) => Promise<ZReportData>;
   explainDifference: (shiftId: string, note: string) => Promise<void>;
   closeDay: () => Promise<string>;
-  recordCashMovement: (type: 'IN' | 'OUT', amountCents: number, reason: string) => Promise<CashMovement>;
+  recordCashMovement: (type: 'IN' | 'OUT', amountCents: number, reason: string, movementId: string, approvalToken?: string) => Promise<CashMovement>;
 }
 
 interface ShiftWire {
@@ -35,6 +35,7 @@ interface SummaryWire {
   totalSales: number | null;
   totalCashIn: number;
   totalCashOut: number;
+  cashRefunds: number | null;
   expectedBalance: number | null;
   cashSales: number | null;
   cardSales: number;
@@ -69,6 +70,7 @@ function mapSummary(wire: SummaryWire, shift: Shift): ShiftSummary {
     totalVeresiyeCents: wire.veresiyeSales,
     totalCashInCents: wire.totalCashIn,
     totalCashOutCents: wire.totalCashOut,
+    totalCashRefundsCents: wire.cashRefunds,
     expectedCashInDrawerCents: wire.expectedBalance,
     totalSalesCents: wire.totalSales,
   };
@@ -158,12 +160,14 @@ export const useShiftStore = create<ShiftStore>((set, get) => ({
     return reply.message;
   },
 
-  recordCashMovement: async (type, amountCents, reason) => {
+  recordCashMovement: async (type, amountCents, reason, movementId, approvalToken) => {
     const shiftId = get().activeShift?.id;
     if (!shiftId) throw new Error('Açık vardiya yok.');
     const { actorId, actorRole, tenantId } = sessionArgs();
     const command = type === 'IN' ? 'cash_in' : 'cash_out';
     const movement = await invokeIPC<CashMovement>(command, {
+      movementId,
+      approvalToken,
       shiftId,
       amountCents,
       reason,

@@ -8,6 +8,27 @@ use super::dto::{ShiftCalculation, ShiftSummaryDto};
 use crate::db::DbPool;
 use sqlx::Row;
 
+pub(crate) fn expected_cash_balance(
+    opening: i64,
+    cash_sales: i64,
+    cash_in: i64,
+    cash_out: i64,
+    cash_refunds: i64,
+) -> Result<i64, String> {
+    opening
+        .checked_add(cash_sales)
+        .and_then(|amount| amount.checked_add(cash_in))
+        .and_then(|amount| amount.checked_sub(cash_out))
+        .and_then(|amount| amount.checked_sub(cash_refunds))
+        .ok_or_else(|| "FINANCIAL_OVERFLOW: kasa bakiyesi hesaplanamadı.".to_string())
+}
+
+pub(crate) fn cash_difference(actual: i64, expected: i64) -> Result<i64, String> {
+    actual
+        .checked_sub(expected)
+        .ok_or_else(|| "FINANCIAL_OVERFLOW: kasa farkı hesaplanamadı.".to_string())
+}
+
 /// Vardiya özeti kapısını fail-closed geçirir ve kiracıyı çözer.
 pub(crate) fn vardiya_oku_kapisi(
     actor_role: Option<&str>,
@@ -172,8 +193,13 @@ pub async fn calculate_expected_shift_balance(
         .try_get("cash_refunds")
         .map_err(|e| e.to_string())?;
 
-    let expected_balance =
-        opening_balance + cash_sales + total_cash_in - total_cash_out - cash_refunds;
+    let expected_balance = expected_cash_balance(
+        opening_balance,
+        cash_sales,
+        total_cash_in,
+        total_cash_out,
+        cash_refunds,
+    )?;
 
     Ok(ShiftCalculation {
         total_sales,
@@ -268,7 +294,7 @@ pub async fn get_shift_summary(
     .await?;
 
     let discrepancy = match actual_closing_balance {
-        Some(actual) => actual - calc.expected_balance,
+        Some(actual) => cash_difference(actual, calc.expected_balance)?,
         None => 0,
     };
 
@@ -290,6 +316,24 @@ pub async fn get_shift_summary(
         meal_card_sales: calc.meal_card_sales,
         veresiye_sales: calc.veresiye_sales,
         total_refunds: calc.total_refunds,
+        cash_refunds: show_cash.then_some(calc.cash_refunds),
         total_discounts: calc.total_discounts,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cash_difference, expected_cash_balance};
+
+    #[test]
+    fn kasa_toplami_satis_olmadan_nakit_cikisini_negatif_gosterir() {
+        assert_eq!(expected_cash_balance(0, 0, 0, 1_000, 0), Ok(-1_000));
+    }
+
+    #[test]
+    fn tasan_kasa_toplami_ve_farki_hata_verir() {
+        assert!(expected_cash_balance(i64::MAX, 1, 0, 0, 0).is_err());
+        assert!(cash_difference(i64::MAX, -1).is_err());
+        assert_eq!(cash_difference(900, 1_000), Ok(-100));
+    }
 }

@@ -10,8 +10,8 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::services::staff360::payroll_types::{
-    PayrollRule, PayrollRuleInput, PayrollRun, StaffKpi, SuspiciousFlag, TipAllocation,
-    TipAllocationInput, TipPoolSummary,
+    PayrollRule, PayrollRun, StaffKpi, SuspiciousFlag, TipAllocation, TipAllocationInput,
+    TipPoolSummary,
 };
 use crate::services::staff360::staff_types::{
     CustodyRecord, Incident, IncidentInput, ShiftPlan, ShiftPlanInput, StaffProfile,
@@ -248,30 +248,6 @@ pub async fn get_payroll_rules(
     crate::rbac::require_staff_admin(&actor_role)?;
     let tenant = require_tenant_scope(tenant_id.as_deref())?;
     payroll_service::list_rules(&pool, &tenant, true).await
-}
-
-#[tauri::command]
-pub async fn set_payroll_rule(
-    tenant_id: Option<String>,
-    actor_role: String,
-    input: PayrollRuleInput,
-    pool: State<'_, DbPool>,
-) -> Result<(), String> {
-    crate::rbac::require_owner(&actor_role)?;
-    let tenant = require_tenant_scope(tenant_id.as_deref())?;
-    payroll_service::set_rule(&pool, &tenant, &input).await
-}
-
-#[tauri::command]
-pub async fn delete_payroll_rule(
-    tenant_id: Option<String>,
-    actor_role: String,
-    user_id: String,
-    pool: State<'_, DbPool>,
-) -> Result<(), String> {
-    crate::rbac::require_owner(&actor_role)?;
-    let tenant = require_tenant_scope(tenant_id.as_deref())?;
-    payroll_service::delete_rule(&pool, &tenant, &user_id).await
 }
 
 #[tauri::command]

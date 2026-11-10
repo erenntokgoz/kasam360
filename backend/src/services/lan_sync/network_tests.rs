@@ -132,10 +132,54 @@ macro_rules! wait_until {
     }};
 }
 
+/// Kümede tam bir otorite görünene kadar bekler; otoriteyi ve diğer cihazı döndürür.
+///
+/// Disk onayı ya da zamanlayıcı yüzünden kalp atışı otorite süresini aşarsa takipçi seçim
+/// başlatır ve otorite el değiştirir; bu güvenlidir. Senaryo hangi cihazın otorite
+/// olduğunu varsaymaz, kimin olduğunu kayıp anında okur.
+async fn settled_authority<'a>(
+    first: &'a (SqlitePool, LanSync),
+    second: &'a (SqlitePool, LanSync),
+) -> (&'a (SqlitePool, LanSync), &'a (SqlitePool, LanSync)) {
+    let is_authority = |device: &(SqlitePool, LanSync)| {
+        let status = device.1.status();
+        status.role == Some(super::engine::Role::Leader) && status.state == "READY"
+    };
+    wait_until!(
+        "tek otorite ve iki cihaz hazır",
+        (is_authority(first) != is_authority(second)) && first.1.status().members.len() == 2
+    );
+    if is_authority(first) {
+        (first, second)
+    } else {
+        (second, first)
+    }
+}
+
+/// Sonucu belirsiz kalan işlemi aynı kimlikle yeniden sorar; ikinci kez yazılmaz.
+async fn submit_until_resolved(
+    sync: &LanSync,
+    build: impl Fn() -> Operation,
+) -> Result<super::OperationOutcome, String> {
+    let mut last = String::new();
+    for _ in 0..40 {
+        match sync.submit(build()).await {
+            Ok(outcome) if outcome.status == OperationStatus::Pending => {
+                last = "PENDING_RESULT".to_string();
+            }
+            Err(error) if error.starts_with("SYNC_RETRY") => last = error,
+            other => return other,
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    Err(last)
+}
+
 #[tokio::test]
 async fn iki_kurulum_eslesir_para_cogunlukla_yazilir_cihaz_kaybinda_durur() {
-    let (pool_a, sync_a) = device("a").await;
-    let (pool_b, sync_b) = device("b").await;
+    let device_a = device("a").await;
+    let device_b = device("b").await;
+    let ((_, sync_a), (pool_b, sync_b)) = (&device_a, &device_b);
 
     let (code, _) = sync_a
         .create_pairing_code(TENANT, "Kasa", "127.0.0.1", 0)
@@ -158,7 +202,7 @@ async fn iki_kurulum_eslesir_para_cogunlukla_yazilir_cihaz_kaybinda_durur() {
         .join(&code, TENANT, "Garson", 0)
         .await
         .expect("katılım");
-    assert_eq!(remaining(&pool_b).await, Some(10_000));
+    assert_eq!(remaining(pool_b).await, Some(10_000));
     assert!(
         sync_b.join(&code, TENANT, "Garson", 0).await.is_err(),
         "ikinci katılım reddedilir"
@@ -170,74 +214,109 @@ async fn iki_kurulum_eslesir_para_cogunlukla_yazilir_cihaz_kaybinda_durur() {
     wait_until!("takipçi hazır", sync_b.status().state == "READY");
     assert!(sync_a.is_multi_device());
 
-    // Takipçiden gelen ödeme otoriteye gider, iki diske de yazılır.
-    let paid = sync_b
-        .submit(operation(
-            "op_pay",
-            &local_id(&sync_b),
-            payment("op_pay", 4_000, 0),
-        ))
-        .await
-        .expect("ödeme");
+    // Ödeme, hangi cihaz o an otorite olursa olsun diğerinden gönderilir ve iki diske yazılır.
+    let (authority, follower) = settled_authority(&device_a, &device_b).await;
+    let follower_id = local_id(&follower.1);
+    let paid = submit_until_resolved(&follower.1, || {
+        operation("op_pay", &follower_id, payment("op_pay", 4_000, 0))
+    })
+    .await
+    .expect("ödeme");
     assert_eq!(paid.status, OperationStatus::Applied);
-    assert_eq!(remaining(&pool_b).await, Some(6_000));
-    wait_until!("otorite uyguladı", remaining(&pool_a).await == Some(6_000));
+    assert_eq!(remaining(&follower.0).await, Some(6_000));
+    wait_until!(
+        "otorite uyguladı",
+        remaining(&authority.0).await == Some(6_000)
+    );
 
     // Aynı kimlik tekrarı ikinci ödeme üretmez.
-    let again = sync_b
+    let again = follower
+        .1
         .submit(operation(
             "op_pay",
-            &local_id(&sync_b),
+            &follower_id,
             payment("op_pay", 4_000, 0),
         ))
         .await
         .expect("tekrar");
     assert_eq!(again, paid);
 
-    // Takipçi kaybolur: kalan cihaz çoğunluğu yitirir ve yazmayı durdurur.
-    sync_b.shutdown().await;
+    // Takipçi kaybolur: kalan cihaz çoğunluğu yitirir ve yazmayı durdurur. Otorite el
+    // değiştirmiş olabilir; kaybı yaşayan cihaz kayıp anında otorite olandır.
+    let (survivor, lost) = settled_authority(&device_a, &device_b).await;
+    let survivor_id = local_id(&survivor.1);
+    lost.1.shutdown().await;
     wait_until!(
         "çoğunluk kaybı görüldü",
-        sync_a.status().state == "NO_CONNECTION"
+        survivor.1.status().state == "NO_CONNECTION"
     );
     // Son ACK kiralaması dolana kadar otoritenin eski çoğunluğu kullanması güvenlidir.
     // Kaybın kesinleşmesinden sonra yazma gecikmeden reddedilmeli.
     tokio::time::sleep(std::time::Duration::from_millis(2_100)).await;
-    let refused = sync_a
-        .submit(operation("op_lost", "a", payment("op_lost", 1_000, 1)))
+    // Kayıptan önce otorite el değiştirmişse kalan cihaz takipçidir ve otoriteye
+    // ulaşılamadığını bildirir; otorite ise çoğunluk kaybını bildirir. İkisi de
+    // yazmayı reddeder.
+    let still_authority = survivor.1.status().role == Some(super::engine::Role::Leader);
+    let expected_refusal = if still_authority {
+        "QUORUM_LOST"
+    } else {
+        "NO_CONNECTION"
+    };
+    let refused = survivor
+        .1
+        .submit(operation(
+            "op_lost",
+            &survivor_id,
+            payment("op_lost", 1_000, 1),
+        ))
         .await;
     assert!(
         refused
             .as_ref()
-            .is_err_and(|error| error.starts_with("QUORUM_LOST")),
+            .is_err_and(|error| error.starts_with(expected_refusal)),
         "{refused:?}"
     );
-    assert_eq!(remaining(&pool_a).await, Some(6_000));
+    assert_eq!(remaining(&survivor.0).await, Some(6_000));
     assert_eq!(
-        remaining(&pool_b).await,
+        remaining(&lost.0).await,
         Some(6_000),
         "kapanan cihazda da onaysız tahsilat yok"
     );
 
-    // Planlı pasife alma tek cihaz moduna güvenle döner.
-    let members = sync_a.status().members;
-    let gone = members.iter().find(|m| !m.is_local).expect("diğer cihaz");
-    sync_a
-        .set_device_passive(TENANT, &gone.device_id, "usr_1", "OWNER")
-        .await
-        .expect("pasif");
+    // Otorite kalan cihaz planlı pasife alır; takipçi kalan cihaz sahibin devralmasıyla
+    // tek cihaz moduna geçer. İkisi de güvenle yazmaya döner.
+    if still_authority {
+        let members = survivor.1.status().members;
+        let gone = members.iter().find(|m| !m.is_local).expect("diğer cihaz");
+        survivor
+            .1
+            .set_device_passive(TENANT, &gone.device_id, "usr_1", "OWNER")
+            .await
+            .expect("pasif");
+    } else {
+        survivor
+            .1
+            .take_over(TENANT, "usr_1", "OWNER")
+            .await
+            .expect("devralma");
+    }
     wait_until!(
         "tek cihaz",
-        !sync_a.is_multi_device() && sync_a.status().state == "READY"
+        !survivor.1.is_multi_device() && survivor.1.status().state == "READY"
     );
-    assert!(sync_a.require_local_write().is_ok());
-    let resumed = sync_a
-        .submit(operation("op_after", "a", payment("op_after", 1_000, 1)))
+    assert!(survivor.1.require_local_write().is_ok());
+    let resumed = survivor
+        .1
+        .submit(operation(
+            "op_after",
+            &survivor_id,
+            payment("op_after", 1_000, 1),
+        ))
         .await
         .expect("devam");
     assert_eq!(resumed.status, OperationStatus::Applied);
-    assert_eq!(remaining(&pool_a).await, Some(5_000));
-    sync_a.shutdown().await;
+    assert_eq!(remaining(&survivor.0).await, Some(5_000));
+    survivor.1.shutdown().await;
 }
 
 #[tokio::test]

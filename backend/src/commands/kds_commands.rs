@@ -21,6 +21,21 @@ const KDS_ROLES: [crate::rbac::Role; 3] = [
     crate::rbac::Role::Kitchen,
 ];
 
+/// Aktif fişleri okuyabilen roller. Garson hazır kalemi masasına götürür, kasiyer ise
+/// salonda ve kasada mutfak durumunu izler; ikisi de yalnız okur, fiş ilerletemez.
+const KDS_READ_ROLES: [crate::rbac::Role; 5] = [
+    crate::rbac::Role::Owner,
+    crate::rbac::Role::Manager,
+    crate::rbac::Role::Kitchen,
+    crate::rbac::Role::Waiter,
+    crate::rbac::Role::Cashier,
+];
+
+/// Fiş listesi kapısı; rol alanı gönderilmezse reddedilir (fail-closed).
+pub(crate) fn kds_okuma_kapisi(actor_role: Option<&str>) -> Result<crate::rbac::Role, String> {
+    crate::rbac::require_any_present(actor_role, &KDS_READ_ROLES)
+}
+
 /// KDS kapısını fail-closed geçirir.
 ///
 /// Neden ayrı fonksiyon: `tauri::State` içeren komutlar doğrudan
@@ -355,15 +370,7 @@ pub async fn get_active_tickets(
     actor_role: Option<String>,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<KdsOrderDto>, String> {
-    crate::rbac::require_any_present(
-        actor_role.as_deref(),
-        &[
-            crate::rbac::Role::Owner,
-            crate::rbac::Role::Manager,
-            crate::rbac::Role::Kitchen,
-            crate::rbac::Role::Waiter,
-        ],
-    )?;
+    kds_okuma_kapisi(actor_role.as_deref())?;
     let tenant_id = tenant_id.trim().to_string();
     if tenant_id.is_empty() {
         return Err("UNAUTHORIZED: tenant_id is required".to_string());

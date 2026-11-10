@@ -1,4 +1,5 @@
 import { formatDateTime } from '../../../lib/date';
+import { utcOffsetMinutes } from '../../../lib/dateRange';
 import { formatMoney } from '../../../lib/formatMoney';
 import { invokeIPC } from '../../../services/tauriClient';
 import type { FinancialProfitSummary } from '../../../types/ledger';
@@ -163,6 +164,7 @@ async function profitReport(args: ReportArgs): Promise<ReportTable> {
     tenantId: args.tenantId,
     startDate: args.fromDate,
     endDate: args.toDate,
+    utcOffsetMinutes: utcOffsetMinutes(),
   });
   const approximate = report.costMissingLines > 0;
   const profit = (label: string, cents: number) => ({

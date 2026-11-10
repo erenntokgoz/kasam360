@@ -72,8 +72,46 @@
 }
 
 .table-cell .table-spot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   width: 100%;
   height: 100%;
+  min-height: 0;
+  padding: 4px;
+  text-align: center;
+}
+
+.table-cell .table-spot > svg {
+  display: block;
+  flex: 1 1 0;
+  width: min(100%, 160px);
+  min-height: 0;
+  max-height: 76px;
+}
+
+.table-cell .table-spot > .table-spot-name,
+.table-cell .table-spot > .table-spot-amount,
+.table-cell .table-spot > .table-spot-note {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.table-cell .table-spot > .table-spot-name {
+  font-weight: 650;
+}
+
+.table-cell .table-spot > .table-spot-amount {
+  font-size: clamp(0.72rem, 3.2vw, 0.9rem);
+}
+
+.table-cell .table-spot > .table-spot-note {
+  font-size: 0.72rem;
 }
 
 .table-spot {
@@ -173,13 +211,27 @@
 
 .table-spot[data-state="bill"] {
   border-color: var(--warn);
+  box-shadow: inset 0 4px 0 var(--warn), var(--lift);
 }
 
 .table-spot[data-state="busy"] {
   border-color: var(--action);
+  box-shadow: inset 0 4px 0 var(--action), var(--lift);
 }
 
-.kroki-room .table-spot {
+.table-spot[data-state="reserved"] {
+  border-style: dashed;
+  box-shadow: inset 0 4px 0 var(--accent-blue), var(--lift);
+}
+
+/* Boş masa geri planda kalır: dolu ve hesap bekleyen masalar ilk bakışta ayrışır. */
+.table-spot[data-state="empty"] .table-spot-name {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.kroki-room .table-spot,
+.kroki-room .table-spot[data-state] {
   background: transparent;
   box-shadow: none;
 }

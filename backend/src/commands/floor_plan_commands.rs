@@ -171,7 +171,8 @@ pub async fn save_floor_layout(
             aktor.tenant(),
             serde_json::json!({
                 "tableCount": args.tables.len(),
-                "objectCount": args.objects.len(),
+                "objectCount": args.objects.len() + args.new_objects.len(),
+                "deletedObjectCount": args.delete_object_ids.len(),
             }),
         )
         .await

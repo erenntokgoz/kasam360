@@ -9,11 +9,14 @@ import { Modal } from '../../ui/Modal';
 import { Numpad } from '../../ui/Numpad';
 
 export interface ApprovalScope {
-  operation: 'DISCOUNT' | 'COMPLIMENTARY' | 'VOID_ORDER' | 'REFUND';
+  operation: 'DISCOUNT' | 'COMPLIMENTARY' | 'VOID_ORDER' | 'REFUND' | 'CASH_OUT' | 'PAYROLL_PAY' | 'PAYROLL_RULE' | 'STAFF_ADVANCE';
   resourceId: string;
   amountCents: number;
   discountPercent?: number;
 }
+
+/** Onayı yalnız işletme sahibinden kabul edilen para çıkışı işlemleri. */
+const OWNER_ONLY: ApprovalScope['operation'][] = ['CASH_OUT', 'PAYROLL_PAY', 'PAYROLL_RULE', 'STAFF_ADVANCE'];
 
 interface ManagerPinPromptProps {
   scope: ApprovalScope;
@@ -59,7 +62,7 @@ export const ManagerPinPrompt: React.FC<ManagerPinPromptProps> = ({ scope, title
       <div className="space-y-3">
         <p className="text-xs flex items-center gap-1.5 text-[var(--text-secondary)]">
           <ShieldCheck className="w-4 h-4 text-[var(--text-secondary)]" />
-          <span>Yönetici veya işletme sahibi PIN kodu</span>
+          <span>{OWNER_ONLY.includes(scope.operation) ? 'Yalnız işletme sahibi PIN kodu' : 'Yönetici veya işletme sahibi PIN kodu'}</span>
         </p>
         <div aria-label="Girilen hane sayısı" className="h-12 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] flex items-center justify-center text-xl font-bold tracking-[0.4em] text-[var(--text-primary)]">
           {'•'.repeat(pin.length)}

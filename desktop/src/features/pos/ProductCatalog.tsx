@@ -77,7 +77,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
         actions={
           <label className="bar-search">
             <Search className="w-4 h-4 shrink-0" />
-            <input type="search" aria-label="Ürün ara" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <input type="search" aria-label="Ürün ara" placeholder="Ürün ara" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </label>
         }
       >

@@ -34,6 +34,7 @@ pub async fn open_shift(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ShiftDto, String> {
     state.lan_sync.require_local_write()?;
+    crate::services::security360::money_gate::nakit_sayimi_gecerli_mi(expected_amount_cents)?;
     // Neden yetki eklendi (AGENTS.md §6): komut `actor_role`'ü yalnız denetim
     // kaydına yazıyordu, kontrol etmiyordu. Böylece mutfak ve garson rolü de
     // kasa vardiyası açıp beklenen bakiyeyi belirleyebiliyordu.
@@ -137,7 +138,10 @@ pub async fn execute_close_shift(
     )
     .await?;
 
-    let difference = actual_amount_cents - calc.expected_balance;
+    let difference = crate::commands::cashier_commands::summary::cash_difference(
+        actual_amount_cents,
+        calc.expected_balance,
+    )?;
 
     sqlx::query("UPDATE shifts SET status = 'CLOSED', closed_at = datetime('now'), actual_amount_cents = ?, difference_cents = ? WHERE id = ? AND tenant_id = ?")
         .bind(actual_amount_cents)
@@ -193,6 +197,7 @@ pub async fn close_shift(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<ShiftDto, String> {
     state.lan_sync.require_local_write()?;
+    crate::services::security360::money_gate::nakit_sayimi_gecerli_mi(actual_amount_cents)?;
     // Neden yetki eklendi (AGENTS.md §6): `actor_role` kontrol edilmiyordu.
     // Vardiya kapatma `actual_amount_cents` ile kasa farkı üretir; bunu
     // kasiyer dışındaki bir rol yapabiliyorsa muhasebe kaydı güvenilmez olur.

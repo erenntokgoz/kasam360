@@ -36,7 +36,7 @@ pub(crate) fn date_filter(range: &AnalyticsRange) -> (String, String) {
                 String::new()
             };
             let to_part = if is_safe_iso(to) {
-                format!(" AND datetime(o.created_at) <= datetime('{to}')")
+                format!(" AND datetime(o.created_at) < datetime('{to}')")
             } else {
                 String::new()
             };
@@ -194,6 +194,10 @@ pub fn median(values: &[i64]) -> Option<i64> {
 /// Eşikler raporun kendi medyanından türetilir; işletmenin gizli sabiti yoktur.
 /// Marjı bilinmeyen ürün sınıflandırılamaz ve `margin_percent: None` ile döner.
 pub fn bcg_classify(margins: &[ProductMargin]) -> Result<Vec<BcgEntry>, String> {
+    // Satış yoksa sınıflandırılacak ürün yoktur: bu bir hata değil boş dönemdir.
+    if margins.is_empty() {
+        return Ok(Vec::new());
+    }
     let known: Vec<i64> = margins.iter().filter_map(|m| m.margin_percent).collect();
     let margin_median =
         median(&known).ok_or_else(|| "BCG icin en az bir urunun maliyeti bilinmeli".to_string())?;

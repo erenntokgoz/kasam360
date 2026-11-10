@@ -28,7 +28,7 @@ async fn test_pool() -> SqlitePool {
 }
 
 fn mart_araligi() -> AnalyticsRange {
-    Some(("2026-03-01T00:00:00Z".into(), "2026-03-31T23:59:59Z".into()))
+    Some(("2026-03-01T00:00:00Z".into(), "2026-04-01T00:00:00Z".into()))
 }
 
 #[tokio::test]

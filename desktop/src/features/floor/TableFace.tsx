@@ -23,19 +23,28 @@ const stateOf = (table: FloorTable) => {
 export const TableFace: React.FC<TableFaceProps> = ({ table, readyCount = 0, className = '', style, ...button }) => {
   const state = stateOf(table);
   const hasOrder = state === 'busy' || state === 'bill';
+  const elapsed = minutesElapsed(table.openedAt);
+  const amount = formatMoney(table.remainingCents ?? table.totalCents);
+  const waiter = table.waiterName?.trim();
+  const orderDetail = state === 'bill' ? 'Hesap' : readyCount > 0 ? `${readyCount} hazır` : `${elapsed} dk`;
+  const accessibleDetails = hasOrder
+    ? [amount, waiter, orderDetail].filter(Boolean).join(', ')
+    : state === 'reserved'
+      ? [formatTime(table.reservedAt), table.customerName ?? 'Rezerve'].join(', ')
+      : '';
 
   return (
-    <button type="button" className={`table-spot ${className}`} data-state={state} data-table-id={table.id} style={{ ...style, '--age': hasOrder ? Math.min(minutesElapsed(table.openedAt) / AGE_FULL_MINUTES, 1) : 0 } as React.CSSProperties} aria-label={`${table.tableNumber}, ${table.capacity} kişilik`} {...button}>
+    <button type="button" className={`table-spot ${className}`} data-state={state} data-table-id={table.id} style={{ ...style, '--age': hasOrder ? Math.min(elapsed / AGE_FULL_MINUTES, 1) : 0 } as React.CSSProperties} aria-label={[`${table.tableNumber}, ${table.capacity} kişilik`, accessibleDetails].filter(Boolean).join(', ')} {...button}>
       <TableOutline seats={table.capacity} />
       <span className="table-spot-name truncate max-w-[66%]">{table.tableNumber}</span>
       {hasOrder ? (
         <>
-          <span className="table-spot-amount tabular-nums">{formatMoney(table.remainingCents ?? table.totalCents)}</span>
+          <span className="table-spot-amount tabular-nums">{amount}</span>
           {/* Dört satır masa çiziminin dışına taşıyordu: garson ve süre tek satırdadır. */}
           <span className="table-spot-note tabular-nums truncate max-w-[80%]">
             {[
-              table.waiterName?.split(' ')[0],
-              state === 'bill' ? 'Hesap' : readyCount > 0 ? `${readyCount} hazır` : `${minutesElapsed(table.openedAt)} dk`,
+              waiter,
+              orderDetail,
             ]
               .filter(Boolean)
               .join(' · ')}

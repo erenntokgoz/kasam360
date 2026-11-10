@@ -81,7 +81,7 @@ pub struct Panorama {
     pub live: LiveState,
 }
 
-/// Dönem: tarihler RFC 3339, `offset` yerel saat farkı (`+180 minutes`).
+/// Dönem: RFC 3339 yarı açık aralık `[from, to)`; istemcinin yerel ofseti gün kovalarını belirler.
 pub struct Period<'a> {
     pub from: &'a str,
     pub to: &'a str,
@@ -94,7 +94,7 @@ fn text_error(error: sqlx::Error) -> String {
 
 const PAYMENTS: &str = "FROM audit_ledger
     WHERE tenant_id = ?1 AND action = 'payment:settled_fifo'
-      AND datetime(timestamp) >= datetime(?2) AND datetime(timestamp) <= datetime(?3)";
+      AND datetime(timestamp) >= datetime(?2) AND datetime(timestamp) < datetime(?3)";
 
 /// Dönemde kapanan adisyonlar. Kısmi ödemesi süren adisyonun kâr ve KDV'si kapanınca sayılır.
 fn closed_orders() -> String {
@@ -139,7 +139,7 @@ async fn kpi(
     let refund: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(amount_cents), 0) FROM refunds
          WHERE tenant_id = ?1 AND datetime(created_at) >= datetime(?2)
-           AND datetime(created_at) <= datetime(?3)",
+           AND datetime(created_at) < datetime(?3)",
     )
     .bind(tenant)
     .bind(period.from)
@@ -152,7 +152,7 @@ async fn kpi(
                                            json_extract(payload, '$.orderTotalCents')) AS INTEGER)), 0)
          FROM audit_ledger
          WHERE tenant_id = ?1 AND action IN ('order_item:voided', 'order:voided')
-           AND datetime(timestamp) >= datetime(?2) AND datetime(timestamp) <= datetime(?3)",
+           AND datetime(timestamp) >= datetime(?2) AND datetime(timestamp) < datetime(?3)",
     )
     .bind(tenant)
     .bind(period.from)
@@ -234,7 +234,10 @@ async fn buckets(
                 .map_err(|e| format!("VALIDATION: tarih: {e}"))
         };
         let first = local_date(&parse(period.from)?, offset_minutes);
-        let last = local_date(&parse(period.to)?, offset_minutes);
+        let last = local_date(
+            &(parse(period.to)? - chrono::Duration::nanoseconds(1)),
+            offset_minutes,
+        );
         (0..=(last - first).num_days().min(MAX_DAY_BUCKETS))
             .map(|day| {
                 (first + chrono::Duration::days(day))
@@ -399,7 +402,10 @@ pub async fn build(
     if compare_seconds <= 0 {
         return Err("VALIDATION: karşılaştırma aralığı pozitif olmalıdır".to_string());
     }
-    let span = end - start;
+    // `to` is exclusive, so measure through the final included instant. This keeps
+    // a calendar-day selection on the hourly chart even though its SQL bound is
+    // midnight at the start of the following day.
+    let span = (end - start) - chrono::Duration::nanoseconds(1);
     let back = chrono::Duration::seconds(compare_seconds);
     let earlier_from = (start - back).to_rfc3339();
     let earlier_to = (end - back).to_rfc3339();

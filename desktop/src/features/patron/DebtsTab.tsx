@@ -35,6 +35,14 @@ const CardRow: React.FC<{ card: DirectoryContact; onOpen: () => void }> = ({ car
         <span className="block text-sm font-bold truncate text-[var(--text-primary)]">{card.name}</span>
         <span className="block text-xs text-[var(--text-muted)] truncate tabular-nums">{card.phone || 'Telefon yok'}</span>
       </span>
+      <span className="ml-auto mr-6 hidden w-32 text-right text-xs tabular-nums text-[var(--text-secondary)] md:block">
+        {card.creditLimitCents > 0 ? (
+          <>
+            <span className="block text-[var(--text-muted)]">Limit</span>
+            <span className={card.balanceCents > card.creditLimitCents ? 'font-bold text-[var(--accent-red)]' : ''}>{formatMoney(card.creditLimitCents)}</span>
+          </>
+        ) : null}
+      </span>
       <span className="text-right shrink-0">
         <span className={`block text-sm font-bold tabular-nums ${balanceTone(card.balanceCents)}`}>
           {formatMoney(Math.abs(card.balanceCents))}
@@ -62,6 +70,9 @@ export const DebtsTab: React.FC = () => {
     if (tab === 'SUPPLIER') void loadAwaiting();
   }, [tab, loadAwaiting]);
 
+  // Toplamlar listelenen kartlardan, tamsayı kuruşla toplanır; arama yapılırsa başlıkta "aranan" yazar.
+  const owedToUs = cards.reduce((sum, card) => sum + Math.max(card.balanceCents, 0), 0);
+  const weOwe = cards.reduce((sum, card) => sum + Math.max(-card.balanceCents, 0), 0);
   const selected = selectedId ? cards.find((card) => card.id === selectedId) ?? null : null;
   // Kartı olmayan tedarikçinin teslimi hiçbir kartta görünmez; listede durur, onayda kart açılır.
   const unlinked = tab === 'SUPPLIER' ? awaiting.filter((document) => !document.directoryId) : [];
@@ -148,6 +159,21 @@ export const DebtsTab: React.FC = () => {
           void refresh();
         }}
       />
+
+      {cards.length > 0 ? (
+        <dl aria-label="Cari toplamları" className="grid grid-cols-3 gap-3">
+          {([
+            ['Kartlar', String(cards.length), ''],
+            ['Bize Borçlu', formatMoney(owedToUs), 'text-[var(--accent-emerald)]'],
+            ['Biz Borçluyuz', formatMoney(weOwe), 'text-[var(--accent-red)]'],
+          ] as const).map(([label, value, tone]) => (
+            <div key={label} className="paper rounded-xl border border-[var(--border)] px-4 py-3">
+              <dt className="text-xs font-semibold text-[var(--text-secondary)]">{label}{search.trim() ? ' · aranan' : ''}</dt>
+              <dd className={`mt-0.5 text-xl font-bold tabular-nums ${tone}`}>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
 
       <section className="paper border border-[var(--border)] rounded-xl overflow-hidden flex flex-col min-h-0">
         <div className="px-4 py-2 border-b border-[var(--border)] flex items-center justify-between gap-2">

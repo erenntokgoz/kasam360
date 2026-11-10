@@ -86,6 +86,22 @@ pub async fn directory_statement(
     from_date: &str,
     to_date: &str,
 ) -> Result<DirectoryStatement, String> {
+    directory_statement_at(pool, tenant_id, directory_id, from_date, to_date, 0).await
+}
+
+/// Yerel gün ofsetiyle ekstre. Borç ve tahsilat zamanları UTC yazılır; `date(created_at)` ile
+/// yerel gün karşılaştırmak gece 00:00-03:00 hareketlerini önceki güne atar ve bugün açılan borç
+/// "önceki dönem" görünürdü. Dönem `[başlangıç günü 00:00, bitiş günü + 1)` yerel sınırlarıyla okunur.
+pub async fn directory_statement_at(
+    pool: &SqlitePool,
+    tenant_id: &str,
+    directory_id: &str,
+    from_date: &str,
+    to_date: &str,
+    utc_offset_minutes: i64,
+) -> Result<DirectoryStatement, String> {
+    let (from_utc, to_utc) =
+        crate::services::pnl_service::utc_bounds(from_date, to_date, utc_offset_minutes)?;
     let dir = sqlx::query("SELECT name, type FROM directories WHERE id = ? AND tenant_id = ?")
         .bind(directory_id)
         .bind(tenant_id)
@@ -106,17 +122,17 @@ pub async fn directory_statement(
                                       ELSE -total_amount_cents END)
                       FROM debts
                       WHERE tenant_id = ?1 AND directory_id = ?2
-                        AND date(created_at) < date(?3)), 0)
+                        AND datetime(created_at) < datetime(?3)), 0)
           + COALESCE((SELECT SUM(CASE WHEN d.type = 'GIVEN' THEN -dp.amount_cents
                                       ELSE dp.amount_cents END)
                       FROM debt_payments dp
                       JOIN debts d ON d.id = dp.debt_id AND d.tenant_id = dp.tenant_id
                       WHERE dp.tenant_id = ?1 AND d.directory_id = ?2
-                        AND date(dp.created_at) < date(?3)), 0)",
+                        AND datetime(dp.created_at) < datetime(?3)), 0)",
     )
     .bind(tenant_id)
     .bind(directory_id)
-    .bind(from_date)
+    .bind(&from_utc)
     .fetch_one(pool)
     .await
     .map_err(|e| format!("Açılış bakiyesi hesaplanamadı: {}", e))?;
@@ -132,13 +148,13 @@ pub async fn directory_statement(
          LEFT JOIN purchase_orders po
                 ON po.id = sd.purchase_order_id AND po.tenant_id = sd.tenant_id
          WHERE deb.tenant_id = ? AND deb.directory_id = ?
-           AND date(deb.created_at) >= date(?) AND date(deb.created_at) <= date(?)
+           AND datetime(deb.created_at) >= datetime(?) AND datetime(deb.created_at) < datetime(?)
          ORDER BY deb.created_at ASC, deb.id ASC",
     )
     .bind(tenant_id)
     .bind(directory_id)
-    .bind(from_date)
-    .bind(to_date)
+    .bind(&from_utc)
+    .bind(&to_utc)
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Dönem borçları okunamadı: {}", e))?;
@@ -155,13 +171,13 @@ pub async fn directory_statement(
          LEFT JOIN purchase_orders po
                 ON po.id = sd.purchase_order_id AND po.tenant_id = sd.tenant_id
          WHERE dp.tenant_id = ? AND d.directory_id = ?
-           AND date(dp.created_at) >= date(?) AND date(dp.created_at) <= date(?)
+           AND datetime(dp.created_at) >= datetime(?) AND datetime(dp.created_at) < datetime(?)
          ORDER BY dp.created_at ASC, dp.id ASC",
     )
     .bind(tenant_id)
     .bind(directory_id)
-    .bind(from_date)
-    .bind(to_date)
+    .bind(&from_utc)
+    .bind(&to_utc)
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Dönem tahsilatları okunamadı: {}", e))?;
@@ -362,3 +378,7 @@ fn take12(value: &str) -> String {
 #[cfg(test)]
 #[path = "ledger_statement_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ledger_statement_boundary_tests.rs"]
+mod boundary_tests;

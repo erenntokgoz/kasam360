@@ -5,7 +5,7 @@ import { errorText } from '../../../lib/cariInput';
 import { formatMoney } from '../../../lib/formatMoney';
 import { centsToText, parseCents } from '../../../lib/moneyInput';
 import { useAuthStore } from '../../../stores/authStore';
-import { usePanoramaStore } from '../../../stores/panoramaStore';
+import { currentMonth, usePanoramaStore } from '../../../stores/panoramaStore';
 import { Button } from '../../../ui/Button';
 import { Panel } from './Panel';
 
@@ -21,9 +21,14 @@ function monthEndEstimate(actualCents: number, now = new Date()): number | null 
  * Hedef panodan ayrı okunur: menü analizi ya da pano hata verse de hedef görünür.
  * Hedef işletme politikasıdır; yalnız sahip değiştirir, diğer roller okur.
  */
-export const MonthlyGoal: React.FC = () => {
-  const { target, targetError, loadTarget, saveTarget } = usePanoramaStore();
+export const MonthlyGoal: React.FC<{ month: string; rangeSelected: boolean }> = ({ month, rangeSelected }) => {
+  const { target, targetMonth, targetError, loadTarget, saveTarget } = usePanoramaStore();
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+  const isCurrentMonth = month === currentMonth();
+  const displayedTarget = targetMonth === month ? target : undefined;
+  const displayedError = targetMonth === month ? targetError : null;
+  const monthLabel = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' })
+    .format(new Date(`${month}-01T00:00:00`));
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
@@ -31,15 +36,18 @@ export const MonthlyGoal: React.FC = () => {
   const cents = parseCents(text);
 
   useEffect(() => {
-    void loadTarget();
-  }, [loadTarget]);
+    setEditing(false);
+    setText('');
+    setSaveError(null);
+    void loadTarget(month);
+  }, [loadTarget, month]);
 
   const submit = async () => {
     if (cents === null || cents <= 0) return;
     setSaving(true);
     setSaveError(null);
     try {
-      await saveTarget(cents);
+      await saveTarget(cents, month);
       setEditing(false);
     } catch (caught) {
       setSaveError(errorText(caught));
@@ -48,28 +56,31 @@ export const MonthlyGoal: React.FC = () => {
     }
   };
 
-  const achieved = target?.achieved_percent ?? null;
-  const estimate = target ? monthEndEstimate(target.actual_cents) : null;
+  const achieved = displayedTarget?.achieved_percent ?? null;
+  const estimate = displayedTarget && isCurrentMonth ? monthEndEstimate(displayedTarget.actual_cents) : null;
 
   return (
     <Panel
-      title="Aylık Hedef"
-      aside={
-        isOwner && target !== undefined ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-h-12 text-sm"
-            onClick={() => {
-              setEditing(!editing);
-              setSaveError(null);
-              setText(target ? centsToText(target.target_cents) : '');
-            }}
-          >
-            {editing ? 'Vazgeç' : target ? 'Değiştir' : 'Hedef Koy'}
-          </Button>
-        ) : null
-      }
+      title={`Aylık Hedef · ${monthLabel}`}
+      aside={(
+        <div className="flex items-center gap-2">
+          {!rangeSelected ? <span className="text-xs text-[var(--text-muted)]">Seçili tarih aralığından bağımsız</span> : null}
+          {isOwner && isCurrentMonth && displayedTarget !== undefined ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-h-12 text-sm"
+              onClick={() => {
+                setEditing(!editing);
+                setSaveError(null);
+                setText(displayedTarget ? centsToText(displayedTarget.target_cents) : '');
+              }}
+            >
+              {editing ? 'Vazgeç' : displayedTarget ? 'Değiştir' : 'Hedef Koy'}
+            </Button>
+          ) : null}
+        </div>
+      )}
     >
       {editing ? (
         <div className="flex items-center gap-2">
@@ -88,21 +99,21 @@ export const MonthlyGoal: React.FC = () => {
       {saveError ? (
         <ErrorToast message={`Hedef kaydedilemedi: ${saveError}`} />
       ) : null}
-      {targetError ? (
+      {displayedError ? (
         <div className="flex items-center justify-between gap-2">
-          <><p className="text-sm text-[var(--text-secondary)]">Hedef okunamadı.</p><ErrorToast message={`Hedef okunamadı: ${targetError}`} /></>
-          <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void loadTarget()}>
+          <><p className="text-sm text-[var(--text-secondary)]">Hedef okunamadı.</p><ErrorToast message={`Hedef okunamadı: ${displayedError}`} /></>
+          <Button variant="secondary" className="min-h-12 text-sm" onClick={() => void loadTarget(month)}>
             Tekrar Dene
           </Button>
         </div>
-      ) : target === undefined ? (
+      ) : displayedTarget === undefined ? (
         <p className="text-sm text-[var(--text-secondary)]">Hedef okunuyor…</p>
-      ) : target ? (
+      ) : displayedTarget ? (
         <>
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-3xl font-bold tabular-nums text-[var(--text-primary)]">%{achieved ?? 0}</span>
             <span className="text-xs tabular-nums text-[var(--text-secondary)]">
-              {formatMoney(target.actual_cents)} / {formatMoney(target.target_cents)}
+              {formatMoney(displayedTarget.actual_cents)} / {formatMoney(displayedTarget.target_cents)}
             </span>
           </div>
           <div className="h-2 rounded bg-[var(--bg-subtle)] overflow-hidden">
@@ -115,7 +126,11 @@ export const MonthlyGoal: React.FC = () => {
           ) : null}
         </>
       ) : !editing ? (
-        <p className="text-sm text-[var(--text-secondary)]">Bu ay için hedef yok.</p>
+        <p className="text-sm text-[var(--text-secondary)]">
+          {isCurrentMonth
+            ? `${monthLabel} için hedef tanımlanmamış.`
+            : `${monthLabel} için hedef tanımlanmamış. Geçmiş ay hedefi sonradan eklenemez.`}
+        </p>
       ) : null}
     </Panel>
   );

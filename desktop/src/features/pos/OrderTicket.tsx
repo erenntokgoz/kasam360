@@ -1,4 +1,4 @@
-import { ErrorToast } from '../../ui/ErrorToast';
+import { InlineAlert } from '../../ui/InlineAlert';
 import React, { useState } from 'react';
 import { Send, Trash2, FileText } from 'lucide-react';
 import { usePosStore } from '../../stores/posStore';
@@ -10,6 +10,7 @@ import { Modal } from '../../ui/Modal';
 import { SmartAuthModal } from './SmartAuthModal';
 import { ItemTransferModal } from './ItemTransferModal';
 import { OrderTicketLineItem } from './OrderTicketLineItem';
+import { sendAndReturnToFloor } from './sendFlow';
 import { useFloorStore } from '../../stores/floorStore';
 import { useAuthStore } from '../../stores/authStore';
 import { canCollectPayment } from '../../lib/roleAccess';
@@ -31,6 +32,7 @@ export const OrderTicket: React.FC = () => {
     loadActiveOrder,
     sendToKitchen,
     orderError,
+    dismissOrderError,
     isSending,
     calculateTotalCents,
   } = usePosStore();
@@ -48,14 +50,14 @@ export const OrderTicket: React.FC = () => {
   const total = calculateTotalCents();
   const unsentCount = ticketItems.filter((i) => !i.isSentToKitchen).length;
 
-  const handleSendToKitchen = async () => {
-    if (await sendToKitchen()) {
-      playOrderBell();
-      await loadFloorPlan();
-      setActiveModule('FLOOR');
-      showNotice('Sipariş mutfağa iletildi.');
-    }
-  };
+  const handleSendToKitchen = () =>
+    sendAndReturnToFloor({
+      send: sendToKitchen,
+      ringBell: playOrderBell,
+      goToFloor: () => setActiveModule('FLOOR'),
+      refreshFloor: loadFloorPlan,
+      notifySuccess: showNotice,
+    });
 
   // Tahsilat sunucudaki adisyona yapılır; bekleyen kalemler düğme yazısıyla belli olarak gider.
   const handlePay = async () => {
@@ -120,9 +122,8 @@ export const OrderTicket: React.FC = () => {
       {/* Kalemler Listesi */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
         {ticketItems.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[var(--text-muted)]">
-            <span className="text-xs">Adisyonda henüz ürün bulunmuyor.</span>
-            <span className="text-xs mt-1">Katalogdan ürün seçerek ekleyebilirsiniz.</span>
+          <div className="h-full flex items-center justify-center text-center p-6 text-[var(--text-muted)]">
+            <span className="text-sm">Adisyon boş.</span>
           </div>
         ) : (
           ticketItems.map((item) => (
@@ -153,9 +154,7 @@ export const OrderTicket: React.FC = () => {
         )}
       </div>
 
-      {orderError ? (
-        <ErrorToast message={orderError} />
-      ) : null}
+      {orderError ? <InlineAlert message={orderError} onDismiss={dismissOrderError} className="mx-4 mb-2 shrink-0" /> : null}
 
       {/* Alt Toplam ve Ödeme Alanı */}
       <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-subtle)] space-y-3 shrink-0">

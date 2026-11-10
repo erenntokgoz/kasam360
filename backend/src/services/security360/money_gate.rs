@@ -22,6 +22,14 @@ pub fn nakit_tutar_gecerli_mi(amount_cents: i64) -> Result<(), String> {
     Ok(())
 }
 
+/// Açılış ve fiziksel sayımda sıfır nakit geçerlidir; negatif sayım geçersizdir.
+pub fn nakit_sayimi_gecerli_mi(amount_cents: i64) -> Result<(), String> {
+    if amount_cents < 0 {
+        return Err("VALIDATION: Kasa sayımı negatif olamaz.".to_string());
+    }
+    Ok(())
+}
+
 /// Gerekçe zorunlu mu?
 ///
 /// Kasa çıkışı tek taraflı para hareketidir: kasadan çıkan parayı neye
@@ -114,6 +122,13 @@ mod tests {
         assert!(nakit_tutar_gecerli_mi(-1).is_err());
         // Negatif tutar `IN` gibi toplamlara ters yönde işler.
         assert!(nakit_tutar_gecerli_mi(-100_000).is_err());
+    }
+
+    #[test]
+    fn acilis_ve_fiziksel_sayim_sifir_olabilir_negatif_olamaz() {
+        assert!(nakit_sayimi_gecerli_mi(0).is_ok());
+        assert!(nakit_sayimi_gecerli_mi(1).is_ok());
+        assert!(nakit_sayimi_gecerli_mi(-1).is_err());
     }
 
     #[test]

@@ -223,8 +223,14 @@ pub async fn get_panorama(
             .map_err(|e| e.to_string()),
         None => Err("Veritabanı yolu bilinmiyor.".to_string()),
     };
-    let alerts =
-        crate::services::panorama_alerts::collect(&pool, &tid, &range.from, &range.to, last_backup)
-            .await;
+    let alerts = crate::services::panorama_alerts::collect(
+        &pool,
+        &tid,
+        &range.from,
+        &range.to,
+        last_backup,
+        utc_offset_minutes,
+    )
+    .await;
     Ok(PanoramaDto { board, alerts })
 }

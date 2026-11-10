@@ -17,8 +17,7 @@ use serde::{Deserialize, Serialize};
 // Girdi doğrulama
 // ---------------------------------------------------------------------------
 
-/// Tarih aralığı. `from`/`to` ISO-8601 metindir; karşılaştırma leksikografiktir
-/// ve aynı biçimdeki ISO zaman damgalarıyla doğru sıralanır.
+/// Tarih aralığı; başlangıç dahildir, `to` anı hariçtir.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AnalyticsRangeDto {
     pub from: Option<String>,
@@ -35,12 +34,58 @@ fn parse_range(dto: Option<AnalyticsRangeDto>) -> Result<AnalyticsRange, String>
     match (dto.from, dto.to) {
         (None, None) => Ok(None),
         (Some(from), Some(to)) => {
-            if from > to {
-                return Err(format!("tarih araligi ters: {from} > {to}"));
+            let start = chrono::DateTime::parse_from_rfc3339(&from)
+                .map_err(|_| "INVALID_ARGUMENT: from RFC 3339 olmalıdır".to_string())?;
+            let end = chrono::DateTime::parse_from_rfc3339(&to)
+                .map_err(|_| "INVALID_ARGUMENT: to RFC 3339 olmalıdır".to_string())?;
+            if end <= start {
+                return Err(
+                    "INVALID_ARGUMENT: to from sonrasinda olmali (exclusive end)".to_string(),
+                );
             }
             Ok(Some((from, to)))
         }
         _ => Err("tarih araliginda from ve to birlikte verilmelidir".to_string()),
+    }
+}
+
+#[cfg(test)]
+mod range_tests {
+    use super::{parse_range, reject_past_month, AnalyticsRangeDto};
+
+    #[test]
+    fn gecmis_ay_hedefi_reddedilir_guncel_ve_gelecek_ay_kabul_edilir() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-11-10T12:00:00Z")
+            .expect("tarih")
+            .with_timezone(&chrono::Utc);
+        assert!(reject_past_month("2026-10", now).is_err());
+        assert!(reject_past_month("2025-12", now).is_err());
+        assert!(reject_past_month("2026-11", now).is_ok());
+        assert!(reject_past_month("2026-12", now).is_ok());
+    }
+
+    #[test]
+    fn analitik_aralik_esit_ve_ters_ucu_reddeder() {
+        let equal = AnalyticsRangeDto {
+            from: Some("2026-11-01T00:00:00+03:00".into()),
+            to: Some("2026-11-01T00:00:00+03:00".into()),
+        };
+        assert!(parse_range(Some(equal)).is_err());
+
+        let reversed = AnalyticsRangeDto {
+            from: Some("2026-11-02T00:00:00+03:00".into()),
+            to: Some("2026-11-01T00:00:00+03:00".into()),
+        };
+        assert!(parse_range(Some(reversed)).is_err());
+    }
+
+    #[test]
+    fn analitik_aralik_ofsetleri_gercek_anlara_gore_karsilastirir() {
+        let range = AnalyticsRangeDto {
+            from: Some("2026-10-31T20:59:00+00:00".into()),
+            to: Some("2026-11-01T00:00:00+03:00".into()),
+        };
+        assert!(parse_range(Some(range)).is_ok());
     }
 }
 
@@ -337,6 +382,16 @@ pub async fn get_monthly_targets(
         .collect())
 }
 
+/// Geçmiş ayın hedefi sonradan değiştirilemez; gerçekleşen rakam hedefe uydurulmaz.
+/// Karşılaştırma UTC ayıyla yapılır: yerel ay en çok bir ay önde olabilir, bu yüzden
+/// meşru bir güncel ay hedefi asla reddedilmez.
+fn reject_past_month(month: &str, now: chrono::DateTime<chrono::Utc>) -> Result<(), String> {
+    if month < now.format("%Y-%m").to_string().as_str() {
+        return Err(format!("gecmis ayin hedefi degistirilemez: {month}"));
+    }
+    Ok(())
+}
+
 /// Aylık hedef ekler veya günceller (UPSERT). Aynı kiracı/ay/kategori için
 /// tek satır tutulur; hedef sayacı her güncellemede artmaz.
 #[tauri::command]
@@ -348,6 +403,7 @@ pub async fn set_monthly_target(
 ) -> Result<(), String> {
     require_reporting_write(&actor_role)?;
     validate_month(&input.month)?;
+    reject_past_month(&input.month, chrono::Utc::now())?;
     if input.target_cents < 0 {
         return Err("hedef negatif olamaz".to_string());
     }

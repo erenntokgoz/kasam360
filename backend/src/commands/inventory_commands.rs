@@ -26,9 +26,15 @@ pub struct StockMovementDto {
 
 #[tauri::command]
 pub async fn get_inventory(
+    caller_role: Option<String>,
     tenant_id: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<InventoryItemDto>, String> {
+    // Stok miktarı ve maliyet mantığı yönetim bilgisidir; rol kapısı olmadan her oturum okuyabiliyordu.
+    crate::rbac::require_any_present(
+        caller_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager],
+    )?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     let rows = sqlx::query(
@@ -43,13 +49,14 @@ pub async fn get_inventory(
 
     let mut items = Vec::new();
     for row in rows {
+        // Okunamayan stok sıfır sayılmaz: sıfır "tükendi" uyarısı üretirdi; hata yukarı taşınır.
         items.push(InventoryItemDto {
-            id: row.try_get("id").unwrap_or_default(),
-            name: row.try_get("name").unwrap_or_default(),
-            sku: row.try_get("sku").ok(),
-            current_stock: row.try_get("current_stock").unwrap_or(0.0),
-            unit: row.try_get("unit").unwrap_or_default(),
-            min_stock_alert: row.try_get("min_stock_alert").ok(),
+            id: row.try_get("id").map_err(|e| e.to_string())?,
+            name: row.try_get("name").map_err(|e| e.to_string())?,
+            sku: row.try_get("sku").map_err(|e| e.to_string())?,
+            current_stock: row.try_get("current_stock").map_err(|e| e.to_string())?,
+            unit: row.try_get("unit").map_err(|e| e.to_string())?,
+            min_stock_alert: row.try_get("min_stock_alert").map_err(|e| e.to_string())?,
         });
     }
 
@@ -87,7 +94,8 @@ pub async fn adjust_stock(
     .fetch_optional(&mut *conn)
     .await
     .map_err(|e| e.to_string())?
-    .unwrap_or(0.0);
+    // Olmayan kalem sıfır stok sayılıp hareket yazılamaz; başka işletmenin kimliği de buraya düşer.
+    .ok_or_else(|| "NOT_FOUND: stok kalemi bulunamadı".to_string())?;
 
     let mut tx = pool.begin_write().await?;
 
@@ -219,9 +227,15 @@ pub async fn create_inventory_item(
 
 #[tauri::command]
 pub async fn get_low_stock_alerts(
+    caller_role: Option<String>,
     tenant_id: String,
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<InventoryItemDto>, String> {
+    // Stok miktarı ve maliyet mantığı yönetim bilgisidir; rol kapısı olmadan her oturum okuyabiliyordu.
+    crate::rbac::require_any_present(
+        caller_role.as_deref(),
+        &[crate::rbac::Role::Owner, crate::rbac::Role::Manager],
+    )?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
     let rows = sqlx::query(
@@ -236,13 +250,14 @@ pub async fn get_low_stock_alerts(
 
     let mut items = Vec::new();
     for row in rows {
+        // Okunamayan stok sıfır sayılmaz: sıfır "tükendi" uyarısı üretirdi; hata yukarı taşınır.
         items.push(InventoryItemDto {
-            id: row.try_get("id").unwrap_or_default(),
-            name: row.try_get("name").unwrap_or_default(),
-            sku: row.try_get("sku").ok(),
-            current_stock: row.try_get("current_stock").unwrap_or(0.0),
-            unit: row.try_get("unit").unwrap_or_default(),
-            min_stock_alert: row.try_get("min_stock_alert").ok(),
+            id: row.try_get("id").map_err(|e| e.to_string())?,
+            name: row.try_get("name").map_err(|e| e.to_string())?,
+            sku: row.try_get("sku").map_err(|e| e.to_string())?,
+            current_stock: row.try_get("current_stock").map_err(|e| e.to_string())?,
+            unit: row.try_get("unit").map_err(|e| e.to_string())?,
+            min_stock_alert: row.try_get("min_stock_alert").map_err(|e| e.to_string())?,
         });
     }
 

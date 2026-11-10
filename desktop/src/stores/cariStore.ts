@@ -10,6 +10,7 @@ import type {
 import { invokeIPC } from '../services/tauriClient';
 import { useAuthStore } from './authStore';
 import { errorText } from '../lib/cariInput';
+import { utcOffsetMinutes } from '../lib/dateRange';
 
 export interface CardInput {
   name: string;
@@ -76,6 +77,11 @@ export function sessionArgs() {
   return { actorRole: user.role, actorId: user.userId, tenantId: user.tenantId };
 }
 
+// Sekme ya da arama değişince geç gelen eski liste yeni listeyi ezmesin.
+let cardsRequest = 0;
+let detailRequest = 0;
+let awaitingRequest = 0;
+
 export const useCariStore = create<CariStore>((set) => ({
   cards: [],
   debts: [],
@@ -84,6 +90,7 @@ export const useCariStore = create<CariStore>((set) => ({
   loadError: null,
 
   loadCards: async (type, search) => {
+    const request = ++cardsRequest;
     try {
       const { actorRole, tenantId } = sessionArgs();
       const cards = await invokeIPC<DirectoryContact[]>('get_directories', {
@@ -92,13 +99,14 @@ export const useCariStore = create<CariStore>((set) => ({
         directoryType: type,
         search: search.trim() || undefined,
       });
-      set({ cards, loadError: null });
+      if (request === cardsRequest) set({ cards, loadError: null });
     } catch (error) {
-      set({ cards: [], loadError: errorText(error) });
+      if (request === cardsRequest) set({ cards: [], loadError: errorText(error) });
     }
   },
 
   loadCardDetail: async (directoryId, from, to) => {
+    const request = ++detailRequest;
     try {
       const { actorRole, tenantId } = sessionArgs();
       const [debts, statement] = await Promise.all([
@@ -107,26 +115,28 @@ export const useCariStore = create<CariStore>((set) => ({
           directoryId,
           from,
           to,
+          utcOffsetMinutes: utcOffsetMinutes(),
           actorRole,
           tenantId,
         }),
       ]);
-      set({ debts, statement, loadError: null });
+      if (request === detailRequest) set({ debts, statement, loadError: null });
     } catch (error) {
-      set({ debts: [], statement: null, loadError: errorText(error) });
+      if (request === detailRequest) set({ debts: [], statement: null, loadError: errorText(error) });
     }
   },
 
   loadAwaiting: async () => {
+    const request = ++awaitingRequest;
     try {
       const { actorRole, tenantId } = sessionArgs();
       const awaiting = await invokeIPC<AwaitingDocument[]>('get_awaiting_supplier_documents', {
         actorRole,
         tenantId,
       });
-      set({ awaiting, loadError: null });
+      if (request === awaitingRequest) set({ awaiting, loadError: null });
     } catch (error) {
-      set({ awaiting: [], loadError: errorText(error) });
+      if (request === awaitingRequest) set({ awaiting: [], loadError: errorText(error) });
     }
   },
 

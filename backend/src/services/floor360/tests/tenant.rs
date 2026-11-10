@@ -22,6 +22,8 @@ async fn baska_kiracinin_masasi_krokiye_alinamaz() {
         &SaveLayoutInput {
             tables: vec![yerlesim("tbl_b", 400, 400, 0, 4)],
             objects: vec![],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await;
@@ -57,6 +59,8 @@ async fn baska_kiracinin_bolumu_masaya_tanimlanamaz() {
                 zone_id: Some(yabanci),
             }],
             objects: vec![],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await;
@@ -127,6 +131,8 @@ async fn bolum_silme_masayi_silmez_yalniz_baglantiyi_duser() {
                 zone_id: Some(bolum.clone()),
             }],
             objects: vec![],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await

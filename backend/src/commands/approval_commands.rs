@@ -67,6 +67,10 @@ pub async fn verify_manager_pin(
             | crate::approval_service::operation::DISCOUNT
             | crate::approval_service::operation::COMPLIMENTARY
             | crate::approval_service::operation::REFUND
+            | crate::approval_service::operation::CASH_OUT
+            | crate::approval_service::operation::PAYROLL_PAY
+            | crate::approval_service::operation::PAYROLL_RULE
+            | crate::approval_service::operation::STAFF_ADVANCE
     ) {
         return Err("INVALID_OPERATION: Bilinmeyen onay işlemi.".to_string());
     }

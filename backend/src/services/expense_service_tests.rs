@@ -151,3 +151,60 @@ async fn cekmecede_olmayan_nakit_gider_kaydi_kasayi_eksiye_indirir() {
     ).fetch_one(&pool).await.expect("kasa bakiyesi");
     assert_eq!(expected, -1);
 }
+
+#[tokio::test]
+async fn gider_gun_filtresi_yerel_gunu_kullanir_saatsiz_tarih_oldugu_gibi_kalir() {
+    let pool = pool().await;
+    // Hem saatli UTC anı hem yalnız tarih: biri gece yarısına yakın.
+    for (id, date) in [
+        ("exp_utc", "2026-11-09T22:45:34+00:00"),
+        ("exp_plain", "2026-11-10"),
+    ] {
+        sqlx::query(
+            "INSERT INTO general_expenses (id, tenant_id, category, amount_cents, payment_method,
+                 actor_id, expense_date) VALUES (?, 'tnt_a', 'OTHER', 100, 'BANK_TRANSFER', 'usr_a', ?)",
+        )
+        .bind(id)
+        .bind(date)
+        .execute(&pool)
+        .await
+        .expect("gider");
+    }
+    // Beklenen gün sistem saat diliminden okunur: test hangi TZ'de koşarsa koşsun geçer.
+    let local_day: String =
+        sqlx::query_scalar("SELECT date('2026-11-09T22:45:34+00:00', 'localtime')")
+            .fetch_one(&pool)
+            .await
+            .expect("yerel gün");
+    let ids = |from: String, to: String| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, String>(&format!(
+                "SELECT e.id FROM general_expenses e WHERE e.tenant_id = 'tnt_a'
+                   AND {LOCAL_DAY_SQL} >= substr(?, 1, 10) AND {LOCAL_DAY_SQL} <= substr(?, 1, 10)
+                 ORDER BY e.id"
+            ))
+            .bind(from)
+            .bind(to)
+            .fetch_all(&pool)
+            .await
+            .expect("liste")
+        }
+    };
+    // Saatli kayıt yalnız kendi yerel gününde görünür; gün sonu metni aynı günü kapsar.
+    assert!(ids(local_day.clone(), format!("{local_day} 23:59:59"))
+        .await
+        .contains(&"exp_utc".to_string()));
+    assert!(!ids("2026-11-12".to_string(), "2026-11-13".to_string())
+        .await
+        .contains(&"exp_utc".to_string()));
+    // Yalnız tarih taşıyan kayıt dilimden etkilenmez.
+    assert_eq!(
+        ids("2026-11-10".to_string(), "2026-11-10 23:59:59".to_string())
+            .await
+            .iter()
+            .filter(|id| *id == "exp_plain")
+            .count(),
+        1
+    );
+}

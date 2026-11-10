@@ -35,6 +35,8 @@ async fn gecersiz_masa_tum_dzeni_geri_alir() {
                 yerlesim("tbl_2", 800, 800, 7, 4),
             ],
             objects: vec![],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await;
@@ -79,6 +81,8 @@ async fn yabanci_bolum_tum_dzeni_geri_alir() {
                 },
             ],
             objects: vec![],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await;
@@ -112,6 +116,8 @@ async fn olmayan_masa_yazma_tum_dzeni_geri_alir() {
                 yerlesim("tbl_olmayan", 800, 800, 0, 4),
             ],
             objects: vec![],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await;
@@ -144,6 +150,8 @@ async fn basarili_kayitta_yazimlar_kalici() {
         &SaveLayoutInput {
             tables: vec![yerlesim("tbl_1", 400, 400, 90, 6)],
             objects: vec![],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await

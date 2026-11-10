@@ -54,6 +54,8 @@ async fn kroki_konumlandirmasi_durumu_degistirmez() {
         &SaveLayoutInput {
             tables: vec![yerlesim("tbl_1", 600, 600, 90, 8)],
             objects: vec![],
+            new_objects: vec![],
+            delete_object_ids: vec![],
         },
     )
     .await

@@ -14,6 +14,7 @@ export interface ModalProps {
   showCloseButton?: boolean;
   surface?: 'paper' | 'work';
   cardFlow?: boolean;
+  fullScreen?: boolean;
   /** Kapat düğmesinin yanına gelen işlemler; biçimi Kapat ile aynıdır. */
   headerActions?: React.ReactNode;
 }
@@ -29,6 +30,7 @@ export const Modal: React.FC<ModalProps> = ({
   surface = 'paper',
   headerActions,
   cardFlow = false,
+  fullScreen = false,
 }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -71,7 +73,7 @@ export const Modal: React.FC<ModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 overflow-y-auto"
+      className={cn('motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/75', fullScreen ? 'p-0 overflow-hidden' : 'p-4 overflow-y-auto')}
     >
       <div
         ref={panelRef}
@@ -80,8 +82,8 @@ export const Modal: React.FC<ModalProps> = ({
         className={cn(
           'motion-dialog outline-none w-full border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
           surface === 'work' ? 'work-surface' : 'paper',
-          cardFlow && 'max-h-full',
-          maxWidthClasses
+          cardFlow && !fullScreen && 'max-h-full',
+          fullScreen ? 'w-screen h-screen max-w-none max-h-none rounded-none' : maxWidthClasses
         )}
       >
         <div className="px-5 pt-5 pb-3 border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0">
@@ -98,7 +100,7 @@ export const Modal: React.FC<ModalProps> = ({
             ) : null}
           </div>
         </div>
-        <div className={cn('p-5 overflow-y-auto', !cardFlow && 'max-h-[calc(100vh-7.5rem)]')}>{children}</div>
+        <div className={cn(fullScreen ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : 'p-5 overflow-y-auto', !cardFlow && !fullScreen && 'max-h-[calc(100vh-7.5rem)]')}>{children}</div>
       </div>
     </div>
   );

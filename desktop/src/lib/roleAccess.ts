@@ -28,3 +28,8 @@ export function homeModule(role: UserRole): AppModule {
 export function canCollectPayment(role: UserRole | undefined): boolean {
   return role === 'OWNER' || role === 'CASHIER';
 }
+
+/** Mutfak fişini yalnız mutfak hattı ilerletir; garson ve kasiyer ekranı izler. */
+export function canAdvanceKitchen(role: UserRole | undefined): boolean {
+  return role === 'OWNER' || role === 'MANAGER' || role === 'KITCHEN';
+}
