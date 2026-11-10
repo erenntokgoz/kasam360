@@ -1,7 +1,9 @@
-name: Build KASAM360 Linux artifact
+name: CI
 
 on:
   push:
+    branches: [develop]
+  pull_request:
     branches: [develop]
   workflow_dispatch:
 
@@ -9,13 +11,118 @@ permissions:
   contents: read
 
 concurrency:
-  group: kasam360-linux-artifact-${{ github.ref }}
-  cancel-in-progress: false
+  group: kasam360-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Tauri Linux system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            pkg-config build-essential libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libxdo-dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Build desktop frontend required by tauri-build
+        run: |
+          npm ci --prefix desktop
+          npm run build --prefix desktop
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Clippy
+        working-directory: backend
+        env:
+          CARGO_TERM_COLOR: always
+        run: cargo clippy --lib --tests -- -D warnings
+
+      - name: Unit tests
+        working-directory: backend
+        env:
+          CARGO_TERM_COLOR: always
+        run: cargo test --lib
+
+      - name: Format check
+        working-directory: backend
+        run: cargo fmt --check
+
+  desktop:
+    name: Desktop checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix desktop
+
+      - name: Build
+        run: npm run build --prefix desktop
+
+      - name: Test
+        working-directory: desktop
+        run: npx vitest run
+
+  api:
+    name: API checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix backend/api
+
+      - name: Type check
+        working-directory: backend/api
+        run: npx tsc --noEmit
+
+      - name: Test
+        working-directory: backend/api
+        run: npx vitest run
+
   build:
+    name: Build Linux x86_64 images
+    needs: [backend, desktop, api]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -119,6 +226,23 @@ jobs:
           done
           if [ "$web_ready" != true ]; then docker logs --tail 100 web; exit 1; fi
           curl --fail --silent http://127.0.0.1:3000/api/auth/get-session
+
+      - name: Push SHA and develop tags to GHCR
+        if: github.ref == 'refs/heads/develop'
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          for name in kasam360-api kasam360-web; do
+            remote="ghcr.io/erenntokgoz/${name}"
+            docker tag "${name}:${SOURCE_SHA}" "${remote}:${SOURCE_SHA}"
+            docker tag "${name}:${SOURCE_SHA}" "${remote}:develop"
+            docker push "${remote}:${SOURCE_SHA}"
+            docker push "${remote}:develop"
+          done
+          docker logout ghcr.io
 
       - name: Package SHA-versioned images
         env:

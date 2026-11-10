@@ -64,6 +64,11 @@ export async function ensureIndexes({ account, business }: Databases) {
     business.collection('sync_quarantine').createIndex({ tenant_id: 1, operation_id: 1 }, { unique: true }),
     business.collection('sync_quarantine').createIndex({ tenant_id: 1, status: 1, received_at: 1 }),
     business.collection('sync_quarantine_decision').createIndex({ tenant_id: 1, operation_id: 1 }, { unique: true }),
+    // QR menü: tek işletme tek slug, tek yayın; slug tüm sistemde tekildir, görsel (işletme, sha256) ile tekildir.
+    business.collection('qr_menu_slug').createIndex({ tenant_id: 1 }, { unique: true }),
+    business.collection('qr_menu_slug').createIndex({ slug: 1 }, { unique: true }),
+    business.collection('qr_menu_publication').createIndex({ tenant_id: 1 }, { unique: true }),
+    business.collection('qr_menu_image').createIndex({ tenant_id: 1, sha256: 1 }, { unique: true }),
   ]);
 }
 
@@ -84,6 +89,9 @@ export async function removeUserData({ account, business, businessClient }: Data
       await business.collection('sync_device_cursor').deleteMany({ tenant_id: tenantId }, { session });
       await business.collection('sync_quarantine').deleteMany({ tenant_id: tenantId }, { session });
       await business.collection('sync_quarantine_decision').deleteMany({ tenant_id: tenantId }, { session });
+      for (const name of ['qr_menu_slug', 'qr_menu_publication', 'qr_menu_image']) {
+        await business.collection(name).deleteMany({ tenant_id: tenantId }, { session });
+      }
     });
   } finally {
     await session.endSession();

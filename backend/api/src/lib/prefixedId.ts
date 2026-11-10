@@ -15,6 +15,7 @@ export function ulid(now = Date.now()): string {
 
 const PREFIXES: Record<string, string> = {
   user: 'usr', session: 'ses', account: 'acc', verification: 'ver', tenant: 'tnt', membership: 'mem',
+  qr_menu_slug: 'qms', qr_menu_publication: 'qmp', qr_menu_image: 'qmi',
 };
 
 export const prefixedId = (model: string) => `${PREFIXES[model] ?? 'rec'}_${ulid()}`;

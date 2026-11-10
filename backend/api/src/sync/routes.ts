@@ -21,7 +21,7 @@ type Need = 'write' | 'read';
  * Bitiş zamanı ile güvenlik iptali ayrıdır: bitmiş cihaz yalnız bitişinden önce oluşmuş
  * kendi işlemlerini gönderebilir; iptal veya engel push/release dahil tüm erişimi kapatır.
  */
-async function authorize(context: Context, keys: LicenseKeys, devices: DeviceLicenses, need: Need, tenantId?: string) {
+export async function authorize(context: Context, keys: LicenseKeys, devices: DeviceLicenses, need: Need, tenantId?: string) {
   const bearer = /^Bearer (\S+)$/.exec(context.req.header('authorization') ?? '')?.[1] ?? '';
   const owner = await keys.find(bearer);
   if (!owner) throw new SyncError(401, 'INVALID_KEY', 'Lisans anahtarı geçersiz. Cihazı yeniden bağlayın.');

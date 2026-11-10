@@ -5,6 +5,29 @@ use super::common::*;
 
 // ─── Satış raporu ────────────────────────────────────────────────────────────
 
+/// Tahsilat kaydı: ciro bu kayıtlardan okunur (Pano ile aynı kaynak).
+async fn seed_settlement(
+    pool: &sqlx::SqlitePool,
+    tenant: &str,
+    seq: i64,
+    order_id: &str,
+    amount: i64,
+    closed: bool,
+    at: &str,
+) {
+    seed_audit(
+        pool,
+        tenant,
+        seq,
+        "payment:settled_fifo",
+        order_id,
+        "usr_1",
+        &serde_json::json!({ "orderId": order_id, "method": "Nakit", "totalAmount": amount, "orderClosed": if closed { 1 } else { 0 } }),
+        at,
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn ciro_yalnizca_paid_siparislerden_hesaplanir() {
     let pool = pool().await;
@@ -27,6 +50,16 @@ async fn ciro_yalnizca_paid_siparislerden_hesaplanir() {
         99000,
         "2026-03-05 12:05:00",
         "OPEN",
+    )
+    .await;
+    seed_settlement(
+        &pool,
+        TENANT_A,
+        1,
+        "ord_paid",
+        45000,
+        true,
+        "2026-03-05 12:00:00",
     )
     .await;
     let mut conn = conn_of(&pool).await;
@@ -66,6 +99,26 @@ async fn baska_tenantin_cirosu_rapora_girmez() {
         999000,
         "2026-03-05 12:00:00",
         "PAID",
+    )
+    .await;
+    seed_settlement(
+        &pool,
+        TENANT_A,
+        1,
+        "ord_a",
+        10000,
+        true,
+        "2026-03-05 12:00:00",
+    )
+    .await;
+    seed_settlement(
+        &pool,
+        TENANT_B,
+        2,
+        "ord_b",
+        999000,
+        true,
+        "2026-03-05 12:00:00",
     )
     .await;
     let mut conn = conn_of(&pool).await;
@@ -111,6 +164,36 @@ async fn tarih_araligi_disi_kalan_siparisler_hicelenmez() {
         80000,
         "2026-06-01 09:00:00",
         "PAID",
+    )
+    .await;
+    seed_settlement(
+        &pool,
+        TENANT_A,
+        1,
+        "ord_inside",
+        10000,
+        true,
+        "2026-03-10 12:00:00",
+    )
+    .await;
+    seed_settlement(
+        &pool,
+        TENANT_A,
+        2,
+        "ord_before",
+        70000,
+        true,
+        "2025-12-31 23:00:00",
+    )
+    .await;
+    seed_settlement(
+        &pool,
+        TENANT_A,
+        3,
+        "ord_after",
+        80000,
+        true,
+        "2026-06-01 09:00:00",
     )
     .await;
     let mut conn = conn_of(&pool).await;
@@ -198,6 +281,16 @@ async fn kategori_hacmi_baska_tenant_urununu_saymaz() {
     )
     .await;
     seed_order_item(&pool, "it_1", "ord_1", "prd_a", 3, 30000).await;
+    seed_settlement(
+        &pool,
+        TENANT_A,
+        1,
+        "ord_1",
+        30000,
+        true,
+        "2026-03-05 12:00:00",
+    )
+    .await;
     let mut conn = conn_of(&pool).await;
 
     let report = sales_report(&mut conn, TENANT_A, &range(ARALIK.0, ARALIK.1))
@@ -318,4 +411,75 @@ async fn fis_raporu_baska_tenantin_fisini_gormez() {
         .await
         .expect("fiş raporu okunur");
     assert!(rows.is_empty(), "çapraz tenant sızıntısı");
+}
+
+#[tokio::test]
+async fn gece_yarisini_asan_adisyon_tahsilat_gunune_duser() {
+    let pool = pool().await;
+    seed_tenant(&pool, TENANT_A).await;
+    // 4 Mart 23:50'de açılır, 5 Mart 00:10'da tahsil edilir.
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_gece",
+        "tbl_1",
+        20000,
+        "2026-03-04 23:50:00",
+        "PAID",
+    )
+    .await;
+    seed_settlement(
+        &pool,
+        TENANT_A,
+        1,
+        "ord_gece",
+        20000,
+        true,
+        "2026-03-05 00:10:00",
+    )
+    .await;
+    let mut conn = conn_of(&pool).await;
+
+    let acilis_gunu = sales_report(
+        &mut conn,
+        TENANT_A,
+        &range("2026-03-04T00:00:00+00:00", "2026-03-05T00:00:00+00:00"),
+    )
+    .await
+    .expect("rapor okunur");
+    assert_eq!(acilis_gunu.total_revenue_cents, 0);
+    assert_eq!(acilis_gunu.total_orders, 0);
+
+    let tahsilat_gunu = sales_report(
+        &mut conn,
+        TENANT_A,
+        &range("2026-03-05T00:00:00+00:00", "2026-03-06T00:00:00+00:00"),
+    )
+    .await
+    .expect("rapor okunur");
+    assert_eq!(tahsilat_gunu.total_revenue_cents, 20000);
+    assert_eq!(tahsilat_gunu.total_orders, 1);
+}
+
+#[tokio::test]
+async fn iptal_edilen_tahsil_edilmemis_siparis_ciroya_girmez() {
+    let pool = pool().await;
+    seed_tenant(&pool, TENANT_A).await;
+    seed_order(
+        &pool,
+        TENANT_A,
+        "ord_void",
+        "tbl_1",
+        50000,
+        "2026-03-05 12:00:00",
+        "VOID",
+    )
+    .await;
+    let mut conn = conn_of(&pool).await;
+
+    let report = sales_report(&mut conn, TENANT_A, &range(ARALIK.0, ARALIK.1))
+        .await
+        .expect("rapor okunur");
+    assert_eq!(report.total_revenue_cents, 0);
+    assert_eq!(report.total_orders, 0);
 }

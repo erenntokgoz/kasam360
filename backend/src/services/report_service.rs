@@ -8,7 +8,9 @@
 //! tutarlar kuruş (`*_cents`) olarak döner.
 //!
 //! Kaynak gerçekler (uydurma yok):
-//! - Ciro: `orders.status = 'PAID'` (şema CHECK'i yalnız bu değeri üretir).
+//! - Ciro: tahsilat zamanına göre `payment:settled_fifo` kayıtları (Pano ile
+//!   aynı kaynak ve `[başlangıç, bitiş)` sınırı); gece yarısını aşan adisyon
+//!   tahsil edildiği güne düşer. Tahsil edilmemiş (iptal) sipariş ciroya girmez.
 //! - Ödeme yöntemi: `audit_ledger` içindeki `payment:settled_fifo` kayıtları.
 //! - Kategori hacmi: `order_items` → `products` → `categories` birleşimi.
 //! - İptal: `order:voided` kaydı; onaylayan `approverId` payload'ındadır.
@@ -27,10 +29,12 @@ pub async fn sales_report(
     tenant_id: &str,
     range: &ReportRange,
 ) -> Result<SalesReportDto, String> {
+    // Neden audit_ledger: ciro tahsilat anında oluşur; `orders.created_at` açılış
+    // zamanıdır ve 23:50'de açılıp 00:10'da kapanan adisyonu Pano'dan farklı güne
+    // düşürürdü. Kısmi tahsilat tutarı tahsil edildiği dönemde, adisyon sayısı
+    // kapanış tahsilatının döneminde sayılır.
     let row = sqlx::query(
-        "SELECT COALESCE(SUM(total_cents), 0) AS revenue, COUNT(*) AS order_count \
-         FROM orders \
-         WHERE tenant_id = ? AND status = 'PAID' AND datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?)",
+        "SELECT COALESCE(SUM(CAST(json_extract(payload, '$.totalAmount') AS INTEGER)), 0) AS revenue,                 COALESCE(SUM(json_extract(payload, '$.orderClosed') = 1), 0) AS order_count          FROM audit_ledger          WHERE tenant_id = ? AND action = 'payment:settled_fifo'            AND datetime(timestamp) >= datetime(?) AND datetime(timestamp) < datetime(?)",
     )
     .bind(tenant_id)
     .bind(&range.from)
@@ -59,7 +63,7 @@ pub async fn sales_report(
     let voided_cents: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(CAST(json_extract(payload, '$.orderTotalCents') AS INTEGER)), 0) \
          FROM audit_ledger \
-         WHERE tenant_id = ? AND action = 'order:voided' AND datetime(timestamp) >= datetime(?) AND datetime(timestamp) <= datetime(?)",
+         WHERE tenant_id = ? AND action = 'order:voided' AND datetime(timestamp) >= datetime(?) AND datetime(timestamp) < datetime(?)",
     )
     .bind(tenant_id)
     .bind(&range.from)
@@ -140,9 +144,13 @@ async fn category_volumes(
          JOIN products p ON p.id = oi.product_id AND p.tenant_id = ? \
          LEFT JOIN categories c ON c.id = p.category_id AND c.tenant_id = ? \
          WHERE o.tenant_id = ? AND o.status = 'PAID' \
-           AND datetime(o.created_at) >= datetime(?) AND datetime(o.created_at) <= datetime(?) \
+           AND o.id IN (SELECT json_extract(payload, '$.orderId') FROM audit_ledger \
+                        WHERE tenant_id = ? AND action = 'payment:settled_fifo' \
+                          AND json_extract(payload, '$.orderClosed') = 1 \
+                          AND datetime(timestamp) >= datetime(?) AND datetime(timestamp) < datetime(?)) \
          GROUP BY c.id, COALESCE(c.name, 'Kategorisiz') ORDER BY qty DESC",
     )
+    .bind(tenant_id)
     .bind(tenant_id)
     .bind(tenant_id)
     .bind(tenant_id)
