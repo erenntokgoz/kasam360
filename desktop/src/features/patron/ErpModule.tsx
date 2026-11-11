@@ -22,7 +22,7 @@ export const ErpModule: React.FC = () => {
 
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] select-none">
-      <Bar label="Yönetim">
+      <Bar label="Yönetim" title="Yönetim">
         {TABS.map((tab) => (
           <BarTab key={tab.id} id={`erp-tab-${tab.id}`} aria-controls="erp-content"
             active={section === tab.id} onClick={() => setActiveErpTab(tab.id)}>

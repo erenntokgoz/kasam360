@@ -1,11 +1,12 @@
 /* İşlem bildirimleri
-   Kâğıda yapıştırılmış küçük fiş: zemin yaprakla aynı, türü soldaki şerit ve simge söyler.
-   Renkler tema sözlüğünden gelir; yeni renk tanımlanmaz. */
+   Altta ortada yarı saydam hap: türü simge rengi söyler. Bulanıklık kullanılmaz; böylece cam katman
+   sayısı (kenar çubuğu + üst çubuk + açık panel) artmaz. Renkler tema sözlüğünden gelir. */
 
 .notice-stack {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  left: 50%;
+  translate: -50% 0;
+  bottom: 20px;
   z-index: 90;
   display: flex;
   flex-direction: column;
@@ -22,12 +23,11 @@
   align-items: flex-start;
   gap: 10px;
   min-height: 48px;
-  padding: 0 0 0 12px;
+  padding: 0 0 0 18px;
   color: var(--text);
-  background-color: var(--surface);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--notice-tone);
-  border-radius: 6px;
+  background-color: var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
   box-shadow: var(--lift);
   animation: motion-slip-in 180ms var(--motion-ease-out);
 }
@@ -72,7 +72,7 @@
   font-variant-numeric: tabular-nums;
   color: var(--notice-tone);
   border: 1px solid currentColor;
-  border-radius: 4px;
+  border-radius: 999px;
   animation: motion-bump 160ms var(--motion-ease-out);
 }
 
@@ -87,7 +87,7 @@
   color: var(--muted);
   background: transparent;
   border: 0;
-  border-radius: 0 5px 5px 0;
+  border-radius: 999px;
 }
 .notice-slip-close:hover {
   color: var(--text);

@@ -1,42 +1,50 @@
-/* Üst menü şeridi */
+/* Gezinme şeridi: birinci seviye çerçevesiz metin sekmesi + kayan vurgu çizgisi; iç seviye segment hap grubu.
+   Neden: iç içe üç kutu düğme satırı yerine tek başlık bandı; vurgu çizgisi yalnız transform ile kayar. */
 .bar {
   position: relative;
   z-index: 5;
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex-shrink: 0;
+  padding: 12px 20px 0;
+  background-color: transparent;
+  border-bottom: 1px solid var(--line);
+}
+.bar-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.4vw, 1.9rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  color: var(--text);
+}
+.bar-row {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
   min-width: 0;
-  min-height: 52px;
-  padding-top: 0;
-  flex-shrink: 0;
-  background-color: var(--surface);
-  border-bottom: 1px solid var(--line);
-  box-shadow: none;
-}
-.bar::before {
-  content: none;
-}
-.bar-plain {
-  min-height: 48px;
-  padding-top: 0;
-  box-shadow: none;
-  border-bottom: 1px solid var(--line);
-}
-.bar-plain::before {
-  content: none;
-}
-.paper .bar {
-  background-color: transparent;
-  box-shadow: none;
-  border-bottom: 1px solid var(--line);
 }
 .bar-tabs {
+  position: relative;
   display: flex;
   flex: 1 1 14rem;
   min-width: 0;
-  padding: 0 8px;
   overflow-x: auto;
   scrollbar-width: none;
+}
+.bar-ink {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 3px;
+  background-color: var(--action);
+  border-radius: 0;
+  transform-origin: 0 50%;
+  opacity: 0;
+  pointer-events: none;
 }
 .bar-actions {
   display: flex;
@@ -46,42 +54,96 @@
   max-width: 100%;
   min-width: 0;
   margin-inline-start: auto;
-  padding: 4px 12px;
+  padding: 4px 0 4px 12px;
 }
 .bar-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 44px;
+  gap: 8px;
+  min-height: 48px;
   padding: 0 14px;
-  margin: 4px 0;
   font-family: inherit;
   font-size: 0.9375rem;
   font-weight: 600;
   white-space: nowrap;
   color: var(--muted);
   cursor: pointer;
-  border-radius: 6px;
-  transition: background-color 90ms ease, color 90ms ease;
+  background: transparent;
+  border: 0;
+  border-radius: 12px 12px 0 0;
+  transition: color 90ms ease;
 }
 .bar-item:hover {
   color: var(--text);
-  background-color: var(--hover);
+  background: transparent;
 }
 .bar-item[aria-selected="true"],
 .bar-item[aria-pressed="true"] {
   color: var(--text);
-  background-color: var(--hover);
-  box-shadow: inset 0 -2px 0 var(--action);
-  font-weight: 650;
+  font-weight: 700;
 }
+.bar-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  background-color: var(--hover);
+  border-radius: 999px;
+}
+.bar-item[aria-selected="true"] .bar-count {
+  color: var(--button);
+  background-color: var(--action);
+}
+
+/* İç seviye: tek yuvarlak kap içinde hap seçenekler; seçili olan dolu. */
+.bar-plain {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0;
+  border-bottom: 0;
+}
+.bar-plain .bar-tabs {
+  flex: 0 1 auto;
+  gap: 4px;
+  padding: 4px;
+  background-color: var(--glass-tint);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.bar-plain .bar-item {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 0.875rem;
+  border-radius: 999px;
+}
+.bar-plain .bar-item:hover {
+  background-color: var(--hover);
+}
+.bar-plain .bar-item[aria-selected="true"],
+.bar-plain .bar-item[aria-pressed="true"] {
+  color: var(--button);
+  background-color: var(--action);
+}
+.bar-plain .bar-count {
+  color: inherit;
+  background-color: rgba(127, 127, 127, 0.22);
+}
+.bar-plain .bar-actions {
+  padding-left: 10px;
+}
+
 .bar-actions > .bar-item {
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 48px;
+  padding: 0 18px;
   color: var(--text);
-  border: 1px solid var(--edge);
-  border-radius: 6px;
-  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background-color: var(--glass-tint);
 }
 .bar-actions > .bar-item:hover {
   background-color: var(--hover);
@@ -94,8 +156,8 @@
   font-weight: 650;
 }
 .bar-actions > .bar-danger {
-  color: var(--danger-fg);
-  background-color: var(--danger);
+  color: var(--danger);
+  background-color: transparent;
   border-color: var(--danger);
   font-weight: 650;
 }
@@ -103,7 +165,6 @@
   display: inline-flex;
   align-items: center;
   padding: 0 10px;
-  font-family: inherit;
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -113,17 +174,17 @@
 .bar-search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 220px;
+  gap: 8px;
+  width: 240px;
   max-width: 100%;
   min-width: 0;
-  height: 44px;
-  padding: 0 8px;
+  height: 48px;
+  padding: 0 16px;
   margin: auto 0;
   color: var(--muted);
-  border: 1px solid var(--edge);
-  border-radius: 6px;
-  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background-color: var(--glass-tint);
 }
 /* Genel input kuralı daha özgül olduğundan kapsayıcı çerçeve tek kalır: içte ikinci kutu çizilmez. */
 .bar-search input:not([type="checkbox"]):not([type="radio"]) {
@@ -150,6 +211,10 @@
 }
 .bar-search input::placeholder {
   color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-item { transition: none; }
 }
 
 .hand {
@@ -274,7 +339,7 @@
   --text-secondary: var(--muted);
   background-color: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 16px;
   box-shadow: var(--lift);
 }
 .kroki-room-head {
@@ -286,7 +351,7 @@
   padding: 0 16px;
   border-bottom: 1px solid var(--line);
   background: var(--base);
-  border-radius: 7px 7px 0 0;
+  border-radius: 15px 15px 0 0;
   font-weight: 650;
 }
 .kroki-room-head h3 {

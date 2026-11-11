@@ -6,7 +6,6 @@
    kasa defteri, rapor ve KDS alanları düz opak --surface üzerinde kalır. */
 
 .side-rail,
-.bar,
 .mobile-tabbar,
 .glass-panel.glass-panel {
   background-color: var(--glass);
@@ -97,4 +96,15 @@
 }
 :root[data-perf="low"] .kroki-room-head {
   background-color: var(--base);
+}
+
+/* Bildirim hapı yarı saydamdır ama bulanıklık taşımaz; düşük cihaz ve saydamlık azaltmada opak. */
+:root[data-perf="low"] .notice-slip {
+  background-color: var(--surface);
+  border-color: var(--line);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .notice-slip {
+    background-color: var(--surface);
+  }
 }

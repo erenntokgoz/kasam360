@@ -14,7 +14,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         autoComplete="off"
         spellCheck={false}
         className={cn(
-          'min-h-12 w-full px-3.5 py-2 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent-amber)]',
+          'min-h-12 w-full px-4 py-2 rounded-full bg-[var(--glass-tint)] text-[var(--text-primary)] border border-[var(--border)] text-sm outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent-amber)]',
           error && 'border-[var(--accent-red)] focus:border-[var(--accent-red)]',
           className
         )}

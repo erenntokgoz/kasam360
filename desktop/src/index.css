@@ -273,8 +273,8 @@
   background-color: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: var(--lift);
+  border-radius: 16px;
+  box-shadow: none;
 }
 
 .paper::before {
@@ -309,9 +309,9 @@
 .work-surface select {
   background-color: var(--surface);
   color: var(--text);
-  border: 1px solid var(--edge);
-  border-radius: 6px;
-  padding-inline: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding-inline: 1rem;
 }
 
 * {
@@ -369,9 +369,9 @@ button {
 @layer base {
   button, input:not([type="checkbox"]):not([type="radio"]) {
     min-height: 44px;
-    border: 1px solid var(--edge);
-    border-radius: 6px;
-    padding: .55rem .8rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: .55rem 1rem;
     background: var(--surface);
     color: var(--text);
   }
@@ -400,16 +400,17 @@ h2 {
   font-size: 1.12rem;
 }
 
+/* Düğmeler: birincil dolu hap, ikincil cam hap, tehlike ayrı. 48px dokunma hedefi korunur. */
 .tactile-btn {
   font-family: inherit;
   font-weight: 600;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 999px;
   box-shadow: none;
-  transition: background-color 80ms ease, border-color 80ms ease;
+  transition: background-color 90ms ease, border-color 90ms ease, transform 90ms ease;
 }
 .tactile-btn:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: scale(0.975);
 }
 .tactile-btn:disabled {
   opacity: 0.5;
@@ -431,8 +432,8 @@ h2 {
 
 .btn-secondary {
   color: var(--text);
-  background-color: var(--surface);
-  border: 1px solid var(--edge);
+  background-color: var(--glass-tint);
+  border: 1px solid var(--line);
 }
 .btn-secondary:hover {
   background-color: var(--hover);
@@ -440,7 +441,7 @@ h2 {
 
 .paper .btn-secondary,
 .bar .btn-secondary {
-  background-color: var(--surface);
+  background-color: var(--glass-tint);
   border-color: var(--line);
 }
 .paper .btn-secondary:hover,
@@ -449,8 +450,8 @@ h2 {
 }
 
 .btn-selected {
-  color: var(--text);
-  background-color: var(--hover);
+  color: var(--action);
+  background-color: var(--navon);
   border-color: var(--action);
   font-weight: 650;
 }
@@ -596,7 +597,7 @@ td:first-child {
 dialog {
   width: min(390px, calc(100% - 2rem));
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 20px;
   padding: 1.25rem;
   background: var(--surface);
   color: var(--text);
@@ -625,13 +626,13 @@ dialog form {
 .toast,
 [role="status"] > .paper {
   position: fixed;
-  right: 1rem;
-  bottom: 1rem;
+  left: 50%;
+  translate: -50% 0;
+  bottom: 1.25rem;
   max-width: calc(100% - 2rem);
-  background: var(--surface) !important;
-  border: 1px solid var(--line) !important;
-  border-left: 3px solid var(--ok) !important;
-  border-radius: 6px !important;
+  background: var(--glass) !important;
+  border: 1px solid var(--glass-edge) !important;
+  border-radius: 999px !important;
   box-shadow: var(--lift) !important;
   padding: .65rem .85rem !important;
   display: flex;
@@ -665,12 +666,25 @@ input:-webkit-autofill:focus {
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
-  min-height: 44px;
-  border: 1px solid var(--edge);
-  border-radius: 6px;
-  padding: .55rem .8rem;
-  background-color: var(--surface);
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .55rem 1rem;
+  background-color: var(--glass-tint);
   color: var(--text);
+}
+textarea {
+  border-radius: 16px;
+}
+input[type="date"],
+input[type="month"],
+input[type="time"] {
+  font-variant-numeric: tabular-nums;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
+  border-radius: 999px;
 }
 input:not([type="checkbox"]):not([type="radio"]):focus,
 select:focus,
@@ -684,9 +698,9 @@ textarea:focus {
 .paper select,
 .paper textarea,
 .bar select {
-  background-color: var(--surface);
-  border: 1px solid var(--edge);
-  border-radius: 6px;
+  background-color: var(--glass-tint);
+  border: 1px solid var(--line);
+  border-radius: 999px;
   color: var(--text);
 }
 .paper input:focus,
@@ -697,8 +711,10 @@ textarea:focus {
 }
 
 .rounded-md,
-.rounded-lg,
+.rounded-lg {
+  border-radius: 12px;
+}
 .rounded-xl,
 .rounded-2xl {
-  border-radius: 6px;
+  border-radius: 16px;
 }

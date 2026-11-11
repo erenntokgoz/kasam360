@@ -436,8 +436,8 @@
   padding: 18px;
   color: var(--text);
   border: 1px solid var(--glass-edge);
-  border-radius: 20px;
-  box-shadow: var(--lift);
+  border-radius: 16px;
+  box-shadow: none;
 }
 .dash-card-title {
   margin: 0;
@@ -569,7 +569,7 @@
   padding: 4px;
   background-color: var(--glass-tint);
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 999px;
 }
 .seg-btn,
 .seg-month > button.tactile-btn {
@@ -581,7 +581,7 @@
   color: var(--text);
   background-color: transparent;
   border: 0;
-  border-radius: 14px;
+  border-radius: 999px;
   cursor: pointer;
 }
 .seg-btn:hover,

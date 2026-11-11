@@ -80,47 +80,33 @@ export const ReportsTab: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Rapor">
+      <div className="seg" role="group" aria-label="Rapor">
         {keys.map((key) => (
-          <Button
-            key={key}
-            variant={report === key ? 'selected' : 'secondary'}
-            className="min-h-12 text-sm font-bold"
-            aria-pressed={report === key}
-            onClick={() => setReport(key)}
-          >
+          <button key={key} type="button" className="seg-btn" aria-pressed={report === key} onClick={() => setReport(key)}>
             {REPORTS[key].label}
-          </Button>
+          </button>
         ))}
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)]">
           Başlangıç
-          <Input type="date" className="min-h-12 !w-44 tabular-nums" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} />
+          <Input type="date" className="!w-44 tabular-nums" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} />
         </label>
         <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)]">
           Bitiş
-          <Input type="date" className="min-h-12 !w-44 tabular-nums" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} />
+          <Input type="date" className="!w-44 tabular-nums" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} />
         </label>
-        <div className="flex items-center gap-1.5" role="group" aria-label="Hazır dönem">
+        <div className="seg" role="group" aria-label="Hazır dönem">
           {QUICK.map((item) => {
             const active = from === item.from() && to === item.to();
             return (
-              <Button
-                key={item.label}
-                variant={active ? 'selected' : 'secondary'}
-                className="min-h-12 text-sm font-bold"
-                aria-pressed={active}
-                onClick={() => {
-                  setFrom(item.from());
-                  setTo(item.to());
-                }}
-              >
+              <button key={item.label} type="button" className="seg-btn" aria-pressed={active}
+                onClick={() => { setFrom(item.from()); setTo(item.to()); }}>
                 {item.label}
-              </Button>
+              </button>
             );
           })}
-          <MonthPicker value={monthValue} current={dayText(new Date()).slice(0, 7)} onSelect={(month) => {
+          <MonthPicker value={monthValue} current={dayText(new Date()).slice(0, 7)} className="seg-month" onSelect={(month) => {
             const range = monthRange(month);
             setFrom(range.from);
             setTo(range.to);

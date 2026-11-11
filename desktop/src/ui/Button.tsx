@@ -10,7 +10,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'secondary', size = 'md', isLoading, disabled, children, ...props }, ref) => {
     const baseClasses =
-      'tactile-btn inline-flex items-center justify-center font-semibold select-none cursor-pointer text-center outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)]';
+      'tactile-btn inline-flex items-center justify-center font-semibold select-none cursor-pointer text-center outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] rounded-full';
 
     const sizeClasses = {
       sm: 'min-h-12 px-3 py-1 text-sm gap-1.5',
