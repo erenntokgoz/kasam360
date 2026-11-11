@@ -4,21 +4,21 @@
    Hiçbir kural bulanıklık veya sürekli animasyon eklemez. */
 
 /* Segment kap: seçili düğmeyle ikincil/hayalet düğme yan yana ise. */
-:is(div, span, section, fieldset):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) {
+:is(div, span, section, fieldset):not(.grid):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) {
   padding: 4px;
   background-color: var(--glass-tint);
   border: 1px solid var(--line);
   border-radius: 28px;
 }
-:is(div, span, section, fieldset):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > :is(.btn-secondary, .btn-ghost, .btn-selected) {
+:is(div, span, section, fieldset):not(.grid):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > :is(.btn-secondary, .btn-ghost, .btn-selected) {
   border-color: transparent;
   background-color: transparent;
   color: var(--text);
 }
-:is(div, span, section, fieldset):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > :is(.btn-secondary, .btn-ghost):hover {
+:is(div, span, section, fieldset):not(.grid):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > :is(.btn-secondary, .btn-ghost):hover {
   background-color: var(--hover);
 }
-:is(div, span, section, fieldset):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > .btn-selected {
+:is(div, span, section, fieldset):not(.grid):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > .btn-selected {
   color: var(--button);
   background-color: var(--action);
   border-color: var(--action);

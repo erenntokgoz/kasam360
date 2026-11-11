@@ -44,6 +44,15 @@ function dayBounds(from: string, to: string) {
   return { from: toLocalIso(new Date(fy, fm - 1, fd)), to: toLocalIso(new Date(ty, tm - 1, td, 23, 59, 59)) };
 }
 
+/** Sayı ve tutar sütunları sağa yaslanır; metin içeren sütun solda kalır (tutarlar alt alta okunur). */
+const NUMBER_CELL = /^[-−+]?\d[\d.,\s]*(?:\s?(?:₺|TL|%|adet))?$/i;
+function numericColumns(columns: string[], rows: string[][]): boolean[] {
+  return columns.map((_, index) => {
+    const cells = rows.map((row) => row[index] ?? '').filter((cell) => cell.trim() !== '' && cell.trim() !== '-');
+    return cells.length > 0 && cells.every((cell) => NUMBER_CELL.test(cell.trim()));
+  });
+}
+
 export const ReportsTab: React.FC = () => {
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
   const keys = (Object.keys(REPORTS) as ReportKey[]).filter((key) => isOwner || !OWNER_ONLY_REPORTS.has(key));
@@ -82,6 +91,7 @@ export const ReportsTab: React.FC = () => {
 
   const meta: ReportFileMeta = { title: REPORTS[report].label, from, to, filters: [['Rapor türü', REPORTS[report].label]] };
 
+  const numeric = table ? numericColumns(table.columns, table.rows) : [];
   const reportSeg = (
     <div className="seg" role="group" aria-label="Rapor">
       {keys.map((key) => (
@@ -172,8 +182,8 @@ export const ReportsTab: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-[var(--text-muted)]">
-                {table.columns.map((column) => (
-                  <th key={column} className="font-medium px-4 py-3 whitespace-nowrap">{column}</th>
+                {table.columns.map((column, index) => (
+                  <th key={column} className={`font-medium px-4 py-3 whitespace-nowrap ${numeric[index] ? 'text-right' : ''}`}>{column}</th>
                 ))}
               </tr>
             </thead>
@@ -181,7 +191,7 @@ export const ReportsTab: React.FC = () => {
               {table.rows.map((row, index) => (
                 <tr key={`${row[0]}-${index}`} className="border-t border-[var(--border)]">
                   {row.map((cell, column) => (
-                    <td key={column} className="px-4 py-2.5 tabular-nums text-[var(--text-primary)] whitespace-nowrap">{cell}</td>
+                    <td key={column} className={`px-4 py-2.5 tabular-nums text-[var(--text-primary)] whitespace-nowrap ${numeric[column] ? 'text-right' : ''}`}>{cell}</td>
                   ))}
                 </tr>
               ))}

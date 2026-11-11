@@ -189,14 +189,18 @@ export const FloorModule: React.FC = () => {
       </Bar>
 
       <div className="floor-tools">
-        {FILTERS.map((item) => (
-          <button key={item.id} type="button" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
-            {item.label} <span className="tabular-nums">{scopedTables.filter((table) => matchesTableFilter(table, item.id)).length}</span>
-          </button>
-        ))}
+        <div className="seg" role="group" aria-label="Masa durumu">
+          {FILTERS.map((item) => (
+            <button key={item.id} type="button" className="seg-btn" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+              {item.label} <span className="tabular-nums">{scopedTables.filter((table) => matchesTableFilter(table, item.id)).length}</span>
+            </button>
+          ))}
+        </div>
         <span className="flex-1" />
-        <button type="button" aria-pressed={viewMode === 'CARDS'} onClick={() => setViewMode('CARDS')}>Kartlar</button>
-        <button type="button" aria-pressed={viewMode === 'KROKI'} onClick={() => setViewMode('KROKI')}>Kroki</button>
+        <div className="seg" role="group" aria-label="Görünüm">
+          <button type="button" className="seg-btn" aria-pressed={viewMode === 'CARDS'} onClick={() => setViewMode('CARDS')}>Kartlar</button>
+          <button type="button" className="seg-btn" aria-pressed={viewMode === 'KROKI'} onClick={() => setViewMode('KROKI')}>Kroki</button>
+        </div>
       </div>
 
       <div className="floor-views">
