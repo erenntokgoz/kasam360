@@ -1,8 +1,8 @@
 //! Bulut eşitlemesinin komutları: durum, hesaptan çıkış ve girişte geri yükleme.
 //!
-//! Ağ yalnız sabit site adresine gider (`SITE_URL`); IPC'den adres gelmez.
+//! Ağ yalnız sabit site adresine gider (`API_URL`); IPC'den adres gelmez.
 
-use crate::commands::account_commands::{sign_out_device, SITE_URL};
+use crate::commands::account_commands::{sign_out_device, API_URL};
 use crate::commands::license_commands::{
     account_tenants, activate_for_tenant, link_with_password, TenantChoice,
 };
@@ -57,7 +57,7 @@ pub async fn cloud_sign_out(
 ) -> Result<CloudSignOut, String> {
     sign_out_device(&pool, &state, actor_id, actor_role, tenant_id).await?;
     state.staff_session.clear()?;
-    let api = HttpApi::new(SITE_URL)?;
+    let api = HttpApi::new(API_URL)?;
     let outcome = cloud.sign_out(&api).await?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let session = device_session::load(&mut conn).await?;
@@ -91,7 +91,7 @@ pub async fn cloud_restore(
         }
     }
     link_with_password(&pool, &email, &password).await?;
-    let api = HttpApi::new(SITE_URL)?;
+    let api = HttpApi::new(API_URL)?;
     let progress = move |step: RestoreProgress| {
         if let Err(reason) = app.emit(RESTORE_EVENT, &step) {
             tracing::warn!("Geri yükleme ilerlemesi yayınlanamadı: {reason}");
@@ -167,7 +167,7 @@ pub async fn cloud_restore_tenant(
         license_key,
         license_device_id: device_id,
     };
-    let api = HttpApi::new(SITE_URL)?;
+    let api = HttpApi::new(API_URL)?;
     let progress = move |step: RestoreProgress| {
         if let Err(reason) = app.emit(RESTORE_EVENT, &step) {
             tracing::warn!("Geri yükleme ilerlemesi yayınlanamadı: {reason}");

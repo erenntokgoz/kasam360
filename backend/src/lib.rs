@@ -164,7 +164,7 @@ pub fn run() {
                     status,
                 );
             }));
-            cloud_sync.start(commands::account_commands::SITE_URL);
+            cloud_sync.start(commands::account_commands::API_URL);
             app.manage(cloud_sync);
 
             app.manage(pool);

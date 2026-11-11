@@ -3,7 +3,7 @@
 //! Komutlar personel oturumu istemez: lisans yokken kasa açılmaz ve bağlamayı sahip
 //! web hesabıyla yapar. Ağ yalnız sabit site adresine gider; IPC'den adres gelmez.
 
-use crate::commands::account_commands::SITE_URL;
+use crate::commands::account_commands::API_URL;
 use crate::db::DbPool;
 use crate::services::license::{self, LicenseStatus, SignedTenantLicense};
 use serde::Deserialize;
@@ -97,7 +97,7 @@ async fn refresh(pool: &DbPool) -> Result<LicenseStatus, String> {
         return refresh_tenant(pool, &stored.device_id, &key, &tenant_id, &tenant_name).await;
     }
     let response = client()?
-        .get(format!("{SITE_URL}/api/desktop/license"))
+        .get(format!("{API_URL}/api/desktop/license"))
         .bearer_auth(&key)
         .header("x-device-id", &stored.device_id)
         .header("x-device-name", device_name())
@@ -170,7 +170,7 @@ async fn refresh_tenant(
     tenant_id: &str,
     tenant_name: &str,
 ) -> Result<LicenseStatus, String> {
-    refresh_tenant_at(pool, device_id, key, tenant_id, tenant_name, SITE_URL, None).await
+    refresh_tenant_at(pool, device_id, key, tenant_id, tenant_name, API_URL, None).await
 }
 
 async fn refresh_tenant_at(
@@ -308,7 +308,7 @@ pub(crate) async fn link_with_password(
 ) -> Result<LicenseStatus, String> {
     let body = serde_json::json!({ "email": email.trim(), "password": password }).to_string();
     let response = client()?
-        .post(format!("{SITE_URL}/api/desktop/license-key"))
+        .post(format!("{API_URL}/api/desktop/license-key"))
         .header("content-type", "application/json")
         .body(body)
         .send()
@@ -340,7 +340,7 @@ pub async fn link_license_with_google(
         return Err("Bağlantı kodu geçersiz.".to_string());
     }
     let response = client()?
-        .get(format!("{SITE_URL}/api/desktop-link/{code}"))
+        .get(format!("{API_URL}/api/desktop-link/{code}"))
         .send()
         .await
         .map_err(|_| "Sunucuya ulaşılamadı. Bağlantınızı kontrol edin.".to_string())?;
@@ -376,7 +376,7 @@ pub(crate) async fn account_tenants(pool: &DbPool) -> Result<Vec<TenantChoice>, 
         .license_key
         .ok_or_else(|| "Kasa henüz hesaba bağlanmadı.".to_string())?;
     let response = client()?
-        .get(format!("{SITE_URL}/api/desktop/tenants"))
+        .get(format!("{API_URL}/api/desktop/tenants"))
         .bearer_auth(&key)
         .send()
         .await

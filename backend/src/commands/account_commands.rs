@@ -26,6 +26,16 @@ pub(crate) const SITE_URL: &str = match option_env!("KASAM360_DEV_SITE_URL") {
 #[cfg(not(debug_assertions))]
 pub(crate) const SITE_URL: &str = "https://kasam360.com.tr";
 
+// Sunucu çağrıları (lisans, eşitleme, menü yayını) üretimde API alt alanına gider; TLS doğrulaması
+// kapatılmaz. Geliştirmede site adresi (web vekili) veya açık dev adresi kullanılır.
+#[cfg(debug_assertions)]
+pub(crate) const API_URL: &str = match option_env!("KASAM360_DEV_API_URL") {
+    Some(url) => url,
+    None => SITE_URL,
+};
+#[cfg(not(debug_assertions))]
+pub(crate) const API_URL: &str = "https://api.kasam360.com.tr";
+
 /// Tarayıcıya yalnız bilinen sayfalar gider; IPC'den gelen metin komut satırına ulaşamaz.
 fn site_page_url(path: &str) -> Result<String, String> {
     let is_link_code = path

@@ -90,7 +90,7 @@ pub fn encode_query(value: &str) -> String {
     out
 }
 
-/// Gerçek sunucu. Adres sabittir (`SITE_URL`); IPC'den adres gelmez.
+/// Gerçek sunucu. Adres sabittir (`API_URL`); IPC'den adres gelmez.
 pub struct HttpApi {
     base: String,
     client: reqwest::Client,

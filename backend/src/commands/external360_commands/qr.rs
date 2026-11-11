@@ -112,7 +112,7 @@ pub async fn qr_menu_publish(
     let tenant = require_tenant_id(tenant_id.as_deref())?;
     crate::services::qr_menu_publish::publish(
         &pool,
-        crate::commands::account_commands::SITE_URL,
+        crate::commands::account_commands::API_URL,
         &tenant,
     )
     .await
@@ -134,7 +134,7 @@ pub async fn qr_menu_status(
     let tenant = require_tenant_id(tenant_id.as_deref())?;
     crate::services::qr_menu_publish::status(
         &pool,
-        crate::commands::account_commands::SITE_URL,
+        crate::commands::account_commands::API_URL,
         &tenant,
     )
     .await
