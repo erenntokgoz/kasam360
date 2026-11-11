@@ -4,33 +4,63 @@
 @import "./auth.css";
 @import "./motion.css";
 @import "./notice.css";
+@import "./glass.css";
+
+/* Archivo yerel pakettendir (CDN yok, internetsiz çalışır); yalnız latin ve latin-ext alt kümeleri, tek değişken ağırlık aralığı. */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../node_modules/@fontsource-variable/archivo/files/archivo-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../node_modules/@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 @theme {
+  --font-sans: var(--font-ui);
   --text-xs: 0.8125rem;
   --text-xs--line-height: 1.25rem;
   --text-sm: 0.9375rem;
   --text-sm--line-height: 1.375rem;
 }
 
-/* KASAM360 Arayüz Tasarım Sistemi
-   Tokenler ve tipografi C:\Users\Eren Tokgöz\Desktop\kasam360-arayuz-referansi.html referansından alınmıştır. */
+/* KASAM360 Çini tasarım token'ları. Desktop ve mobil aynı dosyayı kullanır. */
 
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --base: #f4f6f8;
-  --surface: #ffffff;
-  --hover: #edf2f5;
-  --line: #d7dfe6;
-  --text: #19232c;
-  --muted: #526473;
-  --action: #214f58;
-  --button: #ffffff;
-  --ok: #1c6648;
-  --warn: #834710;
-  --focus: #257e91;
+  /* Çini paleti: kontrast oranları backend/work/tema-yonleri/yon-1.html içinde hesaplanmıştır. */
+  --base: #EDF2F1;
+  --surface: #FFFFFF;
+  --hover: #E1E9E8;
+  --line: #D3DEDD;
+  /* Denetim kenarı yüzeyde en az 3:1 kontrast taşır; ayırıcı çizgi (--line) süs amaçlıdır. */
+  --edge: #78908C;
+  --text: #14211F;
+  --muted: #4A5C5A;
+  --action: #0A6B68;
+  --button: #FFFFFF;
+  --ok: #1B6B3A;
+  --warn: #8A5A00;
+  --focus: #0A6B68;
+  --danger: #B3261E;
 
-  /* Semantik sistem değişkenleri referans tokenlerine eşlenir */
+  /* Cam yüzey yalnız çerçeve öğelerinde kullanılır; yoğun sayı alanları opak --surface üzerindedir. */
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-edge: rgba(20, 33, 31, 0.16);
+  --glass-tint: rgba(237, 242, 241, 0.78);
+  --scrim: rgba(12, 21, 20, 0.45);
+  --navon: rgba(10, 107, 104, 0.12);
+  --glass-blur: 12px;
+
   --desk: var(--base);
   --desk-line: transparent;
 
@@ -46,7 +76,7 @@
 
   --border: var(--line);
   --border-subtle: var(--line);
-  --border-strong: var(--line);
+  --border-strong: var(--edge);
 
   --text-primary: var(--text);
   --text-secondary: var(--muted);
@@ -54,59 +84,61 @@
   --text-tertiary: var(--muted);
 
   --brand: var(--action);
-  --brand-hover: #193e45;
+  --brand-hover: #08524F;
   --primary-bg: var(--action);
-  --primary-hover: #193e45;
+  --primary-hover: #08524F;
   --primary-fg: var(--button);
 
   --success: var(--ok);
-  --success-hover: #144e36;
+  --success-hover: #14502B;
   --success-bg: var(--ok);
   --success-fg: var(--button);
 
   --warning: var(--warn);
-  --warning-hover: #6d3a0c;
+  --warning-hover: #6B4500;
 
-  --danger: #b3261e;
-  --danger-hover: #961f18;
-  --danger-bg: #b3261e;
-  --danger-fg: #ffffff;
+  --danger-hover: #8F1E18;
+  --danger-bg: var(--danger);
+  --danger-fg: #FFFFFF;
 
   --info: var(--action);
 
   --accent-amber: var(--warn);
-  --accent-amber-hover: #6d3a0c;
-  --accent-amber-soft: rgba(131, 71, 16, 0.12);
+  --accent-amber-hover: #6B4500;
+  --accent-amber-soft: rgba(138, 90, 0, 0.12);
   --accent-amber-border: var(--warn);
 
   --accent-emerald: var(--ok);
-  --accent-emerald-hover: #144e36;
-  --accent-emerald-soft: rgba(28, 102, 72, 0.12);
+  --accent-emerald-hover: #14502B;
+  --accent-emerald-soft: rgba(27, 107, 58, 0.12);
   --accent-emerald-border: var(--ok);
 
-  --accent-red: #b3261e;
-  --accent-red-hover: #961f18;
+  --accent-red: var(--danger);
+  --accent-red-hover: #8F1E18;
   --accent-red-soft: rgba(179, 38, 30, 0.12);
-  --accent-red-border: #b3261e;
+  --accent-red-border: var(--danger);
 
   --accent-blue: var(--action);
-  --accent-blue-soft: rgba(33, 79, 88, 0.12);
+  --accent-blue-soft: rgba(10, 107, 104, 0.12);
   --accent-blue-border: var(--line);
 
+  /* Eski yüzey adları geriye uyumluluk için düz yüzeye eşlenir; defter görünümü kalmadı. */
   --sheet: var(--surface);
   --sheet-yellow: var(--surface);
   --sheet-cream: var(--surface);
-  --sheet-green: rgba(28, 102, 72, 0.12);
+  --sheet-green: rgba(27, 107, 58, 0.12);
   --sheet-pink: rgba(179, 38, 30, 0.12);
-  --sheet-blue: rgba(33, 79, 88, 0.12);
-  --sheet-orange: rgba(131, 71, 16, 0.12);
+  --sheet-blue: rgba(10, 107, 104, 0.12);
+  --sheet-orange: rgba(138, 90, 0, 0.12);
   --sheet-rule: var(--line);
   --slip: var(--surface);
 
   --marker: var(--hover);
   --sketch: 6px;
-  --font-hand: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --lift: 0 1px 3px rgba(17, 27, 36, 0.08), 0 4px 12px rgba(17, 27, 36, 0.04);
+  --font-ui: "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-hand: var(--font-ui);
+  /* Tek katmanlı ucuz gölge; çok katmanlı gölge düşük cihazlarda boyama maliyetini artırır. */
+  --lift: 0 1px 3px rgba(20, 33, 31, 0.12);
 
   --print: var(--text);
   --serial: var(--warn);
@@ -114,24 +146,36 @@
   --ink: var(--text);
   --ink-soft: var(--muted);
   --ink-faint: var(--muted);
-  --pen-red: #b3261e;
+  --pen-red: var(--danger);
   --pen-green: var(--ok);
 }
 
 :root[data-theme="dark"],
 [data-theme="dark"] {
   color-scheme: dark;
-  --base: #10161b;
-  --surface: #182128;
-  --hover: #22303a;
-  --line: #33424e;
-  --text: #eef2f5;
-  --muted: #acbac5;
-  --action: #a0d7df;
-  --button: #14252b;
-  --ok: #8bd2ad;
-  --warn: #f0be83;
-  --focus: #9cdae6;
+  /* Çini paleti: kontrast oranları backend/work/tema-yonleri/yon-1.html içinde hesaplanmıştır. */
+  --base: #0C1514;
+  --surface: #142120;
+  --hover: #1C2E2D;
+  --line: #2B4140;
+  /* Denetim kenarı yüzeyde en az 3:1 kontrast taşır; ayırıcı çizgi (--line) süs amaçlıdır. */
+  --edge: #4F706D;
+  --text: #EAF3F2;
+  --muted: #A6BDBA;
+  --action: #5CD1C8;
+  --button: #07201F;
+  --ok: #6FD39A;
+  --warn: #F0B650;
+  --focus: #5CD1C8;
+  --danger: #FF8A80;
+
+  /* Cam yüzey yalnız çerçeve öğelerinde kullanılır; yoğun sayı alanları opak --surface üzerindedir. */
+  --glass: rgba(20, 33, 32, 0.72);
+  --glass-edge: rgba(255, 255, 255, 0.14);
+  --glass-tint: rgba(12, 21, 20, 0.7);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --navon: rgba(92, 209, 200, 0.16);
+  --glass-blur: 12px;
 
   --desk: var(--base);
   --desk-line: transparent;
@@ -148,7 +192,7 @@
 
   --border: var(--line);
   --border-subtle: var(--line);
-  --border-strong: var(--line);
+  --border-strong: var(--edge);
 
   --text-primary: var(--text);
   --text-secondary: var(--muted);
@@ -156,59 +200,61 @@
   --text-tertiary: var(--muted);
 
   --brand: var(--action);
-  --brand-hover: #b8e4eb;
+  --brand-hover: #8BE3DB;
   --primary-bg: var(--action);
-  --primary-hover: #b8e4eb;
+  --primary-hover: #8BE3DB;
   --primary-fg: var(--button);
 
   --success: var(--ok);
-  --success-hover: #a3e2c1;
+  --success-hover: #8FE0B2;
   --success-bg: var(--ok);
   --success-fg: var(--button);
 
   --warning: var(--warn);
-  --warning-hover: #ffd4a3;
+  --warning-hover: #F6CB7E;
 
-  --danger: #f07167;
-  --danger-hover: #f89a93;
-  --danger-bg: #f07167;
-  --danger-fg: #14252b;
+  --danger-hover: #FFB1AA;
+  --danger-bg: var(--danger);
+  --danger-fg: #2A0907;
 
   --info: var(--action);
 
   --accent-amber: var(--warn);
-  --accent-amber-hover: #ffd4a3;
-  --accent-amber-soft: rgba(240, 190, 131, 0.15);
+  --accent-amber-hover: #F6CB7E;
+  --accent-amber-soft: rgba(240, 182, 80, 0.16);
   --accent-amber-border: var(--warn);
 
   --accent-emerald: var(--ok);
-  --accent-emerald-hover: #a3e2c1;
-  --accent-emerald-soft: rgba(139, 210, 173, 0.15);
+  --accent-emerald-hover: #8FE0B2;
+  --accent-emerald-soft: rgba(111, 211, 154, 0.16);
   --accent-emerald-border: var(--ok);
 
-  --accent-red: #f07167;
-  --accent-red-hover: #f89a93;
-  --accent-red-soft: rgba(240, 113, 103, 0.15);
-  --accent-red-border: #f07167;
+  --accent-red: var(--danger);
+  --accent-red-hover: #FFB1AA;
+  --accent-red-soft: rgba(255, 138, 128, 0.16);
+  --accent-red-border: var(--danger);
 
   --accent-blue: var(--action);
-  --accent-blue-soft: rgba(160, 215, 223, 0.15);
+  --accent-blue-soft: rgba(92, 209, 200, 0.16);
   --accent-blue-border: var(--line);
 
+  /* Eski yüzey adları geriye uyumluluk için düz yüzeye eşlenir; defter görünümü kalmadı. */
   --sheet: var(--surface);
   --sheet-yellow: var(--surface);
   --sheet-cream: var(--surface);
-  --sheet-green: rgba(139, 210, 173, 0.15);
-  --sheet-pink: rgba(240, 113, 103, 0.15);
-  --sheet-blue: rgba(160, 215, 223, 0.15);
-  --sheet-orange: rgba(240, 190, 131, 0.15);
+  --sheet-green: rgba(111, 211, 154, 0.16);
+  --sheet-pink: rgba(255, 138, 128, 0.16);
+  --sheet-blue: rgba(92, 209, 200, 0.16);
+  --sheet-orange: rgba(240, 182, 80, 0.16);
   --sheet-rule: var(--line);
   --slip: var(--surface);
 
   --marker: var(--hover);
   --sketch: 6px;
-  --font-hand: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --lift: 0 1px 3px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.22);
+  --font-ui: "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-hand: var(--font-ui);
+  /* Tek katmanlı ucuz gölge; çok katmanlı gölge düşük cihazlarda boyama maliyetini artırır. */
+  --lift: 0 1px 3px rgba(0, 0, 0, 0.4);
 
   --print: var(--text);
   --serial: var(--warn);
@@ -216,7 +262,7 @@
   --ink: var(--text);
   --ink-soft: var(--muted);
   --ink-faint: var(--muted);
-  --pen-red: #f07167;
+  --pen-red: var(--danger);
   --pen-green: var(--ok);
 }
 
@@ -262,7 +308,7 @@
 .work-surface select {
   background-color: var(--surface);
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 6px;
   padding-inline: 0.75rem;
 }
@@ -301,7 +347,7 @@ html, body {
   background-color: var(--base);
   background-image: none;
   color: var(--text);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-ui);
   font-size: 15px;
   line-height: 1.45;
   font-variant-numeric: tabular-nums;
@@ -322,7 +368,7 @@ button {
 @layer base {
   button, input:not([type="checkbox"]):not([type="radio"]) {
     min-height: 44px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: 6px;
     padding: .55rem .8rem;
     background: var(--surface);
@@ -385,7 +431,7 @@ h2 {
 .btn-secondary {
   color: var(--text);
   background-color: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
 }
 .btn-secondary:hover {
   background-color: var(--hover);
@@ -428,7 +474,7 @@ h2 {
 }
 
 .btn-danger {
-  color: #ffffff;
+  color: var(--danger-fg);
   background-color: var(--danger);
   border-color: var(--danger);
   font-weight: 650;
@@ -555,7 +601,7 @@ dialog {
   color: var(--text);
 }
 dialog::backdrop {
-  background: #111b2480;
+  background: var(--scrim);
 }
 /* Katmansız kural Tailwind yardımcılarını (flex, items-center) her zaman ezerdi; etiketler bileşende
    yatay dizilemiyor, onay kutuları metnin üstüne düşüyordu. Temel katmanda kalır, sınıflar kazanır. */
@@ -585,7 +631,7 @@ dialog form {
   border: 1px solid var(--line) !important;
   border-left: 3px solid var(--ok) !important;
   border-radius: 6px !important;
-  box-shadow: 0 8px 25px rgba(17, 27, 36, 0.14) !important;
+  box-shadow: var(--lift) !important;
   padding: .65rem .85rem !important;
   display: flex;
   align-items: center;
@@ -619,7 +665,7 @@ input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
   min-height: 44px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 6px;
   padding: .55rem .8rem;
   background-color: var(--surface);
@@ -638,7 +684,7 @@ textarea:focus {
 .paper textarea,
 .bar select {
   background-color: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 6px;
   color: var(--text);
 }

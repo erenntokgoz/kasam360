@@ -141,4 +141,16 @@ Bağımlılık: D03–D07 ve ilgili ekran görevi. Dosyalar: yeni `docs/design/v
 - [ ] Giriş, kilit, ödeme, ürün formu ve Labs işletme ekranlarında birincil eylem ilk bakışta seçilir; uzun form butonu sabit; kartın içine kart zinciri yok; veri kesiliyorsa tam içeriğe klavyeyle erişim var.
 - [ ] Kabul: tüm satırlar incelenmiş ve açık kusurlar listelenmiş. Sonuç “AI slop değil” gibi öznel slogan değil, karşılaştırılabilir görseller ve görev başarısı kanıtıdır.
 
+## Çini token'ları ve cam kuralı
+
+Desktop ve mobil aynı token dosyasını (`desktop/src/index.css`) kullanır; web ayrıdır. Renkler yalnız semantik token'dan gelir: `--base`, `--surface`, `--hover`, `--line` (süs ayırıcı), `--edge` (denetim kenarı), `--text`, `--muted`, `--action`, `--ok`, `--warn`, `--danger`. Bileşende hex veya ham Tailwind renk sınıfı kullanılmaz.
+
+- Açık: zemin #EDF2F1, yüzey #FFFFFF, kenar #78908C, metin #14211F, ikincil #4A5C5A, vurgu #0A6B68, başarı #1B6B3A, uyarı #8A5A00, tehlike #B3261E.
+- Koyu: zemin #0C1514, yüzey #142120, kenar #4F706D, metin #EAF3F2, ikincil #A6BDBA, vurgu #5CD1C8, başarı #6FD39A, uyarı #F0B650, tehlike #FF8A80.
+- Ölçüm: denetim kenarı yüzeyde 3,41:1 (açık) ve 3,05:1 (koyu); bu yüzden değiştirilmedi. Metin zeminde 14,7:1, vurgu beyaz üzerinde 6,3:1.
+- Yazı tipi: Archivo, yerel paketten (`@fontsource-variable/archivo`), yalnız latin ve latin-ext, tek ağırlık aralığı; CDN yok.
+- Cam yalnız çerçevede: kenar çubuğu, üst çubuk, alt sekme, modal ve çekmece paneli (`.glass-panel`). Kart başlıkları yalnız yarı saydam tondur, bulanıklık almaz. Kasa defteri, rapor tablosu, sipariş kalemi, KDS ve panel içeriği düz opak yüzeydedir.
+- Performans: bulanıklık en çok 3 sabit katmanda (kenar çubuğu veya alt sekme, üst çubuk, açık panel; panel içindeki çubuk ve iç içe panel bulanıklık açmaz), `--glass-blur` 12px, kaydırılan listede ve satırda yok, `will-change` yok, tek katmanlı gölge. `@supports not (backdrop-filter)`, `prefers-reduced-transparency` ve `data-perf="low"` opak yüzeye döner. `data-perf="low"`: Android'de `deviceMemory` ≤ 4 veya `hardwareConcurrency` ≤ 4 (`lib/perfMode.ts`); `localStorage` `kasam360.perf=low` ile elle zorlanır.
+- Bu adımda yerleşim, akış ve hareket değişmedi; `.paper/.sheet` adları geriye uyumluluk için düz yüzeye eşlenmiştir.
+
 Kontrol dayanağı: [Web Interface Guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md). Görsel yön tasarım önerisidir; erişilebilirlik ve davranış ölçütlerinden ayrı değerlendirilir.

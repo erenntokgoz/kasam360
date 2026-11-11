@@ -6,6 +6,9 @@ import { OperationNotice } from '../../desktop/src/ui/OperationNotice';
 import { MobileNavigation } from './MobileNavigation';
 import '../../desktop/src/index.css';
 import './mobile.css';
+import { applyPerformanceMode } from '../../desktop/src/lib/perfMode';
+
+applyPerformanceMode();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

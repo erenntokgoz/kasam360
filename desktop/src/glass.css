@@ -1,0 +1,82 @@
+/* Cam yüzey kuralları.
+   Neden: bulanıklık her karede arkadaki katmanı yeniden boyar; düşük donanımlı kasa bilgisayarları ve
+   ucuz Android cihazlarda akıcılığı bozar. Bu yüzden cam yalnız sabit çerçeve katmanlarındadır:
+   kenar çubuğu, üst çubuk, alt sekme ve modal/çekmece paneli. Bir ekranda aynı anda en çok 3 katman
+   (kenar çubuğu/alt sekme + üst çubuk + açık panel) bulanıklık kullanır. Kaydırılan liste, tablo satırı,
+   kasa defteri, rapor ve KDS alanları düz opak --surface üzerinde kalır. */
+
+.side-rail,
+.bar,
+.mobile-tabbar,
+.glass-panel.glass-panel {
+  background-color: var(--glass);
+  border-color: var(--glass-edge);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+/* Kart başlıkları yalnız yarı saydam tonludur; bulanıklık yoktur (her kartta katman açmaz). */
+.kroki-room-head {
+  background-color: var(--glass-tint);
+}
+
+/* İç içe çerçeve yeni bulanıklık katmanı açmaz: sayı sınırı korunur. */
+.glass-panel .bar,
+.glass-panel .glass-panel,
+.glass-panel .side-rail {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.glass-panel .bar {
+  background-color: transparent;
+}
+
+/* Panel içeriği (form, sayı alanı) opak kalır; yalnız başlık ve çerçeve camdır. */
+.glass-panel > .glass-body {
+  background-color: var(--surface);
+}
+
+/* Modal/çekmece perdesi düz renktir; tam ekran bulanıklık kullanılmaz. */
+.glass-scrim {
+  background-color: var(--scrim);
+}
+
+/* Bulanıklık desteklenmiyorsa opak yedek. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .side-rail,
+  .bar,
+  .mobile-tabbar,
+  .glass-panel.glass-panel {
+    background-color: var(--surface);
+  }
+}
+
+/* Kullanıcı saydamlığı azaltmak istediğinde opak yedek. */
+@media (prefers-reduced-transparency: reduce) {
+  .side-rail,
+  .bar,
+  .mobile-tabbar,
+  .glass-panel.glass-panel {
+    background-color: var(--surface);
+    border-color: var(--line);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .kroki-room-head {
+    background-color: var(--base);
+  }
+}
+
+/* Düşük cihaz algısı (perfMode.ts) cam katmanlarını kapatır. */
+:root[data-perf="low"] .side-rail,
+:root[data-perf="low"] .bar,
+:root[data-perf="low"] .mobile-tabbar,
+:root[data-perf="low"] .glass-panel {
+  background-color: var(--surface);
+  border-color: var(--line);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:root[data-perf="low"] .kroki-room-head {
+  background-color: var(--base);
+}

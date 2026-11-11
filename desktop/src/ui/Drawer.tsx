@@ -50,7 +50,7 @@ export const Drawer: React.FC<DrawerProps> = ({
       ref={rootRef}
       role="dialog"
       aria-modal="true"
-      className="motion-backdrop fixed inset-0 z-40 flex justify-end bg-black/60 overflow-hidden"
+      className="motion-backdrop fixed inset-0 z-40 flex justify-end glass-scrim overflow-hidden"
       onClick={onClose}
     >
       <aside
@@ -59,7 +59,7 @@ export const Drawer: React.FC<DrawerProps> = ({
         aria-label={title}
         data-motion-panel="drawer"
         className={cn(
-          'motion-drawer outline-none w-full h-full paper !rounded-none border-l border-[var(--border)] flex flex-col justify-between shadow-2xl',
+          'motion-drawer glass-panel outline-none w-full h-full paper !rounded-none border-l border-[var(--border)] flex flex-col justify-between shadow-2xl',
           widthClasses
         )}
         onClick={(e) => e.stopPropagation()}
@@ -74,7 +74,7 @@ export const Drawer: React.FC<DrawerProps> = ({
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">{children}</div>
+        <div className="glass-body flex-1 overflow-y-auto p-4 space-y-4">{children}</div>
 
         {footer ? (
           <div className="p-4 border-t border-[var(--border)] bg-[var(--bg-subtle)] space-y-2.5 shrink-0">

@@ -21,7 +21,7 @@ export const SetupGate: React.FC<SetupGateProps> = ({ phase, error, onRetry }) =
         <div className="bg-[var(--bg-surface)] border border-[var(--border-strong)] rounded-lg p-6 max-w-sm space-y-4">
           <h1 className="print-title text-sm font-bold">Kurulum durumu okunamadı</h1>
           <ErrorToast message={error} />
-          <button type="button" onClick={onRetry} className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--brand)] text-white">
+          <button type="button" onClick={onRetry} className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--brand)] text-[var(--button)]">
             Yeniden Dene
           </button>
         </div>

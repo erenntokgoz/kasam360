@@ -73,14 +73,14 @@ export const Modal: React.FC<ModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className={cn('motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/75', fullScreen ? 'p-0 overflow-hidden' : 'p-4 overflow-y-auto')}
+      className={cn('motion-backdrop fixed inset-0 z-50 flex items-center justify-center glass-scrim', fullScreen ? 'p-0 overflow-hidden' : 'p-4 overflow-y-auto')}
     >
       <div
         ref={panelRef}
         tabIndex={-1}
         data-motion-panel="dialog"
         className={cn(
-          'motion-dialog outline-none w-full border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
+          'motion-dialog glass-panel outline-none w-full border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden flex flex-col',
           surface === 'work' ? 'work-surface' : 'paper',
           cardFlow && !fullScreen && 'max-h-full',
           fullScreen ? 'w-screen h-screen max-w-none max-h-none rounded-none' : maxWidthClasses
@@ -100,7 +100,7 @@ export const Modal: React.FC<ModalProps> = ({
             ) : null}
           </div>
         </div>
-        <div className={cn(fullScreen ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : 'p-5 overflow-y-auto', !cardFlow && !fullScreen && 'max-h-[calc(100vh-7.5rem)]')}>{children}</div>
+        <div className={cn('glass-body', fullScreen ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : 'p-5 overflow-y-auto', !cardFlow && !fullScreen && 'max-h-[calc(100vh-7.5rem)]')}>{children}</div>
       </div>
     </div>
   );

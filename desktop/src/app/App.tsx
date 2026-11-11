@@ -174,7 +174,7 @@ export const App: React.FC = () => {
         <div className="bg-[var(--bg-surface)] border border-[var(--border-strong)] rounded-lg p-6 max-w-sm space-y-4">
           <h1 className="text-base font-bold">Platform hesabı</h1>
           <p className="text-sm text-[var(--text-secondary)]">Bu hesapla satış ve işletme ekranları açılamaz.</p>
-          <button type="button" onClick={logout} className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--brand)] text-white">
+          <button type="button" onClick={logout} className="tactile-btn min-h-12 px-4 rounded-lg bg-[var(--brand)] text-[var(--button)]">
             Çıkış Yap
           </button>
         </div>

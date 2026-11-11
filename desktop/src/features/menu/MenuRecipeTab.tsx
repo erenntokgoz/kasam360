@@ -187,7 +187,7 @@ export function MenuRecipeTab({ product, products, cost, busy, createRecipe, dea
             <p>Reçete pasife alınacak. Geçmiş kayıtlar korunur.</p>
             <div className="flex gap-2">
               <button type="button" className="tactile-btn min-h-12 px-3 rounded border border-[var(--border)]" onClick={() => setConfirmDeactivate(false)}>Vazgeç</button>
-              <button type="button" disabled={busy} className="tactile-btn min-h-12 px-3 rounded bg-[var(--accent-red)] text-white disabled:opacity-50" onClick={() => { void deactivateRecipe(product.id, cost.recipeId).then((ok) => { if (ok) setConfirmDeactivate(false); }); }}>Pasife Al</button>
+              <button type="button" disabled={busy} className="tactile-btn min-h-12 px-3 rounded bg-[var(--accent-red)] text-[var(--danger-fg)] disabled:opacity-50" onClick={() => { void deactivateRecipe(product.id, cost.recipeId).then((ok) => { if (ok) setConfirmDeactivate(false); }); }}>Pasife Al</button>
             </div>
           </div>
         ) : (
@@ -240,7 +240,7 @@ export function MenuRecipeTab({ product, products, cost, busy, createRecipe, dea
         </div>;
       })}
       <button type="button" className="tactile-btn min-h-12 px-3 rounded border border-[var(--border)]" onClick={() => setRows((current) => [...current, { key: crypto.randomUUID(), componentProductId: '', quantity: '', unit: 'adet' }])}>+ Malzeme Ekle</button>
-      <button type="button" disabled={busy || rows.length === 0} className="tactile-btn min-h-12 px-4 rounded bg-[var(--brand)] text-white font-bold disabled:opacity-50" onClick={() => void handleCreate()}>{editing ? 'Reçeteyi Kaydet' : 'Reçeteyi Oluştur'}</button>
+      <button type="button" disabled={busy || rows.length === 0} className="tactile-btn min-h-12 px-4 rounded bg-[var(--brand)] text-[var(--button)] font-bold disabled:opacity-50" onClick={() => void handleCreate()}>{editing ? 'Reçeteyi Kaydet' : 'Reçeteyi Oluştur'}</button>
       {editing && <button type="button" disabled={busy} className="tactile-btn min-h-12 px-3" onClick={() => { setError(null); setEditing(null); }}>Vazgeç</button>}
     </div>
   );

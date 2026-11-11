@@ -149,7 +149,7 @@ export const MenuDetailModifiye: React.FC<MenuDetailModifiyeProps> = ({
                   <button
                     type="button"
                     onClick={() => handleAddOptionSubmit(grp.id)}
-                    className="min-h-12 px-3 rounded bg-[var(--accent-blue)] text-white text-sm font-bold cursor-pointer"
+                    className="min-h-12 px-3 rounded bg-[var(--accent-blue)] text-[var(--button)] text-sm font-bold cursor-pointer"
                   >
                     Ekle
                   </button>

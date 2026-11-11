@@ -181,7 +181,7 @@ export const MenuFiyatTab: React.FC = () => {
                 type="button"
                 onClick={() => setShowApplyConfirm(true)}
                 disabled={busy}
-                className="tactile-btn min-h-12 px-5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="tactile-btn min-h-12 px-5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-[var(--button)] text-sm font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Check className="w-4 h-4" />
                 <span>Fiyatları Uygula ({bulkPreview.length} Ürün)</span>
@@ -298,7 +298,7 @@ export const MenuFiyatTab: React.FC = () => {
 
       {/* Toplu Zam Onay Modalı */}
       {showApplyConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 glass-scrim flex items-center justify-center p-4">
           <div className="w-84 paper border border-[var(--border)] rounded-xl p-4 space-y-4 shadow-2xl">
             <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">
               Fiyat Güncellemesini Onayla
@@ -318,7 +318,7 @@ export const MenuFiyatTab: React.FC = () => {
                 type="button"
                 onClick={handleApply}
                 disabled={busy}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-sm font-bold text-white cursor-pointer disabled:opacity-50"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-sm font-bold text-[var(--button)] cursor-pointer disabled:opacity-50"
               >
                 Onayla
               </button>
@@ -329,7 +329,7 @@ export const MenuFiyatTab: React.FC = () => {
 
       {/* Fiyat Listesi Silme Onay Modalı */}
       {isEnabled('feat_dynamic_pricing') && deletingPriceListId && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 glass-scrim flex items-center justify-center p-4">
           <div className="w-80 paper border border-[var(--border)] rounded-xl p-4 space-y-4 shadow-2xl">
             <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">Fiyat Listesini Sil?</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -347,7 +347,7 @@ export const MenuFiyatTab: React.FC = () => {
                 type="button"
                 onClick={handleDeletePriceList}
                 disabled={busy}
-                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-sm font-bold text-white cursor-pointer disabled:opacity-50"
+                className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--accent-red)] hover:bg-[var(--danger-hover)] text-sm font-bold text-[var(--danger-fg)] cursor-pointer disabled:opacity-50"
               >
                 Sil
               </button>
@@ -358,7 +358,7 @@ export const MenuFiyatTab: React.FC = () => {
 
       {/* Yeni Fiyat Listesi Modalı */}
       {isEnabled('feat_dynamic_pricing') && isNewListOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 glass-scrim flex items-center justify-center p-4">
           <div className="w-84 paper border border-[var(--border)] rounded-xl p-4 space-y-3 shadow-2xl">
             <h3 className="print-title text-sm font-bold text-[var(--text-primary)]">+ Yeni Fiyat Listesi</h3>
             <form onSubmit={handleCreatePriceList} className="space-y-3">
@@ -398,7 +398,7 @@ export const MenuFiyatTab: React.FC = () => {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-sm font-bold text-white cursor-pointer disabled:opacity-50"
+                  className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-sm font-bold text-[var(--button)] cursor-pointer disabled:opacity-50"
                 >
                   Oluştur
                 </button>

@@ -202,7 +202,7 @@ export const PayrollPanel: React.FC = () => {
           </table>
         </div>
       ) : null}
-      {paymentTarget ? <div role="dialog" aria-modal="true" aria-label="Bordro ödemesi" className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+      {paymentTarget ? <div role="dialog" aria-modal="true" aria-label="Bordro ödemesi" className="fixed inset-0 z-50 grid place-items-center glass-scrim p-4">
         <div className="w-full max-w-sm rounded-xl bg-[var(--bg-surface)] p-4 space-y-3">
           <h3 className="font-semibold">{paymentTarget.fullName} · kalan {formatMoney(paymentTarget.remainingCents)}</h3>
           <label className="block text-sm">Ödeme tutarı

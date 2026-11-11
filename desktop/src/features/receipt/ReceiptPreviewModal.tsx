@@ -124,15 +124,15 @@ export const ReceiptPreviewModal: React.FC = () => {
           {lastSale || format === 'CUSTOMER' ? (
             /* Format 1: Müşteri Bilgi Fişi */
             <div className="space-y-3">
-              <div className="text-center pb-2 border-b border-dashed border-gray-400">
-                <div className="text-xs text-gray-600 mt-1">
+              <div className="text-center pb-2 border-b border-dashed border-[var(--edge)]">
+                <div className="text-xs text-[var(--text-secondary)] mt-1">
                   {lastSale ? `İşlem: ${lastSale.transactionId.slice(0, 14)}` : 'Ön izleme'} · {formatDateTime()}
                 </div>
                 <div className="text-xs font-bold mt-1 uppercase">Masa: {tableName}</div>
               </div>
 
               {/* Kalem Dökümü */}
-              <div className="space-y-1.5 py-1 border-b border-dashed border-gray-400">
+              <div className="space-y-1.5 py-1 border-b border-dashed border-[var(--edge)]">
                 {items.map((i) => (
                   <div key={i.id} className="flex justify-between items-baseline">
                     <span>
@@ -144,22 +144,22 @@ export const ReceiptPreviewModal: React.FC = () => {
               </div>
 
               {/* Toplamlar */}
-              <div className="space-y-1 pt-1 border-b border-dashed border-gray-400">
+              <div className="space-y-1 pt-1 border-b border-dashed border-[var(--edge)]">
                 {isPartial ? (
-                  <div className="flex justify-between text-gray-600 text-xs">
+                  <div className="flex justify-between text-[var(--text-secondary)] text-xs">
                     <span>Adisyon Toplamı:</span>
                     <span className="tabular-nums">{formatMoney(orderTotal)}</span>
                   </div>
                 ) : null}
-                <div className="flex justify-between text-gray-600 text-xs">
+                <div className="flex justify-between text-[var(--text-secondary)] text-xs">
                   <span>{isPartial ? 'Adisyon KDV’si:' : 'Hesaplanan KDV:'}</span>
                   <span className="tabular-nums">{formatMoney(tax)}</span>
                 </div>
-                <div className="flex justify-between items-baseline text-sm font-bold pt-1 border-t border-gray-300">
+                <div className="flex justify-between items-baseline text-sm font-bold pt-1 border-t border-[var(--edge)]">
                   <span>{isPartial ? 'BU TAHSİLAT:' : 'TOPLAM TUTAR:'}</span>
                   <span className="tabular-nums text-base">{formatMoney(total)}</span>
                 </div>
-                <div className="flex justify-between text-xs text-gray-600 pt-0.5">
+                <div className="flex justify-between text-xs text-[var(--text-secondary)] pt-0.5">
                   <span>Tahsilat Şekli:</span>
                   <span className="font-semibold uppercase">{lastSale ? METHOD_LABEL[lastSale.method] : 'Bekliyor'}</span>
                 </div>
@@ -188,20 +188,20 @@ export const ReceiptPreviewModal: React.FC = () => {
           ) : (
             /* Format 2: Mutfak / İstasyon Sipariş Bileti */
             <div className="space-y-3">
-              <div className="text-center pb-2 border-b-2 border-dashed border-gray-700">
+              <div className="text-center pb-2 border-b-2 border-dashed border-[var(--edge)]">
                 <div className="text-3xl font-black tracking-tight">{tableName}</div>
                 <div className="text-xs font-bold mt-1">MUTFAK SİPARİŞ BİLETİ</div>
-                <div className="text-xs text-gray-600">Saat: {formatDateTime()}</div>
+                <div className="text-xs text-[var(--text-secondary)]">Saat: {formatDateTime()}</div>
               </div>
 
-              <div className="space-y-3 py-2 border-b-2 border-dashed border-gray-700">
+              <div className="space-y-3 py-2 border-b-2 border-dashed border-[var(--edge)]">
                 {items.map((kItem) => (
                   <div key={kItem.id} className="flex items-start gap-3">
                     <span className="text-2xl font-black tabular-nums">{kItem.quantity}x</span>
                     <div>
                       <span className="text-sm font-black uppercase">{kItem.name}</span>
                       {kItem.cookingDegree || kItem.notes ? (
-                        <span className="block text-xs font-bold text-red-700 mt-0.5">
+                        <span className="block text-xs font-bold text-[var(--danger)] mt-0.5">
                           *** {[kItem.cookingDegree, kItem.notes].filter(Boolean).join(' · ')}
                         </span>
                       ) : null}

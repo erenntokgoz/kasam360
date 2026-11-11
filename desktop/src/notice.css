@@ -28,7 +28,7 @@
   border: 1px solid var(--line);
   border-left: 4px solid var(--notice-tone);
   border-radius: 6px;
-  box-shadow: var(--lift), 0 8px 25px rgba(17, 27, 36, 0.14);
+  box-shadow: var(--lift);
   animation: motion-slip-in 180ms var(--motion-ease-out);
 }
 .notice-slip[data-kind="error"] {

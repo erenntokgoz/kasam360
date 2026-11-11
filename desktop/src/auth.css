@@ -21,7 +21,7 @@
   background-color: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 8px 30px rgba(17, 27, 36, 0.12);
+  box-shadow: var(--lift);
   overflow: hidden;
 }
 

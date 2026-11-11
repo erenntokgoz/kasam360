@@ -375,3 +375,9 @@ Ortam: yalıtılmış başlatıcı (`--state-dir`) ve üç ayrı native kasa: A 
 - `require_signed_version` açılmadı: Tauri CLI 2.11.4 imzaya sürümü yazmıyor (denendi), açılsa tüm güncellemeler reddedilirdi. Sürüm düşürme koruması yalnız eklentinin "yeni sürüm olmalı" kuralı ve TLS'dir.
 - Testler: Rust 4 yeni (anahtar yapılandırma, engel kararı, hata sınıfı, kiracı süzmeli açık iş sayımı); vitest 11 yeni (bildirim kararı, açık vardiyada kurulum yok, çevrimdışı sessizlik, hata metni); `node --test scripts/releaseTools.test.mjs` 5 geçti.
 - Test edilmeyen: gerçek anahtarla imzalı derleme, `release.yml` GitHub'da hiç koşmadı, eskiden yeniye gerçek güncelleme ve veri korunumu, NSIS passive kurulumunun açık uygulamayı kapatması. Güncelleme öncesi otomatik yedek alınmıyor.
+
+## Çini paleti ve performans korumalı cam yüzeyler (11 Kasım 2026)
+
+- Yapıldı: desktop ve mobil ortak token'ları Çini paletine geçirildi (açık/koyu), Archivo yerel yazı tipi, cam yalnız çerçeve öğelerinde (`glass.css`), düşük cihaz algısı (`lib/perfMode.ts`), hardcoded beyaz/siyah/gri sınıfları token'a çevrildi, denetim kenarları `--edge` oldu. Yerleşim ve akış değişmedi; backend ve web'e dokunulmadı.
+- Kanıt: desktop `npm run build` ve vitest (65 dosya, 283 test) geçti; mobil `npm run build` geçti. Önce/sonra ekran görüntüleri izole yerel kabul ortamında (gerçek Tauri uygulaması, OWNER PIN ile giriş, vite 1437): Kilit, Salon, masa modalı, Sipariş, Kasa, Yönetim/Pano, Menü, Ayarlar, açık ve koyu — `backend/work/tema-uygulama/shots/`.
+- Test edilmeyen: gerçek Android cihazda düşük cihaz algısı ve cam maliyeti, mobil ekran görüntüleri, KDS ve rapor tablolarının tüm sekmeleri, yazdırma çıktısı, Labs ve web.

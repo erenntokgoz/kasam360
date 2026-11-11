@@ -147,7 +147,7 @@ export const MenuModifierModal: React.FC<MenuModifierModalProps> = ({
             <button
               type="submit"
               disabled={busy || saving}
-              className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-sm font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="tactile-btn flex-1 min-h-12 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-sm font-bold text-[var(--button)] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
               <span>{createdId.current ? 'Ürüne Bağla' : 'Oluştur'}</span>

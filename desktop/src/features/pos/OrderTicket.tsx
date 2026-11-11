@@ -187,7 +187,7 @@ export const OrderTicket: React.FC = () => {
             <span>Mutfağa Gönder</span>
           </span>
           {unsentCount > 0 ? (
-            <span className="text-xs px-2 py-0.5 rounded bg-black/25 font-bold tabular-nums">
+            <span className="text-xs px-2 py-0.5 rounded bg-[var(--button)] text-[var(--action)] font-bold tabular-nums">
               {unsentCount} Yeni
             </span>
           ) : null}
