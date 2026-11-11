@@ -1,0 +1,141 @@
+/* Ortak segment, tablo/liste satırı ve pencere başlığı.
+   Neden: ~45 yerdeki "seçili" düğme grupları tek tek değiştirilmez; `.btn-selected` kardeşi olan düğme
+   grupları :has() ile tek yuvarlak kap içinde segment olur. Davranış (aria-pressed, onClick) aynıdır.
+   Hiçbir kural bulanıklık veya sürekli animasyon eklemez. */
+
+/* Segment kap: seçili düğmeyle ikincil/hayalet düğme yan yana ise. */
+:is(div, span, section, fieldset):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) {
+  padding: 4px;
+  background-color: var(--glass-tint);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+}
+:is(div, span, section, fieldset):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > :is(.btn-secondary, .btn-ghost, .btn-selected) {
+  border-color: transparent;
+  background-color: transparent;
+  color: var(--text);
+}
+:is(div, span, section, fieldset):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > :is(.btn-secondary, .btn-ghost):hover {
+  background-color: var(--hover);
+}
+:is(div, span, section, fieldset):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > .btn-selected {
+  color: var(--button);
+  background-color: var(--action);
+  border-color: var(--action);
+}
+
+/* Yuvarlak baş harf dairesi: liste satırının solunda. */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--action);
+  background-color: var(--navon);
+  border-radius: 999px;
+}
+
+/* Liste satırı: 56px, ince ayraç, tutar sağda. */
+.divide-y > li > :is(button, a, div) {
+  min-height: 56px;
+}
+
+/* Tablo: sade başlık, 56px satır, ince ayraç, sayılar sağda ve tabular. */
+.table-wrap {
+  border-radius: 12px;
+}
+table {
+  font-variant-numeric: tabular-nums;
+}
+th {
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  background-color: var(--surface);
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+}
+td {
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--line);
+}
+tbody tr {
+  height: 56px;
+}
+tbody tr:first-child > td {
+  border-top: 0;
+}
+tbody tr:hover > td {
+  background-color: var(--hover);
+}
+thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+}
+td.number,
+th.number,
+td.text-right,
+th.text-right {
+  text-align: right;
+}
+
+/* Pencere başlık bandı: büyük başlık solda, yuvarlak kapat düğmesi sağda, ayraç yok. */
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 18px 20px 8px;
+}
+.modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  color: var(--text);
+}
+.modal-close {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+/* Gezinme şeridi: Yönetim başlığı ve üçüncü seviye denetim aynı bantta. */
+.bar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-width: 0;
+}
+.bar-head-slot {
+  min-width: 0;
+  max-width: 100%;
+}
+.bar-head-slot:empty {
+  display: none;
+}
+.bar-head-slot .seg {
+  max-width: 100%;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* Vurgu çizgisi kenarlıkla çizilir: zorunlu renk kipinde arka plan kalkar, kenarlık kalır. */
+.bar-ink {
+  height: 0;
+  background: none;
+  border-block-end: 3px solid var(--action);
+}

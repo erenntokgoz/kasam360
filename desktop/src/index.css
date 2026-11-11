@@ -5,6 +5,7 @@
 @import "./motion.css";
 @import "./notice.css";
 @import "./shell.css";
+@import "./listing.css";
 @import "./glass.css";
 
 /* Archivo yerel pakettendir (CDN yok, internetsiz çalışır); yalnız latin ve latin-ext alt kümeleri, tek değişken ağırlık aralığı. */
@@ -450,8 +451,8 @@ h2 {
 }
 
 .btn-selected {
-  color: var(--action);
-  background-color: var(--navon);
+  color: var(--button);
+  background-color: var(--action);
   border-color: var(--action);
   font-weight: 650;
 }

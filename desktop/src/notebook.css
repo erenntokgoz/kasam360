@@ -64,7 +64,7 @@
   padding: 0 14px;
   font-family: inherit;
   font-size: 0.9375rem;
-  font-weight: 600;
+  font-weight: 650;
   white-space: nowrap;
   color: var(--muted);
   cursor: pointer;
@@ -80,7 +80,6 @@
 .bar-item[aria-selected="true"],
 .bar-item[aria-pressed="true"] {
   color: var(--text);
-  font-weight: 700;
 }
 .bar-count {
   display: inline-grid;

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { Button } from './Button';
 import { useExitGhost } from './useExitGhost';
@@ -86,16 +87,16 @@ export const Modal: React.FC<ModalProps> = ({
           fullScreen ? 'w-screen h-screen max-w-none max-h-none rounded-none' : maxWidthClasses
         )}
       >
-        <div className="px-5 pt-5 pb-3 border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0">
-          <div>
-            <h2 className="print-title text-base font-bold text-[var(--text-primary)]">{title}</h2>
+        <div className="modal-head">
+          <div className="min-w-0">
+            <h2 className="modal-title">{title}</h2>
             {subtitle ? <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subtitle}</p> : null}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {headerActions}
             {showCloseButton ? (
-              <Button variant="ghost" size="sm" onClick={onClose} aria-label="Kapat">
-                Kapat
+              <Button variant="secondary" size="sm" onClick={onClose} aria-label="Kapat" title="Kapat" className="modal-close">
+                <X className="w-5 h-5" aria-hidden="true" />
               </Button>
             ) : null}
           </div>

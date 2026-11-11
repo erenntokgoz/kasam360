@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { Avatar } from '../../ui/Avatar';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { useCariStore } from '../../stores/cariStore';
@@ -29,9 +30,10 @@ const CardRow: React.FC<{ card: DirectoryContact; onOpen: () => void }> = ({ car
     <button
       type="button"
       onClick={onOpen}
-      className="w-full min-h-12 px-4 py-3 text-left flex items-center justify-between gap-3 cursor-pointer hover:bg-[var(--bg-hover)]"
+      className="w-full min-h-14 px-4 py-2 text-left flex items-center gap-3 cursor-pointer hover:bg-[var(--bg-hover)]"
     >
-      <span className="min-w-0">
+      <Avatar name={card.name} />
+      <span className="min-w-0 mr-auto">
         <span className="block text-sm font-bold truncate text-[var(--text-primary)]">{card.name}</span>
         <span className="block text-xs text-[var(--text-muted)] truncate tabular-nums">{card.phone || 'Telefon yok'}</span>
       </span>

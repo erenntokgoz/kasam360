@@ -1,5 +1,6 @@
 import { ErrorToast } from '../../../ui/ErrorToast';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Download } from 'lucide-react';
 import { errorText } from '../../../lib/cariInput';
 import { toLocalIso } from '../../../lib/dateRange';
@@ -49,6 +50,9 @@ export const ReportsTab: React.FC = () => {
   const [report, setReport] = useState<ReportKey>('SALES');
   const [from, setFrom] = useState(() => daysAgo(0));
   const [to, setTo] = useState(() => daysAgo(0));
+  // Rapor türü seçimi Yönetim başlık bandındaki yuvaya taşınır; yuva yoksa yerinde çizilir.
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => { setSlot(document.getElementById('erp-title-slot')); }, []);
   const [table, setTable] = useState<ReportTable | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -78,15 +82,19 @@ export const ReportsTab: React.FC = () => {
 
   const meta: ReportFileMeta = { title: REPORTS[report].label, from, to, filters: [['Rapor türü', REPORTS[report].label]] };
 
+  const reportSeg = (
+    <div className="seg" role="group" aria-label="Rapor">
+      {keys.map((key) => (
+        <button key={key} type="button" className="seg-btn" aria-pressed={report === key} onClick={() => setReport(key)}>
+          {REPORTS[key].label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      <div className="seg" role="group" aria-label="Rapor">
-        {keys.map((key) => (
-          <button key={key} type="button" className="seg-btn" aria-pressed={report === key} onClick={() => setReport(key)}>
-            {REPORTS[key].label}
-          </button>
-        ))}
-      </div>
+      {slot ? createPortal(reportSeg, slot) : reportSeg}
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)]">
           Başlangıç

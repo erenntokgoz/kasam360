@@ -1,4 +1,5 @@
 import { ChevronRight } from 'lucide-react';
+import { Avatar } from '../../ui/Avatar';
 import { Button } from '../../ui/Button';
 
 interface RecordCardProps {
@@ -10,7 +11,8 @@ interface RecordCardProps {
 
 export function RecordCard({ title, description, value, onOpen }: RecordCardProps) {
   return (
-    <Button type="button" variant="secondary" onClick={onOpen} className="w-full min-w-0 !justify-between !text-left">
+    <Button type="button" variant="secondary" onClick={onOpen} className="w-full min-w-0 !min-h-14 !rounded-2xl !justify-between !text-left gap-3">
+      <Avatar name={title} />
       <span className="min-w-0 flex-1">
         <span className="block truncate font-bold">{title}</span>
         <span className="block truncate text-xs font-normal text-[var(--text-secondary)] tabular-nums">{description}</span>

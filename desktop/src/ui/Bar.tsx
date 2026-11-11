@@ -9,12 +9,14 @@ interface BarProps {
   plain?: boolean;
   /** Sayfa başlığı: birinci seviye sekmelerin üstünde tek başlık bandı oluşturur. */
   title?: string;
+  /** Başlığın sağında üçüncü seviye denetim için boş yuva kimliği (portal hedefi). */
+  titleSlotId?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }
 
 /** Bütün ekranların tek gezinme şeridi: birinci seviye metin sekmeleri, iç seviye segment kontrol. */
-export const Bar: React.FC<BarProps> = ({ label, plain, title, actions, children }) => {
+export const Bar: React.FC<BarProps> = ({ label, plain, title, titleSlotId, actions, children }) => {
   const tabsRef = useRef<HTMLDivElement>(null);
   const inkRef = useRef<HTMLSpanElement>(null);
   const placed = useRef(false);
@@ -41,7 +43,12 @@ export const Bar: React.FC<BarProps> = ({ label, plain, title, actions, children
 
   return (
     <div className={cn('bar', plain && 'bar-plain')}>
-      {title ? <h1 className="bar-title">{title}</h1> : null}
+      {title ? (
+        <div className="bar-head">
+          <h1 className="bar-title">{title}</h1>
+          {titleSlotId ? <div id={titleSlotId} className="bar-head-slot" /> : null}
+        </div>
+      ) : null}
       <div className="bar-row">
         <div ref={tabsRef} className="bar-tabs" role="tablist" aria-label={label}>
           {children}
