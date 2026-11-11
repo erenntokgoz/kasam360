@@ -80,6 +80,7 @@
 - Ortak NumberInput, PIN, onay ve dialog davranışları merkezi bileşenlerden gelir. Uzun formda işlem altlığı görünür; hata sonrası girilmiş veri korunur.
 - Kilit ekranında doğrulanan personelin oturumu açılır; önceki kullanıcının yetkisi taşınmaz. Ek cihaz mevcut işletmede ikinci OWNER oluşturmaz.
 - Mobil aynı marka ve iş kurallarını kullanır; desktop ekranlarını daraltarak kopyalamak yeterli değildir. Platform fizibilitesi ve gerçek cihaz kabulü gerekir.
+- HTML/CSS/istemci JS işlerinde (web, desktop, mobil, Labs paneli) önce `modern-web-guidance` skill'i ile güncel web API en iyi uygulaması aranır; görsel yön için `frontend-design` kullanılır.
 
 ---
 
