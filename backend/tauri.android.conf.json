@@ -3,5 +3,10 @@
   "build": {
     "beforeBuildCommand": "npm --prefix ../mobile run build && npm --prefix ../mobile run sync:android-brand",
     "frontendDist": "../mobile/dist"
+  },
+  "bundle": {
+    "android": {
+      "versionCode": 2001
+    }
   }
 }

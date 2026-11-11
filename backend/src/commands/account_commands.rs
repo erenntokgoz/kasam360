@@ -28,7 +28,12 @@ pub(crate) const SITE_URL: &str = "https://kasam360.com.tr";
 
 // Sunucu çağrıları (lisans, eşitleme, menü yayını) üretimde API alt alanına gider; TLS doğrulaması
 // kapatılmaz. Geliştirmede site adresi (web vekili) veya açık dev adresi kullanılır.
-#[cfg(debug_assertions)]
+#[cfg(all(debug_assertions, any(target_os = "android", target_os = "ios")))]
+pub(crate) const API_URL: &str = match option_env!("KASAM360_DEV_API_URL") {
+    Some(url) => url,
+    None => "https://api.kasam360.com.tr",
+};
+#[cfg(all(debug_assertions, not(any(target_os = "android", target_os = "ios"))))]
 pub(crate) const API_URL: &str = match option_env!("KASAM360_DEV_API_URL") {
     Some(url) => url,
     None => SITE_URL,
