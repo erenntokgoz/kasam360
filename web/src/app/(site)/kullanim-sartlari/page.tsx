@@ -23,7 +23,7 @@ export default function TermsPage() {
         {
           title: 'Ürün durumu',
           paragraphs: [
-            'KASAM360 erken erişim aşamasındadır. Sitede ödeme alınmaz ve uygulama indirilemez. Özellikler yayın öncesinde değişebilir.',
+            'KASAM360 erken erişim aşamasındadır. Sitede ödeme alınmaz; uygulama yalnız test sürümü olarak indirilebilir. Özellikler yayın öncesinde değişebilir.',
           ],
         },
         {

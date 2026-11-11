@@ -12,6 +12,7 @@ export const siteConfig = {
 export const navLinks = [
   { href: '/ozellikler', label: 'Özellikler' },
   { href: '/abonelik', label: 'Abonelik' },
+  { href: '/indir', label: 'İndir' },
   { href: '/sorular', label: 'Sorular' },
   { href: '/iletisim', label: 'İletişim' },
 ];

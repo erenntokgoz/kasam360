@@ -23,7 +23,7 @@ const questions = [
   },
   {
     question: 'Hangi cihazlarda çalışır?',
-    answer: 'KASAM360 Windows uygulamasıdır. Kasa, garson ve mutfak için aynı ağdaki Windows cihazlar kullanılır.',
+    answer: 'KASAM360 Windows kasa uygulaması ve Android uygulaması olarak İndir sayfasında test sürümüyle sunulur.',
   },
   {
     question: 'Yazar kasanın yerine geçer mi?',

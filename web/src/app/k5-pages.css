@@ -123,3 +123,17 @@ textarea.k-input { padding: 12px 14px; min-height: 120px; resize: vertical; line
 /* Onay kutusunun metni etiket değil açıklamadır; form etiketi kalınlığını almaz. */
 .k-field label.k-check { font-weight: 400; font-size: 14px; color: var(--k-text-2); }
 :root[data-theme="dark"] .k-input, :root:not([data-theme]) .k-input { background: var(--k-bg-2); }
+
+/* İndirme sayfası: iki platform kartı yan yana, dar ekranda alt alta. */
+.k-dl-meta { margin: 0 0 20px; }
+.k-download-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 28px; }
+.k-download-card { display: grid; gap: 18px; align-content: start; }
+.k-download-card h2 { margin: 8px 0 4px; font-size: 24px; letter-spacing: -0.02em; }
+.k-download-card header p { margin: 0; color: var(--k-text-2); }
+.k-download-facts { display: grid; gap: 8px; margin: 0; }
+.k-download-facts div { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px; }
+.k-download-facts dt { color: var(--k-text-2); }
+.k-download-facts dd { margin: 0; overflow-wrap: anywhere; }
+.k-hash { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.k-download-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--k-text-2); font-size: 14.5px; line-height: 1.5; }
+@media (max-width: 900px) { .k-download-grid { grid-template-columns: 1fr; } }
