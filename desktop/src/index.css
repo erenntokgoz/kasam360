@@ -4,6 +4,7 @@
 @import "./auth.css";
 @import "./motion.css";
 @import "./notice.css";
+@import "./shell.css";
 @import "./glass.css";
 
 /* Archivo yerel pakettendir (CDN yok, internetsiz çalışır); yalnız latin ve latin-ext alt kümeleri, tek değişken ağırlık aralığı. */

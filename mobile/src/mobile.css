@@ -42,7 +42,7 @@
   .auth-right form > .grid.grid-cols-2 { column-gap: 12px; row-gap: 10px; }
   .auth-right form > .grid.grid-cols-2 > * { min-width: 0; width: 100%; }
 
-  .side-rail { display: none !important; }
+  .side-rail, .app-topbar { display: none !important; }
   .mobile-tabbar {
     position: fixed; z-index: 80; inset: auto 0 0; display: flex; justify-content: space-around; align-items: stretch;
     min-height: 64px; padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
@@ -67,7 +67,3 @@
   input, select, textarea { font-size: 16px !important; scroll-margin-bottom: 120px; }
 }
 
-@media (min-width: 701px) and (max-width: 1024px) {
-  .side-rail { width: 64px; }
-  .side-rail .side-flag { min-height: 56px; }
-}

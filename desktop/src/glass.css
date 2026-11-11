@@ -15,6 +15,16 @@
   backdrop-filter: blur(var(--glass-blur));
 }
 
+/* Pano kartları ve üst çubuk yalnız yarı saydam tonludur; bulanıklık yoktur. Zemin düz olduğu için
+   bulanıklık görüntüyü değiştirmez, yalnız maliyet getirirdi. Bu yüzden bulanıklık katmanı sayısı
+   (kenar çubuğu + modül şeridi + açık panel) artmaz. */
+.dash-card,
+.app-topbar,
+.top-popover {
+  background-color: var(--glass);
+  border-color: var(--glass-edge);
+}
+
 /* Kart başlıkları yalnız yarı saydam tonludur; bulanıklık yoktur (her kartta katman açmaz). */
 .kroki-room-head {
   background-color: var(--glass-tint);
@@ -53,6 +63,12 @@
 
 /* Kullanıcı saydamlığı azaltmak istediğinde opak yedek. */
 @media (prefers-reduced-transparency: reduce) {
+  .dash-card,
+  .app-topbar,
+  .top-popover {
+    background-color: var(--surface);
+    border-color: var(--line);
+  }
   .side-rail,
   .bar,
   .mobile-tabbar,
@@ -71,7 +87,9 @@
 :root[data-perf="low"] .side-rail,
 :root[data-perf="low"] .bar,
 :root[data-perf="low"] .mobile-tabbar,
-:root[data-perf="low"] .glass-panel {
+:root[data-perf="low"] .glass-panel,
+:root[data-perf="low"] .dash-card,
+:root[data-perf="low"] .app-topbar {
   background-color: var(--surface);
   border-color: var(--line);
   -webkit-backdrop-filter: none;

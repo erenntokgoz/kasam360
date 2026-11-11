@@ -20,6 +20,7 @@ interface PeriodFilterProps {
   onChange: (range: PanoramaRange) => void;
 }
 
+/** Dönem seçimi segment düğmeleri olarak görünür; seçim mantığı ve tarih aralığı kuralları aynıdır. */
 export function PeriodFilter({ range, onChange }: PeriodFilterProps) {
   const [showCustom, setShowCustom] = useState(typeof range === 'object' && 'from' in range);
   const [dates, setDates] = useState(() => {
@@ -39,28 +40,24 @@ export function PeriodFilter({ range, onChange }: PeriodFilterProps) {
     : [formatDay(applied.from), formatDay(visibleTo)].join(' – ');
 
   return (
-    <section aria-label="Rapor dönemi" className="paper space-y-3 rounded-xl border border-[var(--border)] p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label="Hazır dönemler" className="flex flex-wrap gap-2">
-          {RANGES.map((key) => (
-            <Button key={key} type="button" variant={range === key ? 'selected' : 'secondary'} aria-pressed={range === key}
-              onClick={() => { setShowCustom(false); onChange(key); }}>
-              {RANGE_LABELS[key]}
-            </Button>
-          ))}
-          <MonthPicker value={month} current={currentMonth}
-            onSelect={(value) => { setShowCustom(false); onChange({ month: value }); }} />
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <Button type="button" variant={activeCustom ? 'selected' : 'secondary'} aria-expanded={showCustom}
-            aria-controls="panorama-custom-period" onClick={() => setShowCustom(!showCustom)}>
-            Tarih Aralığı
-          </Button>
-        </div>
+    <section aria-label="Rapor dönemi" className="period">
+      <div className="seg" role="group" aria-label="Hazır dönemler">
+        {RANGES.map((key) => (
+          <button key={key} type="button" className="seg-btn" aria-pressed={range === key}
+            onClick={() => { setShowCustom(false); onChange(key); }}>
+            {RANGE_LABELS[key]}
+          </button>
+        ))}
+        <MonthPicker value={month} current={currentMonth} className="seg-month"
+          onSelect={(value) => { setShowCustom(false); onChange({ month: value }); }} />
+        <button type="button" className="seg-btn" aria-pressed={activeCustom} aria-expanded={showCustom}
+          aria-controls="panorama-custom-period" onClick={() => setShowCustom(!showCustom)}>
+          Tarih Aralığı
+        </button>
       </div>
 
       {showCustom && (
-        <form id="panorama-custom-period" className="flex flex-wrap items-end gap-2 border-t border-[var(--border)] pt-3"
+        <form id="panorama-custom-period" className="flex flex-wrap items-end gap-2 pt-3"
           onSubmit={(event) => { event.preventDefault(); if (validRange) onChange(dates); }}>
           <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)]">
             Başlangıç
@@ -80,7 +77,7 @@ export function PeriodFilter({ range, onChange }: PeriodFilterProps) {
           </span>
         </form>
       )}
-      <p role="status" className="text-sm tabular-nums text-[var(--text-secondary)]">Gösterilen dönem · {periodLabel}</p>
+      <p role="status" className="dash-card-sub tabular-nums">Gösterilen dönem · {periodLabel}</p>
     </section>
   );
 }

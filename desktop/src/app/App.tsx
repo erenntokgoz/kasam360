@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
 import { SidebarNav } from '../features/shell/SidebarNav';
+import { TopBar } from '../features/shell/TopBar';
 import { FloorModule } from '../features/floor/FloorModule';
 import { PosModule } from '../features/pos/PosModule';
 import { KdsModule } from '../features/kds/KdsModule';
@@ -195,6 +196,7 @@ export const App: React.FC = () => {
         <SidebarNav />
 
         <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+          <TopBar />
           {/* Zero-latency modül geçişi: açık sepeti, filtreleri ve krokiyi korumak için sekmeler canlı kalır */}
           <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'FLOOR' ? 'motion-panel' : 'hidden'}`}>
             <FloorModule />

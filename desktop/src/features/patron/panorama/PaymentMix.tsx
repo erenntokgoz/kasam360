@@ -1,34 +1,55 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { canAnimate, gsap, useGSAP } from '../../../lib/dashMotion';
 import { formatMoney } from '../../../lib/formatMoney';
 import type { PanoramaData } from '../../../stores/panoramaStore';
 import { Panel } from './Panel';
 
-/** Tek renk çubuk: kanal adı yazılıdır, rengin kimlik taşıması gerekmez. */
+/** Dilimler kanal sırasına göre döner; kanal adı her satırda yazılıdır, renk kimlik taşımaz. */
+const SLICE_COUNT = 5;
+
+/** Kanal payları tam sayı yüzdedir; toplam 100'ü aşmasın diye en büyük dilim farkı alır. */
+export function channelShares(amounts: number[]): number[] {
+  const total = amounts.reduce((sum, amount) => sum + amount, 0);
+  if (total <= 0) return amounts.map(() => 0);
+  const shares = amounts.map((amount) => Math.floor((amount * 100) / total));
+  const remainder = 100 - shares.reduce((sum, share) => sum + share, 0);
+  const largest = amounts.indexOf(Math.max(...amounts));
+  shares[largest] += remainder;
+  return shares;
+}
+
 export const PaymentMix: React.FC<{ channels: PanoramaData['channels'] }> = ({ channels }) => {
+  const root = useRef<HTMLDivElement>(null);
   const total = channels.reduce((sum, item) => sum + item.amountCents, 0);
+  const shares = channelShares(channels.map((item) => item.amountCents));
+
+  useGSAP(() => {
+    if (!canAnimate()) return;
+    gsap.from('.mix-slice', { scaleX: 0, transformOrigin: '0 50%', duration: 0.6, ease: 'power2.out', stagger: 0.08 });
+  }, { scope: root, dependencies: [shares.join(',')], revertOnUpdate: true });
+
   return (
     <Panel title="Ödeme Kanalları">
       {total === 0 ? (
         <p className="text-sm text-[var(--text-secondary)]">Bu dönemde tahsilat yok.</p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {channels.map((item) => {
-            const share = Math.round((item.amountCents * 100) / total);
-            return (
-              <li key={item.channel}>
-                <div className="flex items-baseline justify-between gap-2 text-xs">
-                  <span className="font-semibold text-[var(--text-primary)]">{item.channel}</span>
-                  <span className="tabular-nums text-[var(--text-secondary)]">
-                    {formatMoney(item.amountCents)} · %{share}
-                  </span>
-                </div>
-                <div className="h-2 mt-1 rounded bg-[var(--bg-subtle)] overflow-hidden">
-                  <div className="h-full rounded bg-[var(--accent-blue)]" style={{ width: `${share}%` }} />
-                </div>
+        <div ref={root} className="flex flex-col gap-3">
+          <div className="mix-bar" role="img" aria-label={channels.map((item, index) => `${item.channel} yüzde ${shares[index]}`).join(', ')}>
+            {channels.map((item, index) => (shares[index] > 0 ? (
+              <span key={item.channel} className="mix-slice" data-slice={index % SLICE_COUNT} style={{ flexGrow: shares[index] }} />
+            ) : null))}
+          </div>
+          <ul className="flex flex-col">
+            {channels.map((item, index) => (
+              <li key={item.channel} className="mix-row">
+                <span className="mix-key" data-slice={index % SLICE_COUNT} aria-hidden />
+                <span className="mix-name">{item.channel}</span>
+                <span className="mix-amount tabular-nums">{formatMoney(item.amountCents)}</span>
+                <span className="mix-share tabular-nums">%{shares[index]}</span>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        </div>
       )}
     </Panel>
   );
