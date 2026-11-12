@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, LayoutGrid, Lock, Moon, Search, Settings, ShoppingBag, Sun, Tv, Wallet, BarChart3 } from 'lucide-react';
 import { useUIStore, type AppModule } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useKdsStore } from '../../stores/kdsStore';
 import { useFeatureStore } from '../../stores/featureStore';
 import { useSetupStore } from '../../stores/setupStore';
+import { useKitchenSetupStore } from '../../stores/kitchenSetupStore';
 import { canOpenModule } from '../../lib/roleAccess';
 import { BrandMark } from '../../ui/BrandMark';
 import { buildNavSections, initials, MODULE_LABEL, ROLE_TITLE, type NavEntry } from './shellModel';
@@ -33,6 +34,9 @@ export const SidebarNav: React.FC = () => {
   const lock = useAuthStore((state) => state.lock);
   const activeKdsCount = useKdsStore((state) => state.tickets.length);
   const isEnabled = useFeatureStore((state) => state.isEnabled);
+  const hasKitchenUser = useKitchenSetupStore((state) => state.hasKitchenUser);
+  const loadKitchenSetup = useKitchenSetupStore((state) => state.load);
+  const tenantId = useAuthStore((state) => state.user?.tenantId);
   const businessName = useSetupStore((state) => state.draft.businessName.trim());
   const [query, setQuery] = useState('');
 
@@ -41,11 +45,14 @@ export const SidebarNav: React.FC = () => {
     const entries: NavEntry[] = MODULES.map((id) => {
       let visible = canOpenModule(user?.role, id);
       if (id === 'POS') visible = visible && user?.role !== 'WAITER';
-      if (id === 'KDS') visible = visible && isEnabled('feat_kds');
+      // Etkin KITCHEN kullanıcısı yoksa mutfak ekranı atlanır; KITCHEN rolünün kendisi hep görür.
+      if (id === 'KDS') visible = visible && isEnabled('feat_kds') && (hasKitchenUser !== false || user?.role === 'KITCHEN');
       return { id, label: MODULE_LABEL[id], visible, badge: id === 'KDS' && activeKdsCount > 0 ? activeKdsCount : undefined };
     });
     return buildNavSections(entries, query);
-  }, [user?.role, isEnabled, activeKdsCount, query]);
+  }, [user?.role, isEnabled, hasKitchenUser, activeKdsCount, query]);
+
+  useEffect(() => { void loadKitchenSetup(tenantId); }, [loadKitchenSetup, tenantId]);
 
   const isDark = theme === 'dark';
 

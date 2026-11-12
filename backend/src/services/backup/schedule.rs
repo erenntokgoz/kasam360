@@ -130,7 +130,10 @@ pub async fn run_backup(
     let result = match outcome {
         Ok(result) => result,
         Err(error) => {
-            write_result(pool, Some(&error), None).await?;
+            // Durum yazılamasa da asıl yedek hatası kaybolmaz.
+            if let Err(write_error) = write_result(pool, Some(&error), None).await {
+                return Err(format!("{error} (durum kaydedilemedi: {write_error})"));
+            }
             return Err(error);
         }
     };
@@ -140,8 +143,10 @@ pub async fn run_backup(
     if let Some(mirror) = mirror {
         if let Err(error) = mirror_copy(&result.path, &result.sha256, Path::new(&mirror)) {
             // Yerel yedek durur; yine de hata görünür kalır: harici kopya yok demektir.
+            // Sıra numarası ilerletilmez: aksi halde yeni kayıt gelene dek saatlik döngü
+            // ikinci klasörü bir daha denemez ve harici kopya sessizce eksik kalır.
             let text = format!("İkinci klasöre kopyalanamadı: {error}");
-            write_result(pool, Some(&text), Some(sequence)).await?;
+            write_result(pool, Some(&text), None).await?;
             return Err(text);
         }
     }

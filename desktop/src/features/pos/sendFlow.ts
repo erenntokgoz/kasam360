@@ -6,17 +6,21 @@ export interface SendFlowDeps {
   goToFloor: () => void;
   refreshFloor: () => Promise<void>;
   notifySuccess: (message: string) => void;
+  /** Mutfak ekranı yoksa (etkin KITCHEN kullanıcısı yok) zil çalmaz, mesaj yalnız kaydı söyler. */
+  hasKitchenScreen?: boolean;
 }
 
-export const KITCHEN_SENT_MESSAGE = 'Sipariş mutfağa iletildi.';
+export const KITCHEN_SENT_MESSAGE = 'Sipariş kaydedildi, fiş gönderildi.';
+export const ORDER_SAVED_MESSAGE = 'Sipariş kaydedildi.';
 
 export async function sendAndReturnToFloor(deps: SendFlowDeps): Promise<boolean> {
   const sent = await deps.send();
   if (!sent) return false;
-  deps.ringBell();
+  const screen = deps.hasKitchenScreen ?? true;
+  if (screen) deps.ringBell();
   // Salon kendi girişinde de tazelenir; okuma gecikmesi dönüşü bekletmesin.
   deps.goToFloor();
-  deps.notifySuccess(KITCHEN_SENT_MESSAGE);
+  deps.notifySuccess(screen ? KITCHEN_SENT_MESSAGE : ORDER_SAVED_MESSAGE);
   void deps.refreshFloor().catch(() => undefined);
   return true;
 }

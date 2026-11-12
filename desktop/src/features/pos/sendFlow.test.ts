@@ -37,3 +37,12 @@ describe('mutfağa gönderim akışı', () => {
     expect(flow.goToFloor).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('mutfak ekranı olmayan işletme', () => {
+  it('zil çalmaz, mesaj yalnız kaydı söyler', async () => {
+    const flow = { ...deps(async () => true), hasKitchenScreen: false };
+    expect(await sendAndReturnToFloor(flow)).toBe(true);
+    expect(flow.ringBell).not.toHaveBeenCalled();
+    expect(flow.notifySuccess).toHaveBeenCalledWith('Sipariş kaydedildi.');
+  });
+});

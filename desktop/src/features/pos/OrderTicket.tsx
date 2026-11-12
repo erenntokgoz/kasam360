@@ -13,6 +13,7 @@ import { OrderTicketLineItem } from './OrderTicketLineItem';
 import { sendAndReturnToFloor } from './sendFlow';
 import { useFloorStore } from '../../stores/floorStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useKitchenSetupStore } from '../../stores/kitchenSetupStore';
 import { canCollectPayment } from '../../lib/roleAccess';
 import type { OrderItem } from '../../types/pos';
 
@@ -45,8 +46,8 @@ export const OrderTicket: React.FC = () => {
   const [authModalMode, setAuthModalMode] = useState<'VOID' | 'COMP'>('VOID');
   const [transferModalItem, setTransferModalItem] = useState<OrderItem | null>(null);
   const [askClear, setAskClear] = useState(false);
-  const [askPaid, setAskPaid] = useState(false);
 
+  const hasKitchenUser = useKitchenSetupStore((state) => state.hasKitchenUser);
   const total = calculateTotalCents();
   const unsentCount = ticketItems.filter((i) => !i.isSentToKitchen).length;
 
@@ -57,6 +58,7 @@ export const OrderTicket: React.FC = () => {
       goToFloor: () => setActiveModule('FLOOR'),
       refreshFloor: loadFloorPlan,
       notifySuccess: showNotice,
+      hasKitchenScreen: hasKitchenUser !== false,
     });
 
   // Tahsilat sunucudaki adisyona yapılır; bekleyen kalemler düğme yazısıyla belli olarak gider.
@@ -65,11 +67,6 @@ export const OrderTicket: React.FC = () => {
       if (!(await sendToKitchen())) return;
       await loadFloorPlan();
     }
-    setAskPaid(true);
-  };
-
-  const continuePayment = () => {
-    setAskPaid(false);
     openModal('payment');
   };
 
@@ -173,7 +170,7 @@ export const OrderTicket: React.FC = () => {
           </div>
         </div>
 
-        {/* Mutfağa Gönder Butonu */}
+        {/* Kaydet = istasyon yazıcısına fiş; ayrı gönderme adımı yoktur */}
         <Button
           variant="primary"
           size="lg"
@@ -184,7 +181,7 @@ export const OrderTicket: React.FC = () => {
         >
           <span className="flex items-center gap-2">
             <Send className="w-4 h-4" />
-            <span>Mutfağa Gönder</span>
+            <span>Siparişi Kaydet</span>
           </span>
           {unsentCount > 0 ? (
             <span className="text-xs px-2 py-0.5 rounded bg-[var(--button)] text-[var(--action)] font-bold tabular-nums">
@@ -195,22 +192,12 @@ export const OrderTicket: React.FC = () => {
 
         {canCollect ? (
           <Button variant="success" size="lg" onClick={() => void handlePay()} disabled={total <= 0 || isSending} className="w-full">
-            {unsentCount > 0 ? 'Gönder ve Ödeme Al' : 'Ödeme Al'}
+            {unsentCount > 0 ? 'Kaydet ve Ödeme Al' : 'Ödeme Al'}
           </Button>
         ) : null}
       </div>
 
-      <Modal isOpen={askPaid} onClose={() => setAskPaid(false)} title="Müşteri hesabı ödedi mi?" subtitle="Tahsilat yalnız ödeme alındıysa kaydedilir." maxWidth="sm">
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" size="lg" onClick={() => {
-            setAskPaid(false);
-            showNotice('Ödeme alınmadı. Adisyon açık bırakıldı.');
-          }}>Hayır, açık bırak</Button>
-          <Button variant="success" size="lg" onClick={continuePayment}>Evet, tahsilata geç</Button>
-        </div>
-      </Modal>
-
-      <Modal isOpen={askClear} onClose={() => setAskClear(false)} title="Kalemler silinsin mi?" subtitle={`${unsentCount} kalem henüz mutfağa gitmedi.`} maxWidth="sm">
+      <Modal isOpen={askClear} onClose={() => setAskClear(false)} title="Kalemler silinsin mi?" subtitle={`${unsentCount} kalem henüz kaydedilmedi.`} maxWidth="sm">
         <div className="grid grid-cols-2 gap-2">
           <Button variant="secondary" size="lg" onClick={() => setAskClear(false)}>Vazgeç</Button>
           <Button

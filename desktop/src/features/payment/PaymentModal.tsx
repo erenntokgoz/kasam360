@@ -9,7 +9,7 @@ import { useShiftStore } from '../../stores/shiftStore';
 import { sessionArgs } from '../../stores/cariStore';
 import { formatMoney } from '../../lib/formatMoney';
 import { centsToText, parseCents } from '../../lib/moneyInput';
-import { planPayment } from '../../lib/paymentMath';
+import { planPayment, type PaymentPlan } from '../../lib/paymentMath';
 import { unitShareCents } from '../../lib/orderMath';
 import { errorText } from '../../lib/cariInput';
 import { syncErrorText } from '../../lib/syncError';
@@ -134,7 +134,7 @@ export const PaymentModal: React.FC = () => {
     setSelectedDirectoryId(created.id);
   };
 
-  const finishSale = async (remaining: number) => {
+  const finishSale = async (remaining: number, run: PaymentPlan = plan) => {
     setLastSale({
       transactionId: transactionId.current,
       tableName: activeTableName,
@@ -147,10 +147,10 @@ export const PaymentModal: React.FC = () => {
               totalCents: unitShareCents(item, selectedItemQuantities[item.id]),
             }))
         : payableItems,
-      amountCents: payNowCents,
+      amountCents: run.dueCents,
       method: channel,
-      receivedCents: plan.receivedCents,
-      changeCents: plan.changeCents,
+      receivedCents: run.receivedCents,
+      changeCents: run.changeCents,
       remainingCents: remaining,
     });
     transactionId.current = newTransactionId();
@@ -165,13 +165,13 @@ export const PaymentModal: React.FC = () => {
 
   // Çekim tahsilattan önce yapılır. Aynı işlem kimliğiyle yeniden deneme sağlayıcıya
   // gitmez, önceki sonucu alır; reddedilen kimlik bir daha kullanılmaz.
-  const chargeTestPos = async (): Promise<boolean> => {
+  const chargeTestPos = async (run: PaymentPlan): Promise<boolean> => {
     const { actorId, actorRole, tenantId } = sessionArgs();
     const result = await invokeIPC<{ status: string; message?: string | null }>('test_pos_charge', {
       actorRole,
       actorId,
       tenantId,
-      input: { transactionId: transactionId.current, orderId: activeOrderId, amountCents: payNowCents, scenario: testScenario },
+      input: { transactionId: transactionId.current, orderId: activeOrderId, amountCents: run.dueCents, scenario: testScenario },
     });
     if (result.status === 'APPROVED') return true;
     transactionId.current = newTransactionId();
@@ -181,12 +181,12 @@ export const PaymentModal: React.FC = () => {
 
   const usesTestPos = testMode && channel === 'CARD';
 
-  const execute = async () => {
+  const execute = async (run: PaymentPlan = plan) => {
     const { actorId, actorRole, tenantId } = sessionArgs();
     setIsProcessing(true);
     setErrorMsg(null);
     try {
-      if (usesTestPos && !(await chargeTestPos())) return;
+      if (usesTestPos && !(await chargeTestPos(run))) return;
       const reply = await invokeIPC<PaymentResultWire>('process_payment', {
         actorRole,
         payload: {
@@ -194,9 +194,9 @@ export const PaymentModal: React.FC = () => {
           orderId: activeOrderId,
           timestamp: new Date().toISOString(),
           method: channel,
-          amountTendered: plan.receivedCents,
-          totalAmount: payNowCents,
-          changeAmount: plan.changeCents,
+          amountTendered: run.receivedCents,
+          totalAmount: run.dueCents,
+          changeAmount: run.changeCents,
           items: splitMode === 'ITEMS'
             ? payableItems
                 .filter((item) => selectedItemQuantities[item.id])
@@ -212,7 +212,7 @@ export const PaymentModal: React.FC = () => {
           debtDirectoryId: channel === 'VERESIYE' ? selectedDirectoryId : undefined,
         },
       });
-      await finishSale(reply.remainingCents ?? 0);
+      await finishSale(reply.remainingCents ?? 0, run);
     } catch (caught) {
       const message = errorText(caught);
       if (message.startsWith('IDEMPOTENCY_CONFLICT')) {
@@ -267,11 +267,19 @@ export const PaymentModal: React.FC = () => {
     } else if (channel === 'VERESIYE' && !selectedDirectoryId) {
       setErrorMsg('Cari müşteri seçin.');
     } else if (plan.shortCents > 0 && splitMode === 'FULL' && plan.receivedCents > 0) {
-      // Müşteri nakdin bir kısmını verdi: alınan nakit parça ödeme olarak hazırlanır,
-      // girilen tutar silinmez; kalan için yöntem seçilir.
+      // Müşteri nakdin bir kısmını verdi: alınan tutar ek onay istenmeden parça tahsilat olarak
+      // işlenir, kalan bakiye masada açık kalır ve makbuz penceresinde görünür.
+      const partial = planPayment({
+        mode: 'PARTIAL',
+        remainingCents,
+        itemsCents: 0,
+        partialCents: plan.receivedCents,
+        receivedCents: plan.receivedCents,
+        isCash: true,
+      });
       setSplitMode('PARTIAL');
       setPartialText(receivedText);
-      setErrorMsg(`${formatMoney(plan.receivedCents)} nakit alınacak, ${formatMoney(plan.shortCents)} masada kalacak. Onaylamak için yeniden basın.`);
+      void execute(partial);
     } else if (plan.shortCents > 0) {
       setErrorMsg(`${formatMoney(plan.shortCents)} eksik.`);
     } else {

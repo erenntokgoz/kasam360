@@ -12,6 +12,7 @@ use sqlx::Row;
 
 use crate::db::DbPool;
 pub(crate) mod helpers;
+pub mod kitchen;
 pub(crate) use helpers::*;
 
 fn print_header(title: &str, subtitle: &str) {

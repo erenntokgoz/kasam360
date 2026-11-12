@@ -302,6 +302,8 @@ pub fn run() {
         branch_commands::archive_branch,
         approval_commands::verify_manager_pin,
         approval_commands::set_staff_approval,
+        print_commands::kitchen::print_kitchen_ticket,
+        print_commands::kitchen::get_kitchen_setup,
         cashier_commands::cash_in,
         cashier_commands::cash_out,
         cashier_commands::get_shift_summary,

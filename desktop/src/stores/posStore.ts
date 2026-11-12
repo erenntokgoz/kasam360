@@ -4,6 +4,7 @@ import type { LastSale } from '../types/payment';
 import { invokeIPC } from '../services/tauriClient';
 import { sessionArgs } from './cariStore';
 import { orderErrorText } from '../lib/orderError';
+import { printKitchenTickets } from '../lib/kitchenPrint';
 import {
   lineTotalCents,
   mapServerItem,
@@ -383,6 +384,7 @@ export const usePosStore = create<PosStore>((set, get) => ({
     const draft = draftOf(state);
     if (!key || draft.length === 0 || state.isSending) return false;
     const { actorId, actorRole, tenantId } = sessionArgs();
+    const alreadySent = new Set(state.ticketItems.filter((item) => item.isSentToKitchen).map((item) => item.id));
     set({ isSending: true, orderError: null });
     try {
       await invokeIPC('submit_order', {
@@ -393,6 +395,10 @@ export const usePosStore = create<PosStore>((set, get) => ({
       });
       set((current) => ({ drafts: { ...current.drafts, [key]: [] } }));
       await get().loadActiveOrder();
+      // Kayıt = istasyon fişi: yeni sunucu kalemleri yazıcıya gider, hatası kalıcı uyarı olur.
+      const after = get();
+      const fresh = after.ticketItems.filter((item) => item.isSentToKitchen && !alreadySent.has(item.id)).map((item) => item.id);
+      await printKitchenTickets(after.activeOrderId, fresh, actorRole, tenantId);
       return true;
     } catch (error) {
       // Taslak durur; yeniden denemeden önce sunucu görünümü tazelenir ki
