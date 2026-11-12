@@ -41,6 +41,8 @@ interface Drag {
   size: { width: number; height: number };
   rotation: number;
   moved: boolean;
+  /** Sürüklenen öğe; kalkma efekti (data-lifted) bunun üstünde açılıp kapanır. */
+  node: HTMLElement;
 }
 
 export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({ zones, tables, objects = [], zoneId, showTable, isEditMode, onTablePositionChange, onTableRotate, onObjectPositionChange, onObjectRotate, onSelectObject, selectedObjectId, onOpenTable, onInspectTable }) => {
@@ -78,13 +80,14 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({ zones, tables, o
     event.currentTarget.setPointerCapture(event.pointerId);
     const rect = origin.getBoundingClientRect();
     const pointer = pointerToWorld({ x: event.clientX, y: event.clientY }, { x: rect.left, y: rect.top }, scale);
-    dragRef.current = { kind, id, origin, grab: { x: pointer.x - x, y: pointer.y - y }, start: { x: event.clientX, y: event.clientY }, size, rotation, moved: false };
+    dragRef.current = { kind, id, origin, grab: { x: pointer.x - x, y: pointer.y - y }, start: { x: event.clientX, y: event.clientY }, size, rotation, moved: false, node: event.currentTarget as HTMLElement };
   };
 
   const moveDrag = (event: React.PointerEvent) => {
     const drag = dragRef.current;
     if (!drag) return;
     if (!drag.moved && Math.hypot(event.clientX - drag.start.x, event.clientY - drag.start.y) < 5) return;
+    if (!drag.moved) drag.node.dataset.lifted = 'true';
     drag.moved = true;
     // Konum her harekette imlecin güncel dünya noktasından hesaplanır: zoom, kaydırma veya yeniden boyutlandırma
     // sürükleme ortasında olsa da birikmiş sapma oluşmaz.
@@ -98,10 +101,12 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({ zones, tables, o
   const endDrag = () => {
     // Sürükleme sonrası gelen click döndürme sayılmaz; yalnız sürüklemesiz dokunuş döndürür.
     if (dragRef.current?.moved) suppressClickRef.current = dragRef.current.id;
+    if (dragRef.current) delete dragRef.current.node.dataset.lifted;
     dragRef.current = null;
   };
 
   const cancelDrag = () => {
+    if (dragRef.current) delete dragRef.current.node.dataset.lifted;
     dragRef.current = null;
   };
 

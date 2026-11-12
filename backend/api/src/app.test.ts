@@ -315,7 +315,14 @@ describe('masaüstü ve hesap silme', () => {
 
     await registerAndVerify();
     const cookie = cookies(await post('/sign-in/email', { email: valid.email, password: valid.password }));
-    expect((await app.request(`/api/desktop-link/${LINK}/finish`, { headers: { cookie } })).status).toBe(200);
+    // Uygulamanın başlatmadığı kod oturumlu olsa da tamamlanamaz.
+    expect((await app.request(`/api/desktop-link/${LINK}/finish`, { headers: { cookie } })).status).toBe(400);
+    await app.request(`/api/desktop-link/${LINK}/google`);
+    const done = await app.request(`/api/desktop-link/${LINK}/finish`, { headers: { cookie } });
+    expect(done.status).toBe(200);
+    expect(await done.text()).toContain('kasam360://google-done');
+    // Aynı kodla ikinci bitiş reddedilir.
+    expect((await app.request(`/api/desktop-link/${LINK}/finish`, { headers: { cookie } })).status).toBe(400);
     expect(await (await app.request(`/api/desktop-link/${LINK}`)).json()).toMatchObject({ email: valid.email, businessName: valid.businessName });
     expect((await app.request(`/api/desktop-link/${LINK}`)).status).toBe(204);
   });

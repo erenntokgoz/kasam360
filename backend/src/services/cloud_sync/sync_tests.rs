@@ -437,3 +437,48 @@ async fn buyuk_gorselli_uc_urun_degisikligi_kuyrugu_ilerletir() {
         .iter()
         .all(|op| op.to_string().len() <= super::outbox::LIMITS.bytes));
 }
+
+#[tokio::test]
+async fn sunucu_isletmeyi_bulamazsa_yeniden_baglanir_ve_gonderim_surer() {
+    let sync = till("a", false).await;
+    write(sync.pool(), &product("prd_1")).await;
+    let api = FakeApi::default();
+    api.cloud()
+        .push_errors
+        .push_back(rejected(404, "NOT_FOUND"));
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    sync.set_relinker(move || {
+        let seen = seen.clone();
+        async move {
+            seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    });
+    sync.sync_once(&api, false).await.expect("tur");
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(pending(&sync).await, 0, "yeniden bağlanınca işlem gider");
+}
+
+#[tokio::test]
+async fn isletme_baska_hesaba_aitse_acik_kodla_durur_ve_veri_silinmez() {
+    let sync = till("a", false).await;
+    write(sync.pool(), &product("prd_1")).await;
+    let api = FakeApi::default();
+    api.cloud()
+        .push_errors
+        .push_back(rejected(404, "NOT_FOUND"));
+    api.cloud()
+        .push_errors
+        .push_back(rejected(404, "NOT_FOUND"));
+    sync.set_relinker(|| async {});
+    let result = sync.sync_once(&api, false).await;
+    assert!(
+        matches!(result, Err(SyncError::Permanent { ref code, .. }) if code == "TENANT_NOT_OWNED")
+    );
+    assert_eq!(
+        pending(&sync).await,
+        1,
+        "gönderilemeyen işlem kuyrukta kalır"
+    );
+    assert_eq!(count(sync.pool(), "SELECT COUNT(*) FROM products").await, 1);
+}

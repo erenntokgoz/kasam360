@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from './motion';
 const DURATION_MS = 520;
 const STAGGER_MS = 10;
 
@@ -19,7 +20,7 @@ const rotationOf = (element: HTMLElement) => Number.parseFloat(element.style.get
  * (`transform: rotate`) ve dönüş merkezi bozulmaz, aksi halde görünüm değişince dönük masa köşesinden sapıyordu.
  */
 export function slideTables(from: HTMLElement, to: HTMLElement) {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (prefersReducedMotion()) return;
   to.querySelectorAll<HTMLElement>('[data-table-id]').forEach((element, index) => {
     const source = from.querySelector<HTMLElement>(`[data-table-id="${element.dataset.tableId}"]`);
     const start = source?.getBoundingClientRect();

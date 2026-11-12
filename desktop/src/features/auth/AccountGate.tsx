@@ -1,9 +1,10 @@
 import { ErrorToast } from '../../ui/ErrorToast';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NumberInput } from '../../ui/NumberInput';
 import { errorText } from '../../lib/cariInput';
 import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
 import { Button } from '../../ui/Button';
+import { InlineAlert } from '../../ui/InlineAlert';
 import { Input } from '../../ui/Input';
 import { AccountLogin } from './AccountLogin';
 import { AuthShell } from './AuthShell';
@@ -53,6 +54,30 @@ const CreateAccountForm: React.FC = () => {
   );
 };
 
+/** Çıkış yarımsa: kaç işlem buluta gitmedi ve bulutun söylediği neden. Kapanmaz, yeniden denenebilir. */
+const ExitBlockNotice: React.FC = () => {
+  const { exitBlock, retryExit, refreshExitBlock } = useDeviceSessionStore();
+  const [isBusy, setIsBusy] = useState(false);
+  useEffect(() => { void refreshExitBlock(); }, [refreshExitBlock]);
+  if (!exitBlock) return null;
+  const reason = exitBlock.message ? ` Bulut: ${exitBlock.message}` : '';
+  const text = `Çıkış tamamlanmadı: ${exitBlock.pending} işlem buluta henüz gitmedi, bu yüzden bu kasadaki veri silinmedi. Başka hesapla girmek için işlemlerin gitmesi gerekir.${reason}`;
+  return (
+    <div className="flex flex-col gap-2">
+      <InlineAlert message={text} />
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full min-h-12"
+        isLoading={isBusy}
+        onClick={() => { setIsBusy(true); void retryExit().finally(() => setIsBusy(false)); }}
+      >
+        Şimdi göndermeyi dene
+      </Button>
+    </div>
+  );
+};
+
 /** Kurulu cihazda hesap oturumu yoksa görünür; personel PIN ekranının önündedir. */
 export const AccountGate: React.FC = () => {
   const { session, error, load } = useDeviceSessionStore();
@@ -70,7 +95,7 @@ export const AccountGate: React.FC = () => {
       ) : session?.accountMissing ? (
         <CreateAccountForm />
       ) : (
-        <AccountLogin>
+        <AccountLogin notice={<ExitBlockNotice />}>
           <GoogleDeviceButton />
         </AccountLogin>
       )}

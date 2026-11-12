@@ -6,7 +6,7 @@ import { useUIStore, type Notice, type NoticeKind } from '../stores/uiStore';
 import { EXIT_MS, prefersReducedMotion } from '../lib/motion';
 
 /** Hata ve uyarı okunmadan kaybolmamalı; başarı bildirimi işi bölmeden çekilir. */
-const LIFETIME_MS: Record<NoticeKind, number> = { success: 4500, info: 6000, warning: 8000, error: 12000 };
+const LIFETIME_MS: Record<NoticeKind, number> = { success: 4500, info: 7000, warning: 8000, error: 12000 };
 /** Fare çekilince kalan süre çok kısaysa kart göz açıp kapayınca kaybolmasın. */
 const MIN_RESUME_MS = 1500;
 
@@ -61,6 +61,11 @@ function NoticeCard({ notice }: { notice: Notice }) {
       <p role={urgent ? 'alert' : 'status'} className="notice-slip-text">{notice.message}</p>
       {notice.count > 1 ? (
         <span key={notice.count} className="notice-slip-count" aria-hidden="true">×{notice.count}</span>
+      ) : null}
+      {notice.action ? (
+        <button type="button" className="notice-slip-action" onClick={() => { notice.action?.run(); dismiss(); }}>
+          {notice.action.label}
+        </button>
       ) : null}
       <button type="button" aria-label="Bildirimi kapat" onClick={dismiss} className="notice-slip-close">
         <X aria-hidden="true" className="size-4" />

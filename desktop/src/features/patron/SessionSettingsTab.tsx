@@ -1,3 +1,4 @@
+import { isMotionForced, setMotionForced } from '../../lib/motion';
 import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useState } from 'react';
 import { errorText } from '../../lib/cariInput';
@@ -29,6 +30,8 @@ export const SessionSettingsTab: React.FC<{ reservations?: boolean }> = ({ reser
   const canEditLead = useAuthStore((state) => state.user?.role === 'OWNER' || state.user?.role === 'MANAGER');
   const [leadMinutes, setLeadMinutes] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [motionForced, setMotionForcedState] = useState(isMotionForced);
+  const chooseMotion = (forced: boolean) => { setMotionForced(forced); setMotionForcedState(forced); };
 
   useEffect(() => {
     if (!reservations) return;
@@ -73,7 +76,7 @@ export const SessionSettingsTab: React.FC<{ reservations?: boolean }> = ({ reser
         <Button variant="secondary" className="min-h-12" onClick={() => void run(signOut)}>
           İşletme Hesabından Çık
         </Button>
-        <p className="text-sm text-[var(--text-secondary)]">Çıkış işletme oturumunu kapatır. Bu cihazdaki işletme kayıtları saklanır.</p>
+        <p className="text-sm text-[var(--text-secondary)]">Çıkışta kasadaki işlemler buluta gönderilir; bulut hepsini aldığını doğrulayınca bu cihazdaki kayıtlar temizlenir. Gitmeyen işlem varsa kasa temizlenmez ve nedeni giriş ekranında kalıcı olarak gösterilir.</p>
       </section>
 
       <section className="work-surface border border-[var(--border)] rounded-xl p-4 space-y-3">
@@ -104,6 +107,15 @@ export const SessionSettingsTab: React.FC<{ reservations?: boolean }> = ({ reser
             Açık Tema
           </Button>
         </div>
+        <div className="grid grid-cols-2 gap-2" role="group" aria-label="Animasyonlar">
+          <Button variant={motionForced ? 'secondary' : 'selected'} aria-pressed={!motionForced} onClick={() => chooseMotion(false)}>
+            Sistem Ayarı
+          </Button>
+          <Button variant={motionForced ? 'selected' : 'secondary'} aria-pressed={motionForced} onClick={() => chooseMotion(true)}>
+            Animasyon Açık
+          </Button>
+        </div>
+        <p className="text-sm text-[var(--text-secondary)]">Sistem animasyonları kapatmışsa uygulama da kapatır; Animasyon Açık bunu bu uygulama için yok sayar.</p>
       </section>
 
       </> : null}

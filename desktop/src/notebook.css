@@ -213,7 +213,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bar-item { transition: none; }
+  :root:not([data-motion="full"]) .bar-item { transition: none; }
 }
 
 .hand {
@@ -254,7 +254,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  :root:not([data-motion="full"]) *,
+  :root:not([data-motion="full"]) *::before,
+  :root:not([data-motion="full"]) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

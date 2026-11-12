@@ -33,6 +33,9 @@ export function createApp(
   mountCatalog(app);
   // shortcut: bekleyen bağlantılar bellektedir, ikinci sunucu eklenince veritabanına taşınmalı.
   const desktopLinks = new Map<string, DesktopLink>();
+  // Yalnız uygulamanın başlattığı kodlar tamamlanabilir: tahmin edilen ya da dışarıdan uydurulan
+  // bir kodla bekleyen bağlantı oluşturulamaz. Kod bitişte tüketilir (tek kullanımlık).
+  const startedLinks = new Map<string, number>();
 
   app.get('/health', (context) => context.json({ ok: true }));
   mountVersion(app);
@@ -48,6 +51,8 @@ export function createApp(
   app.get('/api/desktop-link/:code/google', async (context) => {
     const code = context.req.param('code');
     if (!LINK_CODE.test(code)) return context.text('Bağlantı geçersiz.', 400);
+    if (startedLinks.size >= LINK_LIMIT) startedLinks.clear();
+    startedLinks.set(code, Date.now() + LINK_TTL_MS);
     const started = await auth.handler(
       new Request(`${siteUrl}/api/auth/sign-in/social`, {
         method: 'POST',
@@ -65,13 +70,19 @@ export function createApp(
   app.get('/api/desktop-link/:code/finish', async (context) => {
     const code = context.req.param('code');
     const session = await auth.api.getSession({ headers: context.req.raw.headers });
-    if (!LINK_CODE.test(code) || !session) return context.html(page('Google girişi tamamlanamadı. Uygulamadan yeniden deneyin.'), 400);
+    const startedUntil = startedLinks.get(code);
+    startedLinks.delete(code);
+    if (!LINK_CODE.test(code) || !session || startedUntil === undefined || startedUntil < Date.now()) {
+      return context.html(page('Google girişi tamamlanamadı. Uygulamadan yeniden deneyin.'), 400);
+    }
     if (desktopLinks.size >= LINK_LIMIT) desktopLinks.clear();
     const { name, email, businessName, phone } = session.user as DesktopLink['account'];
     const licenseKey = licenseKeys && session.user.emailVerified
       ? await licenseKeys.create(session.user.id).catch(() => undefined) : undefined;
     desktopLinks.set(code, { account: { name, email, businessName, phone }, licenseKey, expiresAt: Date.now() + LINK_TTL_MS });
-    return context.html(page('Giriş tamam. KASAM360 uygulamasına dönebilirsiniz.'));
+    // Uygulama penceresi ya da Android sekmesi bu adresi yakalayıp kendini kapatır; sistem tarayıcısında
+    // özel şema sessizce yok sayılır ve metin kalır.
+    return context.html(page('Giriş tamam. KASAM360 uygulamasına dönebilirsiniz.<script>setTimeout(function(){location.href="kasam360://google-done"},400)</script>'));
   });
 
   app.get('/api/desktop-link/:code', (context) => {

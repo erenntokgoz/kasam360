@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useFloorStore } from '../../../stores/floorStore';
+import { useUIStore } from '../../../stores/uiStore';
 import type { FloorObject, FloorObjectKind } from '../../../types/floor';
 import { Bar, BarTab } from '../../../ui/Bar';
 import { Button } from '../../../ui/Button';
@@ -65,6 +66,19 @@ export const KrokiEditor: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const removeSelectedObject = () => {
     if (!selectedObjectId) return;
+    const removed = draftObjects.find((object) => object.id === selectedObjectId);
+    const removedId = selectedObjectId;
+    // Taslak içinde kalan bir silme; kayda basılana kadar geri alınabilir, veri kaybı olmaz.
+    if (removed) {
+      useUIStore.getState().pushUndoNotice('Öğe taslaktan kaldırıldı.', {
+        label: 'Geri al',
+        run: () => {
+          setDraftObjects((current) => (current.some((object) => object.id === removedId) ? current : [...current, removed]));
+          setDeletedObjectIds((current) => current.filter((id) => id !== removedId));
+          setSelectedObjectId(removedId);
+        },
+      });
+    }
     setDraftObjects((current) => current.filter((object) => object.id !== selectedObjectId));
     setChangedObjectIds((current) => { const next = new Set(current); next.delete(selectedObjectId); return next; });
     if (!selectedObjectId.startsWith('draft:')) setDeletedObjectIds((current) => [...current, selectedObjectId]);

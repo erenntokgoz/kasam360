@@ -2,7 +2,7 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useEffect, useRef, useState } from 'react';
 import { readDesktopLink, type WebAccount } from '../../lib/webAccount';
 import { Button } from '../../ui/Button';
-import { openSitePage } from '../auth/AccountLogin';
+import { closeGoogleLogin, openSitePage } from '../../lib/googleLogin';
 
 const POLL_MS = 2000;
 const POLL_LIMIT = 150;
@@ -17,6 +17,7 @@ export const GoogleSetupButton: React.FC<{ onAccount: (account: WebAccount) => v
 
   const stop = () => {
     window.clearInterval(timer.current);
+    void closeGoogleLogin();
     setIsWaiting(false);
   };
 

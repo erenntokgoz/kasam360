@@ -7,7 +7,40 @@ export const EXIT_MS = 140;
  */
 export function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+  if (isMotionForced()) return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+const MOTION_KEY = 'kasam360.motion';
+
+/**
+ * Sistem "animasyonları kaldır" açıkken (Windows ve Android'de sık: performans ayarı) uygulamanın
+ * hiçbir hareketi çalışmaz ve kullanıcı bunu hata sanır. Ayarlardan "Animasyon Açık" seçilirse
+ * sistem tercihi bu uygulama için yok sayılır. Varsayılan sistem tercihine uymaktır.
+ */
+export function isMotionForced(): boolean {
+  try {
+    return window.localStorage.getItem(MOTION_KEY) === 'full';
+  } catch {
+    return false;
+  }
+}
+
+/** Seçimi saklar ve CSS'in hareket azaltma bloklarını devre dışı bırakan kök işaretini yazar. */
+export function setMotionForced(forced: boolean): void {
+  try {
+    if (forced) window.localStorage.setItem(MOTION_KEY, 'full');
+    else window.localStorage.removeItem(MOTION_KEY);
+  } catch {
+    // Depo yazılamazsa seçim yalnız bu açılışta geçerlidir.
+  }
+  applyMotionPreference(forced);
+}
+
+export function applyMotionPreference(forced = isMotionForced()): void {
+  if (typeof document === 'undefined') return;
+  if (forced) document.documentElement.dataset.motion = 'full';
+  else delete document.documentElement.dataset.motion;
 }
 
 /**

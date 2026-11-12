@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { areaPath, axisLabel, niceAxisMaxLira, smoothPath, type ChartPoint } from '../../../lib/chartPath';
-import { canAnimate, gsap, useGSAP } from '../../../lib/dashMotion';
+import { canAnimate, gsap, useGSAP, useRevealKey } from '../../../lib/dashMotion';
 import { formatMoney } from '../../../lib/formatMoney';
 import type { PanoramaBucket } from '../../../stores/panoramaStore';
 import { Panel } from './Panel';
@@ -66,6 +66,8 @@ export const RevenueChart: React.FC<RevenueChartProps> = ({ kind, buckets, toolb
   // Çizgi soldan sağa çizilir, alan ve kıyas çizgisi arkasından belirir. Yalnız
   // stroke-dashoffset ve opacity oynar; veri aynı kaldıkça (30 sn yenileme) yeniden oynamaz.
   const lineRef = useRef<SVGPathElement>(null);
+  // Pano sekmesi gizliyken ölçüm 0 döner; sekme görününce çizim yeniden başlar.
+  const revealKey = useRevealKey(plot);
   useGSAP(() => {
     if (!canAnimate() || !lineRef.current || !geometry.line) return;
     const length = lineRef.current.getTotalLength();
@@ -76,7 +78,7 @@ export const RevenueChart: React.FC<RevenueChartProps> = ({ kind, buckets, toolb
       { strokeDashoffset: 0, duration: 1.1, ease: 'power2.out', clearProps: 'strokeDasharray,strokeDashoffset' },
     );
     gsap.from('.chart-area, .chart-previous', { opacity: 0, duration: 0.7, delay: 0.5, ease: 'power1.out' });
-  }, { scope: plot, dependencies: [geometry.line], revertOnUpdate: true });
+  }, { scope: plot, dependencies: [geometry.line, revealKey], revertOnUpdate: true });
 
   const title = kind === 'HOUR' ? 'Saatlere Göre Tahsilat' : 'Günlere Göre Tahsilat';
   const active = hovered === null ? null : shown[hovered];

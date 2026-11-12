@@ -21,8 +21,27 @@ interface CloudSignOutReply {
   code: string | null;
 }
 
+/** Çıkış yapıldı ama bulut bütün işlemleri almadığı için yerel veri silinmedi. */
+export interface ExitBlock {
+  pending: number;
+  /** Bulutun son hata kodu; boşsa yalnız bekleniyor. */
+  code: string | null;
+  message: string | null;
+}
+
+interface CloudStatusReply {
+  pending: number;
+  errorCode: string | null;
+  error: string | null;
+  wipePending: boolean;
+}
+
 interface DeviceSessionStore {
   session: DeviceSessionReply | null;
+  /** Kalıcı uyarı: kapatılana ya da kasa temizlenene kadar giriş ekranında durur. */
+  exitBlock: ExitBlock | null;
+  refreshExitBlock: () => Promise<void>;
+  retryExit: () => Promise<void>;
   error: string | null;
   load: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -40,8 +59,34 @@ export const useDeviceSessionStore = create<DeviceSessionStore>((set) => {
     set({ session, error: null });
   };
 
+  const readExitBlock = async () => {
+    const status = await invokeIPC<CloudStatusReply>('get_cloud_sync_status');
+    set({
+      exitBlock: status.wipePending
+        ? { pending: status.pending, code: status.errorCode, message: status.error }
+        : null,
+    });
+  };
+
   return {
     session: null,
+    exitBlock: null,
+
+    // Çıkış yarım kaldıysa uyarı uygulama yeniden açılınca da görünür; durum diskten okunur.
+    refreshExitBlock: async () => {
+      try {
+        await readExitBlock();
+      } catch {
+        // Durum okunamazsa uyarı eklenmez; veri zaten silinmemiştir.
+      }
+    },
+
+    retryExit: async () => {
+      await invokeIPC('retry_cloud_sync');
+      // Arka plan turu birkaç saniyede biter; sonuç durumdan okunur.
+      await new Promise((resolve) => window.setTimeout(resolve, 2500));
+      await readExitBlock();
+    },
     error: null,
 
     // Durum okunamazsa cihaz açık sayılmaz; hata ekranda kalır.
@@ -55,6 +100,7 @@ export const useDeviceSessionStore = create<DeviceSessionStore>((set) => {
 
     signIn: async (email, password) => {
       apply(await invokeIPC<DeviceSessionReply>('account_sign_in', { email, password }));
+      set({ exitBlock: null });
     },
 
     signInWithLink: async (code) => {
@@ -79,9 +125,15 @@ export const useDeviceSessionStore = create<DeviceSessionStore>((set) => {
       apply(reply.session);
       useAuthStore.getState().logout();
       if (reply.wiped) {
+        set({ exitBlock: null });
         await useSetupStore.getState().load();
-      } else if (reply.pending > 0) {
-        useUIStore.getState().pushNotice(`Buluta gitmemiş ${reply.pending} işlem var; gönderilince bu kasa temizlenir.`, 'warning');
+      } else {
+        // Geçici bildirim yerine kalıcı uyarı: kullanıcı başka hesapla girmeden önce nedenini görür.
+        try {
+          await readExitBlock();
+        } catch {
+          set({ exitBlock: { pending: reply.pending, code: reply.code, message: null } });
+        }
       }
     },
 

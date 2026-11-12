@@ -95,16 +95,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .motion-panel,
-  .motion-swap > *,
-  .motion-backdrop,
-  .motion-dialog,
-  .motion-drawer,
-  .motion-item,
-  .motion-ghost {
+  :root:not([data-motion="full"]) .motion-panel,
+  :root:not([data-motion="full"]) .motion-swap > *,
+  :root:not([data-motion="full"]) .motion-backdrop,
+  :root:not([data-motion="full"]) .motion-dialog,
+  :root:not([data-motion="full"]) .motion-drawer,
+  :root:not([data-motion="full"]) .motion-item,
+  :root:not([data-motion="full"]) .motion-ghost {
     animation: none !important;
   }
-  .motion-ghost {
+  :root:not([data-motion="full"]) .motion-ghost {
     display: none !important;
   }
 }
@@ -113,4 +113,58 @@
   .motion-ghost {
     display: none !important;
   }
+}
+
+/* Sürüklenen kroki öğesi kalkar: yalnız scale ve gölge; konum/dönüş transform'una dokunmaz.
+   Düşük cihazda gölge çizilmez, hareket azaltmada geçiş yoktur ama kalkık durum görünür kalır. */
+[data-lifted="true"] {
+  scale: 1.08;
+  z-index: 20;
+  box-shadow: var(--lift);
+  transition: scale 140ms var(--motion-ease-out);
+}
+:root[data-perf="low"] [data-lifted="true"] {
+  box-shadow: none;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="full"]) [data-lifted="true"] {
+    transition: none;
+  }
+}
+
+/* Pano kartları fareyle hafifçe yükselir; cam kartın arka planı değişmez, yalnız translate. */
+:root:not([data-perf="low"]) .dash-card {
+  transition: translate 160ms var(--motion-ease-out), box-shadow 160ms var(--motion-ease-out);
+}
+:root:not([data-perf="low"]) .dash-card:hover {
+  translate: 0 -2px;
+  box-shadow: var(--lift);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="full"]) .dash-card,
+  :root:not([data-motion="full"]) .dash-card:hover {
+    transition: none;
+    translate: none;
+  }
+}
+
+/* Geri al düğmesi bildirim hapının içinde metinle kapat düğmesi arasında durur. */
+.notice-slip-action {
+  align-self: center;
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--notice-tone);
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.notice-slip-action:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

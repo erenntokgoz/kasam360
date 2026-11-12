@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { errorText } from '../../lib/cariInput';
 import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
 import { Button } from '../../ui/Button';
-import { openSitePage } from './AccountLogin';
+import { closeGoogleLogin, openSitePage } from '../../lib/googleLogin';
 
 const POLL_MS = 2000;
 const POLL_LIMIT = 150;
@@ -22,6 +22,7 @@ export const GoogleDeviceButton: React.FC = () => {
 
   const stop = () => {
     window.clearInterval(timer.current);
+    void closeGoogleLogin();
     setIsWaiting(false);
   };
 

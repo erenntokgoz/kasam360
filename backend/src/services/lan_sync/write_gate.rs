@@ -8,7 +8,7 @@
 //! yazan komut açılmamalıdır. Tek cihazda kapı devre dışıdır.
 
 /// Yerel tablolara yazar veya oturumla ilgilidir; işletme verisini değiştirmez.
-const DEVICE_LOCAL: [&str; 26] = [
+const DEVICE_LOCAL: [&str; 28] = [
     "create_backup_now",
     "delete_backup",
     "set_backup_mirror",
@@ -22,6 +22,8 @@ const DEVICE_LOCAL: [&str; 26] = [
     "link_license",
     "link_license_with_google",
     "open_site_page",
+    "close_google_login",
+    "retry_cloud_sync",
     "account_sign_out",
     "set_session_policy",
     "pos_get_categories",

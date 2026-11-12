@@ -90,6 +90,14 @@ pub struct CloudSyncStatus {
 
 type Publisher = Box<dyn Fn(&CloudSyncStatus) + Send + Sync>;
 
+/// Cihazı lisans/işletme kaydına yeniden bağlayan çağrı (sunucuda işletme ve sahiplik kaydı açılır).
+type Relinker =
+    Arc<dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>;
+
+/// Sunucu işletmeyi bulamadığında (404) yeniden bağlama en çok bu aralıkla denenir; aksi halde
+/// her turda etkinleştirme isteği sunucuyu yorar.
+const RELINK_EVERY: std::time::Duration = std::time::Duration::from_secs(300);
+
 struct Live {
     state: &'static str,
     error_code: Option<String>,
@@ -104,6 +112,8 @@ struct Inner {
     wake: Notify,
     live: std::sync::Mutex<Live>,
     publisher: std::sync::Mutex<Option<Publisher>>,
+    relinker: std::sync::Mutex<Option<Relinker>>,
+    last_relink: std::sync::Mutex<Option<std::time::Instant>>,
     running: AtomicBool,
     /// Gönderim, çekme ve çıkış aynı anda çalışmaz: imleç ve silme tek sırayla ilerler.
     pass_lock: tokio::sync::Mutex<()>,
@@ -141,6 +151,8 @@ impl CloudSync {
                     halted_key: None,
                 }),
                 publisher: std::sync::Mutex::new(None),
+                relinker: std::sync::Mutex::new(None),
+                last_relink: std::sync::Mutex::new(None),
                 running: AtomicBool::new(false),
                 pass_lock: tokio::sync::Mutex::new(()),
             }),
@@ -160,6 +172,42 @@ impl CloudSync {
         if let Ok(mut slot) = self.inner.publisher.lock() {
             *slot = Some(publisher);
         }
+    }
+
+    /// Sunucu işletmeyi bulamazsa cihazı yeniden bağlayacak çağrı (lisans etkinleştirme).
+    pub fn set_relinker<F, Fut>(&self, relink: F)
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = ()> + Send + 'static,
+    {
+        if let Ok(mut slot) = self.inner.relinker.lock() {
+            *slot = Some(Arc::new(move || Box::pin(relink())));
+        }
+    }
+
+    /// Yeniden bağlama denendiyse `true`. Sık deneme sunucuyu yormasın diye aralık sınırlıdır.
+    async fn try_relink(&self) -> bool {
+        let relink = match self.inner.relinker.lock() {
+            Ok(slot) => slot.clone(),
+            Err(_) => None,
+        };
+        let Some(relink) = relink else {
+            return false;
+        };
+        let due = match self.inner.last_relink.lock() {
+            Ok(mut last) => {
+                let due = last.is_none_or(|at| at.elapsed() >= RELINK_EVERY);
+                if due {
+                    *last = Some(std::time::Instant::now());
+                }
+                due
+            }
+            Err(_) => false,
+        };
+        if due {
+            relink().await;
+        }
+        due
     }
 
     /// Göndericiyi hemen uyandırır; reddedilmiş anahtar beklemesini de kaldırır.
@@ -335,9 +383,30 @@ impl CloudSync {
             ));
         }
         report.enabled = true;
-        let result = self
+        let mut result = self
             .run_pass(api, &credentials, &identity, pull, &mut report)
             .await;
+        // 404: bu cihazın işletmesi sunucuda bu anahtarın sahibine bağlı görünmüyor. Etkinleştirme
+        // işletmeyi ve sahipliği yoksa açar; sonra tur bir kez daha denenir. Hâlâ 404 ise işletme
+        // başka bir hesabındır ve hata sessiz kalmaz: açık kodla durur.
+        if matches!(&result, Err(SyncError::Permanent { code, .. }) if code == "NOT_FOUND")
+            && self.try_relink().await
+        {
+            let again = self.credentials().await?;
+            if let Some(fresh) = again {
+                result = self
+                    .run_pass(api, &fresh, &identity, pull, &mut report)
+                    .await;
+            }
+        }
+        if let Err(SyncError::Permanent { code, .. }) = &result {
+            if code == "NOT_FOUND" {
+                result = Err(SyncError::Permanent {
+                    code: "TENANT_NOT_OWNED".to_string(),
+                    message: "Bu kasadaki işletme, bağlı hesabın işletmesi olarak görünmüyor. İşletmenin sahibi hesabıyla yeniden bağlayın.".to_string(),
+                });
+            }
+        }
         if let Err(SyncError::Halted { .. }) = &result {
             if let Ok(mut live) = self.inner.live.lock() {
                 live.halted_key = Some(digest);

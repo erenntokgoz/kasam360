@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { canAnimate, gsap, useGSAP } from '../../../lib/dashMotion';
+import { canAnimate, gsap, useGSAP, useRevealKey } from '../../../lib/dashMotion';
 import { formatMoney } from '../../../lib/formatMoney';
 import type { PanoramaData } from '../../../stores/panoramaStore';
 import { useSyncStore, SYNC_STATE_LABEL } from '../../../stores/syncStore';
@@ -37,10 +37,12 @@ export const LivePanel: React.FC<{ live: PanoramaData['live'] }> = ({ live }) =>
   const fill = live.totalTables > 0 ? Math.round((live.openTables * 100) / live.totalTables) : 0;
 
   // Çubuklar tabandan yükselir; yalnız transform oynar.
+  // Gizli sekmede ölçü sıfırdır; çubuklar sekme görününce yükselir.
+  const revealKey = useRevealKey(root);
   useGSAP(() => {
     if (!canAnimate()) return;
     gsap.from('.live-bar', { scaleY: 0, transformOrigin: '50% 100%', duration: 0.5, ease: 'power2.out', stagger: 0.012 });
-  }, { scope: root, dependencies: [bars.length], revertOnUpdate: true });
+  }, { scope: root, dependencies: [bars.length, revealKey], revertOnUpdate: true });
 
   return (
     <Panel

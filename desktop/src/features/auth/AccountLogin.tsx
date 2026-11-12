@@ -1,8 +1,8 @@
-import { ErrorToast } from '../../ui/ErrorToast';
+import { InlineAlert } from '../../ui/InlineAlert';
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
-import { invokeIPC } from '../../services/tauriClient';
+import { openSitePage } from '../../lib/googleLogin';
 import { useDeviceSessionStore } from '../../stores/deviceSessionStore';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
@@ -12,14 +12,15 @@ interface AccountLoginProps {
   onNotOnDevice?: (email: string, password: string) => Promise<void>;
   /** Şifre hesabı sitede yeniler; kurulu cihazın yerel şifresini değiştirmez. */
   onForgot?: () => void;
+  /** Formun üstünde kalıcı duran uyarı (ör. yarım kalan çıkış). */
+  notice?: React.ReactNode;
   children?: React.ReactNode;
 }
 
-/** Sitedeki sabit sayfaları sistem tarayıcısında açar. */
-export const openSitePage = (path: string) => invokeIPC('open_site_page', { path });
+export { openSitePage };
 
 /** Ürüne ilk giriş: işletme hesabı. Personel bundan sonra PIN ile çalışır. */
-export const AccountLogin: React.FC<AccountLoginProps> = ({ onNotOnDevice, onForgot, children }) => {
+export const AccountLogin: React.FC<AccountLoginProps> = ({ onNotOnDevice, onForgot, notice, children }) => {
   const { signIn } = useDeviceSessionStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -51,9 +52,8 @@ export const AccountLogin: React.FC<AccountLoginProps> = ({ onNotOnDevice, onFor
 
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
-      {error ? (
-        <ErrorToast message={error} />
-      ) : null}
+      {notice}
+      {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
       <div>
         <label htmlFor="account-email" className="block text-sm font-medium mb-1 text-[var(--text-secondary)]">
           E-posta

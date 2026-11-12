@@ -81,7 +81,7 @@ pub async fn refresh_license(
     Ok(status)
 }
 
-async fn refresh(pool: &DbPool) -> Result<LicenseStatus, String> {
+pub(crate) async fn refresh(pool: &DbPool) -> Result<LicenseStatus, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let stored = license::load(&mut conn).await?;
     drop(conn);

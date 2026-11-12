@@ -24,6 +24,13 @@ export interface Notice {
   kind: NoticeKind;
   /** Aynı bildirim üst üste gelirse yeni kart açılmaz; sayı artar ve süre baştan başlar. */
   count: number;
+  /** Geri al gibi tek dokunuşluk eylem; basılınca bildirim kapanır. */
+  action?: NoticeAction;
+}
+
+export interface NoticeAction {
+  label: string;
+  run: () => void;
 }
 
 interface UIStore {
@@ -31,6 +38,8 @@ interface UIStore {
   showNotice: (message: string) => void;
   showErrorNotice: (message: string) => void;
   pushNotice: (message: string, kind: NoticeKind) => void;
+  /** Geri alınabilir işlem bildirimi: eylem düğmesi taşır ve süre dolana kadar bekler. */
+  pushUndoNotice: (message: string, action: NoticeAction) => void;
   clearNotice: (id?: number) => void;
   activeModule: AppModule;
   theme: 'dark' | 'light';
@@ -68,12 +77,12 @@ const CLOSED_MODALS: ModalState = {
 let noticeId = 0;
 
 /** Tekrar eden bildirim yeni kimlik alır: eski kartın zamanlayıcısı yenisini kapatamaz. */
-function appendNotice(notices: Notice[], message: string, kind: NoticeKind): Notice[] {
+function appendNotice(notices: Notice[], message: string, kind: NoticeKind, action?: NoticeAction): Notice[] {
   const text = message.trim();
   if (!text) return notices;
   const repeated = notices.find((notice) => notice.message === text && notice.kind === kind);
   const distinct = notices.filter((notice) => notice !== repeated);
-  return [...distinct.slice(-2), { id: ++noticeId, message: text, kind, count: (repeated?.count ?? 0) + 1 }];
+  return [...distinct.slice(-2), { id: ++noticeId, message: text, kind, count: (repeated?.count ?? 0) + 1, action }];
 }
 
 const THEME_KEY = 'kasam360.theme';
@@ -104,6 +113,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   showNotice: (message) => set((state) => ({ notices: appendNotice(state.notices, message, 'success') })),
   showErrorNotice: (message) => set((state) => ({ notices: appendNotice(state.notices, message, 'error') })),
   pushNotice: (message, kind) => set((state) => ({ notices: appendNotice(state.notices, message, kind) })),
+  pushUndoNotice: (message, action) => set((state) => ({ notices: appendNotice(state.notices, message, 'info', action) })),
   clearNotice: (id) => set((state) => ({ notices: id === undefined ? [] : state.notices.filter((notice) => notice.id !== id) })),
   activeModule: 'FLOOR',
   theme: initialTheme,

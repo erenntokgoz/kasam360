@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,9 +29,46 @@ try {
     mkdirSync(path.dirname(destination), { recursive: true });
     copyFileSync(source, destination);
   }
+
+  syncNativeShell();
 } finally {
   const relativeOutput = path.relative(mobileRoot, temporaryOutput);
   if (relativeOutput && !relativeOutput.startsWith('..') && !path.isAbsolute(relativeOutput)) {
     rmSync(temporaryOutput, { recursive: true, force: true });
+  }
+}
+
+/**
+ * `backend/gen` üretilmiş ve izlenmeyen klasördür. Google girişini uygulama içinde açan Android kodu
+ * burada izlenir ve her derlemede üretilmiş projeye uygulanır (tekrar çalıştırmak güvenlidir).
+ */
+function syncNativeShell() {
+  const androidRoot = path.join(backendRoot, 'gen/android/app');
+  const activityDir = path.join(androidRoot, 'src/main/java/com/kasam360/mobile');
+  mkdirSync(activityDir, { recursive: true });
+  copyFileSync(path.join(mobileRoot, 'android-assets/native/MainActivity.kt'), path.join(activityDir, 'MainActivity.kt'));
+
+  const manifestPath = path.join(androidRoot, 'src/main/AndroidManifest.xml');
+  const manifest = readFileSync(manifestPath, 'utf8');
+  if (!manifest.includes('google-done')) {
+    const filter = `            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kasam360" android:host="google-done" />
+            </intent-filter>
+`;
+    const marker = '        </activity>';
+    if (!manifest.includes(marker)) throw new Error('AndroidManifest.xml etkinlik bitişi bulunamadı.');
+    writeFileSync(manifestPath, manifest.replace(marker, `${filter}${marker}`));
+  }
+
+  const gradlePath = path.join(androidRoot, 'build.gradle.kts');
+  const gradle = readFileSync(gradlePath, 'utf8');
+  if (!gradle.includes('androidx.browser:browser')) {
+    const anchor = 'implementation("androidx.webkit:webkit:1.14.0")';
+    if (!gradle.includes(anchor)) throw new Error('build.gradle.kts bağımlılık satırı bulunamadı.');
+    writeFileSync(gradlePath, gradle.replace(anchor, `${anchor}
+    implementation("androidx.browser:browser:1.8.0")`));
   }
 }

@@ -164,6 +164,16 @@ pub fn run() {
                     status,
                 );
             }));
+            // Sunucu bu cihazın işletmesini bulamazsa lisans etkinleştirmesi işletmeyi ve sahipliği açar.
+            let relink_pool = pool.clone();
+            cloud_sync.set_relinker(move || {
+                let pool = relink_pool.clone();
+                async move {
+                    if let Err(reason) = commands::license_commands::refresh(&pool).await {
+                        tracing::warn!("Cihaz işletmeye yeniden bağlanamadı: {reason}");
+                    }
+                }
+            });
             cloud_sync.start(commands::account_commands::API_URL);
             app.manage(cloud_sync);
 
@@ -242,6 +252,7 @@ pub fn run() {
         commands::sync_commands::take_over_device,
         commands::account_commands::get_device_session,
         commands::account_commands::open_site_page,
+        commands::account_commands::close_google_login,
         commands::app_update_commands::get_app_version,
         commands::app_update_commands::get_app_update,
         commands::app_update_commands::install_app_update,
@@ -291,6 +302,8 @@ pub fn run() {
         print_commands::print_day_z_report,
         print_commands::print_cash_slip,
         print_commands::print_order_slip,
+        print_commands::kitchen::print_kitchen_ticket,
+        print_commands::kitchen::get_kitchen_setup,
         print_commands::print_void_slip,
         inventory_commands::get_inventory,
         inventory_commands::adjust_stock,
@@ -302,8 +315,6 @@ pub fn run() {
         branch_commands::archive_branch,
         approval_commands::verify_manager_pin,
         approval_commands::set_staff_approval,
-        print_commands::kitchen::print_kitchen_ticket,
-        print_commands::kitchen::get_kitchen_setup,
         cashier_commands::cash_in,
         cashier_commands::cash_out,
         cashier_commands::get_shift_summary,

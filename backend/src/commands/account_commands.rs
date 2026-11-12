@@ -55,24 +55,93 @@ fn site_page_url(path: &str) -> Result<String, String> {
     Err("Bu sayfa açılamaz.".to_string())
 }
 
-/// Google girişi ve yasal metinler sistem tarayıcısında açılır.
+/// Uygulama içi Google penceresinin etiketi; aynı anda tek giriş penceresi açık kalır.
+const GOOGLE_WINDOW: &str = "google-login";
+/// Giriş bitince site bu adrese yönlenir; pencere bunu yakalayıp kendini kapatır (adres açılmaz).
+const GOOGLE_DONE_SCHEME: &str = "kasam360";
+
+/// Google girişini masaüstünde uygulama penceresinde açar. Pencerede Tauri IPC yetkisi yoktur
+/// (yetki yalnız `main` penceresine tanımlıdır); uzak sayfa uygulamanın komutlarını çağıramaz.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn open_google_window(app: &tauri::AppHandle, url: &str) -> Result<(), String> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+    if let Some(existing) = app.get_webview_window(GOOGLE_WINDOW) {
+        existing.close().map_err(|error| error.to_string())?;
+    }
+    let target: tauri::Url = url
+        .parse()
+        .map_err(|_| "Giriş adresi geçersiz.".to_string())?;
+    let handle = app.clone();
+    WebviewWindowBuilder::new(app, GOOGLE_WINDOW, WebviewUrl::External(target))
+        .title("Google ile giriş")
+        .inner_size(480.0, 720.0)
+        .center()
+        .on_navigation(move |next| {
+            // Site "giriş tamam" der demez pencere kapanır; oturum uygulamadaki yoklamayla aktarılır.
+            if next.scheme() == GOOGLE_DONE_SCHEME {
+                let closing = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(window) = closing.get_webview_window(GOOGLE_WINDOW) {
+                        let _ = window.close();
+                    }
+                });
+                return false;
+            }
+            // Yalnız güvenli bağlantılar açılır; dosya ve özel şema yönlendirmeleri engellenir.
+            next.scheme() == "https" || (cfg!(debug_assertions) && next.scheme() == "http")
+        })
+        .build()
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+/// Giriş tamamlanınca ya da vazgeçilince uygulamadaki yoklama pencereyi kapatır.
 #[tauri::command]
-pub fn open_site_page(app: tauri::AppHandle, path: String) -> Result<(), String> {
+pub fn close_google_login(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        use tauri::Manager;
+        if let Some(window) = app.get_webview_window(GOOGLE_WINDOW) {
+            window.close().map_err(|error| error.to_string())?;
+        }
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let _ = app;
+    Ok(())
+}
+
+/// Google girişi masaüstünde uygulama penceresinde, mobilde uygulama içi sekmede açılır; yasal
+/// metinler sistem tarayıcısındadır. Mobilde sekmeyi arayüz açar (`in_app`), bu yüzden adres döner.
+#[tauri::command]
+pub fn open_site_page(
+    app: tauri::AppHandle,
+    path: String,
+    in_app: Option<bool>,
+) -> Result<String, String> {
     let url = site_page_url(&path)?;
+    let is_google = path.ends_with("/google");
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
+        if is_google && in_app.unwrap_or(false) {
+            return Ok(url);
+        }
         use tauri_plugin_opener::OpenerExt;
         app.opener()
-            .open_url(url, None::<&str>)
-            .map_err(|error| error.to_string())
+            .open_url(&url, None::<&str>)
+            .map_err(|error| error.to_string())?;
+        Ok(url)
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        let _ = app;
+        let _ = in_app;
+        if is_google {
+            open_google_window(&app, &url)?;
+            return Ok(url);
+        }
         std::process::Command::new("rundll32")
             .args(["url.dll,FileProtocolHandler", &url])
             .spawn()
-            .map(|_| ())
+            .map(|_| url)
             .map_err(|error| error.to_string())
     }
 }
@@ -98,6 +167,24 @@ pub async fn account_sign_in(
                 .to_string(),
         );
     }
+    // Kasa tek işletmenin yerel verisini taşır. Başka bir hesap bu kasada hesabı olmadığı için
+    // "hatalı şifre" gibi görünen genel hata yerine gerçek neden söylenir; yerel kullanıcı
+    // aranmadan parola doğrulaması başlatılmaz (kaba kuvvet kilidi de gereksiz yere dolmaz).
+    let known: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM users WHERE is_active = 1
+         AND (email = ? COLLATE NOCASE OR login_identifier = ? COLLATE NOCASE)",
+    )
+    .bind(&email)
+    .bind(&email)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if known == 0 {
+        let waiting = other_business_note(&mut conn).await?;
+        return Err(format!(
+            "OTHER_BUSINESS: Bu kasada başka bir işletme kayıtlı ve {email} onun hesabı değil. Başka hesapla girmek için önce kayıtlı hesapla girip Ayarlar > Oturum bölümünden çıkış yapın; işlemler buluta gidince kasa temizlenir.{waiting}"
+        ));
+    }
     drop(conn);
     let user = authenticate_by_identifier(&pool, &email, &password).await?;
     crate::rbac::require_any(&user.role, &ACCOUNT_ROLES)?;
@@ -105,6 +192,22 @@ pub async fn account_sign_in(
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     device_session::sign_in(&mut conn, &user.id, &user.tenant_id).await?;
     device_session::load(&mut conn).await
+}
+
+/// Çıkışı yarım kalmış kasada kullanıcıya bekleyen işlem sayısını söyler; veri sayımı diskten gelir.
+async fn other_business_note(conn: &mut sqlx::SqliteConnection) -> Result<String, String> {
+    use crate::services::cloud_sync::state;
+    let stored = state::load(conn).await?;
+    if !stored.wipe_pending {
+        return Ok(String::new());
+    }
+    let pending = match state::identity(conn).await? {
+        Some(identity) => state::pending_count(conn, &identity).await?,
+        None => 0,
+    };
+    Ok(format!(
+        " Çıkış bekliyor: {pending} işlem buluta henüz gitmedi, bu yüzden yerel veri silinmedi."
+    ))
 }
 
 /// Google ile açılmış hesabın cihaz girişi. Kimlik uygulamaya değil sunucuya sorulur:

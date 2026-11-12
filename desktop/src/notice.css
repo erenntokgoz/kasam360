@@ -99,9 +99,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .notice-slip,
-  .notice-slip[data-leaving],
-  .notice-slip-count {
+  :root:not([data-motion="full"]) .notice-slip,
+  :root:not([data-motion="full"]) .notice-slip[data-leaving],
+  :root:not([data-motion="full"]) .notice-slip-count {
     animation: none;
   }
 }

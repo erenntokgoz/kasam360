@@ -6,6 +6,7 @@ import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
 import { Button } from '../../../ui/Button';
 import { ErrorToast } from '../../../ui/ErrorToast';
+import { InlineAlert } from '../../../ui/InlineAlert';
 import { Input } from '../../../ui/Input';
 import { Modal } from '../../../ui/Modal';
 import { RecordCard } from '../RecordCard';
@@ -113,7 +114,7 @@ export function CloudSyncSettings({ canManage }: { canManage: boolean }) {
         </div>
         <Button onClick={() => void load()}>Yenile</Button>
       </header>
-      {status?.error && status.state !== 'IDLE' ? <ErrorToast message={status.error} /> : null}
+      {status?.error && status.state !== 'IDLE' ? <InlineAlert message={status.error} /> : null}
       {status?.reviews.length ? (
         <section aria-labelledby="cloud-review-title" className="rounded-md border border-[var(--border)] p-3 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">

@@ -4,7 +4,7 @@ import { useLicenseStore, type LicenseState } from '../../stores/licenseStore';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { AuthShell } from '../auth/AuthShell';
-import { openSitePage } from '../auth/AccountLogin';
+import { closeGoogleLogin, openSitePage } from '../../lib/googleLogin';
 
 const POLL_MS = 2000;
 const POLL_LIMIT = 150;
@@ -34,6 +34,7 @@ const GoogleLinkButton: React.FC<{ onError: (message: string) => void }> = ({ on
 
   const stop = () => {
     window.clearInterval(timer.current);
+    void closeGoogleLogin();
     setIsWaiting(false);
   };
 

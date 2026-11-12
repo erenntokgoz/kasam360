@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { canAnimate, gsap, useGSAP } from '../../../lib/dashMotion';
+import { canAnimate, gsap, useGSAP, useRevealKey } from '../../../lib/dashMotion';
 import { formatMoney } from '../../../lib/formatMoney';
 import type { PanoramaData } from '../../../stores/panoramaStore';
 import { Panel } from './Panel';
@@ -23,10 +23,11 @@ export const PaymentMix: React.FC<{ channels: PanoramaData['channels'] }> = ({ c
   const total = channels.reduce((sum, item) => sum + item.amountCents, 0);
   const shares = channelShares(channels.map((item) => item.amountCents));
 
+  const revealKey = useRevealKey(root);
   useGSAP(() => {
     if (!canAnimate()) return;
     gsap.from('.mix-slice', { scaleX: 0, transformOrigin: '0 50%', duration: 0.6, ease: 'power2.out', stagger: 0.08 });
-  }, { scope: root, dependencies: [shares.join(',')], revertOnUpdate: true });
+  }, { scope: root, dependencies: [shares.join(','), revealKey], revertOnUpdate: true });
 
   return (
     <Panel title="Ödeme Kanalları">

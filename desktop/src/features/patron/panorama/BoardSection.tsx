@@ -52,13 +52,15 @@ export const BoardSection: React.FC = () => {
     return () => clearInterval(timer);
   }, [isVisible, load]);
 
-  // Kartlar ilk açılışta sırayla belirir; dönem değişince pano yeniden oynamaz.
+  // Pano sekmesi gizli tutulur (display:none); kartlar her görünür oluşta bir kez sırayla belirir,
+  // dönem değişince ya da 30 sn yenilemede yeniden oynamaz.
+  useEffect(() => { if (!isVisible) entered.current = false; }, [isVisible]);
   useGSAP(() => {
-    if (!hasData || entered.current) return;
+    if (!hasData || !isVisible || entered.current) return;
     entered.current = true;
     if (!canAnimate()) return;
     gsap.from('.dash-card', { opacity: 0, y: 12, duration: 0.45, ease: 'power2.out', stagger: 0.06, clearProps: 'opacity,transform' });
-  }, { scope: root, dependencies: [hasData] });
+  }, { scope: root, dependencies: [hasData, isVisible] });
 
   const compareLabel = reportPeriod(range).compareLabel;
   const hasSales = data ? data.current.collectedCents > 0 || data.current.orders > 0 || data.buckets.some((item) => item.currentCents > 0 || item.previousCents > 0) : false;

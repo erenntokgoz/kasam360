@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { NumberInput } from '../../../ui/NumberInput';
 import { errorText } from '../../../lib/cariInput';
-import { canAnimate, gsap, useGSAP } from '../../../lib/dashMotion';
+import { canAnimate, gsap, useGSAP, useRevealKey } from '../../../lib/dashMotion';
 import { formatMoney } from '../../../lib/formatMoney';
 import { centsToText, parseCents } from '../../../lib/moneyInput';
 import { useAuthStore } from '../../../stores/authStore';
@@ -30,10 +30,11 @@ const GoalRing: React.FC<{ percent: number }> = ({ percent }) => {
   const filled = Math.min(100, Math.max(0, percent));
   const offset = RING_LENGTH * (1 - filled / 100);
   // Halka boş başlayıp dolar; hareket kapalıyken son durum doğrudan yazılıdır.
+  const revealKey = useRevealKey(root);
   useGSAP(() => {
     if (!canAnimate()) return;
     gsap.from('.goal-ring-fill', { strokeDashoffset: RING_LENGTH, duration: 1.1, ease: 'power2.out' });
-  }, { scope: root, dependencies: [offset], revertOnUpdate: true });
+  }, { scope: root, dependencies: [offset, revealKey], revertOnUpdate: true });
   return (
     <div ref={root} className="goal-ring" role="img" aria-label={`Hedefin yüzde ${percent} kadarı tamamlandı`}>
       <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} aria-hidden>

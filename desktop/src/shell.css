@@ -895,9 +895,9 @@
 .queue-time[data-late="true"] { color: var(--warn); }
 
 @media (prefers-reduced-motion: reduce) {
-  .side-item,
-  .side-switch,
-  .side-switch-knob {
+  :root:not([data-motion="full"]) .side-item,
+  :root:not([data-motion="full"]) .side-switch,
+  :root:not([data-motion="full"]) .side-switch-knob {
     transition: none;
   }
 }

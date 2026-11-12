@@ -38,7 +38,11 @@ export const Bar: React.FC<BarProps> = ({ label, plain, title, titleSlotId, acti
     place(true);
     const onResize = () => place(false);
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    // Modül sekmeleri display:none ile saklanır; gizliyken ölçüm 0'dır. Görünür olunca boyut
+    // değişir ve çizgi doğru sekmenin altına anında yerleşir (kayma yalnız sekme değişiminde).
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize);
+    observer?.observe(tabs);
+    return () => { window.removeEventListener('resize', onResize); observer?.disconnect(); };
   });
 
   return (

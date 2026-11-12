@@ -55,7 +55,7 @@ impl StaffSessions {
 
 /// Oturum açılmadan çalışması gereken komutlar: kurulum, hesap girişi ve PIN ekranı.
 /// Liste kapalıdır: yeni komut buraya eklenmedikçe oturum ister.
-const NO_SESSION: [&str; 25] = [
+const NO_SESSION: [&str; 28] = [
     "get_setup_status",
     "save_setup_draft",
     "complete_business_setup",
@@ -63,6 +63,10 @@ const NO_SESSION: [&str; 25] = [
     "restore_backup_on_setup",
     "get_device_session",
     "open_site_page",
+    "close_google_login",
+    // Yarım kalan çıkışın bekleyen işlem sayısı ve bulut nedeni giriş ekranında gösterilir.
+    "get_cloud_sync_status",
+    "retry_cloud_sync",
     "get_pin_lengths",
     "account_sign_in",
     // Google ile cihaz girişi personel oturumundan önce gelir; kimliği sunucu doğrular.
