@@ -33,10 +33,12 @@ pub mod order_stock;
 pub mod outbox_dispatcher;
 pub mod panorama;
 pub mod panorama_alerts;
+mod panorama_hourly;
 pub mod payment_approval;
 pub mod payment_service;
 pub mod pnl_service;
 pub mod pos_gateway;
+pub mod price_history;
 pub mod qr_menu_publish;
 pub mod receipt_service;
 pub mod refund_service;
@@ -48,6 +50,7 @@ pub mod serve_service;
 pub mod setup;
 pub mod staff360;
 pub mod staff_session;
+pub mod stock_movement_report;
 pub mod stock_trail;
 
 #[cfg(test)]

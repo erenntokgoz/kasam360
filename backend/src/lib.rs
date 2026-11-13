@@ -382,6 +382,8 @@ pub fn run() {
         commands::cash_flow_commands::create_money_account,
         commands::cash_flow_commands::set_money_account_active,
         commands::cash_flow_commands::transfer_between_accounts,
+        report_commands::get_price_history_report,
+        report_commands::get_stock_movement_report,
         report_commands::get_counter_sales_report,
         commands::serve_commands::list_pending_deliveries,
         commands::serve_commands::mark_items_served,
