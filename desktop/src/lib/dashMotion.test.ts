@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canAnimate } from './dashMotion';
 
 function stubBrowser(reduced: boolean, perf?: string) {
-  vi.stubGlobal('window', { matchMedia: () => ({ matches: reduced }) });
+  // Masaüstü varsayılanı tam animasyondur; sistem tercihini sınamak için "system" seçilir.
+  const store = { getItem: () => 'system' };
+  vi.stubGlobal('window', { matchMedia: () => ({ matches: reduced }), localStorage: store });
   vi.stubGlobal('document', { documentElement: { dataset: perf ? { perf } : {} } });
 }
 

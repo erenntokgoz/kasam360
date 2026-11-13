@@ -10,7 +10,7 @@
 }
 
 @keyframes motion-fade-in {
-  from { opacity: 0.35; }
+  from { opacity: 0; }
   to { opacity: 1; }
 }
 @keyframes motion-backdrop-in {
@@ -57,11 +57,11 @@
 
 /* Modül ve sekme değişimi: display:none'dan dönen öğe animasyonu kendiliğinden yeniden oynatır. */
 .motion-panel {
-  animation: motion-fade-in 120ms ease-out;
+  animation: motion-fade-in 200ms ease-out;
 }
 /* Sekme içeriği: yalnız yeni takılan alt öğe oynar, aynı sekmede yeniden çizim oynatmaz. */
 .motion-swap > * {
-  animation: motion-fade-in 120ms ease-out;
+  animation: motion-rise-in 220ms var(--motion-ease-out);
 }
 
 .motion-backdrop {
@@ -147,6 +147,74 @@
     transition: none;
     translate: none;
   }
+}
+
+
+/* Kart ve satır girişi: kardeş sırasına göre kademeli belirir (sibling-index yoksa hepsi birlikte).
+   Gecikme üst sınırlıdır; uzun liste bekletilmez. Yalnız opacity ve transform oynar. */
+@keyframes motion-stagger-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.dash-card,
+.kpi-card,
+.live-row,
+.mix-row,
+.queue-row,
+.motion-stagger > * {
+  animation: motion-stagger-in 260ms var(--motion-ease-out) backwards;
+}
+@supports (animation-delay: calc(sibling-index() * 1ms)) {
+  .dash-card,
+  .kpi-card,
+  .live-row,
+  .mix-row,
+  .queue-row,
+  .motion-stagger > * {
+    animation-delay: calc(min(sibling-index(), 10) * 40ms);
+  }
+}
+
+/* Düğme basma geri bildirimi: dokunmatikte de basıldığı hemen görünür. */
+button:not(:disabled) {
+  transition: scale 90ms var(--motion-ease-out), translate 160ms var(--motion-ease-out), opacity 120ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+button:not(:disabled):active {
+  scale: 0.96;
+}
+
+/* Masa kartı durum değişimi: çerçeve ve vurgu rengi yumuşakça geçer; kart durum değişince küçük bir
+   vuruş yapar (data-state değişince animasyon yeniden başlamaz, bu yüzden yalnız geçiş kullanılır). */
+.table-spot {
+  transition: border-color 220ms ease, box-shadow 220ms ease, scale 90ms var(--motion-ease-out);
+}
+.table-spot .table-chair {
+  transition: fill 220ms ease, opacity 220ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="full"]) .dash-card,
+  :root:not([data-motion="full"]) .kpi-card,
+  :root:not([data-motion="full"]) .live-row,
+  :root:not([data-motion="full"]) .mix-row,
+  :root:not([data-motion="full"]) .queue-row,
+  :root:not([data-motion="full"]) .motion-stagger > *,
+  :root:not([data-motion="full"]) button,
+  :root:not([data-motion="full"]) .table-spot,
+  :root:not([data-motion="full"]) .table-spot .table-chair {
+    animation: none;
+    transition: none;
+  }
+  :root:not([data-motion="full"]) button:active {
+    scale: none;
+  }
+}
+:root[data-perf="low"] .dash-card,
+:root[data-perf="low"] .kpi-card,
+:root[data-perf="low"] .live-row,
+:root[data-perf="low"] .mix-row,
+:root[data-perf="low"] .queue-row {
+  animation: none;
 }
 
 /* Geri al düğmesi bildirim hapının içinde metinle kapat düğmesi arasında durur. */

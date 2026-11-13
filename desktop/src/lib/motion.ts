@@ -14,23 +14,26 @@ export function prefersReducedMotion(): boolean {
 const MOTION_KEY = 'kasam360.motion';
 
 /**
- * Sistem "animasyonları kaldır" açıkken (Windows ve Android'de sık: performans ayarı) uygulamanın
- * hiçbir hareketi çalışmaz ve kullanıcı bunu hata sanır. Ayarlardan "Animasyon Açık" seçilirse
- * sistem tercihi bu uygulama için yok sayılır. Varsayılan sistem tercihine uymaktır.
+ * Masaüstünde varsayılan tam animasyondur: WebView2 "reduce" değerini Windows'un performans/uzaktan
+ * masaüstü/pil tasarrufu ayarlarından da türetir ve kullanıcı uygulamanın hiç hareket etmediğini
+ * hata sanıyordu. Sistem tercihine uymak yalnız Ayarlar'da açıkça "Sistem Ayarı" seçilirse geçerlidir.
+ * Android'de varsayılan sistem tercihidir (pil ve düşük donanım).
  */
 export function isMotionForced(): boolean {
   try {
-    return window.localStorage.getItem(MOTION_KEY) === 'full';
+    const stored = window.localStorage.getItem(MOTION_KEY);
+    if (stored === 'full') return true;
+    if (stored === 'system') return false;
   } catch {
-    return false;
+    // Depo okunamazsa platform varsayılanı geçerlidir.
   }
+  return typeof navigator !== 'undefined' && !/android/i.test(navigator.userAgent);
 }
 
 /** Seçimi saklar ve CSS'in hareket azaltma bloklarını devre dışı bırakan kök işaretini yazar. */
 export function setMotionForced(forced: boolean): void {
   try {
-    if (forced) window.localStorage.setItem(MOTION_KEY, 'full');
-    else window.localStorage.removeItem(MOTION_KEY);
+    window.localStorage.setItem(MOTION_KEY, forced ? 'full' : 'system');
   } catch {
     // Depo yazılamazsa seçim yalnız bu açılışta geçerlidir.
   }

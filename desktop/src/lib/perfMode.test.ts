@@ -7,8 +7,8 @@ describe('isLowPerformanceDevice', () => {
   it('az bellekli Android cihazı düşük sayar', () => {
     expect(isLowPerformanceDevice({ ...base, deviceMemory: 2, hardwareConcurrency: 8 } as never)).toBe(true);
   });
-  it('az çekirdekli Android cihazı düşük sayar', () => {
-    expect(isLowPerformanceDevice({ ...base, deviceMemory: 8, hardwareConcurrency: 4 } as never)).toBe(true);
+  it('2 çekirdekli Android cihazı düşük sayar', () => {
+    expect(isLowPerformanceDevice({ ...base, deviceMemory: 8, hardwareConcurrency: 2 } as never)).toBe(true);
   });
   it('güçlü Android cihazı düşük saymaz', () => {
     expect(isLowPerformanceDevice({ ...base, deviceMemory: 8, hardwareConcurrency: 8 } as never)).toBe(false);
