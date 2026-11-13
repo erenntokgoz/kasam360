@@ -15,6 +15,7 @@ Masaüstü uygulaması açılışta (ve her 6 saatte bir) GitHub Releases üzeri
 3. GitHub > Settings > Secrets and variables > Actions altına iki secret ekleyin:
    - `TAURI_SIGNING_PRIVATE_KEY`: gizli anahtar dosyasının içeriği
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: anahtarı üretirken verdiğiniz parola
+   - Android APK için: `ANDROID_KEYSTORE_B64` (base64 keystore), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. APK, önceki test APK'larıyla aynı debug sertifikasıyla imzalanır (üstüne kurulum için); iş akışı sertifika SHA-256 değerini doğrular.
 4. Gizli anahtarı ve parolayı yedekleyin (parola yöneticisi). Kaybolursa mevcut kurulumlara bir daha güncelleme gönderilemez; kurulu cihazlar yeni anahtarla elle yeniden kurulmak zorunda kalır. Gizli anahtar asla repoya girmez.
 
 ## Her sürümde
@@ -27,7 +28,7 @@ Masaüstü uygulaması açılışta (ve her 6 saatte bir) GitHub Releases üzeri
    git push origin v0.3.0
    ```
 
-3. `Release` iş akışı sırasıyla: etiket/sürüm tutarlılığı, backend clippy/test/fmt, desktop build ve vitest, ardından Windows'ta imzalı NSIS kurulumu, `.sig` ve `latest.json` üretip GitHub Release olarak yayınlar. Etiket sürümle uyuşmuyorsa veya secret/genel anahtar eksikse hiçbir şey yayınlanmaz.
+3. `Release` iş akışı sırasıyla: etiket/sürüm tutarlılığı, backend clippy/test/fmt, desktop build ve vitest, ardından Windows'ta imzalı NSIS kurulumu (`kasam360-kurulum.exe` sabit adlı kopya dahil), `.sig`, `latest.json` ve ubuntu'da imzalı `kasam360-android.apk` üretip tek GitHub Release olarak yayınlar. Android `versionCode` değerini `backend/tauri.android.conf.json` içinde her sürümde artırın. Etiket sürümle uyuşmuyorsa veya secret/genel anahtar eksikse hiçbir şey yayınlanmaz.
 
 ## Notlar
 

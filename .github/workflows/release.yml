@@ -161,6 +161,17 @@ jobs:
       - name: Rust Android hedefi
         run: rustup target add aarch64-linux-android
 
+      # Üretilen Gradle projesi derleme sırasında `cargo tauri` çağırır (npm betiği yok); bu yüzden cargo-tauri kurulur.
+      - name: cargo-tauri önbelleği
+        id: tauri-cli-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-tauri
+          key: cargo-tauri-2.11.4-${{ runner.os }}
+      - name: cargo-tauri kur
+        if: steps.tauri-cli-cache.outputs.cache-hit != 'true'
+        run: cargo install tauri-cli --version 2.11.4 --locked
+
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
@@ -180,8 +191,8 @@ jobs:
           npm ci --prefix desktop
           cd backend
           # backend/gen izlenmez; her koşuda yeniden üretilir, marka/Google girişi kodu beforeBuildCommand ile uygulanır.
-          npx --yes @tauri-apps/cli@2.11.4 android init --ci
-          npx --yes @tauri-apps/cli@2.11.4 android build --apk --target aarch64 --ci
+          cargo tauri android init --ci
+          cargo tauri android build --apk --target aarch64 --ci
 
       - name: Hizala ve imzala
         env:

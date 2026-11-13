@@ -2230,7 +2230,7 @@ dependencies = [
 
 [[package]]
 name = "kasam360-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "argon2",
  "base64 0.22.1",
