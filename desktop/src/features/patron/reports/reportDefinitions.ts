@@ -3,6 +3,8 @@ import { utcOffsetMinutes } from '../../../lib/dateRange';
 import { formatMoney } from '../../../lib/formatMoney';
 import { invokeIPC } from '../../../services/tauriClient';
 import type { FinancialProfitSummary } from '../../../types/ledger';
+import { counterSalesReport } from './counterReport';
+import { hourlySalesReport, materialUsageReport, priceHistoryReport, stockMovementReport } from './stockReports';
 
 export interface ReportTable {
   summary: { label: string; value: string }[];
@@ -22,6 +24,8 @@ export interface ReportArgs {
   /** Aynı dönemin `YYYY-AA-GG` günleri; gün bazlı komutlar bunu alır. */
   fromDate: string;
   toDate: string;
+  /** Kalem süzgeci; yalnız `productFilter` taşıyan raporlar okur. */
+  productId?: string;
 }
 
 interface SalesWire {
@@ -199,11 +203,16 @@ async function profitReport(args: ReportArgs): Promise<ReportTable> {
 
 export const REPORTS = {
   SALES: { label: 'Satış', load: salesReport },
+  COUNTER: { label: 'Hızlı Satış', load: counterSalesReport },
   SHIFTS: { label: 'Vardiya ve Kasa', load: shiftReport },
   ADJUSTMENTS: { label: 'İptal, İade, Fire', load: adjustmentReport },
   STAFF: { label: 'Personel Performansı', load: staffReport },
   PROFIT: { label: 'Kâr', load: profitReport },
-} as const;
+  HOURLY: { label: 'Saatlik Satış', load: hourlySalesReport },
+  STOCK_MOVEMENT: { label: 'Stok Hareketi', load: stockMovementReport, productFilter: true },
+  MATERIAL_USAGE: { label: 'Malzeme Kullanımı', load: materialUsageReport, productFilter: true },
+  PRICE_HISTORY: { label: 'Fiyat Geçmişi', load: priceHistoryReport, productFilter: true },
+} as const satisfies Record<string, { label: string; load: (args: ReportArgs) => Promise<ReportTable>; productFilter?: boolean }>;
 
 /** Kâr yalnız işletme sahibinindir; sunucu da müdüre kâr raporunu vermez. */
 export const OWNER_ONLY_REPORTS: ReadonlySet<string> = new Set(['PROFIT']);

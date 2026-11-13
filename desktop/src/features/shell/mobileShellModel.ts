@@ -2,10 +2,10 @@ import type { AppModule } from '../../stores/uiStore';
 import type { ErpTab } from '../../stores/ledgerStore';
 import type { FeatureFlags } from '../../types/featureFlags';
 import type { UserRole } from '../../types/auth';
-import { canCollectPayment, canOpenModule } from '../../lib/roleAccess';
+import { canCollectPayment, canOpenModule, canQuickSale } from '../../lib/roleAccess';
 
 /** Hızlı işlem sayfasındaki her düğme yalnız var olan bir ekranı açar; iş kuralı burada yazılmaz. */
-export type QuickActionId = 'NEW_ORDER' | 'COLLECT' | 'CASH_OUT' | 'LEDGER';
+export type QuickActionId = 'NEW_ORDER' | 'QUICK_SALE' | 'COLLECT' | 'CASH_OUT' | 'LEDGER';
 
 export interface QuickAction {
   id: QuickActionId;
@@ -27,6 +27,9 @@ export function quickActionsFor(
     actions.push({ id: 'NEW_ORDER', label: 'Yeni Sipariş', module: 'POS' });
   } else if (role === 'WAITER' && canOpenModule(role, 'FLOOR')) {
     actions.push({ id: 'NEW_ORDER', label: 'Yeni Sipariş', module: 'FLOOR' });
+  }
+  if (canQuickSale(role) && canOpenModule(role, 'POS')) {
+    actions.push({ id: 'QUICK_SALE', label: 'Hızlı Satış', module: 'POS' });
   }
   if (canCollectPayment(role) && canOpenModule(role, 'CASHIER')) {
     actions.push({ id: 'COLLECT', label: 'Tahsilat', module: 'CASHIER' });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canAdvanceKitchen, canCollectPayment, canOpenModule, homeModule } from './roleAccess';
+import { canAdvanceKitchen, canCollectPayment, canOpenModule, canQuickSale, canServeDeliveries, homeModule } from './roleAccess';
 
 describe('roleAccess', () => {
   it('mutfak yalnız mutfak ekranını açar', () => {
@@ -44,5 +44,22 @@ describe('roleAccess', () => {
     expect(canAdvanceKitchen('CASHIER')).toBe(false);
     expect(canAdvanceKitchen('WAITER')).toBe(false);
     expect(canAdvanceKitchen(undefined)).toBe(false);
+  });
+
+  it('hızlı satış kasiyer, müdür ve patrona açık; garson ve mutfağa kapalı', () => {
+    expect(canQuickSale('CASHIER')).toBe(true);
+    expect(canQuickSale('MANAGER')).toBe(true);
+    expect(canQuickSale('OWNER')).toBe(true);
+    expect(canQuickSale('WAITER')).toBe(false);
+    expect(canQuickSale('KITCHEN')).toBe(false);
+    expect(canQuickSale(undefined)).toBe(false);
+  });
+
+  it('teslim listesini salon rolleri görür, mutfak görmez', () => {
+    expect(canServeDeliveries('WAITER')).toBe(true);
+    expect(canServeDeliveries('CASHIER')).toBe(true);
+    expect(canServeDeliveries('KITCHEN')).toBe(false);
+    expect(canServeDeliveries('MASTER')).toBe(false);
+    expect(canServeDeliveries(undefined)).toBe(false);
   });
 });

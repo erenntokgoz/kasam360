@@ -7,16 +7,17 @@ const ids = (role: Parameters<typeof quickActionsFor>[0], on: Enabled = allOn) =
 
 describe('mobil hızlı işlemler', () => {
   it('patron dört kısayolu da görür', () => {
-    expect(ids('OWNER')).toEqual(['NEW_ORDER', 'COLLECT', 'CASH_OUT', 'LEDGER']);
+    expect(ids('OWNER')).toEqual(['NEW_ORDER', 'QUICK_SALE', 'COLLECT', 'CASH_OUT', 'LEDGER']);
   });
 
   it('kasiyer cari ekranına gitmez', () => {
-    expect(ids('CASHIER')).toEqual(['NEW_ORDER', 'COLLECT', 'CASH_OUT']);
+    expect(ids('CASHIER')).toEqual(['NEW_ORDER', 'QUICK_SALE', 'COLLECT', 'CASH_OUT']);
   });
 
   it('garson yalnız masa ekranından sipariş açar, tahsilat göremez', () => {
     const actions = quickActionsFor('WAITER', allOn);
     expect(actions).toEqual([{ id: 'NEW_ORDER', label: 'Yeni Sipariş', module: 'FLOOR' }]);
+    expect(actions.some((action) => action.id === 'QUICK_SALE')).toBe(false);
   });
 
   it('mutfak ve oturumsuz kullanıcı kısayol görmez', () => {
@@ -25,10 +26,10 @@ describe('mobil hızlı işlemler', () => {
   });
 
   it('cari bayrağı kapalıysa cari kısayolu gizlenir', () => {
-    expect(ids('MANAGER', (flag) => flag !== 'feat_ledger_cari')).toEqual(['NEW_ORDER', 'CASH_OUT']);
+    expect(ids('MANAGER', (flag) => flag !== 'feat_ledger_cari')).toEqual(['NEW_ORDER', 'QUICK_SALE', 'CASH_OUT']);
   });
 
   it('müdür tahsilat düğmesi görmez ama gideri açar', () => {
-    expect(ids('MANAGER')).toEqual(['NEW_ORDER', 'CASH_OUT', 'LEDGER']);
+    expect(ids('MANAGER')).toEqual(['NEW_ORDER', 'QUICK_SALE', 'CASH_OUT', 'LEDGER']);
   });
 });

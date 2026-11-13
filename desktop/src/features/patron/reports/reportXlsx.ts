@@ -4,13 +4,21 @@ import type { ReportKey, ReportTable } from './reportDefinitions';
 
 const columns: Record<ReportKey, Record<number, 'money' | 'count'>> = {
   SALES: { 1: 'count', 2: 'money' },
+  COUNTER: { 1: 'money' },
   SHIFTS: { 3: 'money', 4: 'money', 5: 'money' },
   ADJUSTMENTS: { 1: 'money' },
   STAFF: { 1: 'money', 2: 'count', 3: 'count', 4: 'money', 5: 'count' },
   PROFIT: { 1: 'money' },
+  HOURLY: { 1: 'money', 2: 'count' },
+  STOCK_MOVEMENT: { 9: 'money', 10: 'money', 11: 'money', 12: 'money', 13: 'money', 14: 'money' },
+  MATERIAL_USAGE: { 3: 'money', 5: 'money', 6: 'money' },
+  PRICE_HISTORY: { 1: 'money', 2: 'money', 3: 'money' },
 };
 
-const counts = new Set(['Adisyon', 'Vardiya', 'Şüpheli Bulgu']);
+const counts = new Set([
+  'Adisyon', 'Vardiya', 'Şüpheli Bulgu', 'Hareketli Kalem', 'Kullanılan Kalem', 'Fiyat Değişimi', 'Zam', 'İndirim',
+]);
+const TEXT_SUMMARY = new Set(['En Çok Satan', 'En Yoğun Saat']);
 
 function cell(text: string, kind: 'money' | 'count' | undefined): Cell {
   if (kind === 'count' && /^-?\d+$/.test(text)) return Number(text);
@@ -28,7 +36,7 @@ export function reportSheet(meta: ReportFileMeta, table: ReportTable, report: Re
   return rows.map((row, index) => row.map((value, column) => {
     if (index >= dataStart) return cell(value, columns[report][column]);
     if (column === 1 && index >= summaryStart && index < dataStart - 2) {
-      return cell(value, counts.has(row[0]) ? 'count' : row[0] === 'En Çok Satan' ? undefined : 'money');
+      return cell(value, counts.has(row[0]) ? 'count' : TEXT_SUMMARY.has(row[0]) ? undefined : 'money');
     }
     return value;
   }));

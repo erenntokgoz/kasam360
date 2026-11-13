@@ -210,3 +210,28 @@ async fn kar_yetkisiz_rolde_bos_doner_sifir_olmaz() {
     assert_eq!(result.products[0].profit_cents, None);
     assert_eq!(result.current.collected_cents, 11000);
 }
+
+#[tokio::test]
+async fn saatlik_dagilim_gunleri_ust_uste_yerel_saate_koyar() {
+    let pool = pool().await;
+    // Yerel 21:15 ve ertesi gün yerel 21:40 aynı saat kovasında toplanır; 00:30 yerel (21:30 UTC) ayrıdır.
+    sale(&pool, "txn_1", "2026-10-29T18:15:00+00:00", 10000, 0).await;
+    sale(&pool, "txn_2", "2026-10-30T18:40:00+00:00", 5000, 0).await;
+    sale(&pool, "txn_3", "2026-10-30T21:30:00+00:00", 2000, 0).await;
+    let result = board(
+        &pool,
+        "2026-10-29T00:00:00+03:00",
+        "2026-11-01T00:00:00+03:00",
+    )
+    .await;
+    assert_eq!(result.hourly.len(), 24);
+    assert_eq!(result.hourly[21].collected_cents, 15000);
+    assert_eq!(result.hourly[21].orders, 2);
+    assert_eq!(result.hourly[0].collected_cents, 2000);
+    assert_eq!(
+        result.hourly[5].collected_cents, 0,
+        "satışsız saat sıfırla döner"
+    );
+    let total: i64 = result.hourly.iter().map(|h| h.collected_cents).sum();
+    assert_eq!(total, result.current.collected_cents);
+}

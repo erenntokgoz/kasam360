@@ -45,6 +45,8 @@ export interface PanoramaData {
   previous: Kpi;
   bucketKind: 'HOUR' | 'DAY';
   buckets: PanoramaBucket[];
+  /** Dönemin günleri üst üste, yerel saate göre; her zaman 24 satır. */
+  hourly: { hour: number; collectedCents: number; orders: number }[];
   channels: { channel: string; amountCents: number }[];
   products: PanoramaProduct[];
   live: {

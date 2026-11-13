@@ -248,6 +248,12 @@ pub async fn update_kds_item_status(
         .await
         .map_err(|e| e.to_string())?;
 
+    // Hazır olma anı teslim listesinde bekleme süresini verir.
+    if payload.status.trim().eq_ignore_ascii_case("ready") {
+        crate::services::serve_service::record_item_ready(&mut tx, &tenant, payload.item_id.trim())
+            .await?;
+    }
+
     // Siparişin updated_at alanını güncelle
     sqlx::query(
         "UPDATE orders SET updated_at = datetime('now') \

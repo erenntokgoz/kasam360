@@ -9,6 +9,7 @@ import { currentMonth, usePanoramaStore } from '../../../stores/panoramaStore';
 import { useUIStore } from '../../../stores/uiStore';
 import { monthLabel } from '../../../ui/MonthPicker';
 import { AlertFeed } from './AlertFeed';
+import { HourlyChart } from './HourlyChart';
 import { KitchenQueue } from './KitchenQueue';
 import { KpiStrip } from './KpiStrip';
 import { LivePanel } from './LivePanel';
@@ -108,6 +109,8 @@ export const BoardSection: React.FC = () => {
               <LivePanel live={data.live} />
             </div>
           </div>
+
+          {data.bucketKind === 'DAY' ? <HourlyChart hourly={data.hourly} /> : null}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <KitchenQueue live={data.live} />

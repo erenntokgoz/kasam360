@@ -696,6 +696,42 @@
 .chart-xlabel[data-edge="start"] { transform: none; }
 .chart-xlabel[data-edge="end"] { transform: translateX(-100%); }
 
+/* Saatlik tahsilat çubukları */
+.hour-plot {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.hour-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+}
+.hour-bar {
+  display: block;
+  width: 100%;
+  background-color: var(--action);
+  opacity: 0.55;
+  border-radius: 4px 4px 0 0;
+}
+.hour-bar[data-peak] { opacity: 1; }
+.hour-col[data-active] .hour-bar { opacity: 1; }
+.hour-labels {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.hour-label {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--muted);
+}
+
 /* Aylık hedef halkası */
 .goal-body {
   display: flex;

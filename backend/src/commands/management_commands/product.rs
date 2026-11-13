@@ -318,6 +318,11 @@ pub async fn update_product(
             .map(|(n, p, a, u)| (serde_json::json!(n), p, a, u))
             .ok_or_else(|| "NOT_FOUND: ürün bulunamadı".to_string())?;
 
+        crate::services::price_history::record_change(
+            &mut conn, &tenant_id, &id, &name, previous_price, price_cents,
+            &actor_id, &actor_role, crate::services::price_history::SOURCE_MENU_EDIT,
+        ).await?;
+
         record_audit(
             &mut conn, &lock, &tenant_id, &actor_id, &actor_role,
             category::MENU,

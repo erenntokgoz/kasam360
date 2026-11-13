@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowUpFromLine, BarChart3, BookOpen, BookUser, LayoutGrid, Lock, MoreHorizontal, Moon, Plus, Settings,
-  ShoppingBag, Sun, Tv, Wallet, X,
+  ShoppingBag, Sun, Tv, Wallet, X, Zap,
 } from 'lucide-react';
 import { canOpenModule } from '../../desktop/src/lib/roleAccess';
 import { useAuthStore } from '../../desktop/src/stores/authStore';
 import { useFeatureStore } from '../../desktop/src/stores/featureStore';
 import { useKdsStore } from '../../desktop/src/stores/kdsStore';
+import { usePosStore } from '../../desktop/src/stores/posStore';
 import { useLedgerStore } from '../../desktop/src/stores/ledgerStore';
 import { useUIStore, type AppModule } from '../../desktop/src/stores/uiStore';
 import { buildNavSections, initials, MODULE_LABEL, ROLE_TITLE, type NavEntry } from '../../desktop/src/features/shell/shellModel';
@@ -16,7 +17,7 @@ import { useFocusTrap } from '../../desktop/src/ui/useFocusTrap';
 const ALL_MODULES: AppModule[] = ['FLOOR', 'POS', 'KDS', 'CASHIER', 'ERP', 'CATALOG', 'SETTINGS'];
 const ICONS = { FLOOR: LayoutGrid, POS: ShoppingBag, KDS: Tv, CASHIER: Wallet, ERP: BarChart3, CATALOG: BookOpen, SETTINGS: Settings };
 const QUICK_ICONS: Record<QuickActionId, typeof Plus> = {
-  NEW_ORDER: ShoppingBag, COLLECT: Wallet, CASH_OUT: ArrowUpFromLine, LEDGER: BookUser,
+  NEW_ORDER: ShoppingBag, QUICK_SALE: Zap, COLLECT: Wallet, CASH_OUT: ArrowUpFromLine, LEDGER: BookUser,
 };
 
 type SheetKind = 'more' | 'quick';
@@ -90,6 +91,7 @@ export function MobileNavigation() {
 
   const go = (module: AppModule) => { setActiveModule(module); setSheet(null); };
   const runQuick = (action: QuickAction) => {
+    if (action.id === 'QUICK_SALE') void usePosStore.getState().openWalkinOrder();
     setActiveModule(action.module);
     if (action.erpTab) useLedgerStore.getState().setActiveErpTab(action.erpTab);
     setSheet(null);

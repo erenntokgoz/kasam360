@@ -9,7 +9,7 @@ const kpi = (over: Partial<Kpi>): Kpi => ({
 });
 
 const data = (over: Partial<PanoramaData>): PanoramaData => ({
-  current: kpi({}), previous: kpi({}), bucketKind: 'HOUR', buckets: [], channels: [], products: [],
+  current: kpi({}), previous: kpi({}), bucketKind: 'HOUR', buckets: [], hourly: [], channels: [], products: [],
   live: { openTables: 0, totalTables: 0, openOrders: 0, openOrderCents: 0, longestOpenMinutes: 0, kitchenWaiting: 0, shiftOpen: false },
   alerts: [], ...over,
 });

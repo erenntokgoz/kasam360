@@ -14,6 +14,23 @@ pub const COUNTER_TABLE: &str = "COUNTER";
 /// Tezgâh satış noktasının kimlik öneki; salon planı bu satırları göstermez.
 pub const COUNTER_ID_PREFIX: &str = "tbl_counter_";
 
+/// Tezgâh satışını açabilen roller: garson masa dışı satış ve tahsilat yapmaz.
+const COUNTER_SALE_ROLES: [crate::rbac::Role; 3] = [
+    crate::rbac::Role::Owner,
+    crate::rbac::Role::Manager,
+    crate::rbac::Role::Cashier,
+];
+
+/// Tezgâh satışı rol kapısı; masa siparişlerinde bir şey denetlemez.
+///
+/// Neden sunucuda: menüde gizlenen düğme güvenlik sayılmaz, rol alanı eksik çağrı reddedilir.
+pub(crate) fn counter_sale_gate(table_id: &str, actor_role: Option<&str>) -> Result<(), String> {
+    if table_id != COUNTER_TABLE {
+        return Ok(());
+    }
+    crate::rbac::require_any_present(actor_role, &COUNTER_SALE_ROLES).map(|_| ())
+}
+
 /// İstemcinin masa kimliğini gerçek satış noktasına çevirir.
 pub(crate) fn resolve_table_id(tenant_id: &str, table_id: &str) -> String {
     if table_id == COUNTER_TABLE {

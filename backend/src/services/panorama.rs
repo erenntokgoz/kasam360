@@ -8,6 +8,9 @@
 use serde::Serialize;
 use sqlx::{Row, SqliteConnection};
 
+use super::panorama_hourly::hourly;
+pub use super::panorama_hourly::HourSales;
+
 const TOP_PRODUCT_LIMIT: i64 = 8;
 const MAX_DAY_BUCKETS: i64 = 92;
 
@@ -76,6 +79,8 @@ pub struct Panorama {
     /// `HOUR` veya `DAY`.
     pub bucket_kind: &'static str,
     pub buckets: Vec<Bucket>,
+    /// Her zaman 24 satır; satışsız saat de sıfırla döner.
+    pub hourly: Vec<HourSales>,
     pub channels: Vec<ChannelShare>,
     pub products: Vec<ProductRow>,
     pub live: LiveState,
@@ -92,7 +97,7 @@ fn text_error(error: sqlx::Error) -> String {
     error.to_string()
 }
 
-const PAYMENTS: &str = "FROM audit_ledger
+pub(crate) const PAYMENTS: &str = "FROM audit_ledger
     WHERE tenant_id = ?1 AND action = 'payment:settled_fifo'
       AND datetime(timestamp) >= datetime(?2) AND datetime(timestamp) < datetime(?3)";
 
@@ -436,6 +441,7 @@ pub async fn build(
         previous: kpi(conn, tenant, &previous).await?,
         bucket_kind,
         buckets: rows,
+        hourly: hourly(conn, tenant, &period).await?,
         channels: channels(conn, tenant, &period).await?,
         products: products(conn, tenant, &period).await?,
         live: live(conn, tenant).await?,

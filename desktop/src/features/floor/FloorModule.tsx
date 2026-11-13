@@ -17,7 +17,8 @@ import { useSyncStore } from '../../stores/syncStore';
 import { Modal } from '../../ui/Modal';
 import { Button } from '../../ui/Button';
 import { getBlueprintZoneId } from './blueprintView';
-import { canOpenModule } from '../../lib/roleAccess';
+import { canOpenModule, canQuickSale } from '../../lib/roleAccess';
+import { PendingDeliveries } from './PendingDeliveries';
 import { useAuthStore } from '../../stores/authStore';
 
 const FILTERS: { id: TableFilter; label: string }[] = [
@@ -166,6 +167,7 @@ export const FloorModule: React.FC = () => {
   return (
     <section className="flex-1 flex flex-col min-w-0 h-full overflow-hidden select-none">
       <OrderStatusBanner className="m-2 mb-0 shrink-0" />
+      <PendingDeliveries active={isOpen} />
       {floorError ? (
         <><p className="text-sm text-[var(--text-secondary)]">Salon planı okunamadı.</p><ErrorToast message={`Salon planı okunamadı: ${floorError}`} /></>
       ) : null}
@@ -174,7 +176,7 @@ export const FloorModule: React.FC = () => {
         actions={
           <>
             <BarAction onClick={() => setIsResModalOpen(true)}>Rezervasyon</BarAction>
-            <BarAction tone="primary" onClick={handleWalkin}>Tezgah Satışı</BarAction>
+            {canQuickSale(role) ? <BarAction tone="primary" onClick={handleWalkin}>Hızlı Satış</BarAction> : null}
           </>
         }
       >

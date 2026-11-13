@@ -217,3 +217,73 @@
 .bar-actions > .bar-item {
   border-width: 1px;
 }
+
+/* Teslim edilecekler: hazır kalem masaya götürülene kadar salonun üstünde sabit kalır. */
+.delivery-strip {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.delivery-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.delivery-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.delivery-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 140px) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 4px 8px 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.delivery-row[data-late="true"] {
+  border-color: var(--warn);
+}
+.delivery-row[data-late="true"] .delivery-wait {
+  color: var(--warn);
+  font-weight: 700;
+}
+.delivery-table {
+  font-weight: 700;
+  color: var(--text);
+}
+.delivery-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.delivery-wait {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  .delivery-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .delivery-summary {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+}

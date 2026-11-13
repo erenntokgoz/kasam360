@@ -6,6 +6,8 @@ import { formatMoney } from '../../lib/formatMoney';
 import { matchesProduct } from '../../lib/searchText';
 import { Button } from '../../ui/Button';
 import { Bar, BarAction, BarTab } from '../../ui/Bar';
+import { useAuthStore } from '../../stores/authStore';
+import { canQuickSale } from '../../lib/roleAccess';
 import type { Product } from '../../types/pos';
 
 export interface ProductCatalogProps {
@@ -31,6 +33,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
   } = usePosStore();
 
   const setActiveModule = useUIStore((state) => state.setActiveModule);
+  const role = useAuthStore((state) => state.user?.role);
 
   const query = searchQuery.trim();
 
@@ -61,9 +64,11 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ onBindTableClick
             <Button variant="primary" size="lg" onClick={() => setActiveModule('FLOOR')}>
               Salonu Aç
             </Button>
-            <Button variant="secondary" size="lg" onClick={() => void openWalkinOrder()}>
-              Tezgah Satışı
-            </Button>
+            {canQuickSale(role) ? (
+              <Button variant="secondary" size="lg" onClick={() => void openWalkinOrder()}>
+                Hızlı Satış
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>

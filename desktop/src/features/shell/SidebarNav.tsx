@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, LayoutGrid, Lock, Moon, Search, Settings, ShoppingBag, Sun, Tv, Wallet, BarChart3 } from 'lucide-react';
+import { BookOpen, LayoutGrid, Zap, Lock, Moon, Search, Settings, ShoppingBag, Sun, Tv, Wallet, BarChart3 } from 'lucide-react';
 import { useUIStore, type AppModule } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useKdsStore } from '../../stores/kdsStore';
 import { useFeatureStore } from '../../stores/featureStore';
 import { useSetupStore } from '../../stores/setupStore';
 import { useKitchenSetupStore } from '../../stores/kitchenSetupStore';
-import { canOpenModule } from '../../lib/roleAccess';
+import { canOpenModule, canQuickSale } from '../../lib/roleAccess';
+import { usePosStore } from '../../stores/posStore';
 import { BrandMark } from '../../ui/BrandMark';
 import { buildNavSections, initials, MODULE_LABEL, ROLE_TITLE, type NavEntry } from './shellModel';
 
@@ -39,6 +40,10 @@ export const SidebarNav: React.FC = () => {
   const tenantId = useAuthStore((state) => state.user?.tenantId);
   const businessName = useSetupStore((state) => state.draft.businessName.trim());
   const [query, setQuery] = useState('');
+  const openWalkinOrder = usePosStore((state) => state.openWalkinOrder);
+  // Kısayol rol kapısını aşmaz; sunucu tezgâh siparişini garsona zaten reddeder.
+  const showQuickSale = canQuickSale(user?.role) && canOpenModule(user?.role, 'POS')
+    && (query.trim() === '' || 'hızlı satış'.includes(query.trim().toLocaleLowerCase('tr-TR')));
 
   // Görünürlük kuralları eski menüyle aynıdır: rol haritası ve özellik bayrağı belirler.
   const sections = useMemo(() => {
@@ -83,6 +88,18 @@ export const SidebarNav: React.FC = () => {
       </label>
 
       <nav className="side-nav" aria-label="Ana Menü">
+        {showQuickSale ? (
+          <div role="group" aria-label="Kısayol" className="side-group">
+            <button
+              type="button"
+              className="side-item"
+              onClick={() => { void openWalkinOrder(); setActiveModule('POS'); }}
+            >
+              <Zap className="w-5 h-5 shrink-0" aria-hidden />
+              <span className="side-item-label">Hızlı Satış</span>
+            </button>
+          </div>
+        ) : null}
         {sections.map((section) => (
           <div key={section.id} role="group" aria-label={section.title} className="side-group">
             <span className="side-group-title" aria-hidden>{section.title}</span>
@@ -104,7 +121,7 @@ export const SidebarNav: React.FC = () => {
             })}
           </div>
         ))}
-        {sections.length === 0 ? <p className="side-empty" role="status">Eşleşen menü yok.</p> : null}
+        {sections.length === 0 && !showQuickSale ? <p className="side-empty" role="status">Eşleşen menü yok.</p> : null}
       </nav>
 
       <div className="side-foot">

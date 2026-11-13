@@ -3,6 +3,7 @@
 //! Kök `src/` dizinindeki dağınık test dosyaları buraya toplanmıştır.
 
 pub mod compensation_tests;
+pub mod counter_sale_tests;
 pub mod floor_lock_tests;
 pub mod menu_tenant_tests;
 pub mod motor_regression_tests;

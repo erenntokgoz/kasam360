@@ -91,6 +91,8 @@ pub async fn submit_order(
         ],
     )?;
 
+    super::queries::counter_sale_gate(&payload.table_id, actor_role.as_deref())?;
+
     let audit_lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
     let mut tx = pool.begin_write().await.map_err(|e| e.to_string())?;
 

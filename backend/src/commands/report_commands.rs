@@ -80,6 +80,22 @@ pub async fn get_sales_report(
     report_service::sales_report(&mut conn, &tid, &range).await
 }
 
+/// Tezgâh (masasız hızlı satış) özeti; masa satışından ayrı okunur.
+#[tauri::command]
+pub async fn get_counter_sales_report(
+    actor_role: String,
+    tenant_id: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<crate::services::counter_sales::CounterSalesDto, String> {
+    rbac::require_reporting(&actor_role)?;
+    let tid = require_tenant(tenant_id.as_deref())?;
+    let range = require_range(from.as_deref(), to.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    crate::services::counter_sales::counter_sales_summary(&mut conn, &tid, &range).await
+}
+
 #[tauri::command]
 pub async fn get_shift_report(
     actor_role: String,
@@ -233,4 +249,50 @@ pub async fn get_panorama(
     )
     .await;
     Ok(PanoramaDto { board, alerts })
+}
+
+#[tauri::command]
+pub async fn get_price_history_report(
+    actor_role: String,
+    tenant_id: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    product_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<crate::services::price_history::PriceChangeRowDto>, String> {
+    rbac::require_reporting(&actor_role)?;
+    let tid = require_tenant(tenant_id.as_deref())?;
+    let range = require_range(from.as_deref(), to.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    crate::services::price_history::list(
+        &mut conn,
+        &tid,
+        &range.from,
+        &range.to,
+        product_id.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn get_stock_movement_report(
+    actor_role: String,
+    tenant_id: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    product_id: Option<String>,
+    pool: tauri::State<'_, DbPool>,
+) -> Result<Vec<crate::services::stock_movement_report::StockMovementRowDto>, String> {
+    rbac::require_reporting(&actor_role)?;
+    let tid = require_tenant(tenant_id.as_deref())?;
+    let range = require_range(from.as_deref(), to.as_deref())?;
+    let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    crate::services::stock_movement_report::report(
+        &mut conn,
+        &tid,
+        &range.from,
+        &range.to,
+        product_id.as_deref(),
+    )
+    .await
 }

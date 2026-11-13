@@ -7,6 +7,7 @@ import { toLocalIso } from '../../../lib/dateRange';
 import { useUIStore } from '../../../stores/uiStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { sessionArgs } from '../../../stores/cariStore';
+import { invokeIPC } from '../../../services/tauriClient';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { MonthPicker } from '../../../ui/MonthPicker';
@@ -63,6 +64,21 @@ export const ReportsTab: React.FC = () => {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => { setSlot(document.getElementById('erp-title-slot')); }, []);
   const [table, setTable] = useState<ReportTable | null>(null);
+  const [productId, setProductId] = useState('');
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const hasProductFilter = 'productFilter' in REPORTS[report] && REPORTS[report].productFilter === true;
+  useEffect(() => {
+    if (!hasProductFilter || products.length > 0) return undefined;
+    let current = true;
+    const { actorRole, tenantId } = sessionArgs();
+    // Süzgeç listesi okunamazsa rapor yine tüm kalemlerle çalışır; hata raporun kendisinde görünür.
+    invokeIPC<{ id: string; name: string }[]>('get_management_products', { actorRole, tenantId })
+      .then((rows) => {
+        if (current) setProducts(rows.map((row) => ({ id: row.id, name: row.name })).sort((a, b) => a.name.localeCompare(b.name, 'tr')));
+      })
+      .catch(() => undefined);
+    return () => { current = false; };
+  }, [hasProductFilter, products.length]);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +93,7 @@ export const ReportsTab: React.FC = () => {
     if (rangeError) return undefined;
     const { actorRole, tenantId } = sessionArgs();
     REPORTS[report]
-      .load({ actorRole, tenantId, ...dayBounds(from, to), fromDate: from, toDate: to })
+      .load({ actorRole, tenantId, ...dayBounds(from, to), fromDate: from, toDate: to, productId: hasProductFilter ? productId : undefined })
       .then((next) => {
         if (current) setTable(next);
       })
@@ -87,9 +103,15 @@ export const ReportsTab: React.FC = () => {
     return () => {
       current = false;
     };
-  }, [report, from, to, rangeError]);
+  }, [report, from, to, rangeError, hasProductFilter, productId]);
 
-  const meta: ReportFileMeta = { title: REPORTS[report].label, from, to, filters: [['Rapor türü', REPORTS[report].label]] };
+  const productName = products.find((item) => item.id === productId)?.name;
+  const meta: ReportFileMeta = {
+    title: REPORTS[report].label,
+    from,
+    to,
+    filters: [['Rapor türü', REPORTS[report].label], ...(hasProductFilter && productName ? [['Kalem', productName] as [string, string]] : [])],
+  };
 
   const numeric = table ? numericColumns(table.columns, table.rows) : [];
   const reportSeg = (
@@ -130,6 +152,19 @@ export const ReportsTab: React.FC = () => {
             setTo(range.to);
           }} />
         </div>
+        {hasProductFilter ? (
+          <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--text-secondary)]">
+            Kalem
+            <select
+              value={productId}
+              onChange={(event) => setProductId(event.target.value)}
+              className="min-h-12 w-56 px-3 rounded-lg bg-[var(--bg-subtle)] text-sm text-[var(--text-primary)] border border-[var(--border)]"
+            >
+              <option value="">Tüm kalemler</option>
+              {products.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+        ) : null}
         <Button
           variant="secondary"
           className="min-h-12 text-sm font-bold ml-auto"

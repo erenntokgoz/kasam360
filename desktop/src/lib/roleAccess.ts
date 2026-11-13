@@ -29,6 +29,16 @@ export function canCollectPayment(role: UserRole | undefined): boolean {
   return role === 'OWNER' || role === 'CASHIER';
 }
 
+/** Masasız hızlı satış kasada yapılır; garson masa dışı satış ve tahsilat yapmaz (sunucu da reddeder). */
+export function canQuickSale(role: UserRole | undefined): boolean {
+  return role === 'OWNER' || role === 'MANAGER' || role === 'CASHIER';
+}
+
+/** Hazır kalemi masaya götürme listesi: salonda çalışan roller; mutfak ve platform görmez. */
+export function canServeDeliveries(role: UserRole | undefined): boolean {
+  return role === 'OWNER' || role === 'MANAGER' || role === 'WAITER' || role === 'CASHIER';
+}
+
 /** Mutfak fişini yalnız mutfak hattı ilerletir; garson ve kasiyer ekranı izler. */
 export function canAdvanceKitchen(role: UserRole | undefined): boolean {
   return role === 'OWNER' || role === 'MANAGER' || role === 'KITCHEN';

@@ -128,6 +128,21 @@ pub async fn bulk_update_product_prices(
     let mut conn = pool.begin_write().await?;
     let result: Result<pricing::BulkPriceResult, String> = async {
         let sonuc = pricing::bulk_update_prices(&mut conn, &tenant_id, args).await?;
+        // Toplu zam her ürün için ayrı fiyat geçmişi satırı bırakır; defterde tek satır vardır.
+        for degisim in &sonuc.changed {
+            crate::services::price_history::record_change(
+                &mut conn,
+                &tenant_id,
+                &degisim.product_id,
+                &degisim.product_name,
+                degisim.old_price_cents,
+                degisim.new_price_cents,
+                &actor_id,
+                &actor_role,
+                crate::services::price_history::SOURCE_BULK_UPDATE,
+            )
+            .await?;
+        }
 
         record_audit(
             &mut conn,
