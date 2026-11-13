@@ -12,6 +12,8 @@ pub mod repositories;
 pub mod services;
 #[cfg(test)]
 mod tests;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod theme_icon;
 pub mod user_credentials;
 
 pub use commands::{
@@ -119,6 +121,8 @@ pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     let builder = builder.setup(|app| {
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        theme_icon::install(app);
         tauri::async_runtime::block_on(async {
             let database_url = resolve_database_url(app)?;
             let db_path = services::backup::db_path_from_url(&database_url);
