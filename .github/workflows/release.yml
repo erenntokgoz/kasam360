@@ -1,7 +1,7 @@
 name: Release
 
 # Yalnız elle atılan `v*` etiketinde çalışır. Önce CI ile aynı testler geçer, sonra
-# Windows'ta imzalı NSIS kurulumu ve updater manifesti (`latest.json`) GitHub Release'e yüklenir.
+# Windows'ta imzalı NSIS kurulumu + updater manifesti (`latest.json`) ve Android APK derlenip tek GitHub Release'e yüklenir.
 on:
   push:
     tags: ['v*']
@@ -65,13 +65,11 @@ jobs:
         working-directory: backend
         run: cargo fmt --check
 
-  release:
+  windows:
     name: Windows imzalı kurulum
     needs: verify
     runs-on: windows-latest
     timeout-minutes: 90
-    permissions:
-      contents: write
     defaults:
       run:
         shell: bash
@@ -118,15 +116,124 @@ jobs:
 
       - name: Updater manifestini üret
         run: |
+          mkdir -p release-assets
           node scripts/releaseTools.mjs manifest "$GITHUB_REF_NAME" backend/target/release/bundle/nsis release-assets/latest.json
-          cp backend/target/release/bundle/nsis/*_"${GITHUB_REF_NAME#v}"_*-setup.exe release-assets/
-          cp backend/target/release/bundle/nsis/*_"${GITHUB_REF_NAME#v}"_*-setup.exe.sig release-assets/
+          installer=$(ls backend/target/release/bundle/nsis/*_"${GITHUB_REF_NAME#v}"_*-setup.exe)
+          cp "$installer" release-assets/
+          cp "$installer.sig" release-assets/
+          # Web sitesindeki sabit indirme bağlantısı için ad değişmeyen kopya.
+          cp "$installer" release-assets/kasam360-kurulum.exe
           ls -l release-assets
+
+      - name: Windows varlıklarını sakla
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-assets
+          path: release-assets/*
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NDK_VERSION: 27.1.12297006
+      # Önceki test APK'larını imzalayan sertifika; farklıysa üstüne kurulum bozulur, bu yüzden doğrulanır.
+      EXPECTED_CERT_SHA256: 9ec70af13291aa07b9c8dcd8c2845223ed033ebd04d7557dd2395f36b02a301b
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Rust Android hedefi
+        run: rustup target add aarch64-linux-android
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Android SDK ve NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "ndk;$NDK_VERSION"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Sürüm kontrolü
+        run: node scripts/releaseTools.mjs check-version "$GITHUB_REF_NAME"
+
+      - name: Android projesini üret ve derle
+        run: |
+          npm ci --prefix desktop
+          cd backend
+          # backend/gen izlenmez; her koşuda yeniden üretilir, marka/Google girişi kodu beforeBuildCommand ile uygulanır.
+          npx --yes @tauri-apps/cli@2.11.4 android init --ci
+          npx --yes @tauri-apps/cli@2.11.4 android build --apk --target aarch64 --ci
+
+      - name: Hizala ve imzala
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          unsigned=$(find backend/gen/android/app/build/outputs/apk -name '*-unsigned.apk' | head -n 1)
+          test -n "$unsigned"
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          mkdir -p release-assets
+          "$tools/zipalign" -p -f 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"
+          "$tools/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEY_PASSWORD \
+            --out release-assets/kasam360-android.apk "$RUNNER_TEMP/aligned.apk"
+          rm -f "$RUNNER_TEMP/release.keystore"
+          "$tools/apksigner" verify --verbose --print-certs release-assets/kasam360-android.apk | tee "$RUNNER_TEMP/certs.txt"
+          grep -qi "certificate SHA-256 digest: $EXPECTED_CERT_SHA256" "$RUNNER_TEMP/certs.txt"
+          ls -l release-assets
+
+      - name: Android varlığını sakla
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-assets
+          path: release-assets/*
+          if-no-files-found: error
+
+  publish:
+    name: GitHub Release
+    needs: [windows, android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Varlıkları indir
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
 
       - name: GitHub Release oluştur
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          ls -l release-assets
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --verify-tag --title "KASAM360 ${GITHUB_REF_NAME}" \
-            --notes "Masaüstü kurulumu ve otomatik güncelleme paketi. Kurulum dosyası imzalıdır."
+            --notes "Masaüstü kurulumu, otomatik güncelleme paketi ve Android APK. Kurulum dosyası güncelleme anahtarıyla imzalıdır."

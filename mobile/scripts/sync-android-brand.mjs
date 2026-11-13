@@ -11,9 +11,11 @@ const androidProject = path.join(backendRoot, 'gen/android/app/src/main/res');
 const temporaryOutput = mkdtempSync(path.join(mobileRoot, '.android-brand-'));
 
 try {
-  execFileSync('cargo', ['tauri', 'icon', iconSource, '--output', temporaryOutput], {
+  // cargo-tauri kurulu olmayan ortamda (CI) da çalışsın diye npm CLI kullanılır.
+  execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', '@tauri-apps/cli@2.11.4', 'icon', iconSource, '--output', temporaryOutput], {
     cwd: backendRoot,
     stdio: 'inherit',
+    shell: process.platform === 'win32',
   });
 
   const generatedAndroid = path.join(temporaryOutput, 'android');

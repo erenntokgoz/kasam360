@@ -1,6 +1,6 @@
 [package]
 name = "kasam360-core"
-version = "0.2.0"
+version = "0.3.0"
 description = "Kasam360 Desktop Core"
 edition = "2021"
 

@@ -4,7 +4,7 @@ import { ChevronRight, Search } from 'lucide-react';
 import { formatDay } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
 import { formatNumber } from '../../lib/numberText';
-import { EXPIRY_WARNING_DAYS, stockRows, stockTotals } from '../../lib/stockSummary';
+import { EXPIRY_WARNING_DAYS, stockRows, stockTotals, stockTrackedIds } from '../../lib/stockSummary';
 import { matchesProduct } from '../../lib/searchText';
 import { stockUnitLabel } from '../../lib/stockUnitLabel';
 import { useStockStore } from '../../stores/stockStore';
@@ -29,9 +29,11 @@ export function StockOverview({ target, onEntry, onCloseEntry }: Props) {
   useEffect(() => { void load(); }, [load]);
 
   const selectedProduct = products.find((product) => product.id === selected);
-  const rows = stockRows(products.map((product) => product.id), batches);
+  const tracked = stockTrackedIds(products, batches);
+  const trackedProducts = products.filter((product) => tracked.has(product.id));
+  const rows = stockRows(trackedProducts.map((product) => product.id), batches);
   const totals = stockTotals(rows.values());
-  const visible = products
+  const visible = trackedProducts
     .filter((product) => matchesProduct(query, product.name, product.barcode, product.sku))
     .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
   const showProduct = selectedProduct && target === null;
@@ -54,10 +56,10 @@ export function StockOverview({ target, onEntry, onCloseEntry }: Props) {
         <Button onClick={() => onEntry(pendingQuickReceipt.productId)}>Bekleyen Teslimi Aç</Button>
       )}
       {visible.length === 0 && <p role="status">{busy ? 'Stoklar yükleniyor.' : query.trim() ? 'Eşleşen stok kalemi yok.' : 'Henüz stok kalemi yok.'}</p>}
-      {products.length > 0 && (
+      {trackedProducts.length > 0 && (
         <dl aria-label="Stok özeti" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {([
-            ['Kalem', String(products.length)],
+            ['Kalem', String(trackedProducts.length)],
             ['Stokta', `${totals.inStock} · tükenen ${totals.outOfStock}`],
             ['Stok Değeri', formatMoney(totals.valueCents)],
             [`Son ${EXPIRY_WARNING_DAYS} Gün SKT`, String(totals.expiring)],

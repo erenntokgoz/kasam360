@@ -55,3 +55,16 @@ export function stockTotals(rows: Iterable<StockRow>, now = new Date()): StockTo
   }
   return totals;
 }
+
+/**
+ * Stok listesine yalnız stok tutulan kalemler girer: hammaddeler ve partisi olan satış ürünleri.
+ * Reçetesiz satış ürünü (ör. kutu içecek) partisi varsa doğrudan FIFO ile düşüldüğü için listede kalır;
+ * partisi olmayan satış ürünü (Espresso gibi reçeteli ya da stoksuz menü ürünü) menüden yönetilir.
+ */
+export function stockTrackedIds(
+  products: ReadonlyArray<{ id: string; isRaw: boolean }>,
+  batches: ReadonlyArray<{ productId: string }>,
+): Set<string> {
+  const withBatch = new Set(batches.map((batch) => batch.productId));
+  return new Set(products.filter((product) => product.isRaw || withBatch.has(product.id)).map((product) => product.id));
+}
