@@ -10,6 +10,7 @@ import { sessionArgs } from '../../stores/cariStore';
 import { useStockStore } from '../../stores/stockStore';
 import { useUIStore } from '../../stores/uiStore';
 import { Button } from '../../ui/Button';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { Modal } from '../../ui/Modal';
 import { NumberInput } from '../../ui/NumberInput';
 import { StockItemPicker } from './StockItemPicker';
@@ -21,6 +22,7 @@ interface WasteRow {
   quantity: number;
   total_cost_cents: number | null;
   notes: string | null;
+  manual: boolean;
 }
 
 async function listWaste() {
@@ -33,6 +35,8 @@ export function StockWastePanel() {
   const canRecord = useAuthStore((state) => state.user?.role === 'OWNER');
   const [rows, setRows] = useState<WasteRow[] | null>(null);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<WasteRow | null>(null);
+  const [removing, setRemoving] = useState<WasteRow | null>(null);
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
@@ -40,7 +44,9 @@ export function StockWastePanel() {
   const inFlight = useRef(false);
   const [listError, setListError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const available = batches.reduce((sum, batch) => batch.productId === productId ? sum + batch.remainingQuantity : sum, 0);
+  // Düzenlenen kaydın düşüm miktarı geri döneceği için kullanılabilir stoğa eklenir.
+  const available = batches.reduce((sum, batch) => batch.productId === productId ? sum + batch.remainingQuantity : sum, 0)
+    + (editing && editing.product_id === productId ? editing.quantity : 0);
   const unit = products.find((product) => product.id === productId)?.stockUnit;
 
   useEffect(() => {
@@ -63,13 +69,22 @@ export function StockWastePanel() {
     setFormError(null);
     try {
       const { actorId, actorRole, tenantId } = sessionArgs();
-      const record = await invokeIPC<WasteRow>('record_waste_command', {
-        actorId, actorRole, tenantId,
-        args: { productId, reason: 'FIRE_EDILDI', quantity: amount, notes: notes.trim() },
+      const record = editing
+        ? await invokeIPC<WasteRow>('edit_waste_command', {
+          actorId, actorRole, tenantId,
+          args: { wasteId: editing.id, productId, quantity: amount, notes: notes.trim() },
+        })
+        : await invokeIPC<WasteRow>('record_waste_command', {
+          actorId, actorRole, tenantId,
+          args: { productId, reason: 'FIRE_EDILDI', quantity: amount, notes: notes.trim() },
+        });
+      setRows((current) => {
+        const rest = (current ?? []).filter((row) => row.id !== record.id);
+        return editing ? (current ?? []).map((row) => row.id === record.id ? record : row) : [record, ...rest].slice(0, 20);
       });
-      setRows((current) => [record, ...(current ?? []).filter((row) => row.id !== record.id)].slice(0, 20));
       setOpen(false);
-      useUIStore.getState().showNotice('Fire stoğa işlendi.');
+      setEditing(null);
+      useUIStore.getState().showNotice(editing ? 'Fire düzeltildi.' : 'Fire stoğa işlendi.');
       await load();
     } catch (caught) {
       setFormError(errorText(caught));
@@ -79,14 +94,32 @@ export function StockWastePanel() {
     }
   }
 
+  async function remove(row: WasteRow) {
+    const { actorId, actorRole, tenantId } = sessionArgs();
+    await invokeIPC('void_waste_command', {
+      actorId, actorRole, tenantId,
+      args: { wasteId: row.id, reason: 'Fire listesinden silindi' },
+    });
+    setRows((current) => (current ?? []).filter((item) => item.id !== row.id));
+    useUIStore.getState().showNotice('Fire silindi, stok geri eklendi.');
+    await load();
+  }
+
+  function openEditor(row: WasteRow | null) {
+    setEditing(row);
+    setProductId(row?.product_id ?? '');
+    setQuantity(row ? String(row.quantity).replace('.', ',') : '');
+    setNotes(row?.notes ?? '');
+    setFormError(null);
+    setOpen(true);
+  }
+
   return (
     <section className="page-fill flex-1 overflow-y-auto p-4">
       <div className="paper rounded-xl border border-[var(--border)] p-4">
         <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-bold">Zayiat ve Fire</h2>
-          {canRecord && <Button size="sm" variant="primary" disabled={busy} onClick={() => {
-            setProductId(''); setQuantity(''); setNotes(''); setFormError(null); setOpen(true);
-          }}>+ Fire Ekle</Button>}
+          {canRecord && <Button size="sm" variant="primary" disabled={busy} onClick={() => openEditor(null)}>+ Fire Ekle</Button>}
         </header>
         <ErrorToast message={listError} />
         <ErrorToast message={stockError} />
@@ -101,12 +134,28 @@ export function StockWastePanel() {
                 </p>
                 {row.notes && <p className="text-[var(--text-secondary)]">{row.notes}</p>}
               </div>
-              <span className="tabular-nums">{row.total_cost_cents === null ? 'Maliyet bilinmiyor' : formatMoney(row.total_cost_cents)}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="tabular-nums">{row.total_cost_cents === null ? 'Maliyet bilinmiyor' : formatMoney(row.total_cost_cents)}</span>
+                {canRecord && row.manual && (
+                  <>
+                    <Button size="sm" disabled={busy} onClick={() => openEditor(row)}>Düzenle</Button>
+                    <Button size="sm" variant="danger" disabled={busy} onClick={() => setRemoving(row)}>Sil</Button>
+                  </>
+                )}
+              </div>
             </li>
           ))}
         </ul>
       </div>
-      <Modal isOpen={open} title="Fire Ekle" onClose={() => { if (!busy) setOpen(false); }} maxWidth="sm">
+      {removing && (
+        <ConfirmDialog
+          title="Fire kaydı silinsin mi?"
+          message={`${removing.product_name} · ${formatNumber(removing.quantity)} ${stockUnitLabel(products.find((product) => product.id === removing.product_id)?.stockUnit)} stoğa, düşüldüğü partilere geri eklenir.`}
+          onConfirm={() => remove(removing)}
+          onClose={() => setRemoving(null)}
+        />
+      )}
+      <Modal isOpen={open} title={editing ? 'Fire Düzenle' : 'Fire Ekle'} onClose={() => { if (!busy) setOpen(false); }} maxWidth="sm">
         <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <StockItemPicker products={products} value={productId} onChange={setProductId} disabled={busy} allowCreate={false} label="Fire ürünü" />
           {productId && <p className="text-sm tabular-nums">Eldeki stok: {formatNumber(available)} {stockUnitLabel(unit)}</p>}
@@ -120,7 +169,7 @@ export function StockWastePanel() {
           <ErrorToast message={formError} />
           <div className="flex justify-end gap-2">
             <Button type="button" disabled={busy} onClick={() => setOpen(false)}>Vazgeç</Button>
-            <Button type="submit" variant="primary" isLoading={busy}>Stoktan Düş</Button>
+            <Button type="submit" variant="primary" isLoading={busy}>{editing ? 'Kaydet' : 'Stoktan Düş'}</Button>
           </div>
         </form>
       </Modal>

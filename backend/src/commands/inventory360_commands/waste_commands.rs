@@ -246,6 +246,130 @@ pub async fn record_waste_command(
     Ok(deger)
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct VoidWasteArgs {
+    pub waste_id: String,
+    pub reason: String,
+}
+
+fn valid_text(text: Option<&str>) -> bool {
+    text.is_some_and(|text| {
+        let text = text.trim();
+        !text.is_empty() && text.chars().count() <= 500
+    })
+}
+
+/// Fire miktarını, notunu veya kalemini düzeltir; stok farkı aynı işlemde FIFO ile işlenir.
+#[tauri::command]
+pub async fn edit_waste_command(
+    actor_role: String,
+    actor_id: Option<String>,
+    tenant_id: Option<String>,
+    args: waste::WasteEditInput,
+    pool: State<'_, DbPool>,
+    app_state: State<'_, crate::AppState>,
+) -> Result<waste::WasteRecord, String> {
+    // Düzeltme fire eklemekle aynı etkiyi taşır; yetki de aynıdır.
+    rbac::require_any(&actor_role, &[Role::Owner])?;
+    if !valid_text(args.notes.as_deref()) {
+        return Err("VALIDATION: Fire açıklaması 1–500 karakter olmalı.".into());
+    }
+
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    let tenant_id = require_tenant(tenant_id.as_deref())?;
+    let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
+
+    let mut conn = pool.begin_write().await?;
+    let result: Result<waste::WasteRecord, String> = async {
+        let sonuc = waste::edit_waste(&mut conn, &tenant_id, &actor_id, args).await?;
+        let kayit = sonuc.record;
+
+        record_audit(
+            &mut conn,
+            &lock,
+            &tenant_id,
+            &actor_id,
+            &actor_role,
+            category::FINANS,
+            "stok:waste_edited",
+            &kayit.id,
+            serde_json::json!({
+                "productId": kayit.product_id,
+                "previousProductId": sonuc.previous_product_id,
+                "previousQuantity": sonuc.previous_quantity,
+                "previousTotalCostCents": sonuc.previous_total_cost_cents,
+                "quantity": kayit.quantity,
+                "totalCostCents": kayit.total_cost_cents,
+            }),
+        )
+        .await?;
+
+        Ok(kayit)
+    }
+    .await;
+
+    let deger = result?;
+    conn.commit().await?;
+    Ok(deger)
+}
+
+/// Fire kaydını iptal eder: kayıt silinmez, stok düşüldüğü partilere geri döner.
+#[tauri::command]
+pub async fn void_waste_command(
+    actor_role: String,
+    actor_id: Option<String>,
+    tenant_id: Option<String>,
+    args: VoidWasteArgs,
+    pool: State<'_, DbPool>,
+    app_state: State<'_, crate::AppState>,
+) -> Result<(), String> {
+    rbac::require_any(&actor_role, &[Role::Owner])?;
+    if !valid_text(Some(&args.reason)) {
+        return Err("VALIDATION: İptal gerekçesi 1–500 karakter olmalı.".into());
+    }
+
+    let lock = AuditLock::new(app_state.audit_mutex.lock().await);
+    let tenant_id = require_tenant(tenant_id.as_deref())?;
+    let (actor_id, actor_role) = audit_actor(actor_id, &actor_role);
+
+    let mut conn = pool.begin_write().await?;
+    let result: Result<(), String> = async {
+        let sonuc = waste::void_waste(
+            &mut conn,
+            &tenant_id,
+            &actor_id,
+            &args.waste_id,
+            args.reason.trim(),
+        )
+        .await?;
+
+        record_audit(
+            &mut conn,
+            &lock,
+            &tenant_id,
+            &actor_id,
+            &actor_role,
+            category::FINANS,
+            "stok:waste_voided",
+            &sonuc.record.id,
+            serde_json::json!({
+                "productId": sonuc.record.product_id,
+                "quantity": sonuc.record.quantity,
+                "totalCostCents": sonuc.record.total_cost_cents,
+                "returnedCostCents": sonuc.returned_cost_cents,
+                "reason": args.reason.trim(),
+            }),
+        )
+        .await?;
+        Ok(())
+    }
+    .await;
+
+    result?;
+    conn.commit().await
+}
+
 #[tauri::command]
 pub async fn list_waste_records_command(
     actor_role: String,

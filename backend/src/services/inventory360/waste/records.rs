@@ -12,11 +12,10 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqliteConnection};
 
+use super::fifo::consume_fifo;
 use crate::id_generator::generate_id;
 use crate::management_commands::ensure_owned;
-use crate::services::inventory360::quantity_cost::{
-    line_cost_cents, unit_cost_cents as calculate_unit_cost_cents,
-};
+use crate::services::inventory360::quantity_cost::unit_cost_cents as calculate_unit_cost_cents;
 use crate::services::inventory360::{optional_i64, optional_text};
 use crate::services::stock_trail::{self, StockMove};
 
@@ -35,6 +34,8 @@ pub struct WasteRecord {
     pub occurred_at: String,
     pub recorded_by: String,
     pub notes: Option<String>,
+    /// Elle girilen fire düzenlenebilir; sipariş iptalinden doğan kayıt siparişe bağlıdır.
+    pub manual: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,71 +88,13 @@ pub async fn record_waste(
         .clone()
         .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
 
-    // Stoğu aşan kayıtta ilk partiye bile dokunulmaz.
-    let mut kalan = input.quantity;
-    let mut maliyet: i64 = 0;
-
-    let partiler = sqlx::query(
-        "SELECT id, remaining_quantity, unit_cost_cents
-           FROM inventory_batches
-          WHERE tenant_id = ? AND product_id = ? AND remaining_quantity > 0
-          ORDER BY received_at ASC, id ASC",
-    )
-    .bind(tenant_id)
-    .bind(&input.product_id)
-    .fetch_all(&mut *conn)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let available = partiler
-        .iter()
-        .try_fold(0.0, |sum, row| {
-            row.try_get::<f64, _>("remaining_quantity")
-                .map(|quantity| sum + quantity)
-        })
-        .map_err(|e| e.to_string())?;
-    if available <= 0.0 || input.quantity - available > f64::EPSILON * input.quantity {
-        return Err("VALIDATION: Fire miktarı eldeki stoğu aşıyor.".into());
-    }
-
-    for parti in &partiler {
-        if kalan <= 0.0 {
-            break;
-        }
-        let parti_id: String = parti.try_get("id").map_err(|e| e.to_string())?;
-        let parti_kalan: f64 = parti
-            .try_get("remaining_quantity")
-            .map_err(|e| e.to_string())?;
-        let parti_maliyet: i64 = parti
-            .try_get("unit_cost_cents")
-            .map_err(|e| e.to_string())?;
-
-        let dusulen = kalan.min(parti_kalan);
-        let yeni_kalan = parti_kalan - dusulen;
-
-        let satir_maliyet = line_cost_cents(parti_maliyet, dusulen)?;
-        maliyet = maliyet
-            .checked_add(satir_maliyet)
-            .ok_or_else(|| "OVERFLOW: fire maliyeti taştı".to_string())?;
-
-        sqlx::query(
-            "UPDATE inventory_batches SET remaining_quantity = ?
-              WHERE id = ? AND tenant_id = ?",
-        )
-        .bind(yeni_kalan)
-        .bind(&parti_id)
-        .bind(tenant_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-
-        kalan -= dusulen;
-    }
+    let id = generate_id("wst");
+    // Stoğu aşan kayıtta ilk partiye bile dokunulmaz; dağılım iptal için saklanır.
+    let maliyet = consume_fifo(conn, tenant_id, &input.product_id, input.quantity, &id).await?;
 
     let unit_cost_cents = Some(calculate_unit_cost_cents(maliyet, input.quantity)?);
     let total_cost_cents = Some(maliyet);
 
-    let id = generate_id("wst");
     sqlx::query(
         "INSERT INTO waste_records
              (id, tenant_id, product_id, reason, quantity, unit_cost_cents,
@@ -198,6 +141,7 @@ pub async fn record_waste(
         occurred_at,
         recorded_by: actor_id.to_string(),
         notes: input.notes,
+        manual: true,
     })
 }
 
@@ -210,10 +154,13 @@ pub async fn list_waste_records(
     let limit = limit.unwrap_or(500).clamp(1, 5000);
     let rows = sqlx::query(
         "SELECT w.id, w.product_id, p.name AS product_name, w.reason, w.quantity,
-                w.unit_cost_cents, w.total_cost_cents, w.occurred_at, w.recorded_by, w.notes
+                w.unit_cost_cents, w.total_cost_cents, w.occurred_at, w.recorded_by, w.notes,
+                EXISTS (SELECT 1 FROM stock_movements m
+                         WHERE m.tenant_id = w.tenant_id AND m.source_id = w.id
+                           AND m.source_type = 'WASTE_RECORD') AS manual
            FROM waste_records w
            JOIN products p ON p.id = w.product_id AND p.tenant_id = w.tenant_id
-          WHERE w.tenant_id = ?
+          WHERE w.tenant_id = ? AND w.voided_at IS NULL
           ORDER BY w.occurred_at DESC
           LIMIT ?",
     )
@@ -236,6 +183,7 @@ pub async fn list_waste_records(
             occurred_at: row.try_get("occurred_at").map_err(|e| e.to_string())?,
             recorded_by: row.try_get("recorded_by").map_err(|e| e.to_string())?,
             notes: optional_text(&row, "notes")?,
+            manual: row.try_get("manual").map_err(|e| e.to_string())?,
         });
     }
     Ok(result)

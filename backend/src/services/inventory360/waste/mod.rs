@@ -12,10 +12,13 @@
 //! Dosya 500 satır sınırını aşmasın diye `records` (fire) ve `count` (kör
 //! sayım) olarak bölündü.
 
+mod adjust;
 pub mod count;
 mod count_adjustment;
+mod fifo;
 pub mod records;
 
+pub use adjust::{edit_waste, void_waste, WasteEditInput, WasteEditOutcome, WasteVoidOutcome};
 pub use count::{
     close_stock_count, get_stock_count, list_stock_counts, open_stock_count, record_count_line,
     StockCount, StockCountLine,

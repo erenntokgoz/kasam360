@@ -1535,8 +1535,27 @@ CREATE TABLE IF NOT EXISTS waste_records (
     occurred_at TEXT NOT NULL,
     recorded_by TEXT NOT NULL,
     notes TEXT,
+    -- İptal edilen fire silinmez: kayıt kalır, stok partilerine geri döner ve
+    -- liste/rapor bu işaretle dışarıda bırakır. Gerçek silme denetim izini keserdi.
+    voided_at TEXT,
+    voided_by TEXT,
+    void_reason TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+-- Fire'ın FIFO'da hangi partiden ne kadar ve hangi maliyetle düştüğü. İptal ve
+-- düzeltme stoğu aynı partilere aynı maliyetle geri koymak için bunu okur.
+CREATE TABLE IF NOT EXISTS waste_allocations (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    waste_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    batch_id TEXT NOT NULL,
+    quantity REAL NOT NULL CHECK (quantity > 0),
+    unit_cost_cents INTEGER NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_waste_alloc_waste
+    ON waste_allocations(tenant_id, waste_id);
 CREATE INDEX IF NOT EXISTS idx_waste_product
     ON waste_records(tenant_id, product_id);
 CREATE INDEX IF NOT EXISTS idx_waste_date

@@ -540,7 +540,9 @@ pub fn run() {
         commands::external360_commands::service_tickets_open,
         commands::external360_commands::outbound_queues_flush,
         commands::external360_commands::outbound_queues_pending,
+        inventory360_commands::waste_commands::edit_waste_command,
         inventory360_commands::waste_commands::record_waste_command,
+        inventory360_commands::waste_commands::void_waste_command,
         inventory360_commands::waste_commands::list_waste_records_command,
         // Kampanya ve Özel Günler. İzin listelerinde MASTER yoktur:
         // platform hesabı işletmenin vergi belgesine erişemez. Yazma yalnız OWNER'dır (prim, KDV ve indirim para

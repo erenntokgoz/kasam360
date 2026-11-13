@@ -332,6 +332,11 @@ pub async fn adjustments_report(
     .await
     .map_err(|e| e.to_string())?;
 
+    // İptal ve düzeltme olayları tarih aralığına bağlanmaz: sonradan iptal edilen fire,
+    // kaydedildiği dönemin raporunda da sayılmamalıdır.
+    let (voided_waste, edited_waste_cents) =
+        crate::services::report_waste::waste_corrections(conn, tenant_id).await?;
+
     let mut out = Vec::new();
     let mut seen_void = false;
     let mut seen_refund = false;
@@ -369,6 +374,13 @@ pub async fn adjustments_report(
                 ("REFUND", amt)
             }
             "stok:waste_recorded" | "stock:waste" => {
+                let resource = row
+                    .try_get::<Option<String>, _>("resource_id")
+                    .map_err(|e| e.to_string())?
+                    .unwrap_or_default();
+                if voided_waste.contains(&resource) {
+                    continue;
+                }
                 seen_waste = true;
                 let amt = payload
                     .get("totalCostCents")
@@ -378,6 +390,7 @@ pub async fn adjustments_report(
                         "WASTE kaydında 'totalCostCents' veya 'amountCents' tutarı okunamadı."
                             .to_string()
                     })?;
+                let amt = edited_waste_cents.get(&resource).copied().unwrap_or(amt);
                 ("WASTE", amt)
             }
             _ => continue,

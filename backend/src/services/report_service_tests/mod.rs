@@ -6,3 +6,4 @@
 mod adjustments_tests;
 mod common;
 mod sales_tests;
+mod waste_void_report_tests;

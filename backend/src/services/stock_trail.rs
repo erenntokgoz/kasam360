@@ -15,6 +15,7 @@ pub const SOURCE_PURCHASE: &str = "PURCHASE_ORDER";
 pub const SOURCE_ORDER_ITEM: &str = "ORDER_ITEM";
 pub const SOURCE_ORDER_VOID: &str = "ORDER_VOID";
 pub const SOURCE_WASTE: &str = "WASTE_RECORD";
+pub const SOURCE_WASTE_VOID: &str = "WASTE_VOID";
 pub const SOURCE_COUNT: &str = "STOCK_COUNT";
 
 /// Sistem düşümünde oturum yoktur; kişi kalemin garsonundan okunur.
@@ -156,7 +157,7 @@ pub struct StockTrailRow {
 
 fn kind_of(movement_type: &str, source_type: Option<&str>) -> &'static str {
     match (movement_type, source_type) {
-        ("IN", Some(SOURCE_ORDER_VOID)) => "IADE",
+        ("IN", Some(SOURCE_ORDER_VOID | SOURCE_WASTE_VOID)) => "IADE",
         ("IN", _) => "MAL_KABUL",
         ("OUT", _) => "SATIS",
         ("WASTE", _) => "FIRE",

@@ -35,6 +35,7 @@ pub mod qr_menu_publish;
 pub mod receipt_service;
 pub mod refund_service;
 pub mod report_service;
+mod report_waste;
 pub mod reservation_service;
 pub mod security360;
 pub mod setup;
