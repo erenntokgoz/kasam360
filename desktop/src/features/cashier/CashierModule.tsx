@@ -19,6 +19,7 @@ import { CashExpenseForm } from './CashExpenseForm';
 import { CashMovementForm } from './CashMovementForm';
 import { FinanceTab } from '../patron/finance/FinanceTab';
 import { useLedgerStore } from '../../stores/ledgerStore';
+import { ClosedOrdersTab } from './ClosedOrdersTab';
 import { ReceiptsTab } from './ReceiptsTab';
 import { ShiftHistory } from './ShiftHistory';
 import { ShiftMovements } from './ShiftMovements';
@@ -49,7 +50,7 @@ export const CashierModule: React.FC = () => {
   const [dayCloseNotice, setDayCloseNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const openModal = useUIStore((state) => state.openModal);
 
-  const [activeTab, setActiveTab] = useState<'SHIFT' | 'FINANCE' | 'RECEIPTS' | 'DAY_CLOSE'>('SHIFT');
+  const [activeTab, setActiveTab] = useState<'SHIFT' | 'FINANCE' | 'RECEIPTS' | 'CLOSED' | 'DAY_CLOSE'>('SHIFT');
   const financeAsked = useLedgerStore((state) => state.activeErpTab === 'FINANCE');
   const [cashAction, setCashAction] = useState<CashAction | 'CHOOSE' | null>(null);
   const [isActionBusy, setIsActionBusy] = useState(false);
@@ -111,6 +112,7 @@ export const CashierModule: React.FC = () => {
       >
         <BarTab active={activeTab === 'SHIFT'} onClick={() => setActiveTab('SHIFT')}>Defter</BarTab>
         <BarTab active={activeTab === 'RECEIPTS'} onClick={() => setActiveTab('RECEIPTS')}>Fişler</BarTab>
+        <BarTab active={activeTab === 'CLOSED'} onClick={() => setActiveTab('CLOSED')}>Kapanan Masalar</BarTab>
         <BarTab active={activeTab === 'DAY_CLOSE'} onClick={() => setActiveTab('DAY_CLOSE')}>Gün Sonu</BarTab>
       </Bar>
 
@@ -155,6 +157,8 @@ export const CashierModule: React.FC = () => {
           </>
         ) : activeTab === 'RECEIPTS' ? (
           <ReceiptsTab onRefunded={() => void loadShiftData()} />
+        ) : activeTab === 'CLOSED' ? (
+          <ClosedOrdersTab />
         ) : (
           /* Gün Sonu / Z Raporu Sekmesi */
           <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">

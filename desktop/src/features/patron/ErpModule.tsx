@@ -4,6 +4,7 @@
 import React from 'react';
 import { useLedgerStore, type ErpTab } from '../../stores/ledgerStore';
 import { Bar, BarTab } from '../../ui/Bar';
+import { AccountsTab } from './accounts/AccountsTab';
 import { CriticalLogTab } from './CriticalLogTab';
 import { DebtsTab } from './DebtsTab';
 import { PanoramaTab } from './panorama/PanoramaTab';
@@ -13,6 +14,7 @@ const TABS: { id: ErpTab; label: string }[] = [
   { id: 'PANORAMA', label: 'Genel Bakış' },
   { id: 'DEBTS', label: 'Cari' },
   { id: 'STAFF', label: 'Personel' },
+  { id: 'ACCOUNTS', label: 'Para ve Hesaplar' },
   { id: 'AUDIT', label: 'Kritik Kayıtlar' },
 ];
 
@@ -36,6 +38,7 @@ export const ErpModule: React.FC = () => {
         {section === 'PANORAMA' && <PanoramaTab />}
         {section === 'DEBTS' && <DebtsTab />}
         {section === 'STAFF' && <StaffLedger />}
+        {section === 'ACCOUNTS' && <AccountsTab />}
         {section === 'AUDIT' && <CriticalLogTab />}
       </div>
     </section>
