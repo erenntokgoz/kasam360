@@ -49,9 +49,10 @@ export function StockRecipes() {
 
   const product = products.find((item) => item.id === selectedId);
   const cost = productRecipe?.productId === selectedId ? productRecipe : null;
+  // Reçete yalnız satış ürünlerine tanımlanır; hammadde reçete malzemesi olarak kalemlerde seçilir.
   const visible = products
-    .filter((item) => matchesProduct(query, item.name, item.barcode, item.sku))
-    .sort((a, b) => Number(!!a.isRaw) - Number(!!b.isRaw) || a.name.localeCompare(b.name, 'tr'));
+    .filter((item) => !item.isRaw && matchesProduct(query, item.name, item.barcode, item.sku))
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
 
   return (
     <section className="page-fill flex-1 min-h-0 overflow-y-auto p-4 space-y-4">

@@ -292,3 +292,38 @@ async fn ikinci_aktif_recete_reddedilir() {
         1
     );
 }
+
+#[tokio::test]
+async fn hammaddeye_recete_tanimlanamaz() {
+    let pool = test_pool().await;
+    let mut conn = conn_of(&pool).await;
+    urun_ekle(&mut conn, KIRACI_A, "prd_un", "Un", 0).await;
+    urun_ekle(&mut conn, KIRACI_A, "prd_un_malzeme", "Tuz", 0).await;
+    sqlx::query("UPDATE products SET is_raw = 1 WHERE tenant_id = ? AND id = 'prd_un'")
+        .bind(KIRACI_A)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    let sonuc = create_recipe(
+        &mut conn,
+        KIRACI_A,
+        AKTOR,
+        recete_girdisi(
+            "prd_un",
+            "Un reçetesi",
+            100.0,
+            1.0,
+            vec![malzeme("prd_un_malzeme", 1.0, "kg", None)],
+        ),
+    )
+    .await;
+    assert!(
+        matches!(sonuc, Err(ref hata) if hata.starts_with("VALIDATION")),
+        "hammaddeye reçete reddedilmeli"
+    );
+    assert_eq!(
+        list_recipes(&mut conn, KIRACI_A, true).await.unwrap().len(),
+        0,
+        "reddedilen reçete yazılmamalı"
+    );
+}

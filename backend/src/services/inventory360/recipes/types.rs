@@ -211,6 +211,22 @@ pub async fn create_recipe(
 ) -> Result<Recipe, String> {
     ensure_owned(conn, "products", &input.product_id, tenant_id).await?;
 
+    // Hammadde yalnız reçete malzemesi olabilir; kendi reçetesi bir satış ürünü
+    // maliyetini temsil eder. Sorgu hata verirse işlem reddedilir (fail-closed).
+    let hammadde: i64 =
+        sqlx::query_scalar("SELECT is_raw FROM products WHERE tenant_id = ? AND id = ?")
+            .bind(tenant_id)
+            .bind(&input.product_id)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+    if hammadde != 0 {
+        return Err(
+            "VALIDATION: hammaddeye reçete tanımlanamaz, reçete yalnız satış ürünlerine eklenir"
+                .into(),
+        );
+    }
+
     if !(input.yield_percent.is_finite()
         && input.yield_percent > 0.0
         && input.yield_percent <= 100.0)
