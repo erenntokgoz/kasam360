@@ -1,4 +1,4 @@
-export type TableStatus = 'EMPTY' | 'OCCUPIED' | 'RESERVED' | 'BILL_REQUESTED';
+export type TableStatus = 'EMPTY' | 'OCCUPIED' | 'RESERVED';
 
 export interface FloorZone {
   id: string;

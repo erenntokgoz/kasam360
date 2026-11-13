@@ -29,7 +29,6 @@ export interface TableSlideOverProps {
   onCloseReservation: (reservationId: string, action: 'ARRIVED' | 'CANCELLED') => Promise<void>;
   /** Rezervasyon sahibi gelince masa rezervasyondaki kişi sayısıyla siparişe açılır. */
   onSeatReservation: (table: FloorTable, guestCount: number) => void;
-  onToggleBill: (tableId: string, requested: boolean) => Promise<void>;
 }
 
 export const TableSlideOver: React.FC<TableSlideOverProps> = ({
@@ -43,7 +42,6 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
   onMergeTable,
   onCloseReservation,
   onSeatReservation,
-  onToggleBill,
 }) => {
   const [moveTargetId, setMoveTargetId] = useState<string>('');
   const [mergeTargetId, setMergeTargetId] = useState<string>('');
@@ -57,7 +55,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
   const loadFloorPlan = useFloorStore((state) => state.loadFloorPlan);
   const tableId = table?.id;
   const activeOrderId = table?.activeOrderId;
-  const isOccupied = table?.status === 'OCCUPIED' || table?.status === 'BILL_REQUESTED';
+  const isOccupied = table?.status === 'OCCUPIED';
 
   // Kanca erken dönüşten önce durmalıdır: masa seçilince kanca sayısı değişir ve
   // React tüm uygulamayı boş ekrana düşürür.
@@ -80,10 +78,9 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
 
   if (!table) return null;
 
-  const isBillAsked = table.status === 'BILL_REQUESTED';
   const elapsed = isOccupied ? minutesElapsed(table.openedAt) : 0;
   const emptyTables = allTables.filter((t) => t.id !== table.id && t.status === 'EMPTY');
-  const occupiedTables = allTables.filter((t) => t.id !== table.id && (t.status === 'OCCUPIED' || t.status === 'BILL_REQUESTED'));
+  const occupiedTables = allTables.filter((t) => t.id !== table.id && t.status === 'OCCUPIED');
 
   const handleConfirmMove = () => {
     if (!moveTargetId) return;
@@ -139,10 +136,6 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
             </div>
           </div>
 
-          <Button variant="secondary" className="w-full" onClick={() => void onToggleBill(table.id, table.status !== 'BILL_REQUESTED')}>
-            {table.status === 'BILL_REQUESTED' ? 'Hesap İsteğini Kaldır' : 'Hesap İstendi'}
-          </Button>
-
           <div className={canSettle ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 gap-2'}>
             <Button
               variant="secondary"
@@ -181,7 +174,7 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-[var(--text-secondary)]">Masa Durumu:</span>
             {isOccupied ? (
-              <Badge variant="amber">{table.status === 'BILL_REQUESTED' ? 'Hesap istendi' : 'Dolu'}</Badge>
+              <Badge variant="amber">Dolu</Badge>
             ) : table.reservationId ? (
               <Badge variant="blue">Rezerve</Badge>
             ) : (
@@ -213,11 +206,10 @@ export const TableSlideOver: React.FC<TableSlideOverProps> = ({
         ) : null}
       </div>
 
-      {isOccupied && (table.trail || table.merged || isBillAsked) ? (
+      {isOccupied && (table.trail || table.merged) ? (
         <div role="note" className="sheet rounded-lg p-3 text-sm space-y-1">
           {table.trail ? <p className="font-semibold">{table.trail} ➭ {table.tableNumber}</p> : null}
           {table.merged ? <p>{table.merged} bu masaya birleşti</p> : null}
-          {isBillAsked ? <p>Hesap istendi</p> : null}
         </div>
       ) : null}
 

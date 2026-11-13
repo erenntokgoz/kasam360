@@ -24,7 +24,6 @@ const FILTERS: { id: TableFilter; label: string }[] = [
   { id: 'ALL', label: 'Tümü' },
   { id: 'EMPTY', label: 'Boş' },
   { id: 'OCCUPIED', label: 'Dolu' },
-  { id: 'BILL_REQUESTED', label: 'Hesap' },
   { id: 'RESERVED', label: 'Rezerve' },
 ];
 
@@ -54,7 +53,6 @@ export const FloorModule: React.FC = () => {
     addReservation,
     closeReservation,
     updateReservation,
-    setBillRequested,
     floorError,
   } = useFloorStore();
 
@@ -244,7 +242,6 @@ export const FloorModule: React.FC = () => {
           closeTableSlideOver();
           handleOpenTable(table, guests);
         }}
-        onToggleBill={setBillRequested}
       />
 
       <Modal isOpen={payPromptTable !== null} onClose={() => setPayPromptTable(null)} title="Müşteri hesabı ödedi mi?" subtitle="Tahsilat yalnız ödeme alındıysa kaydedilir." maxWidth="sm">

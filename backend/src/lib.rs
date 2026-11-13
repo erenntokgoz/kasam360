@@ -281,7 +281,6 @@ pub fn run() {
         commands::setup_commands::join_existing_business,
         commands::floor_commands::table_ops::add_table,
         commands::floor_commands::table_ops::remove_table,
-        commands::floor_commands::table_ops::set_bill_requested,
         commands::floor_commands::zero_close::close_zero_balance_table,
         commands::floor_commands::table_ops::update_table_name,
         commands::floor_commands::transfer::transfer_order_item,

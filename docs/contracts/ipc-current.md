@@ -74,7 +74,6 @@ Kayıtlı komut: **330**
 | 66 | `commands::floor_commands::table_ops::merge_tables` |
 | 67 | `commands::floor_commands::table_ops::move_table` |
 | 68 | `commands::floor_commands::table_ops::remove_table` |
-| 69 | `commands::floor_commands::table_ops::set_bill_requested` |
 | 70 | `commands::floor_commands::table_ops::update_table_name` |
 | 71 | `commands::floor_commands::transfer::transfer_order_item` |
 | 72 | `commands::floor_commands::zero_close::close_zero_balance_table` |

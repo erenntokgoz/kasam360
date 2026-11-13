@@ -13,7 +13,6 @@ export interface TableFaceProps extends React.ButtonHTMLAttributes<HTMLButtonEle
 const AGE_FULL_MINUTES = 120;
 
 const stateOf = (table: FloorTable) => {
-  if (table.status === 'BILL_REQUESTED') return 'bill';
   if (table.status === 'OCCUPIED') return 'busy';
   if (table.status === 'RESERVED') return 'reserved';
   return 'empty';
@@ -22,11 +21,11 @@ const stateOf = (table: FloorTable) => {
 /** Masa her durumda aynı çizimdir: sandalyeler kapasiteyi, renk ve iç yazı durumu söyler. */
 export const TableFace: React.FC<TableFaceProps> = ({ table, readyCount = 0, className = '', style, ...button }) => {
   const state = stateOf(table);
-  const hasOrder = state === 'busy' || state === 'bill';
+  const hasOrder = state === 'busy';
   const elapsed = minutesElapsed(table.openedAt);
   const amount = formatMoney(table.remainingCents ?? table.totalCents);
   const waiter = table.waiterName?.trim();
-  const orderDetail = state === 'bill' ? 'Hesap' : readyCount > 0 ? `${readyCount} hazır` : `${elapsed} dk`;
+  const orderDetail = readyCount > 0 ? `${readyCount} hazır` : `${elapsed} dk`;
   const accessibleDetails = hasOrder
     ? [amount, waiter, orderDetail].filter(Boolean).join(', ')
     : state === 'reserved'

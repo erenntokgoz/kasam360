@@ -463,18 +463,11 @@ input[data-empty-date]:not(:focus)::before {
   line-height: 1.2;
 }
 .table-spot[data-state="busy"],
-.table-spot[data-state="bill"],
 .table-spot[data-state="reserved"] {
   color: var(--text);
 }
 .table-spot[data-state="busy"] .table-top {
   fill: var(--hover);
-}
-.table-spot[data-state="bill"] {
-  color: var(--warn);
-}
-.table-spot[data-state="bill"] .table-top {
-  fill: var(--accent-amber-soft);
 }
 .table-spot[data-state="reserved"] {
   color: var(--action);

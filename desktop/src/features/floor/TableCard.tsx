@@ -18,7 +18,7 @@ export const TableCard: React.FC<TableCardProps> = ({ table, onOpenTable, onInsp
       .flatMap((ticket) => ticket.items)
       .filter((item) => item.status === 'READY').length,
   );
-  const hasOrder = table.status === 'OCCUPIED' || table.status === 'BILL_REQUESTED';
+  const hasOrder = table.status === 'OCCUPIED';
 
   const handleClick = () => {
     // Rezervasyon yalnız masa çekmecesinden kapatılır: müşteri geldi ya da iptal edildi.

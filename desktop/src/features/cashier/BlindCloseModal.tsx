@@ -18,7 +18,7 @@ export const BlindCloseModal: React.FC<{ onShowZ: () => void }> = ({ onShowZ }) 
   const modals = useUIStore((state) => state.modals);
   const closeModal = useUIStore((state) => state.closeModal);
   const { closeShift, explainDifference } = useShiftStore();
-  const openTables = useFloorStore((state) => state.tables.filter((table) => table.status === 'OCCUPIED' || table.status === 'BILL_REQUESTED').length);
+  const openTables = useFloorStore((state) => state.tables.filter((table) => table.status === 'OCCUPIED').length);
 
   const [countedLiras, setCountedLiras] = useState('');
   const [note, setNote] = useState('');

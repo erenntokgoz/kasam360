@@ -47,7 +47,6 @@ const DEFAULT_ZONE = 'Salon';
 const STATUS: Record<string, FloorTable['status']> = {
   AVAILABLE: 'EMPTY',
   OCCUPIED: 'OCCUPIED',
-  BILL_REQUESTED: 'BILL_REQUESTED',
   RESERVED: 'RESERVED',
 };
 
@@ -100,7 +99,6 @@ interface FloorStore {
   removeZone: (zoneId: string) => Promise<void>;
   updateTable: (tableId: string, name: string, seats: number) => Promise<void>;
   removeTable: (tableId: string) => Promise<void>;
-  setBillRequested: (tableId: string, requested: boolean) => Promise<void>;
   setSelectedZoneId: (zoneId: string | null) => void;
   selectTable: (tableId: string | null) => void;
   openTableSlideOver: (tableId: string) => void;
@@ -196,12 +194,6 @@ export const useFloorStore = create<FloorStore>((set, get) => ({
   removeTable: async (tableId) => {
     const { actorId, actorRole } = sessionArgs();
     await invokeIPC('remove_table', { id: tableId, actorId, actorRole });
-    await get().loadFloorPlan();
-  },
-
-  setBillRequested: async (tableId, requested) => {
-    const { actorId, actorRole, tenantId } = sessionArgs();
-    await invokeIPC('set_bill_requested', { tableId, requested, actorId, actorRole, tenantId });
     await get().loadFloorPlan();
   },
 

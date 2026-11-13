@@ -117,7 +117,7 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({ zones, tables, o
 
   const renderTable = ({ table, x, y }: PlacedTable) => {
     if (showTable && !showTable(table)) return null;
-    const hasOrder = table.status === 'OCCUPIED' || table.status === 'BILL_REQUESTED';
+    const hasOrder = table.status === 'OCCUPIED';
     const handleClick = () => {
       if (isEditMode) {
         if (suppressClickRef.current === table.id) suppressClickRef.current = null;

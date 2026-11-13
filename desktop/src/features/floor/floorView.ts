@@ -1,6 +1,6 @@
 import type { FloorTable } from '../../types/floor';
 
-export type TableFilter = 'ALL' | 'EMPTY' | 'OCCUPIED' | 'BILL_REQUESTED' | 'RESERVED';
+export type TableFilter = 'ALL' | 'EMPTY' | 'OCCUPIED' | 'RESERVED';
 
 export function matchesTableFilter(table: FloorTable, filter: TableFilter): boolean {
   if (filter === 'ALL') return true;
