@@ -9,16 +9,18 @@ import { CloudSyncSettings } from './CloudSyncSettings';
 import { DeviceSettings } from './DeviceSettings';
 import { LicenseSettings } from './LicenseSettings';
 import { SessionSettingsTab } from '../SessionSettingsTab';
+import { MealCardSettings } from './MealCardSettings';
 import { LegacyArchivePanel } from './LegacyArchivePanel';
 import { QrMenuSettings } from './QrMenuSettings';
 import { StationSettings } from './StationSettings';
 import { TablesSettings } from './TablesSettings';
 
-type SettingsSection = 'SESSION' | 'FLOOR' | 'BACKUP';
+type SettingsSection = 'SESSION' | 'FLOOR' | 'PAYMENT' | 'BACKUP';
 
 /** Sol menüdeki Ayarlar: işletme, salon ve yedek. */
 export const SettingsTab: React.FC = () => {
   const isOwner = useAuthStore((state) => state.user?.role === 'OWNER');
+  const isManager = useAuthStore((state) => state.user?.role === 'MANAGER');
   const erpSection = useLedgerStore((state) => state.erpSection);
   const [floorSection, setFloorSection] = useState<'TABLES' | 'STATIONS' | 'RESERVATIONS'>('TABLES');
   const [deviceSection, setDeviceSection] = useState<'ACCOUNT' | 'DEVICES'>('ACCOUNT');
@@ -31,6 +33,7 @@ export const SettingsTab: React.FC = () => {
   const tabs: SectionTab<SettingsSection>[] = [
     { id: 'SESSION', label: 'Bu Cihaz' },
     { id: 'FLOOR', label: 'Salon ve Mutfak' },
+    { id: 'PAYMENT', label: 'Ödeme Yöntemleri' },
     ...(isOwner ? [{ id: 'BACKUP' as const, label: 'Yedek ve Kurtarma' }] : []),
   ];
 
@@ -58,6 +61,7 @@ export const SettingsTab: React.FC = () => {
             {floorSection === 'RESERVATIONS' ? <SessionSettingsTab reservations /> : null}
           </>
         ) : null}
+        {section === 'PAYMENT' ? <MealCardSettings canManage={isOwner || isManager} /> : null}
         {section === 'BACKUP' && isOwner ? (
           <>
             <BackupPanel />

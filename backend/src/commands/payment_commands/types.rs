@@ -46,9 +46,12 @@ pub struct SplitPaymentDto {
     pub id: Option<String>,
     pub method: String,
     pub amount: i64,
+    /// Yemek kartı bölümünde kartın markası; diğer yöntemlerde yok sayılır.
+    #[serde(rename = "mealCardProvider", default)]
+    pub meal_card_provider: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct PaymentPayloadDto {
     #[serde(rename = "transactionId")]
     pub transaction_id: String,
@@ -89,6 +92,12 @@ pub struct PaymentPayloadDto {
     /// tahsilat kaydı oluşmaz.
     #[serde(rename = "debtDirectoryId", alias = "debt_directory_id", default)]
     pub debt_directory_id: Option<String>,
+    /// Yemek kartı (`method = "MEAL_CARD"`) tahsilatında kartın markası.
+    ///
+    /// Neden kayıtta: tahsilat dış cihazda yapılır, yazılım yalnız kaydeder; kart
+    /// markası sonradan mutabakatın tek dayanağıdır. Gönderilmezse `OTHER` sayılır.
+    #[serde(rename = "mealCardProvider", default)]
+    pub meal_card_provider: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

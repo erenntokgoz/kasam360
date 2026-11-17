@@ -69,6 +69,7 @@ fn payment(id: &str, method: &str, amount: i64, items: &[(&str, i64)]) -> Paymen
         approval_token: None,
         actor_id: Some("usr_1".to_string()),
         debt_directory_id: None,
+        meal_card_provider: None,
     }
 }
 

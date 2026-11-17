@@ -9,7 +9,7 @@ interface CounterWire {
   payment_methods: { method: string; amount_cents: number }[];
 }
 
-const METHOD_LABEL: Record<string, string> = { CASH: 'Nakit', CARD: 'Kart' };
+const METHOD_LABEL: Record<string, string> = { CASH: 'Nakit', CARD: 'Kart', MEAL_CARD: 'Yemek kartı', VERESIYE: 'Cari' };
 
 /** Masasız hızlı satış; ciro masa satışıyla aynı tahsilat kaynağından, ama ayrı toplanır. */
 export async function counterSalesReport({ actorRole, tenantId, from, to }: ReportArgs): Promise<ReportTable> {

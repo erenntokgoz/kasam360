@@ -4,6 +4,7 @@ import { formatMoney } from '../../../lib/formatMoney';
 import { invokeIPC } from '../../../services/tauriClient';
 import type { FinancialProfitSummary } from '../../../types/ledger';
 import { counterSalesReport } from './counterReport';
+import { mealCardReport } from './mealCardReport';
 import { hourlySalesReport, materialUsageReport, priceHistoryReport, stockMovementReport } from './stockReports';
 
 export interface ReportTable {
@@ -204,6 +205,7 @@ async function profitReport(args: ReportArgs): Promise<ReportTable> {
 export const REPORTS = {
   SALES: { label: 'Satış', load: salesReport },
   COUNTER: { label: 'Hızlı Satış', load: counterSalesReport },
+  MEAL_CARD: { label: 'Yemek Kartı', load: mealCardReport },
   SHIFTS: { label: 'Vardiya ve Kasa', load: shiftReport },
   ADJUSTMENTS: { label: 'İptal, İade, Fire', load: adjustmentReport },
   STAFF: { label: 'Personel Performansı', load: staffReport },

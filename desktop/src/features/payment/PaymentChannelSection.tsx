@@ -18,6 +18,7 @@ const centsToRaw = (cents: number) => {
 import { Input } from '../../ui/Input';
 import { NumberInput } from '../../ui/NumberInput';
 import type { PinpadInfo } from '../../ui/PinpadModal';
+import { acceptedProviders, type MealCardProvider, type MealCardProviderCode } from './mealCards';
 
 const CHANNELS = [
   { id: 'CASH' as const, label: 'Nakit', icon: Banknote },
@@ -37,6 +38,9 @@ export interface PaymentChannelSectionProps {
   selectedDirectoryId: string;
   onSelectDirectory: (id: string) => void;
   onCreateContact: (name: string, phone: string) => Promise<void>;
+  mealCardProviders: MealCardProvider[];
+  selectedMealProvider: MealCardProviderCode | null;
+  onSelectMealProvider: (code: MealCardProviderCode) => void;
 }
 
 export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
@@ -50,6 +54,9 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
   selectedDirectoryId,
   onSelectDirectory,
   onCreateContact,
+  mealCardProviders,
+  selectedMealProvider,
+  onSelectMealProvider,
 }) => {
   const [showQuickAddCari, setShowQuickAddCari] = useState(false);
   const [newCariName, setNewCariName] = useState('');
@@ -133,6 +140,22 @@ export const PaymentChannelSection: React.FC<PaymentChannelSectionProps> = ({
               <span className="block text-2xl font-extrabold tabular-nums">{formatMoney(plan.changeCents)}</span>
             </div>
           )}
+        </div>
+      ) : null}
+
+      {channel === 'MEAL_CARD' ? (
+        <div role="group" aria-label="Yemek kartı markası" className="grid grid-cols-2 gap-2">
+          {acceptedProviders(mealCardProviders).map((provider) => (
+            <Button
+              key={provider.code}
+              type="button"
+              aria-pressed={selectedMealProvider === provider.code}
+              variant={selectedMealProvider === provider.code ? 'selected' : 'secondary'}
+              onClick={() => onSelectMealProvider(provider.code)}
+            >
+              {provider.label}
+            </Button>
+          ))}
         </div>
       ) : null}
 

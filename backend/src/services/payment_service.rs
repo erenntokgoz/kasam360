@@ -2,6 +2,7 @@ use crate::commands::PaymentPayloadDto;
 use crate::repositories::payment_repository::PaymentRepository;
 use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 use crate::services::inventory_service::InventoryService;
+use crate::services::meal_cards;
 use chrono::Utc;
 
 pub struct PaymentService;
@@ -66,13 +67,27 @@ impl PaymentService {
         let mut card_amount_cents: i64 = 0;
         let mut meal_card_amount_cents: i64 = 0;
         let mut veresiye_amount_cents: i64 = 0;
+        let mut meal_provider_breakdown: Vec<serde_json::Value> = Vec::new();
 
         if let Some(ref splits) = payload.splits {
             for s in splits {
                 match s.method.to_uppercase().as_str() {
                     "CASH" | "NAKIT" => cash_amount_cents += s.amount,
                     "CARD" | "KREDI_KARTI" | "CREDIT_CARD" => card_amount_cents += s.amount,
-                    "MEAL_CARD" | "YEMEK_KARTI" => meal_card_amount_cents += s.amount,
+                    "MEAL_CARD" | "YEMEK_KARTI" => {
+                        meal_card_amount_cents += s.amount;
+                        let provider = meal_cards::resolve_provider(
+                            conn,
+                            tenant_id,
+                            &s.method,
+                            s.meal_card_provider.as_deref(),
+                        )
+                        .await?;
+                        meal_provider_breakdown.push(serde_json::json!({
+                            "provider": provider,
+                            "amountCents": s.amount,
+                        }));
+                    }
                     "VERESIYE" => veresiye_amount_cents += s.amount,
                     _ => card_amount_cents += s.amount,
                 }
@@ -81,7 +96,20 @@ impl PaymentService {
             match payload.method.to_uppercase().as_str() {
                 "CASH" | "NAKIT" => cash_amount_cents += payload.total_amount,
                 "CARD" | "KREDI_KARTI" | "CREDIT_CARD" => card_amount_cents += payload.total_amount,
-                "MEAL_CARD" | "YEMEK_KARTI" => meal_card_amount_cents += payload.total_amount,
+                "MEAL_CARD" | "YEMEK_KARTI" => {
+                    meal_card_amount_cents += payload.total_amount;
+                    let provider = meal_cards::resolve_provider(
+                        conn,
+                        tenant_id,
+                        &payload.method,
+                        payload.meal_card_provider.as_deref(),
+                    )
+                    .await?;
+                    meal_provider_breakdown.push(serde_json::json!({
+                        "provider": provider,
+                        "amountCents": payload.total_amount,
+                    }));
+                }
                 "VERESIYE" => veresiye_amount_cents += payload.total_amount,
                 _ => card_amount_cents += payload.total_amount,
             }
@@ -94,6 +122,7 @@ impl PaymentService {
             "cashAmountCents": cash_amount_cents,
             "cardAmountCents": card_amount_cents,
             "mealCardAmountCents": meal_card_amount_cents,
+            "mealProviderBreakdown": meal_provider_breakdown,
             "veresiyeAmountCents": veresiye_amount_cents,
             "cogsTotalCents": total_cogs_cents,
             // Parti girişi olmayan ürünlerde gerçek maliyet bilinmiyor; COGS

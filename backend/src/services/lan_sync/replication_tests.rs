@@ -210,6 +210,7 @@ fn cash_payment(id: &str) -> PaymentPayloadDto {
         approval_token: None,
         actor_id: Some("usr_1".to_string()),
         debt_directory_id: None,
+        meal_card_provider: None,
     }
 }
 

@@ -31,6 +31,7 @@ pub mod ledger_commands;
 pub mod legal360_commands;
 pub mod license_commands;
 pub mod management_commands;
+pub mod meal_card_commands;
 pub mod modifier_commands;
 pub mod order_change_commands;
 pub mod payment_commands;

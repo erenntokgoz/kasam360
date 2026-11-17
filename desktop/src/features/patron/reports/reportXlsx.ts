@@ -5,6 +5,7 @@ import type { ReportKey, ReportTable } from './reportDefinitions';
 const columns: Record<ReportKey, Record<number, 'money' | 'count'>> = {
   SALES: { 1: 'count', 2: 'money' },
   COUNTER: { 1: 'money' },
+  MEAL_CARD: { 1: 'count', 2: 'money' },
   SHIFTS: { 3: 'money', 4: 'money', 5: 'money' },
   ADJUSTMENTS: { 1: 'money' },
   STAFF: { 1: 'money', 2: 'count', 3: 'count', 4: 'money', 5: 'count' },

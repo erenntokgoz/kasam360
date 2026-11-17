@@ -19,6 +19,7 @@ import { Button } from '../../ui/Button';
 import { NumberInput } from '../../ui/NumberInput';
 import { PaymentItemSplitTab } from './PaymentItemSplitTab';
 import { PaymentChannelSection } from './PaymentChannelSection';
+import { useMealCardProviders, type MealCardProviderCode } from './mealCards';
 import { OrderStatusBanner } from '../pos/OrderStatusBanner';
 import { TIP_METHOD_LABEL, TipDialog } from './TipDialog';
 import type { PaymentMethod, PaymentResultWire, PaymentSplitMode, PaymentStatusWire } from '../../types/payment';
@@ -64,6 +65,8 @@ export const PaymentModal: React.FC = () => {
   const [selectedItemQuantities, setSelectedItemQuantities] = useState<Record<string, number>>({});
   const [partialText, setPartialText] = useState('');
   const [channel, setChannel] = useState<PaymentMethod>('CASH');
+  const [mealProvider, setMealProvider] = useState<MealCardProviderCode | null>(null);
+  const { providers: mealProviders, error: mealProvidersError } = useMealCardProviders(Boolean(modals.payment) && channel === 'MEAL_CARD');
   const [receivedText, setReceivedText] = useState('');
   const [selectedDirectoryId, setSelectedDirectoryId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -90,6 +93,7 @@ export const PaymentModal: React.FC = () => {
     clearEntry();
     setSplitMode('FULL');
     setChannel('CASH');
+    setMealProvider(null);
     setTipNotice(null);
     void loadDirectories();
     // Okunamayan mod kapalı sayılır: kart tahsilatı olağan yoldan sürer.
@@ -210,6 +214,7 @@ export const PaymentModal: React.FC = () => {
           cashierId: actorId,
           actorId,
           debtDirectoryId: channel === 'VERESIYE' ? selectedDirectoryId : undefined,
+          mealCardProvider: channel === 'MEAL_CARD' ? mealProvider : undefined,
         },
       });
       await finishSale(reply.remainingCents ?? 0, run);
@@ -330,6 +335,7 @@ export const PaymentModal: React.FC = () => {
             <p role="status" className="rounded-lg bg-[var(--accent-emerald-soft)] px-4 py-3 text-sm font-semibold">{tipNotice}</p>
           ) : null}
 
+          {mealProvidersError ? <ErrorToast message={`Yemek kartı markaları okunamadı: ${mealProvidersError}`} /> : null}
           {errorMsg ? (
             <ErrorToast message={errorMsg} />
           ) : null}
@@ -416,6 +422,9 @@ export const PaymentModal: React.FC = () => {
             selectedDirectoryId={selectedDirectoryId}
             onSelectDirectory={setSelectedDirectoryId}
             onCreateContact={handleCreateCari}
+            mealCardProviders={mealProviders}
+            selectedMealProvider={mealProvider}
+            onSelectMealProvider={setMealProvider}
           />
 
           {usesTestPos ? (
@@ -439,7 +448,7 @@ export const PaymentModal: React.FC = () => {
               Tahsilat Sonucunu Sorgula
             </Button>
           ) : (
-            <Button variant="success" size="xl" onClick={handleExecutePayment} isLoading={isProcessing} disabled={payNowCents <= 0} className="w-full">
+            <Button variant="success" size="xl" onClick={handleExecutePayment} isLoading={isProcessing} disabled={payNowCents <= 0 || (channel === 'MEAL_CARD' && !mealProvider)} className="w-full">
               <Check className="w-5 h-5" />
               <span>{formatMoney(payNowCents)} Tahsil Et</span>
             </Button>

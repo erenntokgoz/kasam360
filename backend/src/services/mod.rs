@@ -25,6 +25,7 @@ pub mod ledger_statement;
 pub mod legal360;
 pub mod license;
 pub mod master_vault;
+pub mod meal_cards;
 pub mod modifier_service;
 pub mod money_accounts;
 pub mod order_change;

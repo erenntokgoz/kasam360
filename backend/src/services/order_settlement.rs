@@ -10,6 +10,7 @@ use crate::commands::{CartItemDto, PaymentPayloadDto};
 use crate::repositories::payment_repository::{PaymentRepository, ServerTruth};
 use crate::services::audit_service::{category, AuditContext, AuditLock, AuditService};
 use crate::services::ledger_service::{record_veresiye_settlement, VeresiyeSettlement};
+use crate::services::meal_cards;
 use crate::services::payment_service::PaymentService;
 use sqlx::{Row, SqliteConnection};
 
@@ -312,6 +313,18 @@ pub async fn settle_order_payment(
     };
 
     let [cash, card, meal_card, veresiye_cents] = channel_amounts(&payload.method, amount)?;
+    // Kapalı marka hata döner; işlem tek dönüşümde olduğundan tahsilatın tümü geri alınır.
+    let meal_provider = meal_cards::resolve_provider(
+        tx,
+        tenant_id,
+        &payload.method,
+        payload.meal_card_provider.as_deref(),
+    )
+    .await?;
+    let meal_breakdown: Vec<serde_json::Value> = meal_provider
+        .iter()
+        .map(|provider| serde_json::json!({ "provider": provider, "amountCents": meal_card }))
+        .collect();
     let veresiye = if veresiye_cents > 0 {
         let directory_id = payload
             .debt_directory_id
@@ -353,6 +366,7 @@ pub async fn settle_order_payment(
             "cashAmountCents": cash,
             "cardAmountCents": card,
             "mealCardAmountCents": meal_card,
+            "mealProviderBreakdown": meal_breakdown,
             "veresiyeAmountCents": veresiye_cents,
             "changeCents": tendered_change,
             "cogsTotalCents": total_cogs_cents,
