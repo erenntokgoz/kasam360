@@ -1447,6 +1447,44 @@ CREATE TABLE IF NOT EXISTS pos_gateway_settings (
     test_mode INTEGER NOT NULL DEFAULT 0
 );
 
+-- Yazar kasa (YN ÖKC) ayarı. Varsayılan kapalıdır; açıkken tahsilat fişsiz tamamlanmaz.
+-- Kablosuz bağlantı türü yoktur (GMP-3 §2.2): yalnız seri, USB ve Ethernet.
+CREATE TABLE IF NOT EXISTS okc_settings (
+    tenant_id TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+    connection_kind TEXT NOT NULL DEFAULT 'TCP'
+        CHECK (connection_kind IN ('SERIAL', 'USB', 'TCP', 'SIMULATOR')),
+    port TEXT NOT NULL DEFAULT '',
+    baud_rate INTEGER NOT NULL DEFAULT 115200,
+    response_timeout_ms INTEGER NOT NULL DEFAULT 5000
+        CHECK (response_timeout_ms BETWEEN 1000 AND 30000),
+    terminal_serial TEXT NOT NULL DEFAULT '',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Yazar kasa fiş günlüğü. FAILED satırı kalıcı uyarıdır; aynı tahsilatın başarılı
+-- yeniden denemesi ISSUED yapar, aynı adisyonun başka denemesi SUPERSEDED yapar.
+CREATE TABLE IF NOT EXISTS okc_receipts (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    transaction_id TEXT NOT NULL,
+    order_id TEXT,
+    status TEXT NOT NULL CHECK (status IN ('ISSUED', 'FAILED', 'SUPERSEDED')),
+    unique_id TEXT,
+    receipt_no INTEGER,
+    z_no INTEGER,
+    eku_no INTEGER,
+    total_cents INTEGER NOT NULL CHECK (total_cents >= 0),
+    error_code TEXT,
+    error_message TEXT,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tenant_id, transaction_id)
+);
+CREATE INDEX IF NOT EXISTS idx_okc_receipts_open
+    ON okc_receipts(tenant_id, status, updated_at);
+
 -- Elle açılan tarife. Saate bağlı değildir; `percent` eksi ise indirimdir.
 -- `product_ids` boşsa tüm ürünlere uygulanır.
 CREATE TABLE IF NOT EXISTS price_tariffs (

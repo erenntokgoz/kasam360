@@ -30,6 +30,7 @@ pub mod master_vault;
 pub mod meal_cards;
 pub mod modifier_service;
 pub mod money_accounts;
+pub mod okc;
 pub mod order_change;
 pub mod order_settlement;
 pub mod order_stock;

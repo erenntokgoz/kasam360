@@ -456,6 +456,11 @@ pub fn run() {
         commands::pos_gateway_commands::test_pos_charge,
         commands::pos_gateway_commands::test_pos_void,
         commands::pos_gateway_commands::get_pos_payment_log,
+        // Yazar kasa (YN ÖKC) ayarı, bağlantı sınaması ve kalıcı uyarılar.
+        commands::okc_commands::get_okc_settings,
+        commands::okc_commands::set_okc_settings,
+        commands::okc_commands::test_okc_connection,
+        commands::okc_commands::list_okc_failures,
         ledger_commands::get_financial_report,
         ledger_commands::export_financial_report,
         ledger_commands::record_owner_personal,

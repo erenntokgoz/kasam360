@@ -130,13 +130,26 @@ pub async fn process_payment(
             .map_err(|e| e.to_string())?;
     }
 
+    // Yazar kasa açıksa fiş kesilmeden tahsilat kesinleşmez. Hata halinde işlem geri
+    // alınır (adisyon açık kalır) ve hata kalıcı uyarı olarak yazılır.
+    let okc_receipt = match super::fiscal::issue_receipt(&mut tx, &tenant_id, &payload).await {
+        Ok(receipt) => receipt,
+        Err(error) => {
+            let _ = tx.rollback().await;
+            return Err(super::fiscal::fail_closed(&pool, &tenant_id, &payload, &error).await);
+        }
+    };
+
     // WAL işlemini (transaction) onayla
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    let fiscal_receipt_no = format!(
-        "FISC-WAL-{}",
-        payload.transaction_id.chars().take(6).collect::<String>()
-    );
+    let fiscal_receipt_no = match okc_receipt.as_ref() {
+        Some(receipt) => super::fiscal::receipt_label(receipt),
+        None => format!(
+            "FISC-WAL-{}",
+            payload.transaction_id.chars().take(6).collect::<String>()
+        ),
+    };
 
     let message = match veresiye.as_ref() {
         Some(s) => format!(

@@ -38,12 +38,25 @@ pub(super) async fn settle(
         &actor_role,
     )
     .await?;
+
+    // Yazar kasa açıksa fiş kesilmeden tahsilat kesinleşmez; hata halinde işlem geri
+    // alınır, adisyon açık kalır ve hata kalıcı uyarı olarak yazılır.
+    let okc_receipt = match super::fiscal::issue_receipt(&mut tx, &tenant_id, &payload).await {
+        Ok(receipt) => receipt,
+        Err(error) => {
+            let _ = tx.rollback().await;
+            return Err(super::fiscal::fail_closed(pool, &tenant_id, &payload, &error).await);
+        }
+    };
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    let fiscal_receipt_no = format!(
-        "FISC-{}",
-        payload.transaction_id.chars().take(10).collect::<String>()
-    );
+    let fiscal_receipt_no = match okc_receipt.as_ref() {
+        Some(receipt) => super::fiscal::receipt_label(receipt),
+        None => format!(
+            "FISC-{}",
+            payload.transaction_id.chars().take(10).collect::<String>()
+        ),
+    };
     let message = match settlement.veresiye.as_ref() {
         Some(debt) => format!(
             "Veresiye: {} cari borca işlendi. Mali Fiş: {}",

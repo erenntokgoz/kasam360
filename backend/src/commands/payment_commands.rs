@@ -5,6 +5,7 @@
 //! Burada `pub use` ile eski yollar korunur, böylece `tauri::generate_handler!`
 //! ve harici çağıranlar etkilenmez.
 
+mod fiscal;
 pub mod refund;
 pub mod single;
 pub mod split;

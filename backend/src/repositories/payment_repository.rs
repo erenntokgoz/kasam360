@@ -15,6 +15,19 @@ pub struct ServerTruth {
     pub total_cents: i64,
 }
 
+/// Sunucunun fiyatladığı tek kalem. Yazar kasa fişi aynı hesaptan beslenir:
+/// ikinci bir fiyat yolu fiş toplamı ile tahsilat toplamını ayrıştırırdı.
+#[derive(Debug, Clone)]
+pub struct PricedLine {
+    pub product_id: String,
+    pub quantity: i64,
+    pub tax_rate_bp: i64,
+    pub gross_cents: i64,
+    pub discount_cents: i64,
+    pub subtotal_cents: i64,
+    pub tax_cents: i64,
+}
+
 impl PaymentRepository {
     /// Aynı işlem kimliği farklı tenant'larda kullanılabilir; çakışma
     /// kontrolü bu yüzden tenant'a göre daraltılır.
@@ -45,16 +58,12 @@ impl PaymentRepository {
     /// `tenant_id` neden parametre: seçenek fiyat farkı istemciden değil
     /// `modifier_options`'tan okunur ve bu okuma tenant'a göre
     /// filtrelenmelidir.
-    pub async fn calculate_server_truth(
+    pub async fn priced_lines(
         conn: &mut sqlx::SqliteConnection,
         tenant_id: &str,
         items: &[CartItemDto],
-    ) -> Result<ServerTruth, String> {
-        let mut subtotal_all_cents: i64 = 0;
-        let mut tax_all_cents: i64 = 0;
-        let mut gross_all_cents: i64 = 0;
-        let mut item_discount_all_cents: i64 = 0;
-
+    ) -> Result<Vec<PricedLine>, String> {
+        let mut lines = Vec::with_capacity(items.len());
         for item in items {
             let product_id = item
                 .product
@@ -144,10 +153,34 @@ impl PaymentRepository {
                 db_tax_rate_bp,
             );
 
-            subtotal_all_cents += subtotal_cents;
-            tax_all_cents += tax_amount_cents;
-            gross_all_cents += gross_cents;
-            item_discount_all_cents += discount_amount_cents;
+            lines.push(PricedLine {
+                product_id: product_id.to_string(),
+                quantity,
+                tax_rate_bp: db_tax_rate_bp,
+                gross_cents,
+                discount_cents: discount_amount_cents,
+                subtotal_cents,
+                tax_cents: tax_amount_cents,
+            });
+        }
+
+        Ok(lines)
+    }
+
+    pub async fn calculate_server_truth(
+        conn: &mut sqlx::SqliteConnection,
+        tenant_id: &str,
+        items: &[CartItemDto],
+    ) -> Result<ServerTruth, String> {
+        let mut subtotal_all_cents: i64 = 0;
+        let mut tax_all_cents: i64 = 0;
+        let mut gross_all_cents: i64 = 0;
+        let mut item_discount_all_cents: i64 = 0;
+        for line in Self::priced_lines(conn, tenant_id, items).await? {
+            subtotal_all_cents += line.subtotal_cents;
+            tax_all_cents += line.tax_cents;
+            gross_all_cents += line.gross_cents;
+            item_discount_all_cents += line.discount_cents;
         }
 
         Ok(ServerTruth {
