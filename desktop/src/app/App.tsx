@@ -112,7 +112,7 @@ export const App: React.FC = () => {
   // Rolün göremediği ekran açık kalmaz: önceki kullanıcıdan kalan seçim veya kısayol
   // mutfak ya da garsonu kasaya götürmemelidir.
   useEffect(() => {
-    if (user && !canOpenModule(user.role, activeModule)) setActiveModule(homeModule(user.role));
+    if (user && !canOpenModule(user.role, activeModule, user.isCourier)) setActiveModule(homeModule(user.role));
   }, [user, activeModule, setActiveModule]);
 
   // Donanım Kısayolları (F1 - F6)
@@ -212,7 +212,7 @@ export const App: React.FC = () => {
           </div>
 
           <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'DELIVERY' ? 'motion-panel' : 'hidden'}`}>
-            {canOpenModule(user?.role, 'DELIVERY') ? <PackageModule /> : null}
+            {canOpenModule(user?.role, 'DELIVERY', user?.isCourier) ? <PackageModule /> : null}
           </div>
 
           <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'CASHIER' ? 'motion-panel' : 'hidden'}`}>

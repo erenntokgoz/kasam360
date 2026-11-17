@@ -24,7 +24,9 @@ describe('roleAccess', () => {
   });
 
   it('paket servis ekranı personele ve kurye olabilecek garsona açık, mutfağa kapalı', () => {
-    for (const role of ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'] as const) expect(canOpenModule(role, 'DELIVERY')).toBe(true);
+    for (const role of ['OWNER', 'MANAGER', 'CASHIER'] as const) expect(canOpenModule(role, 'DELIVERY')).toBe(true);
+    expect(canOpenModule('WAITER', 'DELIVERY')).toBe(false);
+    expect(canOpenModule('WAITER', 'DELIVERY', true)).toBe(true);
     expect(canOpenModule('KITCHEN', 'DELIVERY')).toBe(false);
     expect(canOpenModule('MASTER', 'DELIVERY')).toBe(false);
   });

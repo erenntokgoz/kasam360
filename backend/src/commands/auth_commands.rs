@@ -95,6 +95,9 @@ pub struct UserDto {
     pub active_modules: Option<Vec<String>>,
     #[serde(rename = "mustChangePin", alias = "must_change_pin", default)]
     pub must_change_pin: bool,
+    /// Garson kurye etiketliyse Paket ekranı açılır; etiketsiz garson modülü hiç görmez.
+    #[serde(rename = "isCourier", default)]
+    pub is_courier: bool,
 }
 
 async fn user_dto_with_modules(
@@ -121,13 +124,26 @@ async fn user_dto_with_modules(
         .map(|r| r.try_get("module_id").map_err(|e| e.to_string()))
         .collect::<Result<Vec<_>, _>>()?;
 
+    let user_id: String = row.try_get("id").map_err(|e| e.to_string())?;
+    // Kurye etiketi yoksa (eski kayıt) ekran gizli kalır: hata değil, yetkisizlik varsayılır.
+    let is_courier = sqlx::query_scalar::<_, i64>(
+        "SELECT is_courier FROM users WHERE id = ? AND tenant_id = ? AND is_active = 1",
+    )
+    .bind(&user_id)
+    .bind(&tenant_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?
+    .is_some_and(|flag| flag != 0);
+
     Ok(UserDto {
-        id: row.try_get("id").map_err(|e| e.to_string())?,
+        id: user_id,
         role: row.try_get("role").map_err(|e| e.to_string())?,
         name: row.try_get("name").map_err(|e| e.to_string())?,
         tenant_id,
         active_modules: Some(active_modules),
         must_change_pin,
+        is_courier,
     })
 }
 
@@ -181,6 +197,7 @@ pub async fn authenticate_by_identifier(
                 tenant_id: PLATFORM_TENANT.to_string(),
                 active_modules: Some(master_modules()),
                 must_change_pin: false,
+                is_courier: false,
             });
         }
     }
@@ -289,6 +306,7 @@ pub async fn authenticate_by_pin(
                 tenant_id: effective_tenant.to_string(),
                 active_modules: Some(master_modules()),
                 must_change_pin: false,
+                is_courier: false,
             });
         }
     }

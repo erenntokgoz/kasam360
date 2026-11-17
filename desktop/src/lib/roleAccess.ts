@@ -16,8 +16,11 @@ const MODULES: Record<UserRole, AppModule[]> = {
   KITCHEN: ['KDS'],
 };
 
-export function canOpenModule(role: UserRole | undefined, module: AppModule): boolean {
-  return role ? MODULES[role].includes(module) : false;
+export function canOpenModule(role: UserRole | undefined, module: AppModule, isCourier = false): boolean {
+  if (!role) return false;
+  // Sunucu etiketsiz garsonun paket komutlarını reddeder; menüde de görünmez.
+  if (role === 'WAITER' && module === 'DELIVERY' && !isCourier) return false;
+  return MODULES[role].includes(module);
 }
 
 /** Oturum yeni açıldığında rolün çalıştığı ilk ekran. */

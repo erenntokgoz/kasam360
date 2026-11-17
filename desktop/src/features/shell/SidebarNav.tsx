@@ -49,7 +49,7 @@ export const SidebarNav: React.FC = () => {
   // Görünürlük kuralları eski menüyle aynıdır: rol haritası ve özellik bayrağı belirler.
   const sections = useMemo(() => {
     const entries: NavEntry[] = MODULES.map((id) => {
-      let visible = canOpenModule(user?.role, id);
+      let visible = canOpenModule(user?.role, id, user?.isCourier);
       if (id === 'POS') visible = visible && user?.role !== 'WAITER';
       if (id === 'DELIVERY') visible = visible && isEnabled('feat_delivery');
       // Etkin KITCHEN kullanıcısı yoksa mutfak ekranı atlanır; KITCHEN rolünün kendisi hep görür.

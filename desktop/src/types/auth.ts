@@ -8,6 +8,8 @@ export interface UserSession {
   activeModules?: string[];
   token?: string;
   mustChangePin?: boolean;
+  /** Kurye etiketi: etiketsiz garson Paket ekranını görmez. */
+  isCourier?: boolean;
 }
 
 export interface AuthState {

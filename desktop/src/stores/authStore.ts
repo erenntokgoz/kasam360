@@ -24,6 +24,7 @@ interface AuthReply {
   tenant_id: string;
   activeModules: string[];
   mustChangePin: boolean;
+  isCourier?: boolean;
 }
 
 const roles: UserRole[] = ['MASTER', 'OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN'];
@@ -40,6 +41,7 @@ function readSession(reply: AuthReply): UserSession {
     tenantId: reply.tenant_id,
     activeModules: reply.activeModules,
     mustChangePin: reply.mustChangePin,
+    isCourier: reply.isCourier === true,
   };
 }
 
