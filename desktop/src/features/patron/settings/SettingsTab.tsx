@@ -10,6 +10,7 @@ import { DeviceSettings } from './DeviceSettings';
 import { LicenseSettings } from './LicenseSettings';
 import { SessionSettingsTab } from '../SessionSettingsTab';
 import { MealCardSettings } from './MealCardSettings';
+import { OkcSettings } from './OkcSettings';
 import { LegacyArchivePanel } from './LegacyArchivePanel';
 import { QrMenuSettings } from './QrMenuSettings';
 import { StationSettings } from './StationSettings';
@@ -61,7 +62,12 @@ export const SettingsTab: React.FC = () => {
             {floorSection === 'RESERVATIONS' ? <SessionSettingsTab reservations /> : null}
           </>
         ) : null}
-        {section === 'PAYMENT' ? <MealCardSettings canManage={isOwner || isManager} /> : null}
+        {section === 'PAYMENT' ? (
+          <>
+            <MealCardSettings canManage={isOwner || isManager} />
+            <OkcSettings canEdit={isOwner} canTest={isOwner || isManager} />
+          </>
+        ) : null}
         {section === 'BACKUP' && isOwner ? (
           <>
             <BackupPanel />
