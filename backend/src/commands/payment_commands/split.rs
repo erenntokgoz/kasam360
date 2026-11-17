@@ -49,6 +49,24 @@ pub(super) async fn settle(
         }
     };
     tx.commit().await.map_err(|e| e.to_string())?;
+    drop(audit_lock);
+
+    // Tahsilat kesinleşti; e-Adisyon üretimi hata verirse satış geri alınmaz, adisyon
+    // aday listesinde kalır ve elle üretilir.
+    if settlement.order_closed {
+        if let Some(order_id) = payload.order_id.as_deref() {
+            let actor_id = payload
+                .actor_id
+                .as_deref()
+                .or(payload.cashier_id.as_deref())
+                .unwrap_or("system");
+            if let Err(error) =
+                enqueue_e_document(pool, state, &tenant_id, actor_id, &actor_role, order_id).await
+            {
+                tracing::warn!(order_id, %error, "e-Adisyon kuyruğa alınamadı");
+            }
+        }
+    }
 
     let fiscal_receipt_no = match okc_receipt.as_ref() {
         Some(receipt) => super::fiscal::receipt_label(receipt),
@@ -75,6 +93,24 @@ pub(super) async fn settle(
         remaining_cents: Some(settlement.remaining_cents),
         order_closed: Some(settlement.order_closed),
     })
+}
+
+/// Ayar açıksa kapanan adisyonu kendi kısa yazma işleminde kuyruğa alır.
+async fn enqueue_e_document(
+    pool: &DbPool,
+    state: &crate::AppState,
+    tenant_id: &str,
+    actor_id: &str,
+    actor_role: &str,
+    order_id: &str,
+) -> Result<(), String> {
+    let lock = crate::services::audit_service::AuditLock::new(state.audit_mutex.lock().await);
+    let mut tx = pool.begin_write().await?;
+    crate::services::e_document::auto_enqueue::enqueue_closed_order(
+        &mut tx, &lock, tenant_id, actor_id, actor_role, order_id,
+    )
+    .await?;
+    tx.commit().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

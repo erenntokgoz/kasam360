@@ -5,6 +5,7 @@
 //! üretimde sağlayıcı yapılandırılmamış sayılarak reddedilir (fail-closed).
 //! Veri akışı ve entegratöre sorulacaklar: `docs/contracts/e-adisyon.md`.
 
+pub mod auto_enqueue;
 pub mod dispatcher;
 pub mod model;
 pub mod provider;
