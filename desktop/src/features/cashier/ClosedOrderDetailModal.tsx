@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react';
 import { errorText } from '../../lib/cariInput';
 import { formatDateTime } from '../../lib/date';
 import { formatMoney } from '../../lib/formatMoney';
+import { reportReceiptPrintFailure } from '../../lib/kitchenPrint';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -36,9 +37,9 @@ export const ClosedOrderDetailModal: React.FC<{ orderId: string; onClose: () => 
     try {
       const { actorRole, tenantId } = sessionArgs();
       await invokeIPC('print_receipt', { receiptId: transactionId, actorRole, tenantId });
-      window.print();
-      useUIStore.getState().showNotice('Fiş yazdırıldı.');
+      useUIStore.getState().showNotice('Fiş yazıcıya gönderildi.');
     } catch (caught) {
+      reportReceiptPrintFailure(caught);
       setError(errorText(caught));
     } finally {
       setPrinting(null);

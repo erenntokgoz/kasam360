@@ -223,6 +223,14 @@ pub struct FinancialMovementDto {
     pub fiscal_receipt_no: Option<String>,
 }
 
+/// Fiş satırını belleğe yazar; `String` yazımı hata veremez, bu yüzden sonuç yok sayılır.
+macro_rules! sl {
+    ($slip:expr, $($arg:tt)*) => {{
+        use std::fmt::Write as _;
+        let _ = writeln!($slip, $($arg)*);
+    }};
+}
+
 /// Termal fiş basımı — **yalnız kayıtlı tahsilat için**.
 ///
 /// Neden imza değişti: komut rol ve tenant almayan, kendisine gönderilen
@@ -253,15 +261,18 @@ pub async fn print_receipt(
         .await?
         .ok_or_else(|| "NOT_FOUND: bu işletmeye ait fiş bulunamadı".to_string())?;
 
-    println!("\n================================================");
-    println!("             *** KASAM360 ADİSYON ***           ");
-    println!("              ESC/POS 80mm TERMAL FİŞ           ");
-    println!("================================================");
-    println!(
+    let mut slip = String::new();
+    sl!(slip, "\n================================================");
+    sl!(slip, "             *** KASAM360 ADİSYON ***           ");
+    sl!(slip, "              ESC/POS 80mm TERMAL FİŞ           ");
+    sl!(slip, "================================================");
+    sl!(
+        slip,
         "Fiş No   : {}",
         receipt.fiscal_receipt_no.as_deref().unwrap_or(&receipt.id)
     );
-    println!(
+    sl!(
+        slip,
         "Masa     : {}",
         if receipt.table_id.is_empty() {
             "-"
@@ -269,19 +280,28 @@ pub async fn print_receipt(
             &receipt.table_id
         }
     );
-    println!(
+    sl!(
+        slip,
         "Kasiyer  : {}",
         receipt.cashier_name.as_deref().unwrap_or("-")
     );
-    println!("Tarih    : {}", receipt.created_at);
-    println!("Ödeme    : {}", receipt.payment_method);
-    println!("------------------------------------------------");
-    println!("{:<22} {:>4} {:>9} {:>9}", "ÜRÜN", "ADET", "FİYAT", "TUTAR");
-    println!("------------------------------------------------");
+    sl!(slip, "Tarih    : {}", receipt.created_at);
+    sl!(slip, "Ödeme    : {}", receipt.payment_method);
+    sl!(slip, "------------------------------------------------");
+    sl!(
+        slip,
+        "{:<22} {:>4} {:>9} {:>9}",
+        "ÜRÜN",
+        "ADET",
+        "FİYAT",
+        "TUTAR"
+    );
+    sl!(slip, "------------------------------------------------");
 
     for item in &receipt.items {
         let short_name: String = item.product_name.chars().take(22).collect();
-        println!(
+        sl!(
+            slip,
             "{:<22} {:>4} {:>7}TL {:>7}TL",
             short_name,
             item.quantity,
@@ -290,39 +310,43 @@ pub async fn print_receipt(
         );
     }
 
-    println!("------------------------------------------------");
+    sl!(slip, "------------------------------------------------");
     if !receipt.has_items {
         // Kalem satırı yoksa alt toplam/KDV **uydurulmaz**: fiş toplamı tek
         // satırda gösterilir ve eksiklik açıkça yazılır.
-        println!("Kalem kaydı yok; yalnız tahsilat toplamı geçerlidir.");
+        sl!(slip, "Kalem kaydı yok; yalnız tahsilat toplamı geçerlidir.");
     }
     if receipt.discount_cents > 0 {
-        println!(
+        sl!(
+            slip,
             "İNDİRİM:                             -{:>7} TL",
             crate::domain::money::cents_text(receipt.discount_cents)
         );
     }
-    println!(
+    sl!(
+        slip,
         "GENEL TOPLAM:                         {:>7} TL",
         crate::domain::money::cents_text(receipt.total_cents)
     );
     if let Some(tendered) = receipt.tendered_cents {
-        println!(
+        sl!(
+            slip,
             "Tahsil Edilen ({}):            {:>7} TL",
             receipt.payment_method,
             crate::domain::money::cents_text(tendered)
         );
         if let Some(change) = receipt.change_cents {
-            println!(
+            sl!(
+                slip,
                 "Para Üstü:                            {:>7} TL",
                 crate::domain::money::cents_text(change)
             );
         }
     }
-    println!("================================================");
-    println!("       MALİ DEĞERİ YOKTUR - BİLGİ FİŞİDİR       ");
-    println!("         Bizi Tercih Ettiğiniz İçin             ");
-    println!("              TEŞEKKÜR EDERİZ!                  ");
-    println!("================================================\n");
-    Ok(())
+    sl!(slip, "================================================");
+    sl!(slip, "       MALİ DEĞERİ YOKTUR - BİLGİ FİŞİDİR       ");
+    sl!(slip, "         Bizi Tercih Ettiğiniz İçin             ");
+    sl!(slip, "              TEŞEKKÜR EDERİZ!                  ");
+    sl!(slip, "================================================\n");
+    super::print_commands::send_to_printer(None, slip).await
 }

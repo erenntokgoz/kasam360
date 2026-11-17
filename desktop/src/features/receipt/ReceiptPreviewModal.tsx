@@ -5,6 +5,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { usePosStore } from '../../stores/posStore';
 import { formatMoney } from '../../lib/formatMoney';
 import { formatDateTime } from '../../lib/date';
+import { reportReceiptPrintFailure } from '../../lib/kitchenPrint';
 import { invokeIPC } from '../../services/tauriClient';
 import { sessionArgs } from '../../stores/cariStore';
 import { errorText } from '../../lib/cariInput';
@@ -72,11 +73,11 @@ export const ReceiptPreviewModal: React.FC = () => {
       } else {
         throw new Error('Basılacak kayıt yok.');
       }
-      // Komut yetkiyi ve kaydın varlığını doğrular; kâğıda işletim sistemi yazıcısı basar.
-      window.print();
+      // Komut kaydı veritabanından okuyup varsayılan yazıcıya gönderir; hata kalıcı uyarıdır.
       setPrintSuccess(true);
       setTimeout(() => setPrintSuccess(false), 2500);
     } catch (caught) {
+      reportReceiptPrintFailure(caught);
       setPrintError(errorText(caught));
     } finally {
       setIsPrinting(false);

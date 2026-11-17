@@ -6,16 +6,13 @@
 //! kalıcı uyarı gösterebilsin. Basılacak içerik her zaman veritabanından okunur.
 
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use sqlx::Row;
 
-use super::helpers::{fmt_cents, require_tenant, utc_yerel_goster};
+use super::helpers::{fmt_cents, require_tenant, send_to_printer, utc_yerel_goster};
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
 
-/// Basım süreci takılırsa kasa akışı beklemesin.
-const PRINT_TIMEOUT: Duration = Duration::from_secs(20);
 /// Kalemin istasyonu boşsa KDS ile aynı varsayılan kullanılır.
 const DEFAULT_STATION: &str = "Sıcak";
 
@@ -86,46 +83,6 @@ fn format_ticket(
     }
     text.push_str("================================\n\n\n");
     text
-}
-
-/// Metni Windows yazıcı kuyruğuna verir. Yazıcı adı ortam değişkeniyle gider; komut
-/// metnine karışmaz, bu yüzden adındaki tırnak komutu bozamaz.
-async fn send_to_printer(printer: &str, text: String) -> Result<(), String> {
-    let printer = printer.to_string();
-    let job = tokio::task::spawn_blocking(move || -> Result<(), String> {
-        use std::io::Write;
-        use std::process::{Command, Stdio};
-        let mut child = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                "[Console]::InputEncoding=[Text.Encoding]::UTF8; $input | Out-Printer -Name $env:KASAM_PRINTER",
-            ])
-            .env("KASAM_PRINTER", &printer)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("yazıcı komutu başlatılamadı: {e}"))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(text.as_bytes())
-                .map_err(|e| format!("fiş yazıcıya iletilemedi: {e}"))?;
-        }
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("yazıcı yanıt vermedi: {e}"))?;
-        if output.status.success() {
-            Ok(())
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
-        }
-    });
-    match tokio::time::timeout(PRINT_TIMEOUT, job).await {
-        Err(_) => Err("yazıcı zaman aşımına uğradı".to_string()),
-        Ok(Err(e)) => Err(e.to_string()),
-        Ok(Ok(result)) => result,
-    }
 }
 
 /// Paket siparişinin fiş bloğu: müşteri, telefon, adres, tarif ve tahsil edilecek tutar.
@@ -281,7 +238,7 @@ async fn build_and_print(
             continue;
         };
         let text = format_ticket(&table, station, &created_at, &delivery_block, lines);
-        match send_to_printer(&printer, text).await {
+        match send_to_printer(Some(&printer), text).await {
             Ok(()) => report.printed_stations.push(station.clone()),
             Err(reason) => report
                 .problems

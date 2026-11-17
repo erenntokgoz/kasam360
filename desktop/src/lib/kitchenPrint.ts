@@ -27,3 +27,9 @@ export async function printKitchenTickets(
     usePrintAlertStore.getState().report([`Fiş yazıcıya gönderilemedi, sipariş kayıtlı: ${reason}`]);
   }
 }
+
+/** Müşteri fişi basılamadığında kayıt yine geçerlidir; hata kalıcı uyarı olarak gösterilir. */
+export function reportReceiptPrintFailure(caught: unknown): void {
+  const reason = caught instanceof Error ? caught.message : String(caught);
+  usePrintAlertStore.getState().report([`Fiş yazıcıya gönderilemedi, kayıt geçerli: ${reason}`]);
+}

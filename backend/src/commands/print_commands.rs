@@ -15,23 +15,31 @@ pub(crate) mod helpers;
 pub mod kitchen;
 pub(crate) use helpers::*;
 
-fn print_header(title: &str, subtitle: &str) {
-    println!("\n================================================");
-    println!("             *** KASAM360 ADİSYON ***           ");
-    println!("              ESC/POS 80mm TERMAL FİŞ           ");
-    println!("================================================");
-    println!("  {:<38}", title);
-    if !subtitle.is_empty() {
-        println!("  {:<38}", subtitle);
-    }
-    println!("------------------------------------------------");
+/// Fiş satırını belleğe yazar; `String` yazımı hata veremez, bu yüzden sonuç yok sayılır.
+macro_rules! sl {
+    ($slip:expr, $($arg:tt)*) => {{
+        use std::fmt::Write as _;
+        let _ = writeln!($slip, $($arg)*);
+    }};
 }
 
-fn print_footer() {
-    println!("================================================");
-    println!("       MALİ DEĞERİ YOKTUR - BİLGİ FİŞİDİR       ");
-    println!("       Teşekkür ederiz, tekrar bekleriz.         ");
-    println!("================================================");
+fn print_header(slip: &mut String, title: &str, subtitle: &str) {
+    sl!(slip, "\n================================================");
+    sl!(slip, "             *** KASAM360 ADİSYON ***           ");
+    sl!(slip, "              ESC/POS 80mm TERMAL FİŞ           ");
+    sl!(slip, "================================================");
+    sl!(slip, "  {:<38}", title);
+    if !subtitle.is_empty() {
+        sl!(slip, "  {:<38}", subtitle);
+    }
+    sl!(slip, "------------------------------------------------");
+}
+
+fn print_footer(slip: &mut String) {
+    sl!(slip, "================================================");
+    sl!(slip, "       MALİ DEĞERİ YOKTUR - BİLGİ FİŞİDİR       ");
+    sl!(slip, "       Teşekkür ederiz, tekrar bekleriz.         ");
+    sl!(slip, "================================================");
 }
 
 /// Z-Raporu / X-Raporu — vardiya satırlarından türetilir.
@@ -117,7 +125,9 @@ pub async fn print_z_report(
         .await
         .map_err(|e| e.to_string())?;
 
+    let mut slip = String::new();
     print_header(
+        &mut slip,
         if closed_at.is_some() {
             "Z-RAPORU (GÜN SONU MUTABAKATI)"
         } else {
@@ -125,27 +135,28 @@ pub async fn print_z_report(
         },
         "KASAM360 HESAP DEFTERI",
     );
-    println!("Vardiya No : {}", shift_id);
-    println!("Kasiyer    : {}", cashier_id);
-    println!("Durum      : {}", status);
-    println!("Acilis     : {}", opened_at);
-    println!(
+    sl!(slip, "Vardiya No : {}", shift_id);
+    sl!(slip, "Kasiyer    : {}", cashier_id);
+    sl!(slip, "Durum      : {}", status);
+    sl!(slip, "Acilis     : {}", opened_at);
+    sl!(
+        slip,
         "Kapanis    : {}",
         closed_at.clone().unwrap_or_else(|| "-".to_string())
     );
-    println!("------------------------------------------------");
-    println!("Acilis Bakiyesi : {}", fmt_cents(expected));
-    println!("Toplam Satis    : {}", fmt_cents(total_sales));
-    println!("Kasa Girisi     : {}", fmt_cents(cash_in));
-    println!("Kasa Cikisi     : {}", fmt_cents(cash_out));
+    sl!(slip, "------------------------------------------------");
+    sl!(slip, "Acilis Bakiyesi : {}", fmt_cents(expected));
+    sl!(slip, "Toplam Satis    : {}", fmt_cents(total_sales));
+    sl!(slip, "Kasa Girisi     : {}", fmt_cents(cash_in));
+    sl!(slip, "Kasa Cikisi     : {}", fmt_cents(cash_out));
     if let Some(actual_amount) = actual {
-        println!("Gercek Teslim   : {}", fmt_cents(actual_amount));
+        sl!(slip, "Gercek Teslim   : {}", fmt_cents(actual_amount));
     }
     if let Some(diff) = difference {
-        println!("Fark            : {}", fmt_cents(diff));
+        sl!(slip, "Fark            : {}", fmt_cents(diff));
     }
-    print_footer();
-    Ok(())
+    print_footer(&mut slip);
+    send_to_printer(None, slip).await
 }
 
 /// Kasa giriş/çıkış fişi — kayıtlı kasa hareketinden basılır.
@@ -179,7 +190,9 @@ pub async fn print_cash_slip(
     let created_at: String = row.try_get("created_at").unwrap_or_default();
 
     let is_in = movement_type.eq_ignore_ascii_case("IN");
+    let mut slip = String::new();
     print_header(
+        &mut slip,
         if is_in {
             "KASA GIRIS FISI"
         } else {
@@ -187,19 +200,20 @@ pub async fn print_cash_slip(
         },
         "KASAM360 HESAP DEFTERI",
     );
-    println!("Hareket No : {}", movement_id);
-    println!("Vardiya    : {}", shift_id);
+    sl!(slip, "Hareket No : {}", movement_id);
+    sl!(slip, "Vardiya    : {}", shift_id);
     // Kayıt UTC saklar; fişte müşterinin gördüğü yerel zaman yazılır.
-    println!("Tarih      : {}", utc_yerel_goster(&created_at));
-    println!("Kasiyer    : {}", actor_id);
-    println!("Aciklama   : {}", reason);
-    println!("------------------------------------------------");
-    println!(
+    sl!(slip, "Tarih      : {}", utc_yerel_goster(&created_at));
+    sl!(slip, "Kasiyer    : {}", actor_id);
+    sl!(slip, "Aciklama   : {}", reason);
+    sl!(slip, "------------------------------------------------");
+    sl!(
+        slip,
         "Tutar      : {}",
         fmt_cents(if is_in { amount } else { -amount })
     );
-    print_footer();
-    Ok(())
+    print_footer(&mut slip);
+    send_to_printer(None, slip).await
 }
 
 /// Adisyon (bill) fişi — sipariş kaydından basılır.
@@ -320,30 +334,36 @@ pub async fn print_day_z_report(
         .await
         .unwrap_or_default();
 
-    print_header("GUNUN HESAP DEFTERI MALI BELGE", "KASAM360 HESAP DEFTERI");
-    println!("Tarih        : {}", today);
-    println!("------------------------------------------------");
-    println!("{:<34} {:>12}", "ODEME YONTEMI", "TUTAR");
-    println!("------------------------------------------------");
+    let mut slip = String::new();
+    print_header(
+        &mut slip,
+        "GUNUN HESAP DEFTERI MALI BELGE",
+        "KASAM360 HESAP DEFTERI",
+    );
+    sl!(slip, "Tarih        : {}", today);
+    sl!(slip, "------------------------------------------------");
+    sl!(slip, "{:<34} {:>12}", "ODEME YONTEMI", "TUTAR");
+    sl!(slip, "------------------------------------------------");
     for row in &methods {
         let method: Option<String> = row.try_get("method").ok();
         let amount: i64 = row.try_get("amount").map_err(|e| e.to_string())?;
-        println!(
+        sl!(
+            slip,
             "{:<34} {:>12}",
             method.as_deref().unwrap_or("BILINMIYEN"),
             fmt_cents(amount)
         );
     }
     if methods.is_empty() {
-        println!("Odeme hareketi bulunamadi.");
+        sl!(slip, "Odeme hareketi bulunamadi.");
     }
-    println!("------------------------------------------------");
-    println!("Kasa Girisi : {}", fmt_cents(cash_in));
-    println!("Kasa Cikisi : {}", fmt_cents(cash_out));
-    println!("{:<34} {:>12}", "ADET ADISYON", order_count);
-    println!("{:<34} {:>12}", "GUNLUK CIRO", fmt_cents(revenue));
-    print_footer();
-    Ok(())
+    sl!(slip, "------------------------------------------------");
+    sl!(slip, "Kasa Girisi : {}", fmt_cents(cash_in));
+    sl!(slip, "Kasa Cikisi : {}", fmt_cents(cash_out));
+    sl!(slip, "{:<34} {:>12}", "ADET ADISYON", order_count);
+    sl!(slip, "{:<34} {:>12}", "GUNLUK CIRO", fmt_cents(revenue));
+    print_footer(&mut slip);
+    send_to_printer(None, slip).await
 }
 
 /// Ortak sipariş gövdesi: başlık + kalemler + toplam.
@@ -380,25 +400,28 @@ async fn print_order_body(
     .await
     .map_err(|e| e.to_string())?;
 
-    print_header(title, "KASAM360 ADISYON");
-    println!("Siparis No : {}", order_id);
-    println!(
+    let mut slip = String::new();
+    print_header(&mut slip, title, "KASAM360 ADISYON");
+    sl!(slip, "Siparis No : {}", order_id);
+    sl!(
+        slip,
         "Masa       : {}",
         if table_id.is_empty() { "-" } else { &table_id }
     );
-    println!("Durum      : {}", status);
+    sl!(slip, "Durum      : {}", status);
     // Adisyon fişi müşteriye verilir: kayıt UTC, gösterilen yerel zaman.
-    println!("Tarih      : {}", utc_yerel_goster(&created_at));
-    println!("------------------------------------------------");
-    println!("{:<22} {:>4} {:>12}", "URUN", "ADET", "TUTAR");
-    println!("------------------------------------------------");
+    sl!(slip, "Tarih      : {}", utc_yerel_goster(&created_at));
+    sl!(slip, "------------------------------------------------");
+    sl!(slip, "{:<22} {:>4} {:>12}", "URUN", "ADET", "TUTAR");
+    sl!(slip, "------------------------------------------------");
     for item in &items {
         let name: String = item.try_get("product_name").unwrap_or_default();
         let short: String = name.chars().take(22).collect();
         let quantity: i64 = item.try_get("quantity").map_err(|e| e.to_string())?;
         let line_total: i64 = item.try_get("total_cents").map_err(|e| e.to_string())?;
         let modifiers: Option<String> = item.try_get("modifiers").ok();
-        println!(
+        sl!(
+            slip,
             "{:<22} {:>4} {:>12}",
             short,
             quantity,
@@ -407,19 +430,19 @@ async fn print_order_body(
         if let Some(list) = modifiers {
             let clean = list.replace(['[', ']', '"'], "");
             if !clean.trim().is_empty() {
-                println!("   + {}", clean);
+                sl!(slip, "   + {}", clean);
             }
         }
     }
-    println!("------------------------------------------------");
-    println!("{:<34} {:>12}", "TOPLAM", fmt_cents(total));
+    sl!(slip, "------------------------------------------------");
+    sl!(slip, "{:<34} {:>12}", "TOPLAM", fmt_cents(total));
     if let Some(note) = notes {
         if !note.trim().is_empty() {
-            println!("Not        : {}", note);
+            sl!(slip, "Not        : {}", note);
         }
     }
-    print_footer();
-    Ok(())
+    print_footer(&mut slip);
+    send_to_printer(None, slip).await
 }
 
 #[cfg(test)]
