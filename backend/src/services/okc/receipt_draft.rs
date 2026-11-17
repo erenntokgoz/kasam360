@@ -63,11 +63,21 @@ fn truncate_name(name: &str) -> String {
 /// Fişe girecek ödemeler. Veresiye cari borçtur, fişe girmez.
 pub fn payments_for(payload: &PaymentPayloadDto) -> OkcResult<Vec<ReceiptPayment>> {
     let mut payments = Vec::new();
+    // Tahsilat tek marka taşır (`meal_card_provider`); marka yalnız yemek kartı ödemesine yazılır,
+    // nakit veya karta eklenirse cihaz yanlış kanal bilgisi alırdı.
+    let provider = payload
+        .meal_card_provider
+        .as_deref()
+        .map(|code| code.trim().to_uppercase())
+        .filter(|code| !code.is_empty());
     let mut push = |method: &str, amount: i64| -> OkcResult<()> {
         if let Some(kind) = TenderKind::from_method(method)? {
             payments.push(ReceiptPayment {
                 kind,
                 amount_cents: amount,
+                provider: (kind == TenderKind::MealCard)
+                    .then(|| provider.clone())
+                    .flatten(),
             });
         }
         Ok(())

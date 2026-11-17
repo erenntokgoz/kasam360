@@ -28,6 +28,8 @@ pub const TAG_TAX_BP: u32 = 0xDFB014;
 pub const TAG_TENDER: u32 = 0xDFB015;
 pub const TAG_LINE_NO: u32 = 0xDFB016;
 pub const TAG_STATE: u32 = 0xDFB017;
+/// Yemek kartı markası (yalnız yemek kartı ödemesinde); cihaz bilmiyorsa yok sayar.
+pub const TAG_MEAL_PROVIDER: u32 = 0xDFB018;
 
 /// Tutar etiketleri bankacılık grubundadır (belge §4.3: tutar kritik veridir).
 pub const TAG_AMOUNT: u32 = 0xDFEE0E;
@@ -232,10 +234,14 @@ impl OkcClient {
             self.exchange(request)?;
         }
         for payment in &draft.payments {
-            let request = self
+            let mut request = self
                 .unique_request(MSG_PAYMENT_REQ, unique_id)?
                 .with_field(GROUP_PRIVATE, TAG_TENDER, vec![payment.kind.wire_code()])
                 .with_field(GROUP_BANK, TAG_AMOUNT, amount_field(payment.amount_cents)?);
+            if let Some(provider) = payment.provider.as_deref() {
+                request =
+                    request.with_field(GROUP_PRIVATE, TAG_MEAL_PROVIDER, encode_text(provider)?);
+            }
             self.exchange(request)?;
         }
         // Kapanışta beklenen toplam ve indirim gönderilir; cihaz kendi hesabıyla

@@ -52,10 +52,12 @@ fn draft(basket: &str) -> ReceiptDraft {
             ReceiptPayment {
                 kind: TenderKind::Cash,
                 amount_cents: 10000,
+                provider: None,
             },
             ReceiptPayment {
                 kind: TenderKind::Card,
                 amount_cents: 12700,
+                provider: None,
             },
         ],
     }

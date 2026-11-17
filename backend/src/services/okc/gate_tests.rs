@@ -107,6 +107,19 @@ fn payment(txn: &str, method: &str, amount: i64) -> PaymentPayloadDto {
     }
 }
 
+#[test]
+fn yemek_karti_markasi_yalniz_yemek_karti_odemesine_yazilir() {
+    let mut meal = payment("txn_m", "MEAL_CARD", 1000);
+    meal.meal_card_provider = Some(" multinet ".to_string());
+    let lines = super::receipt_draft::payments_for(&meal).expect("ödeme");
+    assert_eq!(lines[0].provider.as_deref(), Some("MULTINET"));
+
+    let mut cash = payment("txn_c", "CASH", 1000);
+    cash.meal_card_provider = Some("MULTINET".to_string());
+    let lines = super::receipt_draft::payments_for(&cash).expect("ödeme");
+    assert_eq!(lines[0].provider, None);
+}
+
 async fn issue(
     pool: &SqlitePool,
     connector: Arc<dyn DeviceConnector>,

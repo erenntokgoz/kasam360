@@ -124,6 +124,8 @@ pub struct ReceiptLine {
 pub struct ReceiptPayment {
     pub kind: TenderKind,
     pub amount_cents: i64,
+    /// Yemek kartı markası (`MULTINET` gibi); yalnız `TenderKind::MealCard` için anlamlıdır.
+    pub provider: Option<String>,
 }
 
 /// Cihaza gönderilecek fiş taslağı. `basket_id` aynı tahsilatın yeniden
@@ -229,6 +231,7 @@ mod tests {
             payments: vec![ReceiptPayment {
                 kind: TenderKind::Cash,
                 amount_cents: 4500,
+                provider: None,
             }],
         }
     }
