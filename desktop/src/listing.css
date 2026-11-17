@@ -9,6 +9,11 @@
   background-color: var(--glass-tint);
   border: 1px solid var(--line);
   border-radius: 28px;
+  /* Dar pencerede segment taşmasın: kap ebeveynine sığar, fazla seçenekler yatay kayar. */
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 :is(div, span, section, fieldset):not(.grid):has(> .btn-selected ~ :is(.btn-secondary, .btn-ghost), > :is(.btn-secondary, .btn-ghost) ~ .btn-selected) > :is(.btn-secondary, .btn-ghost, .btn-selected) {
   border-color: transparent;

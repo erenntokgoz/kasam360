@@ -564,6 +564,7 @@
 .seg {
   display: inline-flex;
   flex-wrap: wrap;
+  max-width: 100%;
   align-self: flex-start;
   gap: 4px;
   padding: 4px;
