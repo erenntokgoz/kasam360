@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PackageDelivery } from '../types/packageService';
 import {
   awaitingSettlement, cartSubtotalCents, durationText, lateMinutes, nextStatus, orderCode, phoneText,
-  settlementTotals, toSubmitLines,
+  lineKey, settlementTotals, toSubmitLines,
 } from './packageModel';
 
 const NOW = new Date('2026-11-17T12:00:00Z').getTime();
@@ -60,6 +60,15 @@ describe('paket servis modeli', () => {
     expect(wire[1].note).toBe('az pişmiş');
     expect(wire[0].note).toBeNull();
     expect(JSON.stringify(wire)).not.toContain('1050');
+  });
+
+  it('seçenekler kimlikle gönderilir ve farklı seçenek ayrı satırdır', () => {
+    const base = { productId: 'prd_1', name: 'Tost', unitPriceCents: 3500, quantity: 1, note: '' };
+    const withOption = { ...base, modifiers: [{ optionId: 'opt_1', name: 'Kaşar', priceDeltaCents: 500 }] };
+    expect(toSubmitLines([withOption])[0].modifiers).toEqual([{ id: 'opt_1' }]);
+    expect(JSON.stringify(toSubmitLines([withOption]))).not.toContain('500');
+    expect(lineKey(base)).not.toBe(lineKey(withOption));
+    expect(lineKey(withOption)).toBe(lineKey({ ...withOption }));
   });
 
   it('süre, telefon ve kod biçimleri', () => {

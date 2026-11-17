@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Minus, Plus, Search } from 'lucide-react';
 import { formatMoney } from '../../lib/formatMoney';
-import { cartSubtotalCents, type PackageCartLine } from '../../lib/packageModel';
+import { cartSubtotalCents, lineKey, type PackageCartLine } from '../../lib/packageModel';
 import { matchesProduct } from '../../lib/searchText';
 import { usePosStore } from '../../stores/posStore';
-import type { Product } from '../../types/pos';
+import type { OrderItemModifier, Product } from '../../types/pos';
 import { Bar, BarTab } from '../../ui/Bar';
 import { InlineAlert } from '../../ui/InlineAlert';
+import { ModifierModal } from '../pos/ModifierModal';
 
 interface PackageProductPickerProps {
   lines: PackageCartLine[];
@@ -21,6 +22,7 @@ export const PackageProductPicker: React.FC<PackageProductPickerProps> = ({ line
   const [categoryId, setCategoryId] = useState('');
   const [query, setQuery] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [optionProduct, setOptionProduct] = useState<Product | null>(null);
 
   const visible = useMemo(() => products.filter((product) => {
     if (query.trim()) return matchesProduct(query.trim(), product.name, product.barcode);
@@ -31,25 +33,42 @@ export const PackageProductPicker: React.FC<PackageProductPickerProps> = ({ line
 
   const add = async (product: Product) => {
     setNotice(null);
-    // Seçenekli ürün bu ekranda seçeneksiz gönderilemez: zorunlu seçim atlanırdı.
+    // Okunamayan seçenek "seçenek yok" sayılmaz: zorunlu seçim atlanırdı.
     const groups = await loadModifierGroups(product.id);
     if (groups === null) {
       setNotice(`${product.name} için seçenekler okunamadı, ürün eklenmedi.`);
       return;
     }
     if (groups.length > 0) {
-      setNotice(`${product.name} seçenek grubu taşıyor; paket siparişine şimdilik seçeneksiz ürünler eklenir.`);
+      setOptionProduct({ ...product, modifierGroups: groups });
       return;
     }
-    const existing = lines.find((line) => line.productId === product.id);
-    onChange(existing
-      ? lines.map((line) => (line === existing ? { ...line, quantity: line.quantity + 1 } : line))
-      : [...lines, { productId: product.id, name: product.name, unitPriceCents: product.unitPriceCents, quantity: 1, note: '' }]);
+    addLine({ productId: product.id, name: product.name, unitPriceCents: product.unitPriceCents, quantity: 1, note: '' });
   };
 
-  const change = (productId: string, delta: number) => {
+  const addLine = (line: PackageCartLine) => {
+    const existing = lines.find((candidate) => lineKey(candidate) === lineKey(line));
+    onChange(existing
+      ? lines.map((candidate) => (candidate === existing ? { ...candidate, quantity: candidate.quantity + 1 } : candidate))
+      : [...lines, line]);
+  };
+
+  const confirmOptions = (data: { selectedModifiers: OrderItemModifier[]; cookingDegree?: string; notes?: string }) => {
+    if (!optionProduct) return;
+    const extra = data.selectedModifiers.reduce((sum, modifier) => sum + modifier.priceDeltaCents, 0);
+    addLine({
+      productId: optionProduct.id,
+      name: optionProduct.name,
+      unitPriceCents: optionProduct.unitPriceCents + extra,
+      quantity: 1,
+      note: [data.cookingDegree, data.notes].filter(Boolean).join(', '),
+      modifiers: data.selectedModifiers,
+    });
+  };
+
+  const change = (key: string, delta: number) => {
     onChange(lines
-      .map((line) => (line.productId === productId ? { ...line, quantity: line.quantity + delta } : line))
+      .map((line) => (lineKey(line) === key ? { ...line, quantity: line.quantity + delta } : line))
       .filter((line) => line.quantity > 0));
   };
 
@@ -93,12 +112,16 @@ export const PackageProductPicker: React.FC<PackageProductPickerProps> = ({ line
       {lines.length > 0 ? (
         <ul className="divide-y rounded-lg border border-[var(--border)] px-3" aria-label="Sepet">
           {lines.map((line) => (
-            <li key={line.productId} className="flex flex-wrap items-center gap-3 py-2">
-              <span className="min-w-0 flex-1 font-semibold break-words">{line.name}</span>
+            <li key={lineKey(line)} className="flex flex-wrap items-center gap-3 py-2">
+              <span className="min-w-0 flex-1 font-semibold break-words">
+                {line.name}
+                {line.modifiers?.length ? <span className="block text-sm font-normal text-[var(--text-secondary)]">{line.modifiers.map((modifier) => modifier.name).join(', ')}</span> : null}
+                {line.note ? <span className="block text-sm font-normal text-[var(--text-secondary)]">{line.note}</span> : null}
+              </span>
               <span className="flex items-center gap-1">
-                <button type="button" aria-label={`${line.name} azalt`} className="flex size-12 items-center justify-center rounded-full border border-[var(--border)]" onClick={() => change(line.productId, -1)}><Minus className="size-4" aria-hidden="true" /></button>
+                <button type="button" aria-label={`${line.name} azalt`} className="flex size-12 items-center justify-center rounded-full border border-[var(--border)]" onClick={() => change(lineKey(line), -1)}><Minus className="size-4" aria-hidden="true" /></button>
                 <span className="w-8 text-center font-bold tabular-nums">{line.quantity}</span>
-                <button type="button" aria-label={`${line.name} artır`} className="flex size-12 items-center justify-center rounded-full border border-[var(--border)]" onClick={() => change(line.productId, 1)}><Plus className="size-4" aria-hidden="true" /></button>
+                <button type="button" aria-label={`${line.name} artır`} className="flex size-12 items-center justify-center rounded-full border border-[var(--border)]" onClick={() => change(lineKey(line), 1)}><Plus className="size-4" aria-hidden="true" /></button>
               </span>
               <span className="w-24 text-right font-bold tabular-nums">{formatMoney(line.unitPriceCents * line.quantity)}</span>
             </li>
@@ -106,6 +129,12 @@ export const PackageProductPicker: React.FC<PackageProductPickerProps> = ({ line
           <li className="flex justify-between py-2 font-bold tabular-nums"><span>Ürün toplamı</span><span>{formatMoney(cartSubtotalCents(lines))}</span></li>
         </ul>
       ) : null}
+      <ModifierModal
+        isOpen={optionProduct !== null}
+        product={optionProduct}
+        onClose={() => setOptionProduct(null)}
+        onConfirm={confirmOptions}
+      />
     </div>
   );
 };

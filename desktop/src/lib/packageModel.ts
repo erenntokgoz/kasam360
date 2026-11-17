@@ -1,4 +1,5 @@
 import type { PackageDelivery, PackagePayment, PackageStatus } from '../types/packageService';
+import type { OrderItemModifier } from '../types/pos';
 
 /** Gecikme eşikleri (dakika): her aşama kendi sınırına göre vurgulanır. */
 export const LATE_MINUTES: Partial<Record<PackageStatus, number>> = {
@@ -115,6 +116,14 @@ export interface PackageCartLine {
   unitPriceCents: number;
   quantity: number;
   note: string;
+  /** Seçilen seçenekler; fiyat farkı yalnız gösterim içindir, sunucu seçenek kimliğinden hesaplar. */
+  modifiers?: OrderItemModifier[];
+}
+
+/** Aynı ürünün farklı seçenek/not kombinasyonları ayrı satırdır. */
+export function lineKey(line: Pick<PackageCartLine, 'productId' | 'modifiers' | 'note'>): string {
+  const options = (line.modifiers ?? []).map((modifier) => modifier.optionId).sort().join(',');
+  return `${line.productId}|${options}|${line.note.trim()}`;
 }
 
 export function cartSubtotalCents(lines: PackageCartLine[]): number {
@@ -127,7 +136,7 @@ export function toSubmitLines(lines: PackageCartLine[]) {
     id: `drf_${index}_${line.productId}`,
     product: { id: line.productId },
     quantity: line.quantity,
-    modifiers: [],
+    modifiers: (line.modifiers ?? []).map((modifier) => ({ id: modifier.optionId })),
     note: line.note.trim() || null,
   }));
 }
