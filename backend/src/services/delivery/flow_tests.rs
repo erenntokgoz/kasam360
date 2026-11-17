@@ -402,3 +402,35 @@ async fn kurye_gorunumu_yalniz_kendi_atamalarini_listeler() {
     assert_eq!(all.len(), 2);
     assert!(all.iter().any(|row| row.id == other.delivery_id));
 }
+
+#[tokio::test]
+async fn mutfak_hazir_derse_paket_durumu_hazir_olur() {
+    let (pool, ids) = setup().await;
+    let created = create(&pool, TENANT, &ids, "CASH", 0)
+        .await
+        .expect("sipariş");
+    let mutex = Mutex::new(());
+    let lock = AuditLock::new(mutex.lock().await);
+    let mut tx = pool.begin().await.expect("işlem");
+    transitions::mark_ready_for_order(
+        &mut tx,
+        &lock,
+        TENANT,
+        &created.order_id,
+        "usr_kitchen",
+        "KITCHEN",
+    )
+    .await
+    .expect("hazır");
+    // Paket olmayan sipariş sessizce geçilir.
+    transitions::mark_ready_for_order(&mut tx, &lock, TENANT, "ord_yok", "usr_kitchen", "KITCHEN")
+        .await
+        .expect("paket değil");
+    tx.commit().await.expect("kayıt");
+    let status: String = sqlx::query_scalar("SELECT status FROM delivery_orders WHERE id = ?")
+        .bind(&created.delivery_id)
+        .fetch_one(&pool)
+        .await
+        .expect("durum");
+    assert_eq!(status, "READY");
+}

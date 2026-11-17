@@ -160,6 +160,21 @@ pub async fn kds_update_ticket_status(
             .map_err(|e| e.to_string())?;
     }
 
+    // Paket siparişinde mutfak "Hazır" dediğinde teslimat durumu da aynı işlemde HAZIR olur;
+    // aksi halde kurye tahtasında sipariş sonsuza dek "Hazırlanıyor" kalırdı. Özellik
+    // kapalıysa veya sipariş paket değilse bu adım atlanır, KDS akışı bozulmaz.
+    if to_upper == "READY" {
+        crate::services::delivery::transitions::mark_ready_for_order(
+            &mut tx,
+            &audit_lock,
+            &tenant_id,
+            &payload.order_id,
+            &payload.actor_id,
+            &payload.actor_role,
+        )
+        .await?;
+    }
+
     // KDS durum geçişi de bir operasyonel değişikliktir: mutfak ekranındaki her
     // ilerleme "Sipariş & Masa" kategorisine yazılır. İstemci tarafında ikinci bir
     // ledger bulunmadığından bu kayıt tek gerçek kaynaktır.

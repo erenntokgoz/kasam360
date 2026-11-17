@@ -192,3 +192,44 @@ pub async fn assign_courier(
     AuditService::append(conn, lock, &ctx).await?;
     find_delivery(conn, tenant_id, delivery_id).await
 }
+
+/// Siparişe bağlı PREPARING durumundaki teslimatı HAZIR yapar; paket değilse hiçbir şey yapmaz.
+///
+/// Neden ayrı: mutfak "Hazır" dediğinde kurye tahtasındaki durum da aynı işlemde ilerlemeli.
+/// Özellik kapalıysa adım atlanır; KDS akışı paket servis ayarına bağımlı olmamalıdır.
+pub async fn mark_ready_for_order(
+    conn: &mut SqliteConnection,
+    lock: &AuditLock<'_>,
+    tenant_id: &str,
+    order_id: &str,
+    actor_id: &str,
+    actor_role: &str,
+) -> Result<(), String> {
+    let found: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM delivery_orders WHERE order_id = ? AND tenant_id = ? AND status = 'PREPARING'",
+    )
+    .bind(order_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(text_error)?;
+    let Some(delivery_id) = found else {
+        return Ok(());
+    };
+    if super::require_enabled(conn, tenant_id).await.is_err() {
+        return Ok(());
+    }
+    advance(
+        conn,
+        lock,
+        tenant_id,
+        actor_id,
+        actor_role,
+        Who::Staff,
+        &delivery_id,
+        "READY",
+        None,
+    )
+    .await?;
+    Ok(())
+}
