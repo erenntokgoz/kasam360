@@ -103,6 +103,7 @@ fn payment(txn: &str, method: &str, amount: i64) -> PaymentPayloadDto {
         approval_token: None,
         actor_id: Some("usr_1".to_string()),
         debt_directory_id: None,
+        meal_card_provider: None,
     }
 }
 
@@ -289,16 +290,19 @@ async fn veresiye_is_not_a_fiscal_tender_and_unknown_methods_fail() {
             id: None,
             method: "NAKIT".to_string(),
             amount: 1300,
+            meal_card_provider: None,
         },
         SplitPaymentDto {
             id: None,
             method: "VERESIYE".to_string(),
             amount: 1000,
+            meal_card_provider: None,
         },
         SplitPaymentDto {
             id: None,
             method: "YEMEK_KARTI".to_string(),
             amount: 1000,
+            meal_card_provider: None,
         },
     ]);
     let draft = draft_for_payment(&mut conn, T, &mixed)
