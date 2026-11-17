@@ -5,7 +5,7 @@ import { sessionArgs } from './cariStore';
 import { useUIStore } from './uiStore';
 import { newOperationId } from '../lib/cariInput';
 
-export type ErpTab = 'PANORAMA' | 'FINANCE' | 'DEBTS' | 'STAFF' | 'CATALOG' | 'BUDGET' | 'TARIFF' | 'REPORTS' | 'AUDIT' | 'ACCOUNTS';
+export type ErpTab = 'PANORAMA' | 'FINANCE' | 'DEBTS' | 'STAFF' | 'CATALOG' | 'BUDGET' | 'TARIFF' | 'REPORTS' | 'AUDIT' | 'ACCOUNTS' | 'EDOCUMENTS';
 
 /** Panorama uyarısının hedefi: bölüm ve varsa içindeki alt sayfa. */
 const ALERT_TARGETS: Record<string, [ErpTab | 'SETTINGS', string | null]> = {

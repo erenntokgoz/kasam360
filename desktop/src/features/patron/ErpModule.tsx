@@ -7,6 +7,7 @@ import { Bar, BarTab } from '../../ui/Bar';
 import { AccountsTab } from './accounts/AccountsTab';
 import { CriticalLogTab } from './CriticalLogTab';
 import { DebtsTab } from './DebtsTab';
+import { EDocumentTab } from './edocument/EDocumentTab';
 import { PanoramaTab } from './panorama/PanoramaTab';
 import { StaffLedger } from './staff/StaffLedger';
 
@@ -15,6 +16,7 @@ const TABS: { id: ErpTab; label: string }[] = [
   { id: 'DEBTS', label: 'Cari' },
   { id: 'STAFF', label: 'Personel' },
   { id: 'ACCOUNTS', label: 'Para ve Hesaplar' },
+  { id: 'EDOCUMENTS', label: 'e-Belge' },
   { id: 'AUDIT', label: 'Kritik Kayıtlar' },
 ];
 
@@ -39,6 +41,7 @@ export const ErpModule: React.FC = () => {
         {section === 'DEBTS' && <DebtsTab />}
         {section === 'STAFF' && <StaffLedger />}
         {section === 'ACCOUNTS' && <AccountsTab />}
+        {section === 'EDOCUMENTS' && <EDocumentTab />}
         {section === 'AUDIT' && <CriticalLogTab />}
       </div>
     </section>

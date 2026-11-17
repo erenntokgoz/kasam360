@@ -14,6 +14,7 @@ pub mod counter_sales;
 pub mod day_close_archive;
 pub mod device_identity;
 pub mod device_session;
+pub mod e_document;
 pub mod expense_service;
 pub mod external360;
 pub mod floor360;

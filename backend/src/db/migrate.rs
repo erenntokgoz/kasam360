@@ -208,6 +208,11 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "meal_card_providers",
         include_str!("../../migrations/0023_meal_card_providers.sql"),
     ),
+    (
+        24,
+        "e_document_queue",
+        include_str!("../../migrations/0024_e_document_queue.sql"),
+    ),
 ];
 
 /// Version numarasına göre sıralı `(version, name, sql_content)` listesi.

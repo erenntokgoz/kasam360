@@ -397,3 +397,9 @@ Ortam: yalıtılmış başlatıcı (`--state-dir`) ve üç ayrı native kasa: A 
 - Google girişi: masaüstünde `WebviewWindow` ("google-login", IPC yetkisiz), bitişte `kasam360://google-done` yakalanıp kapanır ve uygulamadaki tek kullanımlık kod yoklaması oturumu aktarır. API: `/finish` yalnız `/google` ile başlatılmış kodu kabul eder ve tüketir. Android: Custom Tabs köprüsü (`mobile/android-assets/native/MainActivity.kt`, `sync-android-brand.mjs` üretilmiş projeye uygular).
 - Kanıt: `cargo clippy --lib --tests -- -D warnings`, `cargo fmt --check`, `cargo test --lib` (1309 geçti), desktop `npm run build` + vitest (72 dosya/310 test), mobil build, API typecheck + 91 test.
 - Test edilmeyen: gerçek cihazda animasyonlar, WebView2 penceresinde Google'ın kabulü, Android Kotlin derlemesi ve APK (Gradle bu ortamda çalışmadı), canlı sunucuda 404 nedeninin hangi alt durumdan geldiği.
+
+## e-Adisyon belge altyapısı (17 Kasım 2026)
+
+- Yapıldı: GİB e-Adisyon Kılavuzu V1.0'a göre UBL-TR XML üretici (`services/e_document/xml.rs`), kalıcı kuyruk (`e_document_queue`, migration 0024; ETTN, adisyon ve belge numarası tekil), `EDocumentProvider` sözleşmesi (üretimde yalnız `UnconfiguredProvider`, sahte sağlayıcı `#[cfg(test)]`), ayarlar (varsayılan kapalı, VKN/TCKN sağlama doğrulamalı), 12 IPC komutu ve Yönetim > e-Belge ekranı (kuyruk, belgesiz adisyonlar, ayarlar, kalıcı uyarılar). Veri akışı ve entegratör soruları: `docs/contracts/e-adisyon.md`.
+- Kanıt: `cargo clippy --lib --tests -- -D warnings`, `cargo fmt --check`, `cargo test --lib` (1388 geçti, 36'sı e-Belge), desktop `npm run build` + vitest (81 dosya/347 test).
+- Test edilmeyen: resmî XSD ile doğrulama, gerçek sağlayıcı/GİB gönderimi (yok), Tauri penceresinde e-Belge ekranının görsel kontrolü, LAN'da çok cihazdan aynı adisyona taslak, kapanışta otomatik kuyruğa alma (yapılmadı), e-Arşiv raporlama kılavuzu (okunmadı).
