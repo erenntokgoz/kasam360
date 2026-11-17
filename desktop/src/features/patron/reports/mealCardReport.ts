@@ -10,6 +10,7 @@ export async function mealCardReport({ actorRole, tenantId, from, to }: ReportAr
     summary: [
       { label: 'Toplam', value: formatMoney(report.totalCents) },
       { label: 'Tahsilat', value: String(report.count) },
+      ...((report.refundedCents ?? 0) > 0 ? [{ label: 'İade (toplamdan düşüldü)', value: formatMoney(report.refundedCents ?? 0) }] : []),
     ],
     columns: ['Marka', 'Adet', 'Tutar'],
     rows: report.rows.map((row) => [row.label, String(row.count), formatMoney(row.totalCents)]),

@@ -34,8 +34,11 @@ pub struct ProviderSetting {
 pub struct ReconciliationRow {
     pub provider: String,
     pub label: String,
+    /// Satış toplamından iadeler düşülmüş net tutar.
     pub total_cents: i64,
     pub count: i64,
+    /// Dönemde bu markaya yapılan iade toplamı (bilgi amaçlı; `total_cents` zaten net).
+    pub refunded_cents: i64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -44,6 +47,7 @@ pub struct Reconciliation {
     pub rows: Vec<ReconciliationRow>,
     pub total_cents: i64,
     pub count: i64,
+    pub refunded_cents: i64,
 }
 
 pub fn is_meal_card_method(method: &str) -> bool {
@@ -191,25 +195,97 @@ pub async fn reconciliation(
             row.try_get("cnt").map_err(sql_error)?,
         ));
     }
+    let refunds = refunds_by_provider(conn, tenant_id, from, to).await?;
     let mut out = Vec::new();
-    let (mut total_cents, mut count) = (0_i64, 0_i64);
+    let (mut total_cents, mut count, mut refunded_cents) = (0_i64, 0_i64, 0_i64);
     for (code, _) in PROVIDERS {
-        if let Some((_, total, cnt)) = found.iter().find(|(known, _, _)| known == code) {
-            total_cents += total;
-            count += cnt;
-            out.push(ReconciliationRow {
-                provider: code.to_string(),
-                label: label_of(code).to_string(),
-                total_cents: *total,
-                count: *cnt,
-            });
+        let sale = found.iter().find(|(known, _, _)| known == code);
+        let refunded = refunds
+            .iter()
+            .filter(|(known, _)| known == code)
+            .try_fold(0_i64, |sum, (_, cents)| sum.checked_add(*cents))
+            .ok_or_else(|| "OVERFLOW: iade toplamı taştı".to_string())?;
+        if sale.is_none() && refunded == 0 {
+            continue;
         }
+        let (gross, cnt) = sale.map_or((0, 0), |(_, total, cnt)| (*total, *cnt));
+        let net = gross - refunded;
+        total_cents += net;
+        count += cnt;
+        refunded_cents += refunded;
+        out.push(ReconciliationRow {
+            provider: code.to_string(),
+            label: label_of(code).to_string(),
+            total_cents: net,
+            count: cnt,
+            refunded_cents: refunded,
+        });
     }
     Ok(Reconciliation {
         rows: out,
         total_cents,
         count,
+        refunded_cents,
     })
+}
+
+/// Dönemdeki yemek kartı iadelerini marka bazında verir.
+///
+/// Neden satış kaydından marka okunur: `refunds` tablosu marka taşımaz. İade, orijinal
+/// tahsilatın marka kırılımına sırayla dağıtılır; kırılım yoksa `OTHER` sayılır, böylece
+/// iade tutarı hiçbir koşulda kaybolmaz.
+async fn refunds_by_provider(
+    conn: &mut SqliteConnection,
+    tenant_id: &str,
+    from: &str,
+    to: &str,
+) -> Result<Vec<(String, i64)>, String> {
+    let rows = sqlx::query(
+        "SELECT r.amount_cents AS amount, l.payload AS payload
+         FROM refunds r
+         LEFT JOIN audit_ledger l ON l.tenant_id = r.tenant_id
+              AND l.action = 'payment:settled_fifo' AND l.resource_id = r.original_transaction_id
+         WHERE r.tenant_id = ?1 AND r.method = 'COMPENSATION'
+           AND datetime(r.created_at) >= datetime(?2) AND datetime(r.created_at) <= datetime(?3)
+         ORDER BY r.created_at, r.id",
+    )
+    .bind(tenant_id)
+    .bind(from)
+    .bind(to)
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(sql_error)?;
+    let mut out: Vec<(String, i64)> = Vec::new();
+    for row in rows {
+        let mut left: i64 = row.try_get("amount").map_err(sql_error)?;
+        let payload: Option<String> = row.try_get("payload").map_err(sql_error)?;
+        let parsed = payload.and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
+        if let Some(parts) = parsed
+            .as_ref()
+            .and_then(|value| value.get("mealProviderBreakdown"))
+            .and_then(serde_json::Value::as_array)
+        {
+            for part in parts {
+                let code = part
+                    .get("provider")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(FALLBACK_PROVIDER);
+                let cents = part
+                    .get("amountCents")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0);
+                let take = left.min(cents.max(0));
+                if take > 0 {
+                    out.push((code.to_string(), take));
+                    left -= take;
+                }
+            }
+        }
+        if left > 0 {
+            out.push((FALLBACK_PROVIDER.to_string(), left));
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]

@@ -11,9 +11,10 @@ export interface MealCardProvider {
 }
 
 export interface MealCardReconciliationWire {
-  rows: { provider: MealCardProviderCode; label: string; totalCents: number; count: number }[];
+  rows: { provider: MealCardProviderCode; label: string; totalCents: number; count: number; refundedCents?: number }[];
   totalCents: number;
   count: number;
+  refundedCents?: number;
 }
 
 /** Yalnız işletmenin kabul ettiği markalar ödeme ekranında seçilebilir. */

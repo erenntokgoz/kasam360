@@ -154,3 +154,34 @@ async fn mutabakat_marka_bazinda_toplar_ve_nakiti_karistirmaz() {
         vec![("MULTINET", 450, 2), ("PLUXEE", 200, 1), ("OTHER", 250, 1)]
     );
 }
+
+#[tokio::test]
+async fn mutabakat_iadeleri_markadan_net_dusurur() {
+    let pool = pool().await;
+    pay(&pool, &payment("txn_1", "MEAL_CARD", 300, Some("MULTINET")))
+        .await
+        .expect("multinet");
+    pay(&pool, &payment("txn_2", "MEAL_CARD", 200, Some("PLUXEE")))
+        .await
+        .expect("pluxee");
+    // Nakit iade kaydı yemek kartı mutabakatına girmemeli.
+    sqlx::raw_sql(
+        "INSERT INTO refunds (id, tenant_id, original_transaction_id, original_order_id,
+            compensation_txn_id, amount_cents, reason, method, actor_id, created_at) VALUES
+          ('ref_1', 'tnt_a', 'txn_1', 'ord_1', 'ref_1', 120, 'hatalı', 'COMPENSATION', 'usr_1', datetime('now')),
+          ('ref_2', 'tnt_a', 'txn_2', 'ord_1', 'ref_2', 50, 'nakit', 'CASH', 'usr_1', datetime('now'));",
+    )
+    .execute(&pool)
+    .await
+    .expect("iade");
+
+    let result = report(&pool).await;
+    assert_eq!(result.refunded_cents, 120);
+    assert_eq!(result.total_cents, 380);
+    let rows: Vec<_> = result
+        .rows
+        .iter()
+        .map(|row| (row.provider.as_str(), row.total_cents, row.refunded_cents))
+        .collect();
+    assert_eq!(rows, vec![("MULTINET", 180, 120), ("PLUXEE", 200, 0)]);
+}
