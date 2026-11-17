@@ -2,6 +2,7 @@ import { ErrorToast } from '../../../ui/ErrorToast';
 import React, { useEffect, useRef, useState } from 'react';
 import { invokeIPC } from '../../../services/tauriClient';
 import { sessionArgs } from '../../../stores/cariStore';
+import { useUIStore } from '../../../stores/uiStore';
 import { useStationStore, type Station } from '../../../stores/stationStore';
 import { ConfirmDialog } from '../../../ui/ConfirmDialog';
 import { Button } from '../../../ui/Button';
@@ -55,9 +56,19 @@ export const StationSettings: React.FC = () => {
     }
   };
 
-  const remove = async (stationId: string) => {
+  const remove = async (station: Station) => {
     const { tenantId, actorRole } = sessionArgs();
-    await invokeIPC('delete_station', { actorRole, tenantId, stationId });
+    await invokeIPC('delete_station', { actorRole, tenantId, stationId: station.id });
+    // İstasyon yalnız ad, yazıcı ve görevli listesidir; aynı alanlarla yeniden kaydetmek tam geri almadır.
+    useUIStore.getState().pushUndoNotice(`${station.name} silindi.`, {
+      label: 'Geri al',
+      run: () => {
+        const { tenantId: tenant, actorRole: role } = sessionArgs();
+        invokeIPC('save_station', { actorRole: role, tenantId: tenant, input: { ...station, id: null } })
+          .then(() => load())
+          .catch((caught) => setError(String(caught)));
+      },
+    });
     setSelectedId(null);
     await load().catch((caught) => setError(String(caught)));
   };
@@ -132,7 +143,7 @@ export const StationSettings: React.FC = () => {
       ) : null}
       {deleting && selected ? (
         <ConfirmDialog cardFlow title={`${selected.name} silinsin mi?`}
-          onClose={() => setDeleting(false)} onConfirm={() => remove(selected.id)} />
+          onClose={() => setDeleting(false)} onConfirm={() => remove(selected)} />
       ) : null}
     </div>
   );
