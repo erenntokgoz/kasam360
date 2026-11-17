@@ -213,6 +213,11 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "e_document_queue",
         include_str!("../../migrations/0024_e_document_queue.sql"),
     ),
+    (
+        25,
+        "delivery",
+        include_str!("../../migrations/0025_delivery.sql"),
+    ),
 ];
 
 /// Version numarasına göre sıralı `(version, name, sql_content)` listesi.

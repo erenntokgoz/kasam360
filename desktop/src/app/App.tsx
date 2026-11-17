@@ -7,6 +7,7 @@ import { TopBar } from '../features/shell/TopBar';
 import { FloorModule } from '../features/floor/FloorModule';
 import { PosModule } from '../features/pos/PosModule';
 import { KdsModule } from '../features/kds/KdsModule';
+import { PackageModule } from '../features/packageService/PackageModule';
 import { CashierModule } from '../features/cashier/CashierModule';
 import { CatalogModule } from '../features/patron/CatalogModule';
 import { ErpModule } from '../features/patron/ErpModule';
@@ -208,6 +209,10 @@ export const App: React.FC = () => {
 
           <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'KDS' ? 'motion-panel' : 'hidden'}`}>
             <KdsModule />
+          </div>
+
+          <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'DELIVERY' ? 'motion-panel' : 'hidden'}`}>
+            {canOpenModule(user?.role, 'DELIVERY') ? <PackageModule /> : null}
           </div>
 
           <div className={`flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden ${activeModule === 'CASHIER' ? 'motion-panel' : 'hidden'}`}>

@@ -1,7 +1,7 @@
 import type { AppModule } from '../stores/uiStore';
 import type { UserRole } from '../types/auth';
 
-const OPERATIONS: AppModule[] = ['FLOOR', 'POS', 'KDS', 'CASHIER'];
+const OPERATIONS: AppModule[] = ['FLOOR', 'POS', 'KDS', 'DELIVERY', 'CASHIER'];
 const BUSINESS_PAGES: AppModule[] = [...OPERATIONS, 'ERP', 'CATALOG', 'SETTINGS'];
 
 // Sunucu yetkisiyle aynı harita: açılıp yetki hatası veren ekran menüde görünmez.
@@ -10,8 +10,9 @@ const MODULES: Record<UserRole, AppModule[]> = {
   MASTER: [],
   OWNER: [...OPERATIONS, 'ERP', 'CATALOG', 'SETTINGS'],
   MANAGER: BUSINESS_PAGES,
-  CASHIER: ['FLOOR', 'POS', 'KDS', 'CASHIER'],
-  WAITER: ['FLOOR', 'POS', 'KDS'],
+  CASHIER: ['FLOOR', 'POS', 'KDS', 'DELIVERY', 'CASHIER'],
+  // Garson kurye etiketliyse Paket ekranında yalnız kendine atanan siparişleri görür.
+  WAITER: ['FLOOR', 'POS', 'KDS', 'DELIVERY'],
   KITCHEN: ['KDS'],
 };
 

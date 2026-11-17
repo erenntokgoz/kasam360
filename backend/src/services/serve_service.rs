@@ -48,6 +48,7 @@ pub async fn list_pending(
          LEFT JOIN products p ON p.id = oi.product_id AND p.tenant_id = oi.tenant_id
          WHERE oi.tenant_id = ? AND o.status IN ('OPEN', 'IN_PROGRESS')
            AND UPPER(oi.status) = 'READY'
+           AND o.table_id NOT LIKE 'tbl_counter_dlv_%'
          ORDER BY ready_seconds DESC, oi.id ASC",
     )
     .bind(now)

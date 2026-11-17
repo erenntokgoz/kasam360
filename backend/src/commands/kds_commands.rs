@@ -255,6 +255,7 @@ pub async fn execute_get_active_tickets(
             FROM order_items oi
             LEFT JOIN products p ON oi.product_id = p.id AND p.tenant_id = oi.tenant_id
             WHERE oi.order_id = ? AND oi.tenant_id = ? AND UPPER(COALESCE(oi.status, 'PENDING')) != 'VOID'
+              AND COALESCE(p.sku, '') != 'DELIVERY_FEE'
             ORDER BY oi.id ASC
         ")
         .bind(&id)

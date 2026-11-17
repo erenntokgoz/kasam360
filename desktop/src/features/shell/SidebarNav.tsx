@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, LayoutGrid, Zap, Lock, Moon, Search, Settings, ShoppingBag, Sun, Tv, Wallet, BarChart3 } from 'lucide-react';
+import { Bike, BookOpen, LayoutGrid, Zap, Lock, Moon, Search, Settings, ShoppingBag, Sun, Tv, Wallet, BarChart3 } from 'lucide-react';
 import { useUIStore, type AppModule } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useKdsStore } from '../../stores/kdsStore';
@@ -15,13 +15,14 @@ const ICONS: Record<AppModule, React.ComponentType<{ className?: string }>> = {
   FLOOR: LayoutGrid,
   POS: ShoppingBag,
   KDS: Tv,
+  DELIVERY: Bike,
   CASHIER: Wallet,
   ERP: BarChart3,
   CATALOG: BookOpen,
   SETTINGS: Settings,
 };
 
-const MODULES: AppModule[] = ['FLOOR', 'POS', 'KDS', 'CASHIER', 'ERP', 'CATALOG', 'SETTINGS'];
+const MODULES: AppModule[] = ['FLOOR', 'POS', 'KDS', 'DELIVERY', 'CASHIER', 'ERP', 'CATALOG', 'SETTINGS'];
 
 /** Menü araması üst çubuktaki arama düğmesinden de odaklanabilsin diye kimliği sabittir. */
 export const NAV_SEARCH_ID = 'nav-search';
@@ -50,6 +51,7 @@ export const SidebarNav: React.FC = () => {
     const entries: NavEntry[] = MODULES.map((id) => {
       let visible = canOpenModule(user?.role, id);
       if (id === 'POS') visible = visible && user?.role !== 'WAITER';
+      if (id === 'DELIVERY') visible = visible && isEnabled('feat_delivery');
       // Etkin KITCHEN kullanıcısı yoksa mutfak ekranı atlanır; KITCHEN rolünün kendisi hep görür.
       if (id === 'KDS') visible = visible && isEnabled('feat_kds') && (hasKitchenUser !== false || user?.role === 'KITCHEN');
       return { id, label: MODULE_LABEL[id], visible, badge: id === 'KDS' && activeKdsCount > 0 ? activeKdsCount : undefined };

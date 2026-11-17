@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use sqlx::Row;
 
-use super::helpers::{require_tenant, utc_yerel_goster};
+use super::helpers::{fmt_cents, require_tenant, utc_yerel_goster};
 use crate::db::DbPool;
 use crate::rbac::{self, Role};
 
@@ -58,12 +58,19 @@ struct TicketLine {
 }
 
 /// Fiş metni; tutar içermez, mutfak yalnız ne hazırlayacağını görür.
-fn format_ticket(table: &str, station: &str, created_at: &str, lines: &[TicketLine]) -> String {
+fn format_ticket(
+    table: &str,
+    station: &str,
+    created_at: &str,
+    delivery_block: &str,
+    lines: &[TicketLine],
+) -> String {
     let mut text = String::new();
     text.push_str("================================\n");
     text.push_str(&format!("{station} FISI\n"));
     text.push_str(&format!("Masa: {table}\n"));
     text.push_str(&format!("{}\n", utc_yerel_goster(created_at)));
+    text.push_str(delivery_block);
     text.push_str("--------------------------------\n");
     for line in lines {
         text.push_str(&format!("{} x {}\n", line.quantity, line.name));
@@ -119,6 +126,62 @@ async fn send_to_printer(printer: &str, text: String) -> Result<(), String> {
         Ok(Err(e)) => Err(e.to_string()),
         Ok(Ok(result)) => result,
     }
+}
+
+/// Paket siparişinin fiş bloğu: müşteri, telefon, adres, tarif ve tahsil edilecek tutar.
+///
+/// Neden fişte: kurye ve mutfak adresi ve ödemeyi kâğıttan okur. Paket olmayan siparişte boş döner.
+async fn delivery_block(pool: &DbPool, tenant: &str, order_id: &str) -> Result<String, String> {
+    let row = sqlx::query(
+        "SELECT d.customer_name, d.phone, d.address_text, d.directions, d.payment_method, o.total_cents
+         FROM delivery_orders d JOIN orders o ON o.id = d.order_id AND o.tenant_id = d.tenant_id
+         WHERE d.order_id = ? AND d.tenant_id = ?",
+    )
+    .bind(order_id)
+    .bind(tenant)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some(row) = row else {
+        return Ok(String::new());
+    };
+    let get = |name: &str| row.try_get::<String, _>(name).map_err(|e| e.to_string());
+    let method = get("payment_method")?;
+    let total: i64 = row.try_get("total_cents").map_err(|e| e.to_string())?;
+    let payment = match method.as_str() {
+        "CASH" => format!("Kapıda NAKİT: {}", fmt_cents(total)),
+        "CARD" => format!("Kapıda KART: {}", fmt_cents(total)),
+        _ => "Online ödendi".to_string(),
+    };
+    let mut text = String::from(
+        "PAKET SIPARIS
+",
+    );
+    text.push_str(&format!(
+        "{}
+Tel: {}
+",
+        get("customer_name")?,
+        get("phone")?
+    ));
+    text.push_str(&format!(
+        "Adres: {}
+",
+        get("address_text")?
+    ));
+    let directions = get("directions")?;
+    if !directions.trim().is_empty() {
+        text.push_str(&format!(
+            "Tarif: {}
+",
+            directions.trim()
+        ));
+    }
+    text.push_str(&format!(
+        "{payment}
+"
+    ));
+    Ok(text)
 }
 
 /// Verilen kalemlerin istasyon fişlerini basar. Veritabanına hiçbir şey yazılmaz.
@@ -190,6 +253,8 @@ async fn build_and_print(
             });
     }
 
+    let delivery_block = delivery_block(pool, tenant, order_id).await?;
+
     let stations = sqlx::query("SELECT name, printer_name FROM stations WHERE tenant_id = ?")
         .bind(tenant)
         .fetch_all(pool)
@@ -215,7 +280,7 @@ async fn build_and_print(
                 .push(format!("{station}: yazıcı atanmamış, fiş basılmadı."));
             continue;
         };
-        let text = format_ticket(&table, station, &created_at, lines);
+        let text = format_ticket(&table, station, &created_at, &delivery_block, lines);
         match send_to_printer(&printer, text).await {
             Ok(()) => report.printed_stations.push(station.clone()),
             Err(reason) => report
@@ -238,7 +303,7 @@ mod tests {
             modifiers: Some("[\"Şekersiz\"]".into()),
             notes: Some("sıcak".into()),
         }];
-        let text = format_ticket("Masa 4", "Bar", "2026-01-01 10:00:00", &lines);
+        let text = format_ticket("Masa 4", "Bar", "2026-01-01 10:00:00", "", &lines);
         assert!(text.contains("2 x Çay"));
         assert!(text.contains("+ Şekersiz"));
         assert!(text.contains("NOT: sıcak"));

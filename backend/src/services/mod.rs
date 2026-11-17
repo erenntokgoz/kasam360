@@ -12,6 +12,7 @@ pub mod closed_orders;
 pub mod cloud_sync;
 pub mod counter_sales;
 pub mod day_close_archive;
+pub mod delivery;
 pub mod device_identity;
 pub mod device_session;
 pub mod e_document;

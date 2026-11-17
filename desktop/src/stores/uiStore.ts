@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type AppModule = 'FLOOR' | 'POS' | 'KDS' | 'CASHIER' | 'ERP' | 'CATALOG' | 'SETTINGS';
+export type AppModule = 'FLOOR' | 'POS' | 'KDS' | 'DELIVERY' | 'CASHIER' | 'ERP' | 'CATALOG' | 'SETTINGS';
 
 interface ModalState {
   payment: boolean;

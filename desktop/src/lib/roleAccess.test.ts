@@ -23,6 +23,12 @@ describe('roleAccess', () => {
     expect(canOpenModule('CASHIER', 'KDS')).toBe(true);
   });
 
+  it('paket servis ekranı personele ve kurye olabilecek garsona açık, mutfağa kapalı', () => {
+    for (const role of ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'] as const) expect(canOpenModule(role, 'DELIVERY')).toBe(true);
+    expect(canOpenModule('KITCHEN', 'DELIVERY')).toBe(false);
+    expect(canOpenModule('MASTER', 'DELIVERY')).toBe(false);
+  });
+
   it('tahsilat düğmeleri yalnız kasiyer ve işletme sahibine açılır', () => {
     expect(canCollectPayment('OWNER')).toBe(true);
     expect(canCollectPayment('MANAGER')).toBe(false);

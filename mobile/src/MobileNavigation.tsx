@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ArrowUpFromLine, BarChart3, BookOpen, BookUser, LayoutGrid, Lock, MoreHorizontal, Moon, Plus, Settings,
+  ArrowUpFromLine, BarChart3, Bike, BookOpen, BookUser, LayoutGrid, Lock, MoreHorizontal, Moon, Plus, Settings,
   ShoppingBag, Sun, Tv, Wallet, X, Zap,
 } from 'lucide-react';
 import { canOpenModule } from '../../desktop/src/lib/roleAccess';
@@ -14,8 +14,8 @@ import { buildNavSections, initials, MODULE_LABEL, ROLE_TITLE, type NavEntry } f
 import { quickActionsFor, type QuickAction, type QuickActionId } from '../../desktop/src/features/shell/mobileShellModel';
 import { useFocusTrap } from '../../desktop/src/ui/useFocusTrap';
 
-const ALL_MODULES: AppModule[] = ['FLOOR', 'POS', 'KDS', 'CASHIER', 'ERP', 'CATALOG', 'SETTINGS'];
-const ICONS = { FLOOR: LayoutGrid, POS: ShoppingBag, KDS: Tv, CASHIER: Wallet, ERP: BarChart3, CATALOG: BookOpen, SETTINGS: Settings };
+const ALL_MODULES: AppModule[] = ['FLOOR', 'POS', 'KDS', 'DELIVERY', 'CASHIER', 'ERP', 'CATALOG', 'SETTINGS'];
+const ICONS = { FLOOR: LayoutGrid, POS: ShoppingBag, KDS: Tv, DELIVERY: Bike, CASHIER: Wallet, ERP: BarChart3, CATALOG: BookOpen, SETTINGS: Settings };
 const QUICK_ICONS: Record<QuickActionId, typeof Plus> = {
   NEW_ORDER: ShoppingBag, QUICK_SALE: Zap, COLLECT: Wallet, CASH_OUT: ArrowUpFromLine, LEDGER: BookUser,
 };
@@ -57,6 +57,7 @@ export function MobileNavigation() {
 
   const modules = useMemo(() => ALL_MODULES.filter((module) => {
     if (module === 'KDS' && !isEnabled('feat_kds')) return false;
+    if (module === 'DELIVERY' && !isEnabled('feat_delivery')) return false;
     if (module === 'POS' && user?.role === 'WAITER') return false;
     return canOpenModule(user?.role, module);
   }), [isEnabled, user?.role]);

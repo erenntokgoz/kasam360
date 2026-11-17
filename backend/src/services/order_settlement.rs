@@ -165,6 +165,8 @@ fn channel_amounts(method: &str, amount: i64) -> Result<[i64; 4], String> {
         "CARD" | "KREDI_KARTI" | "CREDIT_CARD" => Ok([0, amount, 0, 0]),
         "MEAL_CARD" | "YEMEK_KARTI" => Ok([0, 0, amount, 0]),
         "VERESIYE" => Ok([0, 0, 0, amount]),
+        // Önceden ödenmiş paket sipariş: tutar ciroya yazılır, kasaya ne nakit ne kart girer.
+        "ONLINE" => Ok([0, 0, 0, 0]),
         other => Err(format!("INVALID_METHOD: bilinmeyen ödeme yöntemi: {other}")),
     }
 }
