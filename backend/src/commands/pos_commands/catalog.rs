@@ -110,7 +110,7 @@ pub(crate) async fn list_pos_products(
                            COUNT(*) AS batch_count FROM inventory_batches \
                     WHERE product_id IS NOT NULL GROUP BY tenant_id, product_id) b \
            ON b.product_id = p.id AND b.tenant_id = p.tenant_id \
-         WHERE p.tenant_id = ? AND p.is_raw = 0 \
+         WHERE p.tenant_id = ? AND p.is_raw = 0 AND p.sku != 'DELIVERY_FEE' \
          ORDER BY p.display_order ASC, p.name ASC",
     )
     .bind(tenant_id)

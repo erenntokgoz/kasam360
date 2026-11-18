@@ -165,7 +165,18 @@ impl InventoryService {
                     }));
                 }
 
-                if remaining_demand > 0.0 {
+                // Neden: stok izlenmeyen ürün (hiç parti girişi olmayan kalem, örn. kola
+                // ya da teslimat ücreti) açık sayılmaz ve hareket defterine "-1 Satış"
+                // yazmaz. Yalnız parti kaydı olan ürün tükenince açık raporlanır.
+                let has_any_batch: i64 = sqlx::query_scalar(
+                    "SELECT COUNT(*) FROM inventory_batches WHERE tenant_id = ? AND product_id = ?",
+                )
+                .bind(tenant_id)
+                .bind(product_id)
+                .fetch_one(&mut *conn)
+                .await
+                .map_err(|e| e.to_string())?;
+                if remaining_demand > 0.0 && has_any_batch > 0 {
                     total_deficit += remaining_demand;
                     batch_allocations.push(serde_json::json!({
                         "batchId": "UNTRACKED_DEFICIT",

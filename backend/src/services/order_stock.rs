@@ -153,6 +153,10 @@ pub async fn release_line(
         .execute(&mut *conn)
         .await
         .map_err(text_error)?;
+        // Stok izlenmeyen kalemin (parti ve açık yok) hareketi olmaz.
+        if allocation.batches.is_empty() && allocation.deficit <= 0.0 {
+            return Ok(Some(cost));
+        }
         stock_trail::record(
             conn,
             tenant_id,
@@ -182,6 +186,9 @@ pub async fn release_line(
         .execute(&mut *conn)
         .await
         .map_err(text_error)?;
+    }
+    if allocation.batches.is_empty() && allocation.deficit <= 0.0 {
+        return Ok(None);
     }
     stock_trail::record(
         conn,

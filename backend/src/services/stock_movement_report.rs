@@ -425,7 +425,7 @@ pub async fn report(
 
     let products = sqlx::query(
         "SELECT id, name, stock_unit, is_raw FROM products
-          WHERE tenant_id = ?1 AND (?2 IS NULL OR id = ?2) ORDER BY name COLLATE NOCASE, id",
+          WHERE tenant_id = ?1 AND sku != 'DELIVERY_FEE' AND (?2 IS NULL OR id = ?2) ORDER BY name COLLATE NOCASE, id",
     )
     .bind(tenant_id)
     .bind(product_id)

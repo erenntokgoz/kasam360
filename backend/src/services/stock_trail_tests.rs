@@ -163,3 +163,44 @@ async fn eski_veritabaninda_kolonlar_eklenir() {
     .expect("kolon");
     assert_eq!(columns, 2);
 }
+
+#[tokio::test]
+async fn stok_izlenmeyen_urun_satista_hareket_yazmaz_iptalde_de_yazmaz() {
+    let pool = pool().await;
+    sqlx::raw_sql(
+        "INSERT INTO products (id, tenant_id, category_id, name, price_cents)
+            VALUES ('prd_kola', 'tnt_a', 'cat_1', 'Kola', 500);
+         INSERT INTO order_items (id, tenant_id, order_id, product_id, quantity, unit_price_cents, tax_rate_bp, subtotal_cents, tax_amount_cents, total_cents, status, waiter_id, stock_source_id)
+            VALUES ('itm_kola', 'tnt_a', 'ord_1', 'prd_kola', 1, 500, 1000, 455, 45, 500, 'Pending', 'usr_2', 'itm_kola');",
+    )
+    .execute(&pool)
+    .await
+    .expect("kola");
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    order_stock::deduct_line(&mut conn, TENANT, "itm_kola", "prd_kola", 1, NOW)
+        .await
+        .expect("düşüm");
+    order_stock::release_line(&mut conn, TENANT, "itm_kola", "yanlış masa", "usr_1", NOW)
+        .await
+        .expect("iptal");
+    assert!(list(&mut conn, TENANT, Some("prd_kola"))
+        .await
+        .expect("liste")
+        .is_empty());
+}
+
+#[tokio::test]
+async fn parti_kaydi_olan_urun_tukenince_aciga_dusen_satis_hareketi_yazilir() {
+    let pool = pool().await;
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    sqlx::query("UPDATE inventory_batches SET remaining_quantity = 0 WHERE id = 'bat_1'")
+        .execute(&mut *conn)
+        .await
+        .expect("tükendi");
+    order_stock::deduct_line(&mut conn, TENANT, "itm_1", "prd_1", 3, NOW)
+        .await
+        .expect("düşüm");
+    let rows = list(&mut conn, TENANT, Some("prd_1")).await.expect("liste");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].quantity, -3.0);
+}

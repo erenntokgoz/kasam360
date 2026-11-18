@@ -213,7 +213,7 @@ pub async fn load_menu(conn: &mut SqliteConnection, tenant_id: &str) -> Result<B
     let products = sqlx::query(
         "SELECT id, category_id, name, description, price_cents, display_order,
                 is_active, is_86, image_url
-           FROM products WHERE tenant_id = ? AND is_raw = 0",
+           FROM products WHERE tenant_id = ? AND is_raw = 0 AND sku != 'DELIVERY_FEE'",
     )
     .bind(tenant_id)
     .fetch_all(&mut *conn)

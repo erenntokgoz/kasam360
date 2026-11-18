@@ -66,7 +66,7 @@ pub async fn get_management_products(
     let tenant_id = require_tenant(tenant_id.as_deref())?;
 
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    let rows = sqlx::query("SELECT id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason, stock_unit, is_raw FROM products WHERE tenant_id = ? ORDER BY name ASC")
+    let rows = sqlx::query("SELECT id, category_id, name, price_cents, image_url, is_active, sku, barcode, tax_rate_bp, description, color, is_86, stockout_reason, stock_unit, is_raw FROM products WHERE tenant_id = ? AND sku != 'DELIVERY_FEE' ORDER BY name ASC")
         .bind(&tenant_id)
         .fetch_all(&mut *conn)
         .await
