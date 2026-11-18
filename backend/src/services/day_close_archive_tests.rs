@@ -128,7 +128,24 @@ async fn detay_yalniz_iki_kapanis_arasindaki_tahsilati_kanallara_boler() {
     assert_eq!((second.cash_cents, second.card_cents), (1_000, 2_500));
     assert_eq!((second.cash_in_cents, second.cash_out_cents), (400, 150));
     assert_eq!(second.shifts.len(), 1);
-    assert_eq!(second.shifts[0].difference_cents, Some(-100));
+    // Beklenen nakit Z raporu ve vardiya kapanışıyla aynı fonksiyondan gelmelidir;
+    // yalnız açılış avansı (1000) gösterilirse fark yanlış çıkardı.
+    let calc = crate::commands::cashier_commands::summary::calculate_expected_shift_balance(
+        &mut conn,
+        TENANT_A,
+        "shf_1",
+        "2026-03-02 08:00:00",
+        Some("2026-03-02 22:59:59"),
+        1_000,
+    )
+    .await
+    .expect("ortak hesap");
+    assert_ne!(calc.expected_balance, 1_000);
+    assert_eq!(second.shifts[0].expected_cents, calc.expected_balance);
+    assert_eq!(
+        second.shifts[0].difference_cents,
+        Some(900 - calc.expected_balance)
+    );
     assert!(second.period_start.is_some());
 
     let first = detail(&mut conn, TENANT_A, &rows[1].id)

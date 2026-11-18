@@ -5,6 +5,9 @@
 //! dağılımı bu sıra aralığından, kasa hareketi ve vardiyalar zaman aralığından
 //! okunur. Servis yalnız `SELECT` yapar ve her sorgu `tenant_id` ile daraltılır.
 
+use crate::commands::cashier_commands::summary::{
+    calculate_expected_shift_balance, cash_difference,
+};
 use serde::Serialize;
 use sqlx::{Row, SqliteConnection};
 
@@ -208,7 +211,7 @@ pub async fn detail(
 
     let shift_rows = sqlx::query(
         "SELECT s.id, u.name AS cashier_name, s.opened_at, s.closed_at, \
-                s.expected_amount_cents, s.actual_amount_cents, s.difference_cents \
+                s.expected_amount_cents AS opening_cents, s.actual_amount_cents \
          FROM shifts s LEFT JOIN users u ON u.id = s.cashier_id AND u.tenant_id = s.tenant_id \
          WHERE s.tenant_id = ?1 AND s.status = 'CLOSED' \
            AND datetime(s.closed_at) > datetime(?2) \
@@ -222,24 +225,41 @@ pub async fn detail(
     .fetch_all(&mut *conn)
     .await
     .map_err(|e| e.to_string())?;
-    let shifts = shift_rows
-        .iter()
-        .map(|r| {
-            Ok(DayCloseShift {
-                shift_id: r.try_get("id").map_err(|e| e.to_string())?,
-                cashier_name: r.try_get("cashier_name").map_err(|e| e.to_string())?,
-                opened_at: r.try_get("opened_at").map_err(|e| e.to_string())?,
-                closed_at: r.try_get("closed_at").map_err(|e| e.to_string())?,
-                expected_cents: r
-                    .try_get("expected_amount_cents")
-                    .map_err(|e| e.to_string())?,
-                actual_cents: r
-                    .try_get("actual_amount_cents")
-                    .map_err(|e| e.to_string())?,
-                difference_cents: r.try_get("difference_cents").map_err(|e| e.to_string())?,
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
+    // Neden ortak fonksiyon: `shifts.expected_amount_cents` yalnız açılış avansını
+    // tutar. Beklenen nakit Z raporu ve vardiya kapanışıyla aynı hesaptan gelir;
+    // ayrı türetilmiş bir sayı arşivi Z raporundan saptırırdı.
+    let mut shifts = Vec::with_capacity(shift_rows.len());
+    for r in &shift_rows {
+        let shift_id: String = r.try_get("id").map_err(|e| e.to_string())?;
+        let opened_at: String = r.try_get("opened_at").map_err(|e| e.to_string())?;
+        let shift_closed_at: Option<String> = r.try_get("closed_at").map_err(|e| e.to_string())?;
+        let opening: i64 = r.try_get("opening_cents").map_err(|e| e.to_string())?;
+        let actual_cents: Option<i64> = r
+            .try_get("actual_amount_cents")
+            .map_err(|e| e.to_string())?;
+        let calc = calculate_expected_shift_balance(
+            conn,
+            tenant_id,
+            &shift_id,
+            &opened_at,
+            shift_closed_at.as_deref(),
+            opening,
+        )
+        .await?;
+        let difference_cents = match actual_cents {
+            Some(actual) => Some(cash_difference(actual, calc.expected_balance)?),
+            None => None,
+        };
+        shifts.push(DayCloseShift {
+            shift_id,
+            cashier_name: r.try_get("cashier_name").map_err(|e| e.to_string())?,
+            opened_at,
+            closed_at: shift_closed_at,
+            expected_cents: calc.expected_balance,
+            actual_cents,
+            difference_cents,
+        });
+    }
 
     Ok(Some(DayCloseDetail {
         header,
