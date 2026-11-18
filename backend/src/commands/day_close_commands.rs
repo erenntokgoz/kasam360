@@ -136,6 +136,40 @@ pub async fn day_close_blocker(
             "UNEXPLAINED_DIFFERENCE: {unexplained} vardiyanın kasa farkı açıklanmadı."
         )));
     }
+    // Neden: ikinci basış (çift tık, gecikmeli yanıt) boş bir `day:closed` kaydı
+    // eklerdi; kapanıştan sonra ne vardiya açılmış ne tahsilat yapılmışsa gün
+    // zaten kapalıdır ve ikinci kapanış fail-closed reddedilir.
+    let last_close = sqlx::query(
+        "SELECT sequence, created_at FROM audit_ledger
+         WHERE tenant_id = ? AND action = 'day:closed' ORDER BY sequence DESC LIMIT 1",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if let Some(close) = last_close {
+        let close_sequence: i64 = close.try_get("sequence").map_err(|e| e.to_string())?;
+        let close_at: String = close.try_get("created_at").map_err(|e| e.to_string())?;
+        let activity: i64 = sqlx::query_scalar(
+            "SELECT
+               (SELECT COUNT(*) FROM shifts WHERE tenant_id = ?1
+                  AND datetime(opened_at) >= datetime(?2))
+             + (SELECT COUNT(*) FROM audit_ledger WHERE tenant_id = ?1
+                  AND action = 'payment:settled_fifo' AND sequence > ?3)",
+        )
+        .bind(tenant_id)
+        .bind(&close_at)
+        .bind(close_sequence)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
+        if activity == 0 {
+            return Ok(Some(
+                "DAY_ALREADY_CLOSED: Gün zaten kapatıldı; yeni vardiya açılmadan tekrar kapatılamaz."
+                    .to_string(),
+            ));
+        }
+    }
     Ok(None)
 }
 

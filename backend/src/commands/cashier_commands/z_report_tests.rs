@@ -144,3 +144,46 @@ async fn gun_sonu_kapisi_acik_adisyon_acik_vardiya_ve_acik_farki_durdurur() {
         .expect("vardiya")
         .starts_with("SHIFT_OPEN"));
 }
+
+#[tokio::test]
+async fn kapanmis_gun_ikinci_kez_kapatilamaz_yeni_vardiyadan_sonra_kapanir() {
+    let pool = pool().await;
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    sqlx::query("UPDATE shifts SET difference_cents = 0")
+        .execute(&mut *conn)
+        .await
+        .expect("farksız");
+    let mutex = tokio::sync::Mutex::new(());
+    let lock = AuditLock::new(mutex.lock().await);
+    let ctx = AuditContext::new(
+        TENANT.to_string(),
+        "usr_1".to_string(),
+        "OWNER".to_string(),
+        category::FINANS,
+        "day:closed",
+        "day_close".to_string(),
+        serde_json::json!({ "closedShiftsCount": 1 }),
+        chrono::Utc::now().to_rfc3339(),
+    )
+    .expect("kayıt");
+    AuditService::append(&mut conn, &lock, &ctx)
+        .await
+        .expect("kapanış");
+    assert!(day_close_blocker(&mut conn, TENANT)
+        .await
+        .expect("kapı")
+        .expect("ikinci kapanış")
+        .starts_with("DAY_ALREADY_CLOSED"));
+
+    sqlx::query(
+        "INSERT INTO shifts (id, tenant_id, cashier_id, status, opened_at, expected_amount_cents)
+         VALUES ('shf_yeni', 'tnt_a', 'usr_1', 'CLOSED', datetime('now', '+1 minute'), 0)",
+    )
+    .execute(&mut *conn)
+    .await
+    .expect("yeni vardiya");
+    assert_eq!(
+        day_close_blocker(&mut conn, TENANT).await.expect("kapı"),
+        None
+    );
+}

@@ -14,6 +14,8 @@ import { Modal } from '../../ui/Modal';
 import { formatDateTime } from '../../lib/date';
 import { Bar, BarAction, BarTab } from '../../ui/Bar';
 import { Button } from '../../ui/Button';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { DAY_CLOSE_CONFIRM_TITLE, dayCloseConfirmMessage } from '../../lib/dayCloseConfirm';
 import { BlindCloseModal } from './BlindCloseModal';
 import { CashExpenseForm } from './CashExpenseForm';
 import { CashMovementForm } from './CashMovementForm';
@@ -49,6 +51,7 @@ export const CashierModule: React.FC = () => {
   const lastZReport = selectedReport ?? latestReport;
   const [dayCloseNotice, setDayCloseNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const openModal = useUIStore((state) => state.openModal);
+  const [confirmDayClose, setConfirmDayClose] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'SHIFT' | 'FINANCE' | 'RECEIPTS' | 'CLOSED' | 'DAY_CLOSE'>('SHIFT');
   const financeAsked = useLedgerStore((state) => state.activeErpTab === 'FINANCE');
@@ -89,12 +92,9 @@ export const CashierModule: React.FC = () => {
     }
   };
 
+  // Hata ConfirmDialog içinde kalır; çift basış dialogun kendi kilidiyle engellenir.
   const handleCloseDay = async () => {
-    try {
-      setDayCloseNotice({ ok: true, text: await closeDay() });
-    } catch (caught) {
-      setDayCloseNotice({ ok: false, text: errorText(caught) });
-    }
+    setDayCloseNotice({ ok: true, text: await closeDay() });
   };
 
   return (
@@ -266,7 +266,7 @@ export const CashierModule: React.FC = () => {
             <section className="work-surface space-y-4 rounded-lg border border-[var(--border)] p-4">
               <ShiftHistory key={latestReport?.shiftId} onSelect={(id) => void handleSelectReport(id)} />
               <div className="flex justify-end border-t border-[var(--border)] pt-4">
-                <Button variant="danger" onClick={() => void handleCloseDay()}>Günü Kapat</Button>
+                <Button variant="danger" onClick={() => { setDayCloseNotice(null); setConfirmDayClose(true); }}>Günü Kapat</Button>
               </div>
               {dayCloseNotice?.ok ? <p role="status" className="text-sm font-semibold text-[var(--accent-emerald)]">{dayCloseNotice.text}</p> : null}
             </section>
@@ -275,6 +275,11 @@ export const CashierModule: React.FC = () => {
           </div>
         )}
       </div>
+
+      {confirmDayClose ? (
+        <ConfirmDialog cardFlow title={DAY_CLOSE_CONFIRM_TITLE} message={dayCloseConfirmMessage()}
+          confirmLabel="Günü Kapat" onConfirm={handleCloseDay} onClose={() => setConfirmDayClose(false)} />
+      ) : null}
 
       {/* Kör Sayım Modalı */}
       <BlindCloseModal onShowZ={() => { setSelectedReport(null); setActiveTab('DAY_CLOSE'); }} />
