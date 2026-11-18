@@ -54,6 +54,14 @@ pub async fn get_floor_plan(
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<FloorPlanData>, String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
+    load_floor_plan(&mut conn, tenant_id).await
+}
+
+/// Salon planını okur; komuttan ayrıldı ki sorgu bağlantı üzerinden test edilebilsin.
+pub(crate) async fn load_floor_plan(
+    conn: &mut sqlx::SqliteConnection,
+    tenant_id: String,
+) -> Result<Vec<FloorPlanData>, String> {
     let query = r#"
         SELECT 
             t.id, 
@@ -85,7 +93,11 @@ pub async fn get_floor_plan(
         LEFT JOIN (
             SELECT 
                 o.table_id,
-                SUM(o.guest_count) AS guest_count,
+                -- Neden alt sorgu: kalemlerle JOIN edilen satırlarda SUM(o.guest_count)
+                -- her kalem için tekrar sayılır (4 kişi, 4 kalem = 16 kişi).
+                (SELECT SUM(g.guest_count) FROM orders g
+                  WHERE g.tenant_id = o.tenant_id AND g.table_id = o.table_id
+                    AND g.status IN ('OPEN', 'IN_PROGRESS')) AS guest_count,
                 MAX(o.updated_at) AS last_activity,
                 SUM(CASE WHEN UPPER(oi.status) = 'READY' THEN 1 ELSE 0 END) AS ready_item_count
             FROM orders o
@@ -112,7 +124,7 @@ pub async fn get_floor_plan(
         .map_err(|e| e.to_string())?;
 
     let lead_minutes =
-        crate::services::reservation_service::lead::lead_minutes(&mut conn, &tenant_id).await?;
+        crate::services::reservation_service::lead::lead_minutes(&mut *conn, &tenant_id).await?;
     let now = chrono::Utc::now();
     let open_orders: Vec<(String, String)> = sqlx::query_as(
         "SELECT table_id, id FROM orders
@@ -127,7 +139,7 @@ pub async fn get_floor_plan(
         std::collections::HashMap::new();
     for (table_id, order_id) in open_orders {
         let balance =
-            crate::services::order_settlement::order_balance(&mut conn, &tenant_id, &order_id)
+            crate::services::order_settlement::order_balance(&mut *conn, &tenant_id, &order_id)
                 .await?;
         let entry = open_by_table.entry(table_id).or_insert((String::new(), 0));
         entry.0 = order_id;
@@ -178,3 +190,7 @@ pub async fn get_floor_plan(
     }
     Ok(res)
 }
+
+#[cfg(test)]
+#[path = "plan_tests.rs"]
+mod tests;
