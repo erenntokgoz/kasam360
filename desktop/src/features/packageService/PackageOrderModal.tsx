@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { errorText } from '../../lib/cariInput';
 import { formatMoney } from '../../lib/formatMoney';
 import { parseCents } from '../../lib/moneyInput';
-import { cartSubtotalCents, PAYMENT_LABEL, toSubmitLines, type PackageCartLine } from '../../lib/packageModel';
+import { cartSubtotalCents, packageOrderBlocker, PAYMENT_LABEL, toSubmitLines, type PackageCartLine } from '../../lib/packageModel';
 import { createPackageOrder, usePackageStore } from '../../stores/packageStore';
 import { usePosStore } from '../../stores/posStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -41,10 +41,11 @@ export const PackageOrderModal: React.FC<PackageOrderModalProps> = ({ onClose })
 
   const feeCents = fee.trim() ? parseCents(fee) : 0;
   const subtotal = cartSubtotalCents(lines);
-  const canSave = customer !== null && addressId !== '' && lines.length > 0 && feeCents !== null;
+  const blocker = packageOrderBlocker({ hasCustomer: customer !== null, addressId, lineCount: lines.length, feeValid: feeCents !== null });
+  const canSave = blocker === null;
 
   const save = async () => {
-    if (!customer || feeCents === null) return;
+    if (!customer || feeCents === null || blocker) return;
     setIsSaving(true);
     setError(null);
     try {
@@ -89,9 +90,12 @@ export const PackageOrderModal: React.FC<PackageOrderModalProps> = ({ onClose })
 
       {error ? <InlineAlert className="mt-4" message={error} onDismiss={() => setError(null)} /> : null}
       <div className="sticky bottom-0 mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--bg-surface)] py-3">
-        <p className="text-lg font-bold tabular-nums">
-          Toplam {formatMoney(subtotal + (feeCents ?? 0))}
-        </p>
+        <div>
+          <p className="text-lg font-bold tabular-nums">
+            Toplam {formatMoney(subtotal + (feeCents ?? 0))}
+          </p>
+          {blocker ? <p role="status" className="text-xs font-semibold text-[var(--accent-red)]">{blocker}</p> : null}
+        </div>
         <Button variant="primary" size="lg" disabled={!canSave} isLoading={isSaving} onClick={() => void save()}>Kaydet ve mutfağa gönder</Button>
       </div>
     </Modal>

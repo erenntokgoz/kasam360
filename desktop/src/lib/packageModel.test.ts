@@ -2,8 +2,26 @@ import { describe, expect, it } from 'vitest';
 import type { PackageDelivery } from '../types/packageService';
 import {
   awaitingSettlement, cartSubtotalCents, durationText, lateMinutes, nextStatus, orderCode, phoneText,
-  lineKey, settlementTotals, toSubmitLines,
+  lineKey, packageOrderBlocker, settlementTotals, toSubmitLines,
 } from './packageModel';
+
+describe('packageOrderBlocker', () => {
+  const ok = { hasCustomer: true, addressId: 'adr_1', lineCount: 1, feeValid: true };
+
+  it('müşteri seçilmeden kayıt engellenir ve neden söylenir', () => {
+    expect(packageOrderBlocker({ ...ok, hasCustomer: false })).toBe('Önce müşteri seçin.');
+  });
+
+  it('eksiksiz siparişte engel yoktur', () => {
+    expect(packageOrderBlocker(ok)).toBeNull();
+  });
+
+  it('adres, sepet ve ücret sırayla denetlenir', () => {
+    expect(packageOrderBlocker({ ...ok, addressId: '' })).toContain('adres');
+    expect(packageOrderBlocker({ ...ok, lineCount: 0 })).toContain('ürün');
+    expect(packageOrderBlocker({ ...ok, feeValid: false })).toContain('ücreti');
+  });
+});
 
 const NOW = new Date('2026-11-17T12:00:00Z').getTime();
 const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();

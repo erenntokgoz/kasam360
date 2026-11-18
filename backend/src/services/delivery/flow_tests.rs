@@ -434,3 +434,32 @@ async fn mutfak_hazir_derse_paket_durumu_hazir_olur() {
         .expect("durum");
     assert_eq!(status, "READY");
 }
+
+#[tokio::test]
+async fn musterisiz_paket_siparisi_hangi_kaynakta_olursa_olsun_reddedilir() {
+    let (pool, ids) = setup().await;
+    let mutex = Mutex::new(());
+    let lock = AuditLock::new(mutex.lock().await);
+    let mut conn = pool.acquire().await.expect("bağlantı");
+    for source in [Some("PHONE".to_string()), Some("COUNTER".to_string()), None] {
+        let mut input = NewDelivery {
+            customer_id: "  ".to_string(),
+            address_id: ids.1.clone(),
+            items: vec![item("prd_1", 1)],
+            fee_cents: 0,
+            payment_method: "CASH".to_string(),
+            note: String::new(),
+            source: source.clone(),
+        };
+        let error = orders::create(&mut conn, &lock, TENANT, CASHIER, "CASHIER", &input)
+            .await
+            .expect_err("müşterisiz");
+        assert!(error.contains("müşteri seçilmeli"), "{error}");
+        input.customer_id = ids.0.clone();
+        input.address_id = String::new();
+        let error = orders::create(&mut conn, &lock, TENANT, CASHIER, "CASHIER", &input)
+            .await
+            .expect_err("adressiz");
+        assert!(error.contains("teslimat adresi"), "{error}");
+    }
+}

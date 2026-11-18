@@ -157,6 +157,15 @@ pub async fn create(
     }
     let note = optional_text(&input.note, "not", NOTE_MAX)?;
 
+    // Neden açık denetim: müşterisiz paket siparişinde teslim edilecek kişi ve adres
+    // bilinmez; boş kimlik genel bir "bulunamadı" hatasına düşmeden net reddedilir.
+    if input.customer_id.trim().is_empty() {
+        return Err("INVALID_ARGUMENT: paket siparişi için müşteri seçilmeli".to_string());
+    }
+    if input.address_id.trim().is_empty() {
+        return Err("INVALID_ARGUMENT: paket siparişi için teslimat adresi seçilmeli".to_string());
+    }
+
     // Müşteri ve adres bu kiracıya ait ve etkin olmalı; başka işletmenin kaydı seçilemez.
     let customer = super::customers::get(conn, tenant_id, input.customer_id.trim()).await?;
     let address = customer

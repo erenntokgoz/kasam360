@@ -130,6 +130,20 @@ export function cartSubtotalCents(lines: PackageCartLine[]): number {
   return lines.reduce((sum, line) => sum + line.unitPriceCents * line.quantity, 0);
 }
 
+/** Kaydı engelleyen ilk neden; boşsa kayıt yapılabilir. Müşterisiz paket siparişi reddedilir. */
+export function packageOrderBlocker(input: {
+  hasCustomer: boolean;
+  addressId: string;
+  lineCount: number;
+  feeValid: boolean;
+}): string | null {
+  if (!input.hasCustomer) return 'Önce müşteri seçin.';
+  if (input.addressId === '') return 'Teslimat adresini seçin.';
+  if (input.lineCount === 0) return 'Sepete en az bir ürün ekleyin.';
+  if (!input.feeValid) return 'Teslimat ücreti geçerli bir tutar olmalı.';
+  return null;
+}
+
 /** Sunucu kalem sözleşmesi: fiyat gönderilmez, sunucu hesaplar. */
 export function toSubmitLines(lines: PackageCartLine[]) {
   return lines.map((line, index) => ({
