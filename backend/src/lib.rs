@@ -95,6 +95,35 @@ fn resolve_database_url(app: &tauri::App) -> Result<String, Box<dyn std::error::
     Ok(format!("sqlite:///{}", path.trim_start_matches('/')))
 }
 
+/// Kurulum kimliği dosyası exe'nin yanındadır; yoksa (geliştirme, taşınabilir) işlem yapılmaz.
+/// Hata açılışı durdurmaz ama günlüğe yazılır; kimlik değeri günlüğe girmez.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+async fn reconcile_install(app: &tauri::App, pool: &sqlx::SqlitePool) {
+    use services::install_marker::{reconcile, Outcome, INSTALL_ID_FILE, LAST_INSTALL_ID_FILE};
+    let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
+    else {
+        return;
+    };
+    let Ok(data_dir) = app.path().app_data_dir() else {
+        return;
+    };
+    match reconcile(
+        pool,
+        &exe_dir.join(INSTALL_ID_FILE),
+        &data_dir.join(LAST_INSTALL_ID_FILE),
+    )
+    .await
+    {
+        Ok(Outcome::SessionCleared) => {
+            tracing::info!("yeni kurulum algılandı: hesap oturumu temizlendi")
+        }
+        Ok(_) => {}
+        Err(error) => tracing::warn!("kurulum kimliği uzlaştırılamadı: {error}"),
+    }
+}
+
 #[cfg_attr(
     any(target_os = "android", target_os = "ios"),
     tauri::mobile_entry_point
@@ -138,6 +167,9 @@ pub fn run() {
             let pool = init_db(&database_url)
                 .await
                 .map_err(|e| Box::new(std::io::Error::other(e.to_string())))?;
+            // Yeniden kurulumda hesap oturumu kapanır, işletme verisi kalır; arayüz oturumu okumadan önce.
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            reconcile_install(app, &pool).await;
             if let Some(error) = &restore_error {
                 services::backup::schedule::write_result(&pool, Some(error), None)
                     .await

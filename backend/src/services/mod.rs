@@ -19,6 +19,7 @@ pub mod e_document;
 pub mod expense_service;
 pub mod external360;
 pub mod floor360;
+pub mod install_marker;
 pub mod inventory360;
 pub mod inventory_service;
 pub mod lan_sync;
