@@ -24,9 +24,7 @@ const METHOD_LABEL: Record<PaymentMethod, string> = {
 export const ReceiptPreviewModal: React.FC = () => {
   const modals = useUIStore((state) => state.modals);
   const closeModal = useUIStore((state) => state.closeModal);
-  const openModal = useUIStore((state) => state.openModal);
-  const setActiveModule = useUIStore((state) => state.setActiveModule);
-  const { activeTableName, activeOrderId, ticketItems, lastSale, setLastSale, calculateTotalCents } = usePosStore();
+  const { activeTableName, activeOrderId, ticketItems, lastSale, calculateTotalCents } = usePosStore();
 
   const [format, setFormat] = useState<'CUSTOMER' | 'KITCHEN'>('CUSTOMER');
   const [isPrinting, setIsPrinting] = useState(false);
@@ -39,19 +37,9 @@ export const ReceiptPreviewModal: React.FC = () => {
   const items = lastSale?.items ?? ticketItems;
   const leftCents = lastSale?.remainingCents ?? 0;
 
-  // Hesap bittiyse iş salonda sürer; parça ödemede kalan aynı pencereden alınır.
-  const handleClose = () => {
-    closeModal('receiptPreview');
-    if (!lastSale) return;
-    setLastSale(null);
-    if (leftCents === 0) setActiveModule('FLOOR');
-  };
+  // Tahsilat sonrası fiş ödeme penceresinin üstünde açılır; kapatmak ödeme ekranını etkilemez.
+  const handleClose = () => closeModal('receiptPreview');
 
-  const handlePayRest = () => {
-    closeModal('receiptPreview');
-    setLastSale(null);
-    openModal('payment');
-  };
   const tableName = lastSale?.tableName ?? activeTableName;
   const total = lastSale?.amountCents ?? calculateTotalCents();
   // KDV kalemlerden hesaplanır ve adisyonun tamamına aittir; parça tahsilatta tahsil edilen tutara
@@ -229,18 +217,7 @@ export const ReceiptPreviewModal: React.FC = () => {
             <Printer className="w-4 h-4" />
             <span>Fiş Yazdır</span>
           </Button>
-          {lastSale ? (
-            leftCents > 0 ? (
-              <>
-                <Button variant="secondary" size="lg" onClick={handleClose}>Adisyona Dön</Button>
-                <Button variant="success" size="lg" onClick={handlePayRest}>Kalanı Al</Button>
-              </>
-            ) : (
-              <Button variant="primary" size="lg" onClick={handleClose}>Salona Dön</Button>
-            )
-          ) : (
-            <Button variant="primary" size="lg" onClick={handleClose}>Kapat</Button>
-          )}
+          <Button variant="primary" size="lg" onClick={handleClose}>Kapat</Button>
         </div>
       </div>
     </Modal>

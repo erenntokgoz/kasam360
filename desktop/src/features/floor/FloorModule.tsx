@@ -14,7 +14,6 @@ import { ReservationModal } from './ReservationModal';
 import { Bar, BarAction, BarTab } from '../../ui/Bar';
 import { OrderStatusBanner } from '../pos/OrderStatusBanner';
 import { useSyncStore } from '../../stores/syncStore';
-import { Modal } from '../../ui/Modal';
 import { Button } from '../../ui/Button';
 import { getBlueprintZoneId } from './blueprintView';
 import { canOpenModule, canQuickSale } from '../../lib/roleAccess';
@@ -65,7 +64,6 @@ export const FloorModule: React.FC = () => {
 
   const [isResModalOpen, setIsResModalOpen] = useState(false);
   const [filter, setFilter] = useState<TableFilter>('ALL');
-  const [payPromptTable, setPayPromptTable] = useState<FloorTable | null>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const krokiRef = useRef<HTMLDivElement>(null);
   const shownView = useRef(viewMode);
@@ -153,13 +151,6 @@ export const FloorModule: React.FC = () => {
 
   const handlePayFromDrawer = async (table: FloorTable) => {
     closeTableSlideOver();
-    setPayPromptTable(table);
-  };
-
-  const acceptPayPrompt = async () => {
-    const table = payPromptTable;
-    if (!table) return;
-    setPayPromptTable(null);
     await openOrderForTable(table.id, table.tableNumber, table.occupiedSeats || 2);
     openModal('payment');
   };
@@ -245,16 +236,6 @@ export const FloorModule: React.FC = () => {
           handleOpenTable(table, guests);
         }}
       />
-
-      <Modal isOpen={payPromptTable !== null} onClose={() => setPayPromptTable(null)} title="Müşteri hesabı ödedi mi?" subtitle="Tahsilat yalnız ödeme alındıysa kaydedilir." maxWidth="sm">
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" size="lg" onClick={() => {
-            setPayPromptTable(null);
-            useUIStore.getState().showNotice('Ödeme alınmadı. Adisyon açık bırakıldı.');
-          }}>Hayır, açık bırak</Button>
-          <Button variant="success" size="lg" onClick={() => void acceptPayPrompt()}>Evet, tahsilata geç</Button>
-        </div>
-      </Modal>
 
       {/* Rezervasyon Ekleme Modalı */}
       <ReservationModal

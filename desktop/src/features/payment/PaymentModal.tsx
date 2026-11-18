@@ -53,7 +53,7 @@ export const PaymentModal: React.FC = () => {
   const modals = useUIStore((state) => state.modals);
   const closeModal = useUIStore((state) => state.closeModal);
   const openModal = useUIStore((state) => state.openModal);
-  const { activeTableName, activeTableId, activeOrderId, balance, ticketItems, loadActiveOrder, setLastSale } = usePosStore();
+  const { activeTableName, activeTableId, activeOrderId, balance, ticketItems, lastSale, loadActiveOrder, setLastSale } = usePosStore();
   const { directories, createContact, loadDirectories } = useLedgerStore();
   const { loadFloorPlan } = useFloorStore();
   const { activeShift, loadShiftData } = useShiftStore();
@@ -162,9 +162,13 @@ export const PaymentModal: React.FC = () => {
     setSplitMode('FULL');
     setIsUnresolved(false);
     await Promise.all([loadActiveOrder(), loadFloorPlan(), loadShiftData()]);
+    // Tahsilattan sonra ekran kapanmaz: kalan bakiye aynı pencerede güncellenir, hesap bittiyse
+    // ödendi durumu gösterilir ve pencereyi kasiyer kendisi kapatır.
+  };
+
+  const closePayment = () => {
+    setLastSale(null);
     closeModal('payment');
-    openModal('receiptPreview');
-    useUIStore.getState().showNotice('Tahsilat kaydedildi.');
   };
 
   // Çekim tahsilattan önce yapılır. Aynı işlem kimliğiyle yeniden deneme sağlayıcıya
@@ -296,16 +300,39 @@ export const PaymentModal: React.FC = () => {
     <Modal
       isOpen={modals.payment}
       onClose={() => {
-        if (!isUnresolved && !isProcessing) closeModal('payment');
+        if (!isUnresolved && !isProcessing) closePayment();
       }}
       title={`${activeTableName} Tahsilatı`}
       surface="work"
       maxWidth="5xl"
 
     >
+      {lastSale && lastSale.remainingCents === 0 ? (
+        <div className="space-y-4">
+          <div role="status" className="rounded-lg bg-[var(--accent-emerald-soft)] p-6 text-center">
+            <span className="block text-sm text-[var(--text-secondary)]">Hesap ödendi</span>
+            <span className="block text-3xl font-extrabold tabular-nums">{formatMoney(lastSale.amountCents)}</span>
+          </div>
+          {lastSale.method === 'CASH' ? (
+            <p className="text-sm font-semibold tabular-nums text-center">
+              Alınan {formatMoney(lastSale.receivedCents)} · Para üstü {formatMoney(lastSale.changeCents)}
+            </p>
+          ) : null}
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button variant="secondary" size="xl" onClick={() => openModal('receiptPreview')}>Fiş</Button>
+            <Button variant="primary" size="xl" onClick={closePayment}>Kapat</Button>
+          </div>
+        </div>
+      ) : (
       <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-4">
         <div className="space-y-4 min-w-0">
           <OrderStatusBanner />
+          {lastSale ? (
+            <div role="status" className="flex items-center justify-between gap-3 rounded-lg bg-[var(--accent-emerald-soft)] px-4 py-3 text-sm font-semibold tabular-nums">
+              <span>{formatMoney(lastSale.amountCents)} tahsil edildi · {formatMoney(lastSale.remainingCents)} kaldı</span>
+              <Button variant="secondary" onClick={() => openModal('receiptPreview')}>Fiş</Button>
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-[var(--bg-subtle)] rounded-lg p-4">
               <span className="text-sm text-[var(--text-secondary)] block">Kalan Bakiye</span>
@@ -455,6 +482,7 @@ export const PaymentModal: React.FC = () => {
           )}
         </div>
       </div>
+      )}
       {isTipOpen ? (
         <TipDialog
           info={pinpadInfo.slice(0, 2)}
